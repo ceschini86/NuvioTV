@@ -1,10 +1,16 @@
 package com.nuvio.tv.core.plugin
 
 import android.util.Log
+import com.lagradost.cloudstream3.TvType
+import com.nuvio.tv.core.plugin.cloudstream.ExternalExtensionLoader
+import com.nuvio.tv.core.plugin.cloudstream.ExternalExtensionRunner
+import com.nuvio.tv.core.plugin.cloudstream.ExternalRepoParser
 import com.nuvio.tv.data.local.PluginDataStore
+import com.nuvio.tv.domain.model.ExternalPluginEntry
 import com.nuvio.tv.domain.model.LocalScraperResult
 import com.nuvio.tv.domain.model.PluginManifest
 import com.nuvio.tv.domain.model.PluginRepository
+import com.nuvio.tv.domain.model.RepositoryType
 import com.nuvio.tv.domain.model.ScraperInfo
 import com.nuvio.tv.domain.model.ScraperManifestInfo
 import com.squareup.moshi.Moshi
@@ -43,7 +49,10 @@ class PluginManager @Inject constructor(
     private val dataStore: PluginDataStore,
     private val runtime: PluginRuntime,
     private val pluginSyncService: com.nuvio.tv.core.sync.PluginSyncService,
-    private val authManager: com.nuvio.tv.core.auth.AuthManager
+    private val authManager: com.nuvio.tv.core.auth.AuthManager,
+    private val externalRepoParser: ExternalRepoParser,
+    private val externalExtensionLoader: ExternalExtensionLoader,
+    private val externalExtensionRunner: ExternalExtensionRunner
 ) {
     private val moshi = Moshi.Builder()
         .addLast(KotlinJsonAdapterFactory())
@@ -76,7 +85,21 @@ class PluginManager @Inject constructor(
         }
     }
 
-    private fun normalizeUrl(url: String): String = canonicalizeManifestUrl(url).lowercase()
+    /**
+     * Canonicalize a URL for deduplication. For NuvioTV-style URLs (that don't end in .json),
+     * appends /manifest.json. For URLs already ending in .json (external repos), keeps them as-is.
+     */
+    private fun canonicalizeRepoUrl(url: String): String {
+        val trimmed = url.trim().trimEnd('/')
+        // If URL already ends with a .json file, it's likely an external repo URL — keep as-is
+        if (trimmed.substringAfterLast("/").endsWith(".json", ignoreCase = true)) {
+            return trimmed
+        }
+        // Otherwise canonicalize as NuvioTV manifest
+        return canonicalizeManifestUrl(trimmed)
+    }
+
+    private fun normalizeUrl(url: String): String = canonicalizeRepoUrl(url).lowercase()
     
     // Single-flight map to prevent duplicate scraper executions
     private val inFlightScrapers = ConcurrentHashMap<String, kotlinx.coroutines.Deferred<List<LocalScraperResult>>>()
@@ -128,41 +151,79 @@ class PluginManager @Inject constructor(
     }
     
     /**
-     * Add a new repository from manifest URL
+     * Add a new repository from manifest URL.
+     * Auto-detects format: tries NuvioTV manifest first, then external repo format.
      */
     suspend fun addRepository(manifestUrl: String): Result<PluginRepository> = withContext(Dispatchers.IO) {
         try {
+            // First try NuvioTV format (with canonicalized /manifest.json URL)
             val canonicalManifestUrl = canonicalizeManifestUrl(manifestUrl)
             Log.d(TAG, "Adding repository from: $canonicalManifestUrl")
-            
-            // Fetch manifest
-            val manifest = fetchManifest(canonicalManifestUrl)
-                ?: return@withContext Result.failure(Exception("Failed to fetch manifest"))
-            
-            // Create repository
-            val repo = PluginRepository(
-                id = UUID.randomUUID().toString(),
-                name = manifest.name,
-                url = canonicalManifestUrl,
-                enabled = true,
-                lastUpdated = System.currentTimeMillis(),
-                scraperCount = manifest.scrapers.size
-            )
-            
-            // Save repository
-            dataStore.addRepository(repo)
-            
-            // Download and save scrapers
-            downloadScrapers(repo.id, canonicalManifestUrl, manifest.scrapers)
-            
-            Log.d(TAG, "Repository added: ${repo.name} with ${manifest.scrapers.size} scrapers")
-            triggerRemoteSync()
-            Result.success(repo)
 
+            val manifest = fetchManifest(canonicalManifestUrl)
+            if (manifest != null) {
+                return@withContext addNuvioRepository(canonicalManifestUrl, manifest)
+            }
+
+            // NuvioTV format failed — try external repo format with the original URL
+            val trimmedUrl = manifestUrl.trim().trimEnd('/')
+            Log.d(TAG, "NuvioTV manifest not found, trying external format: $trimmedUrl")
+
+            val externalResult = externalRepoParser.tryParse(trimmedUrl)
+            if (externalResult != null) {
+                return@withContext addExternalRepository(trimmedUrl, externalResult)
+            }
+
+            Result.failure(Exception("Failed to parse repository: unrecognized format"))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to add repository: ${e.message}", e)
             Result.failure(e)
         }
+    }
+
+    private suspend fun addNuvioRepository(
+        canonicalManifestUrl: String,
+        manifest: PluginManifest
+    ): Result<PluginRepository> {
+        val repo = PluginRepository(
+            id = UUID.randomUUID().toString(),
+            name = manifest.name,
+            url = canonicalManifestUrl,
+            enabled = true,
+            lastUpdated = System.currentTimeMillis(),
+            scraperCount = manifest.scrapers.size,
+            type = RepositoryType.NUVIO_JS
+        )
+
+        dataStore.addRepository(repo)
+        downloadJsScrapers(repo.id, canonicalManifestUrl, manifest.scrapers)
+
+        Log.d(TAG, "NuvioTV repository added: ${repo.name} with ${manifest.scrapers.size} scrapers")
+        triggerRemoteSync()
+        return Result.success(repo)
+    }
+
+    private suspend fun addExternalRepository(
+        repoUrl: String,
+        parseResult: com.nuvio.tv.core.plugin.cloudstream.ExternalRepoParseResult
+    ): Result<PluginRepository> {
+        val repo = PluginRepository(
+            id = UUID.randomUUID().toString(),
+            name = parseResult.name,
+            url = repoUrl,
+            description = parseResult.description,
+            enabled = true,
+            lastUpdated = System.currentTimeMillis(),
+            scraperCount = parseResult.plugins.size,
+            type = RepositoryType.EXTERNAL_DEX
+        )
+
+        dataStore.addRepository(repo)
+        downloadDexExtensions(repo.id, parseResult.plugins)
+
+        Log.d(TAG, "External repository added: ${repo.name} with ${parseResult.plugins.size} extensions")
+        triggerRemoteSync()
+        return Result.success(repo)
     }
     
     /**
@@ -170,16 +231,21 @@ class PluginManager @Inject constructor(
      */
     suspend fun removeRepository(repoId: String) {
         val scraperList = dataStore.scrapers.first()
-        
+        val repo = dataStore.repositories.first().find { it.id == repoId }
+
         // Remove all scrapers from this repo
         scraperList.filter { it.repositoryId == repoId }.forEach { scraper ->
-            dataStore.deleteScraperCode(scraper.id)
+            if (scraper.type == RepositoryType.EXTERNAL_DEX || repo?.type == RepositoryType.EXTERNAL_DEX) {
+                externalExtensionLoader.deleteExtension(scraper.id)
+            } else {
+                dataStore.deleteScraperCode(scraper.id)
+            }
         }
-        
+
         // Remove scrapers from list
         val updatedScrapers = scraperList.filter { it.repositoryId != repoId }
         dataStore.saveScrapers(updatedScrapers)
-        
+
         // Remove repository
         dataStore.removeRepository(repoId)
         triggerRemoteSync()
@@ -191,7 +257,7 @@ class PluginManager @Inject constructor(
         removeMissingLocal: Boolean = true
     ) {
         val normalizedRemote = remoteUrls
-            .map { canonicalizeManifestUrl(it) }
+            .map { canonicalizeRepoUrl(it) }
             .filter { it.isNotEmpty() }
             .distinctBy { normalizeUrl(it) }
         val remoteUrlSet = normalizedRemote.map { normalizeUrl(it) }.toSet()
@@ -240,10 +306,14 @@ class PluginManager @Inject constructor(
         try {
             val repo = dataStore.repositories.first().find { it.id == repoId }
                 ?: return@withContext Result.failure(Exception("Repository not found"))
-            
+
+            if (repo.type == RepositoryType.EXTERNAL_DEX) {
+                return@withContext refreshExternalRepository(repo)
+            }
+
             val manifest = fetchManifest(repo.url)
                 ?: return@withContext Result.failure(Exception("Failed to fetch manifest"))
-            
+
             // Update repository
             val updatedRepo = repo.copy(
                 name = manifest.name,
@@ -251,15 +321,35 @@ class PluginManager @Inject constructor(
                 scraperCount = manifest.scrapers.size
             )
             dataStore.updateRepository(updatedRepo)
-            
+
             // Re-download scrapers
-            downloadScrapers(repo.id, repo.url, manifest.scrapers)
-            
+            downloadJsScrapers(repo.id, repo.url, manifest.scrapers)
+
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to refresh repository: ${e.message}", e)
             Result.failure(e)
         }
+    }
+
+    private suspend fun refreshExternalRepository(repo: PluginRepository): Result<Unit> {
+        val parseResult = externalRepoParser.tryParse(repo.url)
+            ?: return Result.failure(Exception("Failed to parse external repository"))
+
+        // Evict stale class loaders for old scrapers
+        val oldScrapers = dataStore.scrapers.first().filter { it.repositoryId == repo.id }
+        oldScrapers.forEach { externalExtensionLoader.evictCache(it.id) }
+
+        val updatedRepo = repo.copy(
+            name = parseResult.name,
+            lastUpdated = System.currentTimeMillis(),
+            scraperCount = parseResult.plugins.size
+        )
+        dataStore.updateRepository(updatedRepo)
+
+        downloadDexExtensions(repo.id, parseResult.plugins)
+
+        return Result.success(Unit)
     }
     
     /**
@@ -391,9 +481,22 @@ class PluginManager @Inject constructor(
     }
     
     /**
-     * Execute a single scraper
+     * Execute a single scraper, dispatching by type.
      */
     suspend fun executeScraper(
+        scraper: ScraperInfo,
+        tmdbId: String,
+        mediaType: String,
+        season: Int?,
+        episode: Int?
+    ): List<LocalScraperResult> {
+        return when (scraper.type) {
+            RepositoryType.EXTERNAL_DEX -> executeExternalDexScraper(scraper, tmdbId, mediaType, season, episode)
+            RepositoryType.NUVIO_JS -> executeJsScraper(scraper, tmdbId, mediaType, season, episode)
+        }
+    }
+
+    private suspend fun executeJsScraper(
         scraper: ScraperInfo,
         tmdbId: String,
         mediaType: String,
@@ -420,7 +523,7 @@ class PluginManager @Inject constructor(
             } catch (_: Exception) {
                 // ignore
             }
-            
+
             val settings = dataStore.getScraperSettings(scraper.id)
             
             Log.d(TAG, "Executing scraper: ${scraper.name}")
@@ -438,9 +541,27 @@ class PluginManager @Inject constructor(
             
             Log.d(TAG, "Scraper ${scraper.name} returned ${results.size} results")
             results.map { it.copy(provider = scraper.name) }
-            
+
         } catch (e: Exception) {
             Log.e(TAG, "Failed to execute scraper ${scraper.name}: ${e.message}", e)
+            emptyList()
+        }
+    }
+
+    private suspend fun executeExternalDexScraper(
+        scraper: ScraperInfo,
+        tmdbId: String,
+        mediaType: String,
+        season: Int?,
+        episode: Int?
+    ): List<LocalScraperResult> {
+        return try {
+            Log.d(TAG, "Executing DEX scraper: ${scraper.name}")
+            val results = externalExtensionRunner.execute(scraper.id, tmdbId, mediaType, season, episode)
+            Log.d(TAG, "DEX scraper ${scraper.name} returned ${results.size} results")
+            results.map { it.copy(provider = scraper.name) }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to execute DEX scraper ${scraper.name}: ${e.message}", e)
             emptyList()
         }
     }
@@ -487,7 +608,7 @@ class PluginManager @Inject constructor(
         }
     }
     
-    private suspend fun downloadScrapers(
+    private suspend fun downloadJsScrapers(
         repoId: String,
         manifestUrl: String,
         scraperInfos: List<ScraperManifestInfo>
@@ -576,6 +697,62 @@ class PluginManager @Inject constructor(
             }
         }
         
+        dataStore.saveScrapers(existingScrapers)
+    }
+
+    /**
+     * Download .cs3 DEX extensions and register them as scrapers.
+     */
+    private suspend fun downloadDexExtensions(
+        repoId: String,
+        plugins: List<ExternalPluginEntry>
+    ) = withContext(Dispatchers.IO) {
+        val existingScrapers = dataStore.scrapers.first().toMutableList()
+
+        plugins.forEach { plugin ->
+            try {
+                val scraperId = "$repoId:${plugin.internalName}"
+
+                // Download .cs3 file
+                val file = externalExtensionLoader.downloadExtension(scraperId, plugin.url)
+                if (file == null) {
+                    Log.e(TAG, "Failed to download extension: ${plugin.name}")
+                    return@forEach
+                }
+
+                // Map tvTypes to NuvioTV content types
+                val supportedTypes = plugin.tvTypes
+                    ?.mapNotNull { TvType.fromString(it) }
+                    ?.map { TvType.toNuvioType(it) }
+                    ?.distinct()
+                    ?.ifEmpty { listOf("movie", "tv") }
+                    ?: listOf("movie", "tv")
+
+                val scraper = ScraperInfo(
+                    id = scraperId,
+                    repositoryId = repoId,
+                    name = plugin.name,
+                    description = plugin.description ?: "",
+                    version = plugin.version.toString(),
+                    filename = plugin.url, // Store download URL for reference
+                    supportedTypes = supportedTypes,
+                    enabled = true,
+                    manifestEnabled = plugin.status == 1,
+                    logo = plugin.iconUrl,
+                    contentLanguage = emptyList(),
+                    formats = null,
+                    type = RepositoryType.EXTERNAL_DEX
+                )
+
+                existingScrapers.removeAll { it.id == scraperId }
+                existingScrapers.add(scraper)
+
+                Log.d(TAG, "Downloaded DEX extension: ${plugin.name} (${file.length()} bytes)")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error downloading extension ${plugin.name}: ${e.message}", e)
+            }
+        }
+
         dataStore.saveScrapers(existingScrapers)
     }
 }

@@ -83,6 +83,10 @@
     kotlinx.serialization.KSerializer serializer(...);
 }
 
+# ── External extension compatibility stubs (loaded via DexClassLoader) ────────
+-keep class com.lagradost.cloudstream3.** { *; }
+-keepclassmembers class com.lagradost.cloudstream3.** { *; }
+
 # ── General ────────────────────────────────────────────────────────────────────
 # Keep line numbers for crash reports
 -keepattributes SourceFile,LineNumberTable
