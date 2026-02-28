@@ -82,6 +82,7 @@ class PluginViewModel @Inject constructor(
             is PluginUiEvent.RemoveRepository -> removeRepository(event.repoId)
             is PluginUiEvent.RefreshRepository -> refreshRepository(event.repoId)
             is PluginUiEvent.ToggleScraper -> toggleScraper(event.scraperId, event.enabled)
+            is PluginUiEvent.ToggleAllScrapersForRepo -> toggleAllScrapersForRepo(event.repoId, event.enabled)
             is PluginUiEvent.TestScraper -> testScraper(event.scraperId)
             is PluginUiEvent.SetPluginsEnabled -> setPluginsEnabled(event.enabled)
             PluginUiEvent.ClearTestResults -> _uiState.update { it.copy(testResults = null, testScraperId = null) }
@@ -159,6 +160,12 @@ class PluginViewModel @Inject constructor(
     private fun toggleScraper(scraperId: String, enabled: Boolean) {
         viewModelScope.launch {
             pluginManager.toggleScraper(scraperId, enabled)
+        }
+    }
+
+    private fun toggleAllScrapersForRepo(repoId: String, enabled: Boolean) {
+        viewModelScope.launch {
+            pluginManager.toggleAllScrapersForRepo(repoId, enabled)
         }
     }
 

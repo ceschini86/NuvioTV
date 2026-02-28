@@ -476,7 +476,18 @@ class PluginManager @Inject constructor(
         }
         dataStore.saveScrapers(updatedScrapers)
     }
-    
+
+    /**
+     * Toggle all scrapers belonging to a repository
+     */
+    suspend fun toggleAllScrapersForRepo(repoId: String, enabled: Boolean) {
+        val scraperList = dataStore.scrapers.first()
+        val updatedScrapers = scraperList.map { scraper ->
+            if (scraper.repositoryId == repoId) scraper.copy(enabled = enabled) else scraper
+        }
+        dataStore.saveScrapers(updatedScrapers)
+    }
+
     /**
      * Toggle plugins globally enabled
      */

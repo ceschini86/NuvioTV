@@ -217,10 +217,15 @@ fun PluginScreenContent(
             }
 
             items(uiState.repositories, key = { it.id }) { repo ->
+                val repoScrapers = uiState.scrapers.filter { it.repositoryId == repo.id }
                 RepositoryCard(
                     repository = repo,
+                    repoScrapers = repoScrapers,
                     onRefresh = { viewModel.onEvent(PluginUiEvent.RefreshRepository(repo.id)) },
                     onRemove = { viewModel.onEvent(PluginUiEvent.RemoveRepository(repo.id)) },
+                    onToggleAll = { enabled ->
+                        viewModel.onEvent(PluginUiEvent.ToggleAllScrapersForRepo(repo.id, enabled))
+                    },
                     isLoading = uiState.isLoading,
                     isReadOnly = viewModel.isReadOnly
                 )
@@ -847,11 +852,17 @@ private fun ConfirmRepoChangesDialog(
 @Composable
 private fun RepositoryCard(
     repository: PluginRepository,
+    repoScrapers: List<ScraperInfo>,
     onRefresh: () -> Unit,
     onRemove: () -> Unit,
+    onToggleAll: (Boolean) -> Unit,
     isLoading: Boolean,
     isReadOnly: Boolean = false
 ) {
+    val enabledCount = repoScrapers.count { it.enabled }
+    val allEnabled = repoScrapers.isNotEmpty() && enabledCount == repoScrapers.size
+    val anyEnabled = enabledCount > 0
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -886,7 +897,48 @@ private fun RepositoryCard(
                 )
             }
 
-            if (!isReadOnly) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (!isReadOnly) Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (repoScrapers.isNotEmpty()) {
+                    Surface(
+                        onClick = { onToggleAll(!anyEnabled) },
+                        colors = ClickableSurfaceDefaults.colors(
+                            containerColor = NuvioColors.Surface,
+                            focusedContainerColor = NuvioColors.FocusBackground
+                        ),
+                        border = ClickableSurfaceDefaults.border(
+                            focusedBorder = Border(
+                                border = BorderStroke(2.dp, NuvioColors.FocusRing),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                        ),
+                        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
+                        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "$enabledCount/${repoScrapers.size}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (anyEnabled) NuvioColors.Secondary else NuvioColors.TextSecondary
+                            )
+                            Switch(
+                                checked = anyEnabled,
+                                onCheckedChange = null,
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = NuvioColors.Secondary,
+                                    checkedTrackColor = NuvioColors.Secondary.copy(alpha = 0.3f)
+                                )
+                            )
+                        }
+                    }
+                }
+
                 Button(
                     onClick = onRefresh,
                     enabled = !isLoading,
