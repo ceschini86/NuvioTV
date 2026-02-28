@@ -76,8 +76,25 @@ class PluginManager @Inject constructor(
         return sb.toString()
     }
 
+    /**
+     * Normalize custom protocol schemes to https://.
+     * External repos often use schemes like "cloudstreamrepo://" or "stremio://".
+     */
+    private fun sanitizeScheme(url: String): String {
+        val trimmed = url.trim()
+        // Replace any non-http(s) scheme with https://
+        val schemeEnd = trimmed.indexOf("://")
+        if (schemeEnd > 0) {
+            val scheme = trimmed.substring(0, schemeEnd).lowercase()
+            if (scheme != "http" && scheme != "https") {
+                return "https://${trimmed.substring(schemeEnd + 3)}"
+            }
+        }
+        return trimmed
+    }
+
     private fun canonicalizeManifestUrl(url: String): String {
-        val trimmed = url.trim().trimEnd('/')
+        val trimmed = sanitizeScheme(url).trimEnd('/')
         return if (trimmed.endsWith(MANIFEST_SUFFIX, ignoreCase = true)) {
             trimmed
         } else {
@@ -90,7 +107,7 @@ class PluginManager @Inject constructor(
      * appends /manifest.json. For URLs already ending in .json (external repos), keeps them as-is.
      */
     private fun canonicalizeRepoUrl(url: String): String {
-        val trimmed = url.trim().trimEnd('/')
+        val trimmed = sanitizeScheme(url).trimEnd('/')
         // If URL already ends with a .json file, it's likely an external repo URL — keep as-is
         if (trimmed.substringAfterLast("/").endsWith(".json", ignoreCase = true)) {
             return trimmed
@@ -156,22 +173,37 @@ class PluginManager @Inject constructor(
      */
     suspend fun addRepository(manifestUrl: String): Result<PluginRepository> = withContext(Dispatchers.IO) {
         try {
-            // First try NuvioTV format (with canonicalized /manifest.json URL)
-            val canonicalManifestUrl = canonicalizeManifestUrl(manifestUrl)
-            Log.d(TAG, "Adding repository from: $canonicalManifestUrl")
+            val sanitizedUrl = sanitizeScheme(manifestUrl).trimEnd('/')
+            val filename = sanitizedUrl.substringAfterLast("/")
+            val isExplicitJsonFile = filename.endsWith(".json", ignoreCase = true)
+                    && !filename.equals("manifest.json", ignoreCase = true)
+
+            // If the URL points to a specific .json file (not manifest.json),
+            // try external format first to avoid a wasted 404 on the NuvioTV path.
+            if (isExplicitJsonFile) {
+                Log.d(TAG, "URL ends in .json — trying external format first: $sanitizedUrl")
+                val externalResult = externalRepoParser.tryParse(sanitizedUrl)
+                if (externalResult != null) {
+                    return@withContext addExternalRepository(sanitizedUrl, externalResult)
+                }
+            }
+
+            // Try NuvioTV format (with canonicalized /manifest.json URL)
+            val canonicalManifestUrl = canonicalizeManifestUrl(sanitizedUrl)
+            Log.d(TAG, "Trying NuvioTV manifest: $canonicalManifestUrl")
 
             val manifest = fetchManifest(canonicalManifestUrl)
             if (manifest != null) {
                 return@withContext addNuvioRepository(canonicalManifestUrl, manifest)
             }
 
-            // NuvioTV format failed — try external repo format with the original URL
-            val trimmedUrl = manifestUrl.trim().trimEnd('/')
-            Log.d(TAG, "NuvioTV manifest not found, trying external format: $trimmedUrl")
-
-            val externalResult = externalRepoParser.tryParse(trimmedUrl)
-            if (externalResult != null) {
-                return@withContext addExternalRepository(trimmedUrl, externalResult)
+            // If we haven't tried external format yet, try it now
+            if (!isExplicitJsonFile) {
+                Log.d(TAG, "NuvioTV manifest not found, trying external format: $sanitizedUrl")
+                val externalResult = externalRepoParser.tryParse(sanitizedUrl)
+                if (externalResult != null) {
+                    return@withContext addExternalRepository(sanitizedUrl, externalResult)
+                }
             }
 
             Result.failure(Exception("Failed to parse repository: unrecognized format"))
