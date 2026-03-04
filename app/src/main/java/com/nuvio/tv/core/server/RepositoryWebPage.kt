@@ -1,11 +1,21 @@
 package com.nuvio.tv.core.server
 
 import android.content.Context
+import android.content.res.Configuration
 import com.nuvio.tv.R
+import java.util.Locale
 
 object RepositoryWebPage {
 
-    fun getHtml(context: Context): String = """
+    fun getHtml(baseContext: Context): String {
+        val tag = baseContext.getSharedPreferences("app_locale", Context.MODE_PRIVATE)
+            .getString("locale_tag", null)
+        val context = if (!tag.isNullOrEmpty()) {
+            val config = Configuration(baseContext.resources.configuration)
+            config.setLocale(Locale.forLanguageTag(tag))
+            baseContext.createConfigurationContext(config)
+        } else baseContext
+        return """
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -594,4 +604,5 @@ loadRepos();
 </body>
 </html>
 """.trimIndent()
+    }
 }
