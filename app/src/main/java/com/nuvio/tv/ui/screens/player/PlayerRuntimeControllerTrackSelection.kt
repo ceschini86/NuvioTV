@@ -43,11 +43,13 @@ internal fun PlayerRuntimeController.showSeekOverlayTemporarily() {
 
 internal fun PlayerRuntimeController.selectAudioTrack(trackIndex: Int) {
     if (isUsingMpvEngine()) {
+        val wasPlaying = isPlaybackCurrentlyPlaying()
         val track = _uiState.value.audioTracks.getOrNull(trackIndex)
         val trackId = track?.trackId?.toIntOrNull()
         val changed = trackId != null && mpvView?.selectAudioTrackById(trackId) == true
         if (changed) {
             persistRememberedLinkAudioSelection(trackIndex)
+            keepMpvPlayingIfNeeded(wasPlaying)
         }
         return
     }
@@ -157,6 +159,7 @@ internal fun PlayerRuntimeController.applyAddonSubtitleOverrideByLanguage(
 internal fun PlayerRuntimeController.selectSubtitleTrack(trackIndex: Int) {
     if (isUsingMpvEngine()) {
         Log.d(PlayerRuntimeController.TAG, "Selecting INTERNAL subtitle trackIndex=$trackIndex (mpv)")
+        val shouldKeepPlaying = !userPausedManually && !_uiState.value.playbackEnded
         val track = _uiState.value.subtitleTracks.getOrNull(trackIndex)
         val trackId = track?.trackId?.toIntOrNull()
         val changed = trackId != null && mpvView?.selectSubtitleTrackById(trackId) == true
@@ -165,6 +168,7 @@ internal fun PlayerRuntimeController.selectSubtitleTrack(trackIndex: Int) {
             pendingAddonSubtitleTrackId = null
             pendingAudioSelectionAfterSubtitleRefresh = null
             updateMpvAvailableTracks()
+            keepMpvPlayingIfNeeded(shouldKeepPlaying)
         }
         return
     }
@@ -251,7 +255,14 @@ internal fun PlayerRuntimeController.selectAddonSubtitle(subtitle: Subtitle) {
             return
         }
         Log.d(PlayerRuntimeController.TAG, "Selecting ADDON subtitle lang=${subtitle.lang} id=${subtitle.id} (mpv)")
-        val added = mpvView?.addAndSelectExternalSubtitle(subtitle.url) == true
+        val wasPlaying = isPlaybackCurrentlyPlaying()
+        val normalizedLang = PlayerSubtitleUtils.normalizeLanguageCode(subtitle.lang)
+        val trackTitle = buildAddonSubtitleTrackId(subtitle)
+        val added = mpvView?.addAndSelectExternalSubtitle(
+            url = subtitle.url,
+            title = trackTitle,
+            language = normalizedLang
+        ) == true
         if (!added) return
 
         pendingAddonSubtitleLanguage = null
@@ -264,6 +275,7 @@ internal fun PlayerRuntimeController.selectAddonSubtitle(subtitle: Subtitle) {
             )
         }
         updateMpvAvailableTracks()
+        keepMpvPlayingIfNeeded(wasPlaying)
         return
     }
 

@@ -2,7 +2,9 @@ package com.nuvio.tv.ui.screens.player
 
 import android.util.Log
 import com.nuvio.tv.data.local.InternalPlayerEngine
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 internal fun PlayerRuntimeController.attachMpvView(view: NuvioMpvSurfaceView?) {
     if (mpvView === view) return
@@ -272,6 +274,28 @@ internal fun PlayerRuntimeController.setPlaybackPaused(paused: Boolean) {
     } else {
         _exoPlayer?.let { player ->
             if (paused) player.pause() else player.play()
+        }
+    }
+}
+
+internal fun PlayerRuntimeController.keepMpvPlayingIfNeeded(wasPlaying: Boolean) {
+    if (!wasPlaying || !isUsingMpvEngine()) return
+    scope.launch {
+        // If track switch forces a pause, nudge playback back only when needed.
+        repeat(6) {
+            if (!isUsingMpvEngine()) return@launch
+            val view = mpvView ?: return@launch
+            val pausedByCache = view.isPausedForCacheNow()
+            val coreIdle = view.isCoreIdleNow()
+            if (view.isPlayingNow() && !pausedByCache && !coreIdle) {
+                _uiState.update { state ->
+                    if (state.isPlaying) state else state.copy(isPlaying = true, isBuffering = false)
+                }
+                return@launch
+            }
+            view.setPaused(false)
+            _uiState.update { it.copy(isPlaying = true, isBuffering = false) }
+            delay(120L)
         }
     }
 }

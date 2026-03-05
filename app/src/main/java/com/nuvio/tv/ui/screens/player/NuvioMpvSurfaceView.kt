@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.AttributeSet
 import android.util.Log
 import `is`.xyz.mpv.BaseMPVView
-import `is`.xyz.mpv.MPVNode
 import `is`.xyz.mpv.Utils
 import kotlin.math.roundToLong
 
@@ -53,6 +52,16 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
     fun isPlayingNow(): Boolean {
         if (!initialized) return false
         return mpv.getPropertyBoolean("pause") == false
+    }
+
+    fun isPausedForCacheNow(): Boolean {
+        if (!initialized) return false
+        return mpv.getPropertyBoolean("paused-for-cache") == true
+    }
+
+    fun isCoreIdleNow(): Boolean {
+        if (!initialized) return false
+        return mpv.getPropertyBoolean("core-idle") == true
     }
 
     fun seekToMs(positionMs: Long) {
@@ -115,11 +124,25 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
         }
     }
 
-    fun addAndSelectExternalSubtitle(url: String): Boolean {
+    fun addAndSelectExternalSubtitle(
+        url: String,
+        title: String? = null,
+        language: String? = null
+    ): Boolean {
         if (!initialized) return false
         if (url.isBlank()) return false
         return runCatching {
-            mpv.command("sub-add", url, "select")
+            // "cached" avoids duplicate re-loads for the same external subtitle.
+            val safeTitle = title?.takeIf { it.isNotBlank() }
+            val safeLanguage = language?.takeIf { it.isNotBlank() }
+            when {
+                safeTitle != null && safeLanguage != null ->
+                    mpv.command("sub-add", url, "cached", safeTitle, safeLanguage)
+                safeTitle != null ->
+                    mpv.command("sub-add", url, "cached", safeTitle)
+                else ->
+                    mpv.command("sub-add", url, "cached")
+            }
             mpv.setPropertyBoolean("sub-visibility", true)
             true
         }.getOrElse {
@@ -144,30 +167,33 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
 
     fun readTrackSnapshot(): MpvTrackSnapshot {
         if (!initialized) return MpvTrackSnapshot(emptyList(), emptyList())
-        val trackNodes = runCatching { mpv.getPropertyNode("track-list")?.asArray() }
-            .getOrNull()
-            .orEmpty()
-
-        if (trackNodes.isEmpty()) {
+        val trackCount = runCatching { mpv.getPropertyInt("track-list/count") ?: 0 }
+            .getOrDefault(0)
+        if (trackCount <= 0) {
             return MpvTrackSnapshot(emptyList(), emptyList())
         }
 
         val audioTracks = mutableListOf<MpvTrack>()
         val subtitleTracks = mutableListOf<MpvTrack>()
 
-        trackNodes.forEach { node ->
-            val map = node.asMap() ?: return@forEach
-            val type = map.string("type")?.lowercase() ?: return@forEach
-            val id = map.int("id") ?: return@forEach
-            val language = map.string("lang")
-            val title = map.string("title")
-            val codec = map.string("codec")
-            val selected = map.bool("selected")
-            val external = map.bool("external")
-            val channelCount = map.int("demux-channel-count")
-                ?: map.int("audio-channels")
-                ?: map.int("channels")
-            val forced = map.bool("forced") || listOfNotNull(title, language).any {
+        for (i in 0 until trackCount) {
+            val type = mpv.getPropertyString("track-list/$i/type")?.lowercase() ?: continue
+            val id = mpv.getPropertyInt("track-list/$i/id") ?: continue
+            val language = mpv.getPropertyString("track-list/$i/lang")
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+            val title = mpv.getPropertyString("track-list/$i/title")
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+            val codec = mpv.getPropertyString("track-list/$i/codec")
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+            val selected = mpv.getPropertyBoolean("track-list/$i/selected") == true
+            val external = mpv.getPropertyBoolean("track-list/$i/external") == true
+            val channelCount = mpv.getPropertyInt("track-list/$i/demux-channel-count")
+                ?: mpv.getPropertyInt("track-list/$i/audio-channels")
+                ?: mpv.getPropertyInt("track-list/$i/channels")
+            val forced = (mpv.getPropertyBoolean("track-list/$i/forced") == true) || listOfNotNull(title, language).any {
                 it.contains("forced", ignoreCase = true)
             }
 
@@ -223,7 +249,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
         mpv.setOptionString("opengl-es", "yes")
         mpv.setOptionString("hwdec", "mediacodec,mediacodec-copy")
         mpv.setOptionString("hwdec-codecs", "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1")
-        mpv.setOptionString("ao", "audiotrack,aaudio,opensles")
+        mpv.setOptionString("ao", "audiotrack,opensles")
         mpv.setOptionString("audio-set-media-role", "yes")
         mpv.setOptionString("tls-verify", "yes")
         mpv.setOptionString("tls-ca-file", "${context.filesDir.path}/cacert.pem")
@@ -269,15 +295,3 @@ data class MpvTrack(
     val isForced: Boolean,
     val isExternal: Boolean
 )
-
-private fun Map<String, MPVNode>.string(key: String): String? {
-    return this[key]?.asString()?.trim()?.takeIf { it.isNotBlank() }
-}
-
-private fun Map<String, MPVNode>.int(key: String): Int? {
-    return this[key]?.asInt()?.toInt()
-}
-
-private fun Map<String, MPVNode>.bool(key: String): Boolean {
-    return this[key]?.asBoolean() == true
-}
