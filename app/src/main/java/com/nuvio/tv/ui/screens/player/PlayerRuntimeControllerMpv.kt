@@ -15,6 +15,10 @@ internal fun PlayerRuntimeController.attachMpvView(view: NuvioMpvSurfaceView?) {
     runCatching {
         view.setMedia(currentStreamUrl, currentHeaders)
         view.setPlaybackSpeed(_uiState.value.playbackSpeed)
+        view.applySubtitleLanguagePreferences(
+            preferred = _uiState.value.subtitleStyle.preferredLanguage,
+            secondary = _uiState.value.subtitleStyle.secondaryPreferredLanguage
+        )
         view.setPaused(false)
         val pendingSeek = _uiState.value.pendingSeekPosition
             ?: pendingResumeProgress?.position
@@ -35,6 +39,8 @@ internal fun PlayerRuntimeController.attachMpvView(view: NuvioMpvSurfaceView?) {
         cancelPauseOverlay()
         startProgressUpdates()
         startWatchProgressSaving()
+        updateMpvAvailableTracks()
+        tryAutoSelectPreferredSubtitleFromAvailableTracks()
         scheduleHideControls()
         emitScrobbleStart()
     }.onFailure {
@@ -79,6 +85,10 @@ internal fun PlayerRuntimeController.initializeMpvPlayer(url: String, headers: M
     runCatching {
         view.setMedia(url, headers)
         view.setPlaybackSpeed(_uiState.value.playbackSpeed)
+        view.applySubtitleLanguagePreferences(
+            preferred = _uiState.value.subtitleStyle.preferredLanguage,
+            secondary = _uiState.value.subtitleStyle.secondaryPreferredLanguage
+        )
         view.setPaused(false)
         val pendingSeek = _uiState.value.pendingSeekPosition
             ?: pendingResumeProgress?.position
@@ -104,6 +114,8 @@ internal fun PlayerRuntimeController.initializeMpvPlayer(url: String, headers: M
         cancelPauseOverlay()
         startProgressUpdates()
         startWatchProgressSaving()
+        updateMpvAvailableTracks()
+        tryAutoSelectPreferredSubtitleFromAvailableTracks()
         scheduleHideControls()
         emitScrobbleStart()
     }.onFailure { error ->
@@ -131,6 +143,82 @@ internal fun PlayerRuntimeController.pauseForLifecycle() {
         return
     }
     _exoPlayer?.pause()
+}
+
+internal fun PlayerRuntimeController.updateMpvAvailableTracks() {
+    if (!isUsingMpvEngine()) return
+    val snapshot = mpvView?.readTrackSnapshot() ?: return
+
+    val audioTracks = snapshot.audioTracks
+        .mapIndexed { index, track ->
+            val codecSuffix = buildList {
+                track.codec?.takeIf { it.isNotBlank() }?.let { add(it) }
+                track.channelCount?.takeIf { it > 0 }?.let { add("${it}ch") }
+            }.joinToString(" ")
+            val displayName = if (codecSuffix.isBlank()) {
+                track.name
+            } else {
+                "${track.name} ($codecSuffix)"
+            }
+            TrackInfo(
+                index = index,
+                name = displayName,
+                language = track.language,
+                trackId = track.id.toString(),
+                codec = track.codec,
+                channelCount = track.channelCount,
+                isSelected = track.isSelected
+            )
+        }
+
+    val internalSubtitleTracks = snapshot.subtitleTracks
+        .filterNot { it.isExternal }
+        .mapIndexed { index, track ->
+            TrackInfo(
+                index = index,
+                name = track.name,
+                language = track.language,
+                trackId = track.id.toString(),
+                codec = track.codec,
+                isForced = track.isForced,
+                isSelected = track.isSelected
+            )
+        }
+
+    val selectedAudioIndex = audioTracks.indexOfFirst { it.isSelected }
+    val selectedSubtitleIndex = internalSubtitleTracks.indexOfFirst { it.isSelected }
+    val selectedExternalSubtitle = snapshot.subtitleTracks.any { it.isExternal && it.isSelected }
+
+    hasScannedTextTracksOnce = true
+    maybeApplyRememberedAudioSelection(audioTracks)
+    maybeRestorePendingAudioSelectionAfterSubtitleRefresh(audioTracks)
+
+    _uiState.update { state ->
+        val addonSelection = if (!selectedExternalSubtitle) null else state.selectedAddonSubtitle
+        val normalizedSelectedSubtitleIndex = if (selectedExternalSubtitle) {
+            -1
+        } else {
+            selectedSubtitleIndex
+        }
+
+        if (
+            state.audioTracks == audioTracks &&
+            state.subtitleTracks == internalSubtitleTracks &&
+            state.selectedAudioTrackIndex == selectedAudioIndex &&
+            state.selectedSubtitleTrackIndex == normalizedSelectedSubtitleIndex &&
+            state.selectedAddonSubtitle == addonSelection
+        ) {
+            state
+        } else {
+            state.copy(
+                audioTracks = audioTracks,
+                subtitleTracks = internalSubtitleTracks,
+                selectedAudioTrackIndex = selectedAudioIndex,
+                selectedSubtitleTrackIndex = normalizedSelectedSubtitleIndex,
+                selectedAddonSubtitle = addonSelection
+            )
+        }
+    }
 }
 
 internal fun PlayerRuntimeController.isUsingMpvEngine(): Boolean {

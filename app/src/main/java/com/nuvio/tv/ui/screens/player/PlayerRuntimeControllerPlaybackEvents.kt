@@ -37,6 +37,8 @@ internal fun PlayerRuntimeController.startProgressUpdates() {
                             playbackEnded = ended
                         )
                     }
+                    updateMpvAvailableTracks()
+                    tryAutoSelectPreferredSubtitleFromAvailableTracks()
                     updateActiveSkipInterval(pos)
                     evaluateNextEpisodeCardVisibility(
                         positionMs = pos,
