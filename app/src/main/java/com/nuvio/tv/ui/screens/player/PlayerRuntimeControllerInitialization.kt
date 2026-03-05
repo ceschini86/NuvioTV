@@ -27,6 +27,7 @@ import com.nuvio.tv.data.local.AddonSubtitleStartupMode
 import com.nuvio.tv.data.local.AudioLanguageOption
 import com.nuvio.tv.data.local.SUBTITLE_LANGUAGE_FORCED
 import com.nuvio.tv.data.local.FrameRateMatchingMode
+import com.nuvio.tv.data.local.InternalPlayerEngine
 import com.nuvio.tv.domain.model.Subtitle
 import io.github.peerless2012.ass.media.kt.buildWithAssSupport
 import kotlinx.coroutines.flow.first
@@ -56,10 +57,16 @@ internal fun PlayerRuntimeController.initializePlayer(url: String, headers: Map<
             hasScannedTextTracksOnce = false
             resetLoadingOverlayForNewStream()
             val playerSettings = playerSettingsDataStore.playerSettings.first()
+            currentInternalPlayerEngine = playerSettings.internalPlayerEngine
             _uiState.update {
                 it.copy(
+                    internalPlayerEngine = playerSettings.internalPlayerEngine,
                     frameRateMatchingMode = playerSettings.frameRateMatchingMode
                 )
+            }
+            if (playerSettings.internalPlayerEngine == InternalPlayerEngine.MVP_PLAYER) {
+                initializeMpvPlayer(url = url, headers = headers)
+                return@launch
             }
             runAfrPreflightIfEnabled(
                 url = url,

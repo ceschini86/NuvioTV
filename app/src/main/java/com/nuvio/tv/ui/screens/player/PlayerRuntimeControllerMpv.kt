@@ -1,0 +1,189 @@
+package com.nuvio.tv.ui.screens.player
+
+import android.util.Log
+import com.nuvio.tv.data.local.InternalPlayerEngine
+import kotlinx.coroutines.flow.update
+
+internal fun PlayerRuntimeController.attachMpvView(view: NuvioMpvSurfaceView?) {
+    if (mpvView === view) return
+    mpvView = view
+
+    if (view == null) return
+    if (!isUsingMpvEngine()) return
+    if (currentStreamUrl.isBlank()) return
+
+    runCatching {
+        view.setMedia(currentStreamUrl, currentHeaders)
+        view.setPlaybackSpeed(_uiState.value.playbackSpeed)
+        view.setPaused(false)
+        val pendingSeek = _uiState.value.pendingSeekPosition
+            ?: pendingResumeProgress?.position
+        if (pendingSeek != null && pendingSeek > 0L) {
+            view.seekToMs(pendingSeek)
+            _uiState.update { it.copy(pendingSeekPosition = null) }
+            pendingResumeProgress = null
+        }
+        hasRenderedFirstFrame = true
+        _uiState.update {
+            it.copy(
+                isBuffering = false,
+                isPlaying = true,
+                showLoadingOverlay = false,
+                error = null
+            )
+        }
+        cancelPauseOverlay()
+        startProgressUpdates()
+        startWatchProgressSaving()
+        scheduleHideControls()
+        emitScrobbleStart()
+    }.onFailure {
+        _uiState.update { state ->
+            state.copy(
+                error = it.message ?: "Failed to initialize libmpv surface",
+                showLoadingOverlay = false
+            )
+        }
+    }
+}
+
+internal fun PlayerRuntimeController.initializeMpvPlayer(url: String, headers: Map<String, String>) {
+    _exoPlayer?.release()
+    _exoPlayer = null
+    trackSelector = null
+    try {
+        loudnessEnhancer?.release()
+    } catch (_: Exception) {
+    }
+    loudnessEnhancer = null
+    try {
+        currentMediaSession?.release()
+    } catch (_: Exception) {
+    }
+    currentMediaSession = null
+    notifyAudioSessionUpdate(false)
+
+    val view = mpvView
+    if (view == null) {
+        _uiState.update {
+            it.copy(
+                isBuffering = true,
+                isPlaying = false,
+                showLoadingOverlay = it.loadingOverlayEnabled,
+                error = null
+            )
+        }
+        return
+    }
+
+    runCatching {
+        view.setMedia(url, headers)
+        view.setPlaybackSpeed(_uiState.value.playbackSpeed)
+        view.setPaused(false)
+        val pendingSeek = _uiState.value.pendingSeekPosition
+            ?: pendingResumeProgress?.position
+        if (pendingSeek != null && pendingSeek > 0L) {
+            view.seekToMs(pendingSeek)
+            _uiState.update { it.copy(pendingSeekPosition = null) }
+            pendingResumeProgress = null
+        }
+
+        hasRenderedFirstFrame = true
+        _uiState.update {
+            it.copy(
+                isBuffering = false,
+                isPlaying = true,
+                showLoadingOverlay = false,
+                error = null,
+                audioTracks = emptyList(),
+                subtitleTracks = emptyList(),
+                selectedAudioTrackIndex = -1,
+                selectedSubtitleTrackIndex = -1
+            )
+        }
+        cancelPauseOverlay()
+        startProgressUpdates()
+        startWatchProgressSaving()
+        scheduleHideControls()
+        emitScrobbleStart()
+    }.onFailure { error ->
+        Log.e(PlayerRuntimeController.TAG, "libmpv initialize failed: ${error.message}", error)
+        _uiState.update {
+            it.copy(
+                error = error.message ?: "Failed to initialize libmpv playback",
+                showLoadingOverlay = false,
+                isBuffering = false
+            )
+        }
+    }
+}
+
+internal fun PlayerRuntimeController.releaseMpvPlayer() {
+    runCatching { mpvView?.releasePlayer() }
+}
+
+internal fun PlayerRuntimeController.pauseForLifecycle() {
+    if (isUsingMpvEngine()) {
+        mpvView?.setPaused(true)
+        stopWatchProgressSaving()
+        stopProgressUpdates()
+        _uiState.update { it.copy(isPlaying = false) }
+        return
+    }
+    _exoPlayer?.pause()
+}
+
+internal fun PlayerRuntimeController.isUsingMpvEngine(): Boolean {
+    return currentInternalPlayerEngine == InternalPlayerEngine.MVP_PLAYER
+}
+
+internal fun PlayerRuntimeController.currentPlaybackPositionMs(): Long? {
+    return if (isUsingMpvEngine()) {
+        mpvView?.currentPositionMs()
+    } else {
+        _exoPlayer?.currentPosition
+    }
+}
+
+internal fun PlayerRuntimeController.currentPlaybackDurationMs(): Long {
+    return if (isUsingMpvEngine()) {
+        mpvView?.durationMs() ?: 0L
+    } else {
+        _exoPlayer?.duration ?: 0L
+    }
+}
+
+internal fun PlayerRuntimeController.isPlaybackCurrentlyPlaying(): Boolean {
+    return if (isUsingMpvEngine()) {
+        mpvView?.isPlayingNow() == true
+    } else {
+        _exoPlayer?.isPlaying == true
+    }
+}
+
+internal fun PlayerRuntimeController.seekPlaybackTo(positionMs: Long) {
+    if (isUsingMpvEngine()) {
+        mpvView?.seekToMs(positionMs)
+    } else {
+        _exoPlayer?.seekTo(positionMs)
+    }
+}
+
+internal fun PlayerRuntimeController.setPlaybackSpeedInternal(speed: Float) {
+    if (isUsingMpvEngine()) {
+        mpvView?.setPlaybackSpeed(speed)
+    } else {
+        _exoPlayer?.setPlaybackSpeed(speed)
+    }
+}
+
+internal fun PlayerRuntimeController.setPlaybackPaused(paused: Boolean) {
+    if (isUsingMpvEngine()) {
+        mpvView?.setPaused(paused)
+        _uiState.update { it.copy(isPlaying = !paused) }
+    } else {
+        _exoPlayer?.let { player ->
+            if (paused) player.pause() else player.play()
+        }
+    }
+}
