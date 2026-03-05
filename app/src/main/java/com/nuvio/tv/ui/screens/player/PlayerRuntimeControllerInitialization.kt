@@ -65,7 +65,16 @@ internal fun PlayerRuntimeController.initializePlayer(url: String, headers: Map<
                 )
             }
             if (playerSettings.internalPlayerEngine == InternalPlayerEngine.MVP_PLAYER) {
+                runAfrPreflightIfEnabled(
+                    url = url,
+                    headers = headers,
+                    frameRateMatchingMode = playerSettings.frameRateMatchingMode,
+                    resolutionMatchingEnabled = playerSettings.resolutionMatchingEnabled
+                )
                 initializeMpvPlayer(url = url, headers = headers)
+                // Keep addon subtitle discovery available on the mpv path too.
+                // Exo does this later in this method, but this branch returns early.
+                fetchAddonSubtitles()
                 return@launch
             }
             runAfrPreflightIfEnabled(
