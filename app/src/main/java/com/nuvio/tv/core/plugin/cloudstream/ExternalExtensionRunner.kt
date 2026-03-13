@@ -11,10 +11,14 @@ import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
 import com.lagradost.cloudstream3.TvType
+import com.lagradost.cloudstream3.metaproviders.TmdbLink
+import com.lagradost.cloudstream3.metaproviders.TmdbProvider
+import com.lagradost.cloudstream3.utils.toJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
 import com.nuvio.tv.core.tmdb.TmdbMetadataService
+import com.nuvio.tv.core.tmdb.TmdbService
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.LocalScraperResult
 import kotlinx.coroutines.Dispatchers
@@ -36,7 +40,8 @@ private const val MIN_TITLE_SIMILARITY = 0.5
 @Singleton
 class ExternalExtensionRunner @Inject constructor(
     private val extensionLoader: ExternalExtensionLoader,
-    private val tmdbMetadataService: TmdbMetadataService
+    private val tmdbMetadataService: TmdbMetadataService,
+    private val tmdbService: TmdbService
 ) {
     /**
      * Execute an external extension scraper.
@@ -67,6 +72,9 @@ class ExternalExtensionRunner @Inject constructor(
             } catch (e: Exception) {
                 Log.e(TAG, "Extension ${api.name} failed: ${e.message}", e)
                 emptyList()
+            } catch (e: Error) {
+                Log.e(TAG, "Extension ${api.name} linkage error: ${e.message}", e)
+                emptyList()
             }
         } ?: run {
             Log.w(TAG, "Extension ${api.name} timed out after ${EXECUTION_TIMEOUT_MS}ms")
@@ -75,6 +83,83 @@ class ExternalExtensionRunner @Inject constructor(
     }
 
     private suspend fun executeInternal(
+        api: MainAPI,
+        tmdbId: String,
+        mediaType: String,
+        season: Int?,
+        episode: Int?
+    ): List<LocalScraperResult> {
+        // TmdbProvider extensions receive TmdbLink JSON directly in loadLinks()
+        // instead of going through search → load → extractData
+        if (api is TmdbProvider) {
+            return executeTmdbProvider(api, tmdbId, mediaType, season, episode)
+        }
+
+        return executeSearchBased(api, tmdbId, mediaType, season, episode)
+    }
+
+    /**
+     * Fast path for TmdbProvider-based extensions.
+     * These extensions override loadLinks() and expect a JSON-serialized TmdbLink
+     * containing TMDB ID, IMDB ID, season/episode info.
+     */
+    private suspend fun executeTmdbProvider(
+        api: MainAPI,
+        tmdbId: String,
+        mediaType: String,
+        season: Int?,
+        episode: Int?
+    ): List<LocalScraperResult> {
+        val tmdbIdInt = tmdbId.toIntOrNull()
+
+        // Get enrichment for the movie name
+        val contentType = when (mediaType.lowercase()) {
+            "movie" -> ContentType.MOVIE
+            else -> ContentType.SERIES
+        }
+        val enrichment = tmdbMetadataService.fetchEnrichment(tmdbId, contentType)
+        val movieName = enrichment?.localizedTitle
+
+        // Look up IMDB ID from TMDB ID
+        val imdbId = if (tmdbIdInt != null) {
+            tmdbService.tmdbToImdb(tmdbIdInt, mediaType)
+        } else null
+
+        val tmdbLink = TmdbLink(
+            imdbID = imdbId,
+            tmdbID = tmdbIdInt,
+            episode = episode,
+            season = season,
+            movieName = movieName
+        )
+
+        val data = tmdbLink.toJson()
+        Log.d(TAG, "TmdbProvider ${api.name}: calling loadLinks with TmdbLink: $data")
+
+        val links = mutableListOf<ExtractorLink>()
+        val subtitles = mutableListOf<SubtitleFile>()
+
+        val success = api.loadLinks(
+            data = data,
+            isCasting = false,
+            subtitleCallback = { subtitles.add(it) },
+            callback = { links.add(it) }
+        )
+
+        if (!success && links.isEmpty()) {
+            Log.d(TAG, "loadLinks returned false and no links from ${api.name}")
+            return emptyList()
+        }
+
+        Log.d(TAG, "Got ${links.size} links and ${subtitles.size} subtitles from ${api.name}")
+        return links.map { link -> link.toLocalScraperResult(api.name) }
+    }
+
+    /**
+     * Standard path for regular MainAPI extensions.
+     * Uses text search to find content, then loads and extracts links.
+     */
+    private suspend fun executeSearchBased(
         api: MainAPI,
         tmdbId: String,
         mediaType: String,

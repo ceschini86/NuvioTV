@@ -86,6 +86,10 @@
 # ── External extension compatibility stubs (loaded via DexClassLoader) ────────
 -keep class com.lagradost.cloudstream3.** { *; }
 -keepclassmembers class com.lagradost.cloudstream3.** { *; }
+-keep class com.lagradost.nicehttp.** { *; }
+-keepclassmembers class com.lagradost.nicehttp.** { *; }
+-keep class com.lagradost.api.** { *; }
+-keepclassmembers class com.lagradost.api.** { *; }
 
 # ── General ────────────────────────────────────────────────────────────────────
 # Keep line numbers for crash reports

@@ -7,7 +7,7 @@ data class HomePageResponse(
 
 data class HomePageList(
     val name: String,
-    val list: List<SearchResponse>,
+    var list: List<SearchResponse>,
     val isHorizontalImages: Boolean = false
 )
 

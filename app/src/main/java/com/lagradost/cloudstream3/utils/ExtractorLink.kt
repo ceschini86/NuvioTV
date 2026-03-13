@@ -1,3 +1,5 @@
+@file:Suppress("unused")
+
 package com.lagradost.cloudstream3.utils
 
 enum class ExtractorLinkType {
@@ -6,20 +8,20 @@ enum class ExtractorLinkType {
     DASH
 }
 
-data class ExtractorLink(
-    val source: String,
-    val name: String,
-    val url: String,
-    val referer: String,
-    val quality: Int = Qualities.Unknown,
-    val type: ExtractorLinkType = ExtractorLinkType.VIDEO,
-    val headers: Map<String, String> = emptyMap(),
-    /** @deprecated Use [type] instead. Kept for backward compatibility with older extensions. */
-    @Deprecated("Use type instead", replaceWith = ReplaceWith("type == ExtractorLinkType.M3U8"))
-    val isM3u8: Boolean = type == ExtractorLinkType.M3U8,
-    /** @deprecated Use [type] instead. */
-    @Deprecated("Use type instead", replaceWith = ReplaceWith("type == ExtractorLinkType.DASH"))
-    val isDash: Boolean = type == ExtractorLinkType.DASH
+/** Sentinel value indicating the type should be inferred. */
+val INFER_TYPE: ExtractorLinkType? = null
+
+open class ExtractorLink(
+    open val source: String,
+    open val name: String,
+    open val url: String,
+    open val referer: String,
+    open val quality: Int = Qualities.Unknown.value,
+    open val type: ExtractorLinkType = ExtractorLinkType.VIDEO,
+    open val headers: Map<String, String> = emptyMap(),
+    open val extractorData: String? = null,
+    @Deprecated("Use type instead") open val isM3u8: Boolean = type == ExtractorLinkType.M3U8,
+    @Deprecated("Use type instead") open val isDash: Boolean = type == ExtractorLinkType.DASH
 ) {
     constructor(
         source: String,
@@ -29,6 +31,7 @@ data class ExtractorLink(
         quality: Int,
         isM3u8: Boolean = false,
         headers: Map<String, String> = emptyMap(),
+        extractorData: String? = null,
         isDash: Boolean = false
     ) : this(
         source = source,
@@ -41,6 +44,27 @@ data class ExtractorLink(
             isDash -> ExtractorLinkType.DASH
             else -> ExtractorLinkType.VIDEO
         },
-        headers = headers
+        headers = headers,
+        extractorData = extractorData
     )
 }
+
+fun newExtractorLink(
+    source: String,
+    name: String,
+    url: String,
+    referer: String = "",
+    quality: Int = Qualities.Unknown.value,
+    type: ExtractorLinkType = ExtractorLinkType.VIDEO,
+    headers: Map<String, String> = emptyMap(),
+    extractorData: String? = null
+): ExtractorLink = ExtractorLink(
+    source = source,
+    name = name,
+    url = url,
+    referer = referer,
+    quality = quality,
+    type = type,
+    headers = headers,
+    extractorData = extractorData
+)

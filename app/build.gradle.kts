@@ -304,6 +304,10 @@ dependencies {
     implementation(libs.jsoup)
     implementation(libs.gson)
 
+    // Jackson — required by CloudStream DEX extensions at runtime
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.17.0")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.0")
+
     // Markdown rendering
     implementation(libs.markdown.renderer.m3)
 
