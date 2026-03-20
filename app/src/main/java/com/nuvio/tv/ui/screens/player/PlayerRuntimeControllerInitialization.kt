@@ -36,6 +36,7 @@ import io.github.peerless2012.ass.media.type.AssRenderType
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -93,7 +94,7 @@ internal fun PlayerRuntimeController.initializePlayer(url: String, headers: Map<
                 url = url,
                 headers = headers
             )
-            val startupSubtitlePreparation = prepareStreamStartSubtitles(playerSettings, showLoadingStatus)
+            val startupSubtitlePreparation = prepareStreamStartSubtitles(playerSettings)
             afrJob.await()
             requestedUseLibassByUser = playerSettings.useLibass
             val useLibass = when {
