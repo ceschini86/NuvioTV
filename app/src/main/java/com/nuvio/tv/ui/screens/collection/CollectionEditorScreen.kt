@@ -679,11 +679,16 @@ private fun FolderEditorContent(
                 val catalog = uiState.availableCatalogs.find {
                     it.addonId == source.addonId && it.type == source.type && it.catalogId == source.catalogId
                 }
+                val isMissing = catalog == null
                 val sourceKey = "${source.addonId}_${source.type}_${source.catalogId}"
                 val removeFocusRequester = catalogFocusRequesters.getOrPut(sourceKey) { FocusRequester() }
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     colors = SurfaceDefaults.colors(containerColor = NuvioColors.BackgroundCard),
+                    border = if (isMissing) Border(
+                        border = BorderStroke(1.dp, NuvioColors.Error.copy(alpha = 0.5f)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) else Border.None,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -697,12 +702,12 @@ private fun FolderEditorContent(
                             Text(
                                 text = catalog?.catalogName?.replaceFirstChar { it.uppercase() } ?: source.catalogId,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = NuvioColors.TextPrimary
+                                color = if (isMissing) NuvioColors.Error else NuvioColors.TextPrimary
                             )
                             Text(
-                                text = "${source.type} - ${catalog?.addonName ?: source.addonId}",
+                                text = if (isMissing) "Addon not installed: ${source.addonId}" else "${source.type} - ${catalog.addonName}",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = NuvioColors.TextTertiary
+                                color = if (isMissing) NuvioColors.Error.copy(alpha = 0.7f) else NuvioColors.TextTertiary
                             )
                         }
                         Button(

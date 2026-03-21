@@ -81,6 +81,14 @@ class CollectionsDataStore @Inject constructor(
 
     fun generateId(): String = UUID.randomUUID().toString()
 
+    fun exportToJson(collections: List<Collection>): String {
+        return gson.toJson(collections.map { it.toSerializable() })
+    }
+
+    fun importFromJson(json: String): List<Collection> {
+        return parseCollections(json)
+    }
+
     private fun parseCollections(json: String?): List<Collection> {
         if (json.isNullOrBlank()) return emptyList()
         return try {
