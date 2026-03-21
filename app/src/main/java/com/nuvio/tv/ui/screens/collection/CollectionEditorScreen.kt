@@ -35,6 +35,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
@@ -62,6 +64,7 @@ import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Switch
 import androidx.tv.material3.SwitchDefaults
 import androidx.tv.material3.Text
+import coil.compose.AsyncImage
 import com.nuvio.tv.domain.model.CollectionFolder
 import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.ui.components.LoadingIndicator
@@ -524,12 +527,37 @@ private fun FolderEditorContent(
 
                 if (coverMode == "image") {
                     Spacer(modifier = Modifier.height(8.dp))
-                    NuvioTextField(
-                        value = folder.coverImageUrl ?: "",
-                        onValueChange = { viewModel.updateFolderCoverImage(it) },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = "https://..."
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        NuvioTextField(
+                            value = folder.coverImageUrl ?: "",
+                            onValueChange = { viewModel.updateFolderCoverImage(it) },
+                            modifier = Modifier.weight(1f),
+                            placeholder = "https://..."
+                        )
+                        if (!folder.coverImageUrl.isNullOrBlank()) {
+                            Card(
+                                onClick = {},
+                                modifier = Modifier
+                                    .width(56.dp)
+                                    .height(56.dp),
+                                shape = CardDefaults.shape(RoundedCornerShape(12.dp)),
+                                colors = CardDefaults.colors(containerColor = NuvioColors.BackgroundCard),
+                                scale = CardDefaults.scale(focusedScale = 1f)
+                            ) {
+                                AsyncImage(
+                                    model = folder.coverImageUrl,
+                                    contentDescription = "Preview",
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(RoundedCornerShape(12.dp)),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -835,6 +863,13 @@ private fun EmojiPickerContent(
     onSelect: (String) -> Unit,
     onBack: () -> Unit
 ) {
+    val firstEmojiFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        repeat(5) { androidx.compose.runtime.withFrameNanos { } }
+        try { firstEmojiFocusRequester.requestFocus() } catch (_: Exception) {}
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -860,6 +895,7 @@ private fun EmojiPickerContent(
             contentPadding = PaddingValues(bottom = 48.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
+            val firstCategory = emojiCategories.keys.first()
             emojiCategories.forEach { (category, emojis) ->
                 item(key = "category_$category") {
                     Text(
@@ -878,8 +914,12 @@ private fun EmojiPickerContent(
                         ) { index ->
                             val emoji = emojis[index]
                             val isSelected = emoji == selectedEmoji
+                            val isFirstEmoji = category == firstCategory && index == 0
                             Card(
                                 onClick = { onSelect(emoji) },
+                                modifier = (if (isFirstEmoji) Modifier.focusRequester(firstEmojiFocusRequester) else Modifier)
+                                    .width(56.dp)
+                                    .height(56.dp),
                                 colors = CardDefaults.colors(
                                     containerColor = if (isSelected) NuvioColors.Secondary.copy(alpha = 0.3f) else NuvioColors.BackgroundCard,
                                     focusedContainerColor = NuvioColors.FocusBackground
@@ -895,10 +935,7 @@ private fun EmojiPickerContent(
                                     )
                                 ),
                                 shape = CardDefaults.shape(RoundedCornerShape(12.dp)),
-                                scale = CardDefaults.scale(focusedScale = 1.1f),
-                                modifier = Modifier
-                                    .width(56.dp)
-                                    .height(56.dp)
+                                scale = CardDefaults.scale(focusedScale = 1.1f)
                             ) {
                                 Box(
                                     modifier = Modifier.fillMaxSize(),
