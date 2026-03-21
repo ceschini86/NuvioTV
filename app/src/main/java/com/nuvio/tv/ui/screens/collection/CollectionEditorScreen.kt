@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -43,6 +45,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Border
@@ -359,6 +362,18 @@ private fun FolderEditorContent(
         return
     }
 
+    if (uiState.showEmojiPicker) {
+        EmojiPickerContent(
+            selectedEmoji = folder.coverEmoji,
+            onSelect = { emoji ->
+                viewModel.updateFolderCoverEmoji(emoji)
+                viewModel.hideEmojiPicker()
+            },
+            onBack = { viewModel.hideEmojiPicker() }
+        )
+        return
+    }
+
     val titleFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
@@ -427,16 +442,95 @@ private fun FolderEditorContent(
             }
 
             item {
-                Text("Cover Image", style = MaterialTheme.typography.labelLarge, color = NuvioColors.TextSecondary)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text("Enter a URL to a custom cover image, or leave empty to use a folder icon.", style = MaterialTheme.typography.bodySmall, color = NuvioColors.TextTertiary)
+                val hasEmoji = !folder.coverEmoji.isNullOrBlank()
+                val coverMode = when {
+                    folder.coverImageUrl != null -> "image"
+                    hasEmoji -> "emoji"
+                    else -> "none"
+                }
+
+                Text("Cover", style = MaterialTheme.typography.labelLarge, color = NuvioColors.TextSecondary)
                 Spacer(modifier = Modifier.height(8.dp))
-                NuvioTextField(
-                    value = folder.coverImageUrl ?: "",
-                    onValueChange = { viewModel.updateFolderCoverImage(it) },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = "https://..."
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(
+                        onClick = { viewModel.clearFolderCover() },
+                        colors = ButtonDefaults.colors(
+                            containerColor = if (coverMode == "none") NuvioColors.Secondary.copy(alpha = 0.3f) else NuvioColors.BackgroundCard,
+                            contentColor = if (coverMode == "none") NuvioColors.Secondary else NuvioColors.TextSecondary,
+                            focusedContainerColor = NuvioColors.FocusBackground,
+                            focusedContentColor = NuvioColors.Primary
+                        ),
+                        border = ButtonDefaults.border(
+                            border = if (coverMode == "none") Border(
+                                border = BorderStroke(2.dp, NuvioColors.Secondary),
+                                shape = RoundedCornerShape(12.dp)
+                            ) else Border.None,
+                            focusedBorder = Border(
+                                border = BorderStroke(2.dp, NuvioColors.FocusRing),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                        ),
+                        shape = ButtonDefaults.shape(RoundedCornerShape(12.dp))
+                    ) { Text("None") }
+
+                    Button(
+                        onClick = { viewModel.showEmojiPicker() },
+                        colors = ButtonDefaults.colors(
+                            containerColor = if (coverMode == "emoji") NuvioColors.Secondary.copy(alpha = 0.3f) else NuvioColors.BackgroundCard,
+                            contentColor = if (coverMode == "emoji") NuvioColors.Secondary else NuvioColors.TextSecondary,
+                            focusedContainerColor = NuvioColors.FocusBackground,
+                            focusedContentColor = NuvioColors.Primary
+                        ),
+                        border = ButtonDefaults.border(
+                            border = if (coverMode == "emoji") Border(
+                                border = BorderStroke(2.dp, NuvioColors.Secondary),
+                                shape = RoundedCornerShape(12.dp)
+                            ) else Border.None,
+                            focusedBorder = Border(
+                                border = BorderStroke(2.dp, NuvioColors.FocusRing),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                        ),
+                        shape = ButtonDefaults.shape(RoundedCornerShape(12.dp))
+                    ) {
+                        if (hasEmoji) {
+                            Text("${folder.coverEmoji}  Emoji")
+                        } else {
+                            Text("Emoji")
+                        }
+                    }
+
+                    Button(
+                        onClick = { viewModel.switchToImageMode() },
+                        colors = ButtonDefaults.colors(
+                            containerColor = if (coverMode == "image") NuvioColors.Secondary.copy(alpha = 0.3f) else NuvioColors.BackgroundCard,
+                            contentColor = if (coverMode == "image") NuvioColors.Secondary else NuvioColors.TextSecondary,
+                            focusedContainerColor = NuvioColors.FocusBackground,
+                            focusedContentColor = NuvioColors.Primary
+                        ),
+                        border = ButtonDefaults.border(
+                            border = if (coverMode == "image") Border(
+                                border = BorderStroke(2.dp, NuvioColors.Secondary),
+                                shape = RoundedCornerShape(12.dp)
+                            ) else Border.None,
+                            focusedBorder = Border(
+                                border = BorderStroke(2.dp, NuvioColors.FocusRing),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                        ),
+                        shape = ButtonDefaults.shape(RoundedCornerShape(12.dp))
+                    ) { Text("Image URL") }
+                }
+
+                if (coverMode == "image") {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    NuvioTextField(
+                        value = folder.coverImageUrl ?: "",
+                        onValueChange = { viewModel.updateFolderCoverImage(it) },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = "https://..."
+                    )
+                }
             }
 
             item {
@@ -711,6 +805,111 @@ private fun CatalogPickerContent(
                                 contentDescription = "Add",
                                 tint = NuvioColors.TextTertiary
                             )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private val emojiCategories = linkedMapOf(
+    "Streaming" to listOf("🎬", "🎭", "🎥", "📺", "🍿", "🎞️", "📽️", "🎦", "📡", "📻"),
+    "Genres" to listOf("💀", "👻", "🔪", "💣", "🚀", "🛸", "🧙", "🦸", "🧟", "🤖", "💘", "😂", "😱", "🤯", "🥺", "😈"),
+    "Sports" to listOf("⚽", "🏀", "🏈", "⚾", "🎾", "🏐", "🏒", "🥊", "🏎️", "🏆", "🎯", "🏋️"),
+    "Music" to listOf("🎵", "🎶", "🎤", "🎸", "🥁", "🎹", "🎷", "🎺", "🎻", "🪗"),
+    "Nature" to listOf("🌍", "🌊", "🏔️", "🌋", "🌅", "🌙", "⭐", "🔥", "❄️", "🌈", "🌸", "🍀"),
+    "Animals" to listOf("🐕", "🐈", "🦁", "🐻", "🦊", "🐺", "🦅", "🐉", "🦋", "🐬", "🦈", "🐙"),
+    "Food" to listOf("🍕", "🍔", "🍣", "🍜", "🍩", "🍰", "🍷", "🍺", "☕", "🧁", "🌮", "🥗"),
+    "Travel" to listOf("✈️", "🚂", "🚗", "⛵", "🏖️", "🗼", "🏰", "🗽", "🎡", "🏕️", "🌆", "🛣️"),
+    "People" to listOf("👨‍👩‍👧‍👦", "👫", "👶", "🧒", "👩", "👨", "🧓", "💃", "🕺", "🥷", "🧑‍🚀", "🧑‍🎨"),
+    "Objects" to listOf("📱", "💻", "🎮", "🕹️", "📷", "🔮", "💡", "🔑", "💎", "🎁", "📚", "✏️"),
+    "Flags" to listOf("🏳️‍🌈", "🇺🇸", "🇬🇧", "🇨🇦", "🇫🇷", "🇩🇪", "🇯🇵", "🇰🇷", "🇮🇳", "🇧🇷", "🇲🇽", "🇦🇺"),
+    "Symbols" to listOf("❤️", "💜", "💙", "💚", "💛", "🧡", "🖤", "🤍", "✅", "❌", "⚡", "💯")
+)
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun EmojiPickerContent(
+    selectedEmoji: String?,
+    onSelect: (String) -> Unit,
+    onBack: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = 48.dp, start = 48.dp, end = 48.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Choose Emoji",
+                style = MaterialTheme.typography.headlineMedium,
+                color = NuvioColors.TextPrimary
+            )
+            NuvioButton(onClick = onBack) { Text("Back") }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 48.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            emojiCategories.forEach { (category, emojis) ->
+                item(key = "category_$category") {
+                    Text(
+                        text = category,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = NuvioColors.TextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp)
+                    ) {
+                        items(
+                            count = emojis.size,
+                            key = { "${category}_${emojis[it]}" }
+                        ) { index ->
+                            val emoji = emojis[index]
+                            val isSelected = emoji == selectedEmoji
+                            Card(
+                                onClick = { onSelect(emoji) },
+                                colors = CardDefaults.colors(
+                                    containerColor = if (isSelected) NuvioColors.Secondary.copy(alpha = 0.3f) else NuvioColors.BackgroundCard,
+                                    focusedContainerColor = NuvioColors.FocusBackground
+                                ),
+                                border = CardDefaults.border(
+                                    border = if (isSelected) Border(
+                                        border = BorderStroke(2.dp, NuvioColors.Secondary),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) else Border.None,
+                                    focusedBorder = Border(
+                                        border = BorderStroke(2.dp, NuvioColors.FocusRing),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                ),
+                                shape = CardDefaults.shape(RoundedCornerShape(12.dp)),
+                                scale = CardDefaults.scale(focusedScale = 1.1f),
+                                modifier = Modifier
+                                    .width(56.dp)
+                                    .height(56.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = emoji,
+                                        fontSize = 28.sp
+                                    )
+                                }
+                            }
                         }
                     }
                 }

@@ -102,6 +102,7 @@ class CollectionsDataStore @Inject constructor(
         val id: String,
         val title: String,
         val coverImageUrl: String? = null,
+        val coverEmoji: String? = null,
         val tileShape: String = "SQUARE",
         val hideTitle: Boolean = false,
         val catalogSources: List<SerializableCatalogSource> = emptyList()
@@ -121,6 +122,7 @@ class CollectionsDataStore @Inject constructor(
                 id = folder.id,
                 title = folder.title,
                 coverImageUrl = folder.coverImageUrl,
+                coverEmoji = folder.coverEmoji,
                 tileShape = folder.tileShape.name,
                 hideTitle = folder.hideTitle,
                 catalogSources = folder.catalogSources.map { source ->
@@ -142,6 +144,7 @@ class CollectionsDataStore @Inject constructor(
                 id = folder.id,
                 title = folder.title,
                 coverImageUrl = folder.coverImageUrl,
+                coverEmoji = folder.coverEmoji,
                 tileShape = PosterShape.fromString(folder.tileShape),
                 hideTitle = folder.hideTitle,
                 catalogSources = folder.catalogSources.map { source ->

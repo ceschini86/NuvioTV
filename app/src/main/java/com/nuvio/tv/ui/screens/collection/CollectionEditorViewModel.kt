@@ -29,7 +29,8 @@ data class CollectionEditorUiState(
     val availableCatalogs: List<AvailableCatalog> = emptyList(),
     val editingFolder: CollectionFolder? = null,
     val showFolderEditor: Boolean = false,
-    val showCatalogPicker: Boolean = false
+    val showCatalogPicker: Boolean = false,
+    val showEmojiPicker: Boolean = false
 )
 
 data class AvailableCatalog(
@@ -155,8 +156,46 @@ class CollectionEditorViewModel @Inject constructor(
 
     fun updateFolderCoverImage(url: String) {
         _uiState.update { state ->
-            state.copy(editingFolder = state.editingFolder?.copy(coverImageUrl = url.ifBlank { null }))
+            state.copy(editingFolder = state.editingFolder?.copy(
+                coverImageUrl = url,
+                coverEmoji = null
+            ))
         }
+    }
+
+    fun updateFolderCoverEmoji(emoji: String) {
+        _uiState.update { state ->
+            state.copy(editingFolder = state.editingFolder?.copy(
+                coverEmoji = emoji,
+                coverImageUrl = null
+            ))
+        }
+    }
+
+    fun switchToImageMode() {
+        _uiState.update { state ->
+            state.copy(editingFolder = state.editingFolder?.copy(
+                coverImageUrl = state.editingFolder.coverImageUrl ?: "",
+                coverEmoji = null
+            ))
+        }
+    }
+
+    fun clearFolderCover() {
+        _uiState.update { state ->
+            state.copy(editingFolder = state.editingFolder?.copy(
+                coverImageUrl = null,
+                coverEmoji = null
+            ))
+        }
+    }
+
+    fun showEmojiPicker() {
+        _uiState.update { it.copy(showEmojiPicker = true) }
+    }
+
+    fun hideEmojiPicker() {
+        _uiState.update { it.copy(showEmojiPicker = false) }
     }
 
     fun updateFolderTileShape(shape: PosterShape) {
@@ -228,7 +267,11 @@ class CollectionEditorViewModel @Inject constructor(
     fun saveFolderEdit() {
         val rawFolder = _uiState.value.editingFolder ?: return
         if (rawFolder.catalogSources.isEmpty()) return
-        val editingFolder = if (rawFolder.title.isBlank()) rawFolder.copy(title = "Untitled") else rawFolder
+        val cleanedFolder = rawFolder.copy(
+            title = rawFolder.title.ifBlank { "Untitled" },
+            coverImageUrl = rawFolder.coverImageUrl?.ifBlank { null }
+        )
+        val editingFolder = cleanedFolder
         _uiState.update { state ->
             val existingIndex = state.folders.indexOfFirst { it.id == editingFolder.id }
             val newFolders = if (existingIndex >= 0) {

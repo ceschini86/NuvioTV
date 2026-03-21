@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Border
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
@@ -154,6 +155,16 @@ private fun FolderCard(
                         .clip(shape),
                     contentScale = ContentScale.Crop
                 )
+            } else if (!folder.coverEmoji.isNullOrBlank()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = folder.coverEmoji,
+                        fontSize = 48.sp
+                    )
+                }
             } else {
                 Box(
                     modifier = Modifier.fillMaxSize(),
