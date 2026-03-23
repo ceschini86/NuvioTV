@@ -2,8 +2,8 @@ package com.nuvio.tv.ui.screens.player
 
 import android.content.Context
 import android.content.res.Resources
-import android.media.audiofx.LoudnessEnhancer
 import android.os.Build
+import android.util.Log
 import android.view.accessibility.CaptioningManager
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -16,6 +16,8 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.ForwardingRenderer
 import androidx.media3.exoplayer.Renderer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.text.TextOutput
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
@@ -28,10 +30,12 @@ import com.nuvio.tv.data.local.AudioLanguageOption
 import com.nuvio.tv.data.local.SUBTITLE_LANGUAGE_FORCED
 import com.nuvio.tv.data.local.FrameRateMatchingMode
 import com.nuvio.tv.data.local.InternalPlayerEngine
+import com.nuvio.tv.data.local.PlayerSettings
 import com.nuvio.tv.domain.model.Subtitle
-import io.github.peerless2012.ass.media.kt.buildWithAssSupport
+import io.github.peerless2012.ass.media.type.AssRenderType
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -43,8 +47,22 @@ internal data class StartupSubtitlePreparation(
     val fetchCompleted: Boolean
 )
 
+private suspend fun PlayerRuntimeController.resolveCurrentStreamMimeType(
+    url: String,
+    headers: Map<String, String>
+) {
+    currentStreamMimeType = PlayerMediaSourceFactory.probeMimeType(
+        url = url,
+        headers = headers,
+        filename = currentFilename
+    )
+    Log.d(
+        PlayerRuntimeController.TAG,
+        "Resolved stream mimeType=${currentStreamMimeType ?: "unknown"} for url=$url"
+    )
+}
+
 @androidx.annotation.OptIn(UnstableApi::class)
-@OptIn(UnstableApi::class)
 internal fun PlayerRuntimeController.initializePlayer(url: String, headers: Map<String, String>) {
     if (url.isEmpty()) {
         _uiState.update { it.copy(error = "No stream URL provided", showLoadingOverlay = false) }
@@ -53,8 +71,6 @@ internal fun PlayerRuntimeController.initializePlayer(url: String, headers: Map<
 
     scope.launch {
         try {
-            autoSubtitleSelected = false
-            hasScannedTextTracksOnce = false
             resetLoadingOverlayForNewStream()
             val playerSettings = playerSettingsDataStore.playerSettings.first()
             val preferredAudioLanguages = resolvePreferredAudioLanguages(
@@ -67,18 +83,26 @@ internal fun PlayerRuntimeController.initializePlayer(url: String, headers: Map<
             _uiState.update {
                 it.copy(
                     internalPlayerEngine = playerSettings.internalPlayerEngine,
-                    frameRateMatchingMode = playerSettings.frameRateMatchingMode
+                    frameRateMatchingMode = playerSettings.frameRateMatchingMode,
+                    resizeMode = playerSettings.resizeMode
                 )
             }
+            val afrJob = async {
+                runAfrPreflightIfEnabled(
+                    url = url,
+                    headers = headers,
+                    frameRateMatchingMode = playerSettings.frameRateMatchingMode,
+                    resolutionMatchingEnabled = playerSettings.resolutionMatchingEnabled
+                )
+            }
+            resolveCurrentStreamMimeType(
+                url = url,
+                headers = headers
+            )
             if (playerSettings.internalPlayerEngine == InternalPlayerEngine.MVP_PLAYER) {
                 mpvInitializationInProgress = true
                 try {
-                    runAfrPreflightIfEnabled(
-                        url = url,
-                        headers = headers,
-                        frameRateMatchingMode = playerSettings.frameRateMatchingMode,
-                        resolutionMatchingEnabled = playerSettings.resolutionMatchingEnabled
-                    )
+                    afrJob.await()
                     initializeMpvPlayer(url = url, headers = headers)
                     // Keep addon subtitle discovery available on the mpv path too.
                     // Exo does this later in this method, but this branch returns early.
@@ -89,20 +113,30 @@ internal fun PlayerRuntimeController.initializePlayer(url: String, headers: Map<
                 return@launch
             }
             mpvInitializationInProgress = false
-            runAfrPreflightIfEnabled(
-                url = url,
-                headers = headers,
-                frameRateMatchingMode = playerSettings.frameRateMatchingMode,
-                resolutionMatchingEnabled = playerSettings.resolutionMatchingEnabled
-            )
-            val startupSubtitlePreparation = prepareStartupSubtitles(
-                mode = playerSettings.addonSubtitleStartupMode,
-                preferredLanguage = playerSettings.subtitleStyle.preferredLanguage,
-                secondaryLanguage = playerSettings.subtitleStyle.secondaryPreferredLanguage
-            )
-            val useLibass = false // Temporarily disabled for maintenance
-            val libassRenderType = playerSettings.libassRenderType.toAssRenderType()
-            val loadControl = DefaultLoadControl.Builder().build()
+            val startupSubtitlePreparation = prepareStreamStartSubtitles(playerSettings)
+            afrJob.await()
+            requestedUseLibassByUser = playerSettings.useLibass
+            val useLibass = when {
+                !requestedUseLibassByUser -> false
+                libassPipelineOverrideForCurrentStream != null -> libassPipelineOverrideForCurrentStream == true
+                else -> true
+            }
+            val requestedLibassRenderType = playerSettings.libassRenderType.toAssRenderType()
+            val libassRenderType = when {
+                !useLibass -> requestedLibassRenderType
+                requestedLibassRenderType == AssRenderType.OVERLAY_OPEN_GL -> AssRenderType.EFFECTS_OPEN_GL
+                requestedLibassRenderType == AssRenderType.OVERLAY_CANVAS -> AssRenderType.EFFECTS_CANVAS
+                else -> requestedLibassRenderType
+            }
+            val loadControl = DefaultLoadControl.Builder()
+                .setTargetBufferBytes(100 * 1024 * 1024)
+                .setBufferDurationsMs(
+                    DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
+                    70_000,
+                    DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
+                    DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
+                )
+                .build()
 
             
             trackSelector = DefaultTrackSelector(context).apply {
@@ -148,24 +182,16 @@ internal fun PlayerRuntimeController.initializePlayer(url: String, headers: Map<
             subtitleDelayUs.set(_uiState.value.subtitleDelayMs.toLong() * 1000L)
             val renderersFactory = SubtitleOffsetRenderersFactory(
                 context = context,
-                subtitleDelayUsProvider = subtitleDelayUs::get
-            )
-                .setExtensionRendererMode(playerSettings.decoderPriority)
+                subtitleDelayUsProvider = subtitleDelayUs::get,
+                gainAudioProcessor = gainAudioProcessor
+            ).setExtensionRendererMode(playerSettings.decoderPriority)
                 .setMapDV7ToHevc(playerSettings.mapDV7ToHevc)
 
-            _exoPlayer = if (useLibass) {
-                
-                ExoPlayer.Builder(context)
-                    .setLoadControl(loadControl)
-                    .setTrackSelector(trackSelector!!)
-                    .setMediaSourceFactory(DefaultMediaSourceFactory(context, extractorsFactory))
-                    .buildWithAssSupport(
-                        context = context,
-                        renderType = libassRenderType,
-                        renderersFactory = renderersFactory
-                    )
-            } else {
-                
+            val buildDefaultPlayer = {
+                mediaSourceFactory.configureSubtitleParsing(
+                    extractorsFactory = null,
+                    subtitleParserFactory = null
+                )
                 ExoPlayer.Builder(context)
                     .setTrackSelector(trackSelector!!)
                     .setMediaSourceFactory(DefaultMediaSourceFactory(context, extractorsFactory))
@@ -173,6 +199,24 @@ internal fun PlayerRuntimeController.initializePlayer(url: String, headers: Map<
                     .setLoadControl(loadControl)
                     .build()
             }
+
+            _exoPlayer = if (useLibass) {
+                ExoPlayer.Builder(context)
+                    .setLoadControl(loadControl)
+                    .setTrackSelector(trackSelector!!)
+                    .setMediaSourceFactory(DefaultMediaSourceFactory(context, extractorsFactory))
+                    .buildWithAssSupportCompat(
+                        context = context,
+                        renderType = libassRenderType,
+                        playerMediaSourceFactory = mediaSourceFactory,
+                        extractorsFactory = extractorsFactory,
+                        renderersFactory = renderersFactory
+                    )
+            } else {
+                buildDefaultPlayer()
+            }
+            activePlayerUsesLibass = useLibass
+            libassPipelineSwitchInFlight = false
 
             _exoPlayer?.apply {
                 
@@ -200,12 +244,7 @@ internal fun PlayerRuntimeController.initializePlayer(url: String, headers: Map<
                     e.printStackTrace()
                 }
 
-                try {
-                    loudnessEnhancer?.release()
-                    loudnessEnhancer = LoudnessEnhancer(audioSessionId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+                applyAudioAmplification(_uiState.value.audioAmplificationDb)
 
                 
                 notifyAudioSessionUpdate(true)
@@ -213,18 +252,14 @@ internal fun PlayerRuntimeController.initializePlayer(url: String, headers: Map<
                 val preferred = playerSettings.subtitleStyle.preferredLanguage
                 val secondary = playerSettings.subtitleStyle.secondaryPreferredLanguage
                 applySubtitlePreferences(preferred, secondary)
-                attachedAddonSubtitleKeys = startupSubtitlePreparation.attachedSubtitles
-                    .distinctBy { addonSubtitleKey(it) }
-                    .map(::addonSubtitleKey)
-                    .toSet()
-                val startupSubtitleConfigurations = startupSubtitlePreparation.attachedSubtitles
-                    .distinctBy { "${it.id}|${it.url}" }
-                    .map { subtitle -> toSubtitleConfiguration(subtitle) }
+                applyStartupSubtitlePreparation(startupSubtitlePreparation)
+                val startupSubtitleConfigurations = buildStartupSubtitleConfigurations(startupSubtitlePreparation)
                 setMediaSource(
                     mediaSourceFactory.createMediaSource(
                         url = url,
                         headers = headers,
-                        subtitleConfigurations = startupSubtitleConfigurations
+                        subtitleConfigurations = startupSubtitleConfigurations,
+                        mimeTypeOverride = currentStreamMimeType
                     )
                 )
                 playWhenReady = true
@@ -273,6 +308,8 @@ internal fun PlayerRuntimeController.initializePlayer(url: String, headers: Map<
                             }
                             // Re-evaluate subtitle auto-selection once player is ready.
                             tryAutoSelectPreferredSubtitleFromAvailableTracks()
+
+                            trackSelectionParameters = trackSelectionParameters.buildUpon().build()
                         }
                     
                         
@@ -345,17 +382,8 @@ internal fun PlayerRuntimeController.initializePlayer(url: String, headers: Map<
                     }
                 })
             }
-            when {
-                startupSubtitlePreparation.fetchCompleted -> {
-                    _uiState.update {
-                        it.copy(
-                            addonSubtitles = startupSubtitlePreparation.fetchedSubtitles,
-                            isLoadingAddonSubtitles = false,
-                            addonSubtitlesError = null
-                        )
-                    }
-                }
-                else -> fetchAddonSubtitles()
+            if (!startupSubtitlePreparation.fetchCompleted) {
+                fetchAddonSubtitles()
             }
         } catch (e: Exception) {
             _uiState.update {
@@ -480,6 +508,68 @@ internal suspend fun PlayerRuntimeController.prepareStartupSubtitles(
     )
 }
 
+internal fun PlayerRuntimeController.resetAddonSubtitleStateForNewStream() {
+    autoSubtitleSelected = subtitleDisabledByPersistedPreference || subtitleAddonRestoredByPersistedPreference
+    hasScannedTextTracksOnce = false
+    pendingAddonSubtitleLanguage = null
+    pendingAddonSubtitleTrackId = null
+    pendingAudioSelectionAfterSubtitleRefresh = null
+    attachedAddonSubtitleKeys = emptySet()
+    _uiState.update {
+        it.copy(
+            addonSubtitles = emptyList(),
+            selectedAddonSubtitle = null,
+            selectedSubtitleTrackIndex = -1,
+            isLoadingAddonSubtitles = false,
+            addonSubtitlesError = null
+        )
+    }
+}
+
+internal suspend fun PlayerRuntimeController.prepareStreamStartSubtitles(
+    playerSettings: PlayerSettings
+): StartupSubtitlePreparation {
+    requestedUseLibassByUser = playerSettings.useLibass
+    if (libassPipelineDecisionStreamUrl != currentStreamUrl) {
+        libassPipelineDecisionStreamUrl = currentStreamUrl
+        libassPipelineOverrideForCurrentStream = null
+        libassPipelineSwitchInFlight = false
+        hasDetectedAssSsaTrackForCurrentStream = false
+    }
+    resetAddonSubtitleStateForNewStream()
+    return prepareStartupSubtitles(
+        mode = playerSettings.addonSubtitleStartupMode,
+        preferredLanguage = playerSettings.subtitleStyle.preferredLanguage,
+        secondaryLanguage = playerSettings.subtitleStyle.secondaryPreferredLanguage
+    )
+}
+
+internal fun PlayerRuntimeController.applyStartupSubtitlePreparation(
+    startupSubtitlePreparation: StartupSubtitlePreparation
+) {
+    attachedAddonSubtitleKeys = startupSubtitlePreparation.attachedSubtitles
+        .distinctBy { addonSubtitleKey(it) }
+        .map(::addonSubtitleKey)
+        .toSet()
+    if (!startupSubtitlePreparation.fetchCompleted) return
+
+    _uiState.update {
+        it.copy(
+            addonSubtitles = startupSubtitlePreparation.fetchedSubtitles,
+            isLoadingAddonSubtitles = false,
+            addonSubtitlesError = null
+        )
+    }
+}
+
+internal fun PlayerRuntimeController.buildStartupSubtitleConfigurations(
+    startupSubtitlePreparation: StartupSubtitlePreparation
+): List<androidx.media3.common.MediaItem.SubtitleConfiguration> {
+    return startupSubtitlePreparation.attachedSubtitles
+        .distinctBy { "${it.id}|${it.url}" }
+        .map(::toSubtitleConfiguration)
+}
+
 internal fun PlayerRuntimeController.resetLoadingOverlayForNewStream() {
     hasRenderedFirstFrame = false
     shouldEnforceAutoplayOnFirstReady = true
@@ -495,8 +585,22 @@ internal fun PlayerRuntimeController.resetLoadingOverlayForNewStream() {
 
 private class SubtitleOffsetRenderersFactory(
     context: Context,
-    private val subtitleDelayUsProvider: () -> Long
+    private val subtitleDelayUsProvider: () -> Long,
+    private val gainAudioProcessor: GainAudioProcessor
 ) : DefaultRenderersFactory(context) {
+
+    override fun buildAudioSink(
+        context: Context,
+        enableFloatOutput: Boolean,
+        enableAudioTrackPlaybackParams: Boolean
+    ): AudioSink {
+        return DefaultAudioSink.Builder(context)
+            .setEnableFloatOutput(enableFloatOutput)
+            .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+            .setAudioProcessors(arrayOf(gainAudioProcessor))
+            .setAudioTrackBufferSizeProvider(FormatAwareAudioTrackBufferProvider())
+            .build()
+    }
 
     override fun buildTextRenderers(
         context: Context,

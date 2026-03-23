@@ -48,7 +48,6 @@ import com.nuvio.tv.ui.components.PosterCardDefaults
 import com.nuvio.tv.ui.components.PosterCardStyle
 import com.nuvio.tv.ui.screens.home.HomeEvent
 import com.nuvio.tv.ui.screens.home.HomeViewModel
-import com.nuvio.tv.ui.screens.home.homeItemStatusKey
 import com.nuvio.tv.ui.theme.NuvioColors
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.math.roundToInt
@@ -143,12 +142,11 @@ fun CatalogSeeAllScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(NuvioColors.Background)
-            .padding(horizontal = 48.dp, vertical = 24.dp)
+            .padding(vertical = 24.dp)
     ) {
         // Header
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 48.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -161,6 +159,7 @@ fun CatalogSeeAllScreen(
         if (uiState.catalogAddonNameEnabled) {
             catalogRow?.addonName?.let { addonName ->
                 Text(
+                    modifier = Modifier.padding(horizontal = 48.dp),
                     text = stringResource(R.string.catalog_see_all_from, addonName),
                     style = MaterialTheme.typography.bodyMedium,
                     color = NuvioColors.TextSecondary
@@ -179,6 +178,8 @@ fun CatalogSeeAllScreen(
                     state = gridState,
                     columns = GridCells.Adaptive(minSize = posterCardStyle.width),
                     contentPadding = PaddingValues(
+                        start = 48.dp,
+                        end = 24.dp,
                         top = 12.dp,
                         bottom = if (catalogRow.isLoading) 80.dp else 32.dp
                     ),
@@ -193,7 +194,6 @@ fun CatalogSeeAllScreen(
                             item = item,
                             posterCardStyle = posterCardStyle,
                             showLabel = uiState.posterLabelsEnabled,
-                            isWatched = uiState.movieWatchedStatus[homeItemStatusKey(item.id, item.apiType)] == true,
                             focusRequester = if (index == focusedItemIndex) restoreFocusRequester else null,
                             onFocused = {
                                 focusedItemIndex = index

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Divider
@@ -18,6 +19,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -25,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -45,13 +48,17 @@ import com.nuvio.tv.ui.components.PosterCardDefaults
 import com.nuvio.tv.ui.components.PosterCardStyle
 import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
+import com.nuvio.tv.data.local.StartupAuthNotice
 import com.nuvio.tv.ui.theme.NuvioColors
+import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 private data class HomePosterOptionsTarget(
     val item: MetaPreview,
     val addonBaseUrl: String
 )
+
+private const val HOME_STARTUP_CW_GATE_TIMEOUT_MS = 5_000L
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -82,11 +89,37 @@ fun HomeScreen(
     val hasCatalogContent = uiState.catalogRows.any { it.items.isNotEmpty() }
     var hasEnteredCatalogContent by rememberSaveable { mutableStateOf(false) }
     var showHomeContentWithAnimation by rememberSaveable { mutableStateOf(false) }
+    var hasReleasedStartupCwGate by rememberSaveable { mutableStateOf(false) }
+    var startupCwGateTimedOut by rememberSaveable { mutableStateOf(false) }
     var posterOptionsTarget by remember { mutableStateOf<HomePosterOptionsTarget?>(null) }
+
+    // Stable lambdas — captured via rememberUpdatedState so they never cause
+    // downstream recomposition when uiState changes.
+    val latestMovieWatchedStatus by rememberUpdatedState(uiState.movieWatchedStatus)
+    val latestPosterOptionsTarget by rememberUpdatedState(posterOptionsTarget)
+    val isCatalogItemWatched: (MetaPreview) -> Boolean = remember(uiState.movieWatchedStatus) {
+        { item -> latestMovieWatchedStatus[homeItemStatusKey(item.id, item.apiType)] == true }
+    }
+    val onCatalogItemLongPress: (MetaPreview, String) -> Unit = remember(Unit) {
+        { item, addonBaseUrl -> posterOptionsTarget = HomePosterOptionsTarget(item, addonBaseUrl) }
+    }
 
     LaunchedEffect(hasCatalogContent) {
         if (hasCatalogContent) {
             hasEnteredCatalogContent = true
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        delay(HOME_STARTUP_CW_GATE_TIMEOUT_MS)
+        startupCwGateTimedOut = true
+    }
+
+    LaunchedEffect(uiState.continueWatchingItems.isNotEmpty(), startupCwGateTimedOut) {
+        if (!hasReleasedStartupCwGate &&
+            (uiState.continueWatchingItems.isNotEmpty() || startupCwGateTimedOut)
+        ) {
+            hasReleasedStartupCwGate = true
         }
     }
 
@@ -105,9 +138,7 @@ fun HomeScreen(
     }
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(NuvioColors.Background)
+        modifier = Modifier.fillMaxSize()
     ) {
         val hasAnyContent = uiState.catalogRows.isNotEmpty() ||
             uiState.continueWatchingItems.isNotEmpty() ||
@@ -157,7 +188,9 @@ fun HomeScreen(
             }
 
             else -> {
-                val shouldShowLoadingGate = !hasEnteredCatalogContent && !hasCatalogContent
+                val shouldShowLoadingGate =
+                    !hasReleasedStartupCwGate ||
+                        (!hasEnteredCatalogContent && !hasCatalogContent)
                 LaunchedEffect(shouldShowLoadingGate) {
                     if (shouldShowLoadingGate) {
                         showHomeContentWithAnimation = false
@@ -194,12 +227,8 @@ fun HomeScreen(
                                 onContinueWatchingPlayManually = onContinueWatchingPlayManually,
                                 showContinueWatchingManualPlayOption = effectiveAutoplayEnabled,
                                 onNavigateToCatalogSeeAll = onNavigateToCatalogSeeAll,
-                                isCatalogItemWatched = { item ->
-                                    uiState.movieWatchedStatus[homeItemStatusKey(item.id, item.apiType)] == true
-                                },
-                                onCatalogItemLongPress = { item, addonBaseUrl ->
-                                    posterOptionsTarget = HomePosterOptionsTarget(item, addonBaseUrl)
-                                }
+                                isCatalogItemWatched = isCatalogItemWatched,
+                                onCatalogItemLongPress = onCatalogItemLongPress
                             )
 
                             HomeLayout.GRID -> GridHomeRoute(
@@ -212,12 +241,8 @@ fun HomeScreen(
                                 onContinueWatchingPlayManually = onContinueWatchingPlayManually,
                                 showContinueWatchingManualPlayOption = effectiveAutoplayEnabled,
                                 onNavigateToCatalogSeeAll = onNavigateToCatalogSeeAll,
-                                isCatalogItemWatched = { item ->
-                                    uiState.movieWatchedStatus[homeItemStatusKey(item.id, item.apiType)] == true
-                                },
-                                onCatalogItemLongPress = { item, addonBaseUrl ->
-                                    posterOptionsTarget = HomePosterOptionsTarget(item, addonBaseUrl)
-                                }
+                                isCatalogItemWatched = isCatalogItemWatched,
+                                onCatalogItemLongPress = onCatalogItemLongPress
                             )
 
                             HomeLayout.MODERN -> ModernHomeRoute(
@@ -228,16 +253,35 @@ fun HomeScreen(
                                 onContinueWatchingStartFromBeginning = onContinueWatchingStartFromBeginning,
                                 onContinueWatchingPlayManually = onContinueWatchingPlayManually,
                                 showContinueWatchingManualPlayOption = effectiveAutoplayEnabled,
-                                isCatalogItemWatched = { item ->
-                                    uiState.movieWatchedStatus[homeItemStatusKey(item.id, item.apiType)] == true
-                                },
-                                onCatalogItemLongPress = { item, addonBaseUrl ->
-                                    posterOptionsTarget = HomePosterOptionsTarget(item, addonBaseUrl)
-                                }
+                                isCatalogItemWatched = isCatalogItemWatched,
+                                onCatalogItemLongPress = onCatalogItemLongPress
                             )
                         }
                     }
                 }
+            }
+        }
+
+        val startupAuthNotice = uiState.startupAuthNotice
+        if (startupAuthNotice != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 24.dp)
+                    .background(
+                        color = Color(0xFF5A1C1C),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                    .padding(horizontal = 18.dp, vertical = 10.dp)
+            ) {
+                Text(
+                    text = when (startupAuthNotice) {
+                        StartupAuthNotice.NUVIO -> stringResource(R.string.auth_notice_nuvio_logged_out)
+                        StartupAuthNotice.TRAKT -> stringResource(R.string.auth_notice_trakt_logged_out)
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = NuvioColors.TextPrimary
+                )
             }
         }
     }
@@ -385,6 +429,7 @@ private fun ModernHomeRoute(
     onCatalogItemLongPress: (MetaPreview, String) -> Unit
 ) {
     val focusState by viewModel.focusState.collectAsStateWithLifecycle()
+    val enrichingItemId by viewModel.enrichingItemId.collectAsStateWithLifecycle()
     val requestTrailerPreview = remember(viewModel) {
         { itemId: String, title: String, releaseInfo: String?, apiType: String ->
             viewModel.requestTrailerPreview(itemId, title, releaseInfo, apiType)
@@ -405,9 +450,15 @@ private fun ModernHomeRoute(
             viewModel.saveFocusState(vi, vo, ri, ii, m)
         }
     }
+    val preloadAdjacentItem = remember(viewModel) {
+        { item: MetaPreview ->
+            viewModel.preloadAdjacentItem(item)
+        }
+    }
     ModernHomeContent(
         uiState = uiState,
         focusState = focusState,
+        enrichingItemId = enrichingItemId,
         trailerPreviewUrls = viewModel.trailerPreviewUrls,
         trailerPreviewAudioUrls = viewModel.trailerPreviewAudioUrls,
         onNavigateToDetail = onNavigateToDetail,
@@ -420,9 +471,10 @@ private fun ModernHomeRoute(
         onRemoveContinueWatching = removeContinueWatching,
         isCatalogItemWatched = isCatalogItemWatched,
         onCatalogItemLongPress = onCatalogItemLongPress,
-        onItemFocus = { item ->
-            viewModel.onItemFocus(item)
+        onItemFocus = remember(viewModel) {
+            { item -> viewModel.onItemFocus(item) }
         },
+        onPreloadAdjacentItem = preloadAdjacentItem,
         onSaveFocusState = saveModernFocusState
     )
 }

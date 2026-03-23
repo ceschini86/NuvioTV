@@ -160,7 +160,6 @@ fun SupportersContributorsScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(NuvioColors.Background)
             .padding(horizontal = 36.dp, vertical = 28.dp)
     ) {
         Row(
@@ -1246,6 +1245,9 @@ private data class ContributorSupportLink(
 )
 
 private val contributorSupportLinks = mapOf(
+    "skoruppa" to ContributorSupportLink(
+        kofiUrl = "https://buymeacoffee.com/skoruppa"
+    ),
     "crisszollo" to ContributorSupportLink(
         kofiUrl = "https://ko-fi.com/crisszollo"
     )

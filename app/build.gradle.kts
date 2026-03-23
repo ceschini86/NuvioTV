@@ -2,7 +2,7 @@
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    // alias(libs.plugins.androidx.baselineprofile) 
+    alias(libs.plugins.androidx.baselineprofile)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
     alias(libs.plugins.kotlin.serialization)
@@ -24,6 +24,18 @@ val devProperties = Properties().apply {
     }
 }
 
+fun env(name: String): String? = providers.environmentVariable(name).orNull
+
+val useDebugReleaseSigning = env("CI_USE_DEBUG_SIGNING").equals("true", ignoreCase = true)
+val releaseStoreFilePath = env("NUVIO_RELEASE_STORE_FILE")
+    ?: localProperties.getProperty("NUVIO_RELEASE_STORE_FILE")
+val releaseKeyAliasValue = env("NUVIO_RELEASE_KEY_ALIAS")
+    ?: localProperties.getProperty("NUVIO_RELEASE_KEY_ALIAS", "nuviotv")
+val releaseKeyPasswordValue = env("NUVIO_RELEASE_KEY_PASSWORD")
+    ?: localProperties.getProperty("NUVIO_RELEASE_KEY_PASSWORD", "815787")
+val releaseStorePasswordValue = env("NUVIO_RELEASE_STORE_PASSWORD")
+    ?: localProperties.getProperty("NUVIO_RELEASE_STORE_PASSWORD", "815787")
+
 android {
     namespace = "com.nuvio.tv"
     compileSdk = 36
@@ -32,8 +44,8 @@ android {
         applicationId = "com.nuvio.tv"
         minSdk = 24
         targetSdk = 36
-        versionCode = 28
-        versionName = "0.4.10-beta"
+        versionCode = 42
+        versionName = "0.4.24-beta"
 
         buildConfigField("String", "PARENTAL_GUIDE_API_URL", "\"${localProperties.getProperty("PARENTAL_GUIDE_API_URL", "")}\"")
         buildConfigField("String", "INTRODB_API_URL", "\"${localProperties.getProperty("INTRODB_API_URL", "")}\"")
@@ -48,6 +60,7 @@ android {
         buildConfigField("String", "TV_LOGIN_WEB_BASE_URL", "\"${localProperties.getProperty("TV_LOGIN_WEB_BASE_URL", "https://app.nuvio.tv/tv-login")}\"")
         buildConfigField("String", "DONATIONS_BASE_URL", "\"${localProperties.getProperty("DONATIONS_BASE_URL", "")}\"")
         buildConfigField("String", "DONATIONS_DONATE_URL", "\"${localProperties.getProperty("DONATIONS_DONATE_URL", "")}\"")
+        buildConfigField("String", "AVATAR_PUBLIC_BASE_URL", "\"${localProperties.getProperty("AVATAR_PUBLIC_BASE_URL", "")}\"")
 
         // In-app updater (GitHub Releases)
         buildConfigField("String", "GITHUB_OWNER", "\"tapframe\"")
@@ -56,10 +69,10 @@ android {
 
     signingConfigs {
         create("release") {
-            keyAlias = "nuviotv"
-            keyPassword = "815787"
-            storeFile = file("../nuviotv.jks")
-            storePassword = "815787"
+            keyAlias = releaseKeyAliasValue
+            keyPassword = releaseKeyPasswordValue
+            storeFile = releaseStoreFilePath?.let(::file) ?: file("../nuviotv.jks")
+            storePassword = releaseStorePasswordValue
         }
     }
 
@@ -82,6 +95,7 @@ android {
             buildConfigField("String", "IMDB_TAPFRAME_API_BASE_URL", "\"${devProperties.getProperty("IMDB_TAPFRAME_API_BASE_URL", "")}\"")
             buildConfigField("String", "DONATIONS_BASE_URL", "\"${devProperties.getProperty("DONATIONS_BASE_URL", localProperties.getProperty("DONATIONS_BASE_URL", ""))}\"")
             buildConfigField("String", "DONATIONS_DONATE_URL", "\"${devProperties.getProperty("DONATIONS_DONATE_URL", localProperties.getProperty("DONATIONS_DONATE_URL", ""))}\"")
+            buildConfigField("String", "AVATAR_PUBLIC_BASE_URL", "\"${devProperties.getProperty("AVATAR_PUBLIC_BASE_URL", localProperties.getProperty("AVATAR_PUBLIC_BASE_URL", ""))}\"")
         }
         release {
             isMinifyEnabled = true
@@ -90,7 +104,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (useDebugReleaseSigning) {
+                signingConfigs.getByName("debug")
+            } else {
+                signingConfigs.getByName("release")
+            }
 
             buildConfigField("boolean", "IS_DEBUG_BUILD", "false")
 
@@ -105,6 +123,20 @@ android {
             buildConfigField("String", "IMDB_TAPFRAME_API_BASE_URL", "\"${localProperties.getProperty("IMDB_TAPFRAME_API_BASE_URL", "")}\"")
             buildConfigField("String", "DONATIONS_BASE_URL", "\"${localProperties.getProperty("DONATIONS_BASE_URL", "")}\"")
             buildConfigField("String", "DONATIONS_DONATE_URL", "\"${localProperties.getProperty("DONATIONS_DONATE_URL", "")}\"")
+            buildConfigField("String", "AVATAR_PUBLIC_BASE_URL", "\"${localProperties.getProperty("AVATAR_PUBLIC_BASE_URL", "")}\"")
+        }
+        create("benchmark") {
+            initWith(buildTypes.getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            isDebuggable = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            applicationIdSuffix = ".debug"
+            matchingFallbacks += "release"
         }
     }
 
@@ -175,11 +207,21 @@ configurations.all {
     exclude(group = "androidx.media3", module = "media3-ui")
 }
 
+baselineProfile {
+    automaticGenerationDuringBuild = false
+    saveInSrc = true
+    mergeIntoMain = true
+    baselineProfileOutputDir = "src/main"
+    filter {
+        include("com.nuvio.tv.**")
+    }
+}
+
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     val composeBom = platform("androidx.compose:compose-bom:2026.01.01")
 
-    // baselineProfile(project(":benchmark"))  // TODO: create benchmark module later
+    baselineProfile(project(":baselineprofile"))
     implementation(libs.androidx.core.ktx)
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation(libs.androidx.appcompat)
@@ -285,7 +327,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
 
     // Performance profiling
-    implementation("androidx.metrics:metrics-performance:1.0.0-beta01")  // JankStats
+    implementation("androidx.metrics:metrics-performance:1.0.0-rc01")  // JankStats
     debugImplementation("androidx.compose.runtime:runtime-tracing")     
 
     // Bundle real crypto-js (JS) for QuickJS plugins

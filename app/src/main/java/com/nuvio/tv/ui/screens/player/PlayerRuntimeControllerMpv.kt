@@ -64,11 +64,6 @@ internal fun PlayerRuntimeController.initializeMpvPlayer(url: String, headers: M
     _exoPlayer = null
     trackSelector = null
     try {
-        loudnessEnhancer?.release()
-    } catch (_: Exception) {
-    }
-    loudnessEnhancer = null
-    try {
         currentMediaSession?.release()
     } catch (_: Exception) {
     }
@@ -200,7 +195,6 @@ internal fun PlayerRuntimeController.updateMpvAvailableTracks() {
     val selectedExternalSubtitle = selectedExternalSubtitleTrack != null
 
     hasScannedTextTracksOnce = true
-    maybeApplyRememberedAudioSelection(audioTracks)
     maybeRestorePendingAudioSelectionAfterSubtitleRefresh(audioTracks)
 
     _uiState.update { state ->
@@ -240,6 +234,10 @@ internal fun PlayerRuntimeController.updateMpvAvailableTracks() {
             )
         }
     }
+    applyPersistedTrackPreference(
+        audioTracks = audioTracks,
+        subtitleTracks = internalSubtitleTracks
+    )
 }
 
 internal fun PlayerRuntimeController.isUsingMpvEngine(): Boolean {

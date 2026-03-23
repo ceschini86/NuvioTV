@@ -3,7 +3,6 @@ package com.nuvio.tv.ui.screens.home
 import android.util.Log
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.network.NetworkResult
-import com.nuvio.tv.data.repository.movieLookupKeys
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogDescriptor
 import com.nuvio.tv.domain.model.CatalogRow
@@ -15,6 +14,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
+import com.nuvio.tv.domain.model.MetaPreview
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withPermit
 import com.nuvio.tv.core.util.filterReleasedItems
@@ -76,17 +76,6 @@ internal fun HomeViewModel.observeInstalledAddonsPipeline() {
     }
 }
 
-internal fun HomeViewModel.observeWatchedMovieIdsPipeline() {
-    viewModelScope.launch {
-        watchProgressRepository.observeWatchedMovieIds()
-            .distinctUntilChanged()
-            .collectLatest { watchedIds ->
-                watchedMovieIds = watchedIds
-                syncMovieWatchedStatusForRowsPipeline(_fullCatalogRows.value)
-            }
-    }
-}
-
 internal suspend fun HomeViewModel.loadAllCatalogsPipeline(
     addons: List<Addon>,
     forceReload: Boolean = false
@@ -111,7 +100,6 @@ internal suspend fun HomeViewModel.loadAllCatalogsPipeline(
     posterStatusReconcileJob?.cancel()
     reconcilePosterStatusObserversPipeline(emptyList())
     _fullCatalogRows.value = emptyList()
-    syncMovieWatchedStatusForRowsPipeline(emptyList())
     truncatedRowCache.clear()
     hasRenderedFirstCatalog = false
     trailerPreviewLoadingIds.clear()
@@ -124,8 +112,12 @@ internal suspend fun HomeViewModel.loadAllCatalogsPipeline(
     externalMetaPrefetchInFlightIds.clear()
     externalMetaPrefetchJob?.cancel()
     pendingExternalMetaPrefetchItemId = null
+    prefetchedTmdbIds.clear()
+    tmdbEnrichFocusJob?.cancel()
+    pendingTmdbEnrichItemId = null
     lastHeroEnrichmentSignature = null
     lastHeroEnrichedItems = emptyList()
+    heroItemOrder = emptyList()
 
     try {
         if (addons.isEmpty()) {
@@ -145,7 +137,7 @@ internal suspend fun HomeViewModel.loadAllCatalogsPipeline(
         val catalogsToLoad = addons.flatMap { addon ->
             addon.catalogs
                 .filterNot {
-                    it.isSearchOnlyCatalog() || isCatalogDisabled(
+                    !it.shouldShowOnHome() || isCatalogDisabled(
                         addonBaseUrl = addon.baseUrl,
                         addonId = addon.id,
                         type = it.apiType,
@@ -155,15 +147,10 @@ internal suspend fun HomeViewModel.loadAllCatalogsPipeline(
                 }
                 .map { catalog -> addon to catalog }
         }
-        val orderedCatalogsToLoad = orderCatalogLoads(catalogsToLoad)
-        val initialCatalogsToLoad = selectInitialCatalogLoads(orderedCatalogsToLoad)
-        val deferredCatalogsToLoad = orderedCatalogsToLoad.filterNot { it in initialCatalogsToLoad }
-
-        pendingCatalogLoads = initialCatalogsToLoad.size
-        initialCatalogsToLoad.forEach { (addon, catalog) ->
+        pendingCatalogLoads = catalogsToLoad.size
+        catalogsToLoad.forEach { (addon, catalog) ->
             loadCatalogPipeline(addon, catalog, generation)
         }
-        scheduleDeferredCatalogLoads(deferredCatalogsToLoad, generation)
     } catch (e: Exception) {
         catalogsLoadInProgress = false
         _uiState.update { it.copy(isLoading = false, error = e.message) }
@@ -242,46 +229,6 @@ internal fun HomeViewModel.loadCatalogPipeline(
     registerCatalogLoadJob(loadJob)
 }
 
-private fun HomeViewModel.orderCatalogLoads(
-    catalogsToLoad: List<Pair<Addon, CatalogDescriptor>>
-): List<Pair<Addon, CatalogDescriptor>> {
-    val orderIndexByKey = catalogOrder.withIndex().associate { (index, key) -> key to index }
-    return catalogsToLoad.sortedBy { (addon, catalog) ->
-        orderIndexByKey[catalogKey(addon.id, catalog.apiType, catalog.id)] ?: Int.MAX_VALUE
-    }
-}
-
-private fun HomeViewModel.selectInitialCatalogLoads(
-    orderedCatalogsToLoad: List<Pair<Addon, CatalogDescriptor>>
-): List<Pair<Addon, CatalogDescriptor>> {
-    val preferredCatalogs = orderedCatalogsToLoad.filterNot { (_, catalog) ->
-        catalog.apiType.equals("other", ignoreCase = true)
-    }
-    return preferredCatalogs.take(HomeViewModel.MAX_INITIAL_HOME_CATALOGS)
-}
-
-private fun HomeViewModel.scheduleDeferredCatalogLoads(
-    deferredCatalogsToLoad: List<Pair<Addon, CatalogDescriptor>>,
-    generation: Long
-) {
-    deferredCatalogLoadJob?.cancel()
-    deferredCatalogLoadJob = null
-
-    if (deferredCatalogsToLoad.isEmpty()) return
-
-    deferredCatalogLoadJob = viewModelScope.launch {
-        delay(HomeViewModel.DEFERRED_HOME_CATALOG_DELAY_MS)
-        deferredCatalogsToLoad.forEachIndexed { index, (addon, catalog) ->
-            if (generation != catalogLoadGeneration) return@launch
-            pendingCatalogLoads += 1
-            loadCatalogPipeline(addon, catalog, generation)
-            if (index < deferredCatalogsToLoad.lastIndex) {
-                delay(HomeViewModel.DEFERRED_HOME_CATALOG_STAGGER_MS)
-            }
-        }
-    }
-}
-
 internal fun HomeViewModel.loadMoreCatalogItemsPipeline(catalogId: String, addonId: String, type: String) {
     val key = catalogKey(addonId = addonId, type = type, catalogId = catalogId)
     val currentRow = catalogsMap[key] ?: return
@@ -358,24 +305,33 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
         } else {
             emptyList()
         }
-        val heroItemsFromSelectedCatalogs = selectedHeroRows
-            .asSequence()
-            .flatMap { row -> row.items.asSequence() }
-            .filter { item -> item.hasHeroArtwork() }
-            .take(7)
-            .toList()
-        val fallbackHeroItemsFromSelectedCatalogs = selectedHeroRows
-            .asSequence()
-            .flatMap { row -> row.items.asSequence() }
-            .take(7)
-            .toList()
+        fun slotShuffled(rows: List<CatalogRow>, filter: (MetaPreview) -> Boolean, currentOrder: List<String>): List<MetaPreview> {
+            val totalCatalogs = rows.size.coerceAtLeast(1)
+            val baseSlot = 7 / totalCatalogs
+            val remainder = 7 % totalCatalogs
+            val result = mutableListOf<MetaPreview>()
+            rows.forEachIndexed { index, row ->
+                val slot = baseSlot + if (index < remainder) 1 else 0
+                val existing = currentOrder.filter { id -> row.items.any { it.id == id } }
+                val byId = row.items.filter(filter).associateBy { it.id }
+                val ordered = existing.mapNotNull { byId[it] }
+                val new = byId.values.filter { it.id !in existing }.shuffled()
+                result += (ordered + new).take(slot)
+            }
+            return result
+        }
 
-        val fallbackHeroItemsWithArtwork = orderedRows
-            .asSequence()
-            .flatMap { it.items.asSequence() }
-            .filter { it.hasHeroArtwork() }
-            .take(7)
-            .toList()
+        val currentHeroOrder = heroItemOrder
+
+        val heroItemsFromSelectedCatalogs = slotShuffled(
+            selectedHeroRows, { it.hasHeroArtwork() }, currentHeroOrder
+        )
+        val fallbackHeroItemsFromSelectedCatalogs = slotShuffled(
+            selectedHeroRows, { true }, currentHeroOrder
+        )
+        val fallbackHeroItemsWithArtwork = slotShuffled(
+            orderedRows, { it.hasHeroArtwork() }, currentHeroOrder
+        )
 
         val computedHeroItems = when {
             heroItemsFromSelectedCatalogs.isNotEmpty() -> heroItemsFromSelectedCatalogs
@@ -407,6 +363,20 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
         }
 
         val computedGridItems = if (currentLayout == HomeLayout.GRID) {
+            val posterCardWidthDp = _uiState.value.posterCardWidthDp
+            val itemsPerRow = when (posterCardWidthDp) {
+                104 -> 7   // compact
+                112 -> 6   // dense
+                120 -> 6   // standard
+                126 -> 6   // balanced
+                134 -> 5   // comfort
+                140 -> 5   // large
+                else -> 6
+            }
+            val rowCount = if (posterCardWidthDp <= 104) 2 else 3
+            val seeAllThreshold = itemsPerRow * rowCount + 2
+            val maxWithSeeAll = itemsPerRow * rowCount - 1
+            val maxWithoutSeeAll = itemsPerRow * rowCount
             buildList {
                 if (heroSectionEnabled && computedHeroItems.isNotEmpty()) {
                     add(GridItem.Hero(computedHeroItems))
@@ -421,8 +391,8 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
                             type = row.apiType
                         )
                     )
-                    val hasEnoughForSeeAll = row.items.size >= 15
-                    val displayItems = if (hasEnoughForSeeAll) row.items.take(14) else row.items.take(15)
+                    val hasEnoughForSeeAll = row.items.size >= seeAllThreshold
+                    val displayItems = if (hasEnoughForSeeAll) row.items.take(maxWithSeeAll) else row.items.take(maxWithoutSeeAll)
                     displayItems.forEach { item ->
                         add(
                             GridItem.Content(
@@ -454,13 +424,14 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
     _fullCatalogRows.update { rows ->
         if (rows == fullRowsFiltered) rows else fullRowsFiltered
     }
-    syncMovieWatchedStatusForRowsPipeline(fullRowsFiltered)
 
     val nextGridItems = if (currentLayout == HomeLayout.GRID) {
         replaceGridHeroItemsPipeline(baseGridItems, baseHeroItems)
     } else {
         baseGridItems
     }
+
+    heroItemOrder = baseHeroItems.map { it.id }
 
     _uiState.update { state ->
         state.copy(
@@ -472,58 +443,45 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
     }
 
     val tmdbSettings = currentTmdbSettings
-    val shouldUseEnrichedHeroItems = tmdbSettings.enabled &&
+    val tmdbEnabledForCurrentLayout = tmdbSettings.enabled &&
+        (currentLayout != HomeLayout.MODERN || tmdbSettings.modernHomeEnabled)
+    val shouldUseEnrichedHeroItems = tmdbEnabledForCurrentLayout &&
         (tmdbSettings.useArtwork || tmdbSettings.useBasicInfo || tmdbSettings.useDetails)
 
     if (shouldUseEnrichedHeroItems && baseHeroItems.isNotEmpty()) {
-        val enrichmentSignature = heroEnrichmentSignaturePipeline(baseHeroItems, tmdbSettings)
-        if (lastHeroEnrichmentSignature == enrichmentSignature) {
-            activeHeroEnrichmentSignature = null
-            val cached = lastHeroEnrichedItems
-            _uiState.update { state ->
-                state.copy(
-                    heroItems = if (state.heroItems == cached) state.heroItems else cached,
-                    gridItems = if (currentLayout == HomeLayout.GRID) {
-                        val enrichedGrid = replaceGridHeroItemsPipeline(state.gridItems, cached)
-                        if (state.gridItems == enrichedGrid) state.gridItems else enrichedGrid
-                    } else state.gridItems
-                )
-            }
-        } else if (activeHeroEnrichmentSignature != enrichmentSignature) {
-            heroEnrichmentJob?.cancel()
-            activeHeroEnrichmentSignature = enrichmentSignature
-            heroEnrichmentJob = viewModelScope.launch {
-                if (startupGracePeriodActive) {
-                    delay(HomeViewModel.STARTUP_GRACE_PERIOD_MS)
+        heroEnrichmentJob?.cancel()
+        heroEnrichmentJob = viewModelScope.launch {
+            val enrichmentSignature = heroEnrichmentSignaturePipeline(baseHeroItems, tmdbSettings)
+            if (lastHeroEnrichmentSignature == enrichmentSignature) {
+                val cached = lastHeroEnrichedItems
+                _uiState.update { state ->
+                    state.copy(
+                        heroItems = if (state.heroItems == cached) state.heroItems else cached,
+                        gridItems = if (currentLayout == HomeLayout.GRID) {
+                            val enrichedGrid = replaceGridHeroItemsPipeline(state.gridItems, cached)
+                            if (state.gridItems == enrichedGrid) state.gridItems else enrichedGrid
+                        } else state.gridItems
+                    )
                 }
-                if (startupGracePeriodActive) {
-                    activeHeroEnrichmentSignature = null
-                    return@launch
-                }
-                try {
-                    val enrichedItems = enrichHeroItemsPipeline(baseHeroItems, tmdbSettings)
-                    lastHeroEnrichmentSignature = enrichmentSignature
-                    lastHeroEnrichedItems = enrichedItems
-                    _uiState.update { state ->
-                        state.copy(
-                            heroItems = if (state.heroItems == enrichedItems) state.heroItems else enrichedItems,
-                            gridItems = if (currentLayout == HomeLayout.GRID) {
-                                val enrichedGrid = replaceGridHeroItemsPipeline(state.gridItems, enrichedItems)
-                                if (state.gridItems == enrichedGrid) state.gridItems else enrichedGrid
-                            } else state.gridItems
-                        )
-                    }
-                } finally {
-                    if (activeHeroEnrichmentSignature == enrichmentSignature) {
-                        activeHeroEnrichmentSignature = null
-                    }
+            } else {
+                val enrichedItems = enrichHeroItemsPipeline(baseHeroItems, tmdbSettings)
+                lastHeroEnrichmentSignature = enrichmentSignature
+                lastHeroEnrichedItems = enrichedItems
+                _uiState.update { state ->
+                    state.copy(
+                        heroItems = if (state.heroItems == enrichedItems) state.heroItems else enrichedItems,
+                        gridItems = if (currentLayout == HomeLayout.GRID) {
+                            val enrichedGrid = replaceGridHeroItemsPipeline(state.gridItems, enrichedItems)
+                            if (state.gridItems == enrichedGrid) state.gridItems else enrichedGrid
+                        } else state.gridItems
+                    )
                 }
             }
         }
     } else {
-        activeHeroEnrichmentSignature = null
         lastHeroEnrichmentSignature = null
         lastHeroEnrichedItems = emptyList()
+        heroItemOrder = emptyList()
     }
 
     schedulePosterStatusReconcilePipeline(displayRows)
@@ -542,25 +500,37 @@ internal fun HomeViewModel.schedulePosterStatusReconcilePipeline(rows: List<Cata
 }
 
 internal fun HomeViewModel.reconcilePosterStatusObserversPipeline(rows: List<CatalogRow>) {
-    val desiredItemsByKey = linkedMapOf<String, Pair<String, String>>()
+    val desiredLibraryItemsByKey = linkedMapOf<String, Pair<String, String>>()
     rows.asSequence()
         .flatMap { row -> row.items.asSequence() }
         .take(HomeViewModel.MAX_POSTER_STATUS_OBSERVERS)
         .forEach { item ->
             val key = homeItemStatusKey(item.id, item.apiType)
-            if (key !in desiredItemsByKey) {
-                desiredItemsByKey[key] = item.id to item.apiType
+            if (key !in desiredLibraryItemsByKey) {
+                desiredLibraryItemsByKey[key] = item.id to item.apiType
             }
         }
-    val desiredKeys = desiredItemsByKey.keys
+    val desiredLibraryKeys = desiredLibraryItemsByKey.keys
+
+    val allMovieItemsByKey = linkedMapOf<String, String>()
+    rows.asSequence()
+        .flatMap { row -> row.items.asSequence() }
+        .filter { it.apiType.equals("movie", ignoreCase = true) }
+        .forEach { item ->
+            val key = homeItemStatusKey(item.id, item.apiType)
+            if (key !in allMovieItemsByKey) {
+                allMovieItemsByKey[key] = item.id
+            }
+        }
+    val desiredMovieKeys = allMovieItemsByKey.keys
 
     posterLibraryObserverJobs.keys
-        .filterNot { it in desiredKeys }
+        .filterNot { it in desiredLibraryKeys }
         .forEach { staleKey ->
             posterLibraryObserverJobs.remove(staleKey)?.cancel()
         }
 
-    desiredItemsByKey.forEach { (statusKey, itemRef) ->
+    desiredLibraryItemsByKey.forEach { (statusKey, itemRef) ->
         val itemId = itemRef.first
         val itemType = itemRef.second
 
@@ -583,47 +553,56 @@ internal fun HomeViewModel.reconcilePosterStatusObserversPipeline(rows: List<Cat
         }
     }
 
+    if (desiredMovieKeys != lastMovieWatchedItemKeys) {
+        lastMovieWatchedItemKeys = desiredMovieKeys
+        movieWatchedObserverJobs.values.forEach { it.cancel() }
+        movieWatchedObserverJobs.clear()
+        movieWatchedBatchJob?.cancel()
+
+        if (desiredMovieKeys.isNotEmpty()) {
+            movieWatchedBatchJob = viewModelScope.launch {
+                watchProgressRepository.observeWatchedMovieIds()
+                    .collectLatest { watchedIds ->
+                        _uiState.update { state ->
+                            val newStatus = buildMap {
+                                allMovieItemsByKey.forEach { (statusKey, contentId) ->
+                                    put(statusKey, contentId in watchedIds)
+                                }
+                            }
+                            if (state.movieWatchedStatus == newStatus) {
+                                state
+                            } else {
+                                state.copy(movieWatchedStatus = newStatus)
+                            }
+                        }
+                    }
+            }
+        }
+    }
+
     _uiState.update { state ->
         val trimmedLibraryMembership =
-            state.posterLibraryMembership.filterKeys { it in desiredKeys }
+            state.posterLibraryMembership.filterKeys { it in desiredLibraryKeys }
+        val trimmedMovieWatchedStatus =
+            state.movieWatchedStatus.filterKeys { it in desiredMovieKeys }
         val trimmedLibraryPending =
-            state.posterLibraryPending.filterTo(linkedSetOf()) { it in desiredKeys }
+            state.posterLibraryPending.filterTo(linkedSetOf()) { it in desiredLibraryKeys }
+        val trimmedMovieWatchedPending =
+            state.movieWatchedPending.filterTo(linkedSetOf()) { it in desiredMovieKeys }
 
         if (
             trimmedLibraryMembership == state.posterLibraryMembership &&
-            trimmedLibraryPending == state.posterLibraryPending
+            trimmedMovieWatchedStatus == state.movieWatchedStatus &&
+            trimmedLibraryPending == state.posterLibraryPending &&
+            trimmedMovieWatchedPending == state.movieWatchedPending
         ) {
             state
         } else {
             state.copy(
                 posterLibraryMembership = trimmedLibraryMembership,
-                posterLibraryPending = trimmedLibraryPending
-            )
-        }
-    }
-}
-
-internal fun HomeViewModel.syncMovieWatchedStatusForRowsPipeline(rows: List<CatalogRow>) {
-    val watchedStatus = linkedMapOf<String, Boolean>()
-    rows.asSequence()
-        .flatMap { row -> row.items.asSequence() }
-        .filter { item -> item.apiType.equals("movie", ignoreCase = true) }
-        .forEach { item ->
-            val statusKey = homeItemStatusKey(item.id, item.apiType)
-            if (statusKey !in watchedStatus) {
-                watchedStatus[statusKey] = movieLookupKeys(item.id).any { it in watchedMovieIds }
-            }
-        }
-
-    val watchedKeys = watchedStatus.keys
-    _uiState.update { state ->
-        val trimmedPending = state.movieWatchedPending.filterTo(linkedSetOf()) { it in watchedKeys }
-        if (state.movieWatchedStatus == watchedStatus && state.movieWatchedPending == trimmedPending) {
-            state
-        } else {
-            state.copy(
-                movieWatchedStatus = watchedStatus,
-                movieWatchedPending = trimmedPending
+                movieWatchedStatus = trimmedMovieWatchedStatus,
+                posterLibraryPending = trimmedLibraryPending,
+                movieWatchedPending = trimmedMovieWatchedPending
             )
         }
     }
