@@ -5,12 +5,16 @@ import com.lagradost.cloudstream3.ExternalNetworkInterface
 import com.lagradost.cloudstream3.NAppResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.Cookie
+import okhttp3.CookieJar
 import okhttp3.FormBody
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -25,7 +29,26 @@ private const val MAX_RESPONSE_SIZE = 2 * 1024 * 1024L // 2MB
 @Singleton
 class ExternalNetworkInterceptor @Inject constructor() : ExternalNetworkInterface {
 
+    private val cookieJar = object : CookieJar {
+        private val store = ConcurrentHashMap<String, MutableList<Cookie>>()
+
+        override fun loadForRequest(url: HttpUrl): List<Cookie> {
+            return store[url.host]?.filter { cookie ->
+                cookie.expiresAt > System.currentTimeMillis()
+            } ?: emptyList()
+        }
+
+        override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+            val hostCookies = store.getOrPut(url.host) { mutableListOf() }
+            cookies.forEach { newCookie ->
+                hostCookies.removeAll { it.name == newCookie.name }
+                hostCookies.add(newCookie)
+            }
+        }
+    }
+
     private val defaultClient = OkHttpClient.Builder()
+        .cookieJar(cookieJar)
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .followRedirects(true)
@@ -81,7 +104,8 @@ class ExternalNetworkInterceptor @Inject constructor() : ExternalNetworkInterfac
                 val responseHeaders = buildMap {
                     response.headers.forEach { (name, value) -> put(name, value) }
                 }
-                NAppResponse(bodyText, response.code, responseHeaders)
+                val finalUrl = response.request.url.toString()
+                NAppResponse(bodyText, response.code, responseHeaders, finalUrl)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Request failed: ${request.url} - ${e.message}")

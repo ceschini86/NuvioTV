@@ -211,6 +211,23 @@ class ExternalExtensionLoader @Inject constructor(
             )
             classLoaderCache[scraperId] = classLoader
 
+            // Check for critical class shadowing
+            try {
+                @Suppress("DEPRECATION")
+                val inspectDex = dalvik.system.DexFile(dexFile)
+                val allEntries = inspectDex.entries().toList()
+                inspectDex.close()
+                val criticalShadows = allEntries.filter { className ->
+                    className == "com.lagradost.cloudstream3.MainActivityKt" ||
+                    className == "com.lagradost.cloudstream3.MainAPIKt" ||
+                    className == "com.lagradost.cloudstream3.utils.ExtractorApiKt" ||
+                    className == "com.lagradost.cloudstream3.utils.AppUtilsKt"
+                }
+                if (criticalShadows.isNotEmpty()) {
+                    Log.w(TAG, "Extension $scraperId shadows critical classes: $criticalShadows")
+                }
+            } catch (_: Exception) {}
+
             // Find and instantiate the plugin class
             val plugin = findAndLoadPlugin(classLoader, dexFile)
             if (plugin == null) {

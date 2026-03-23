@@ -739,16 +739,19 @@ class PluginManager @Inject constructor(
             externalExtensionLoader.ensureExtractorsLoaded(allDexIds, diagnostics)
         }
 
+        val testSeason = if (testMediaType == "movie") null else 1
+        val testEpisode = if (testMediaType == "movie") null else 1
+
         return try {
             val results = when (scraper.type) {
                 RepositoryType.EXTERNAL_DEX -> {
                     externalExtensionRunner.executeWithDiagnostics(
-                        scraper.id, testTmdbId, testMediaType, 1, 1, diagnostics
+                        scraper.id, testTmdbId, testMediaType, testSeason, testEpisode, diagnostics
                     )
                 }
                 RepositoryType.NUVIO_JS -> {
                     diagnostics.addStep("Executing JS scraper...")
-                    executeScraper(scraper, testTmdbId, testMediaType, 1, 1)
+                    executeScraper(scraper, testTmdbId, testMediaType, testSeason, testEpisode)
                 }
             }
             diagnostics.addStep("Result: ${results.size} streams")

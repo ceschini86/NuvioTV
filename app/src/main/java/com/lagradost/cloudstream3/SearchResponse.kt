@@ -49,7 +49,9 @@ data class AnimeSearchResponse(
     override var id: Int? = null,
     override var quality: SearchQuality? = null,
     override var posterHeaders: Map<String, String>? = null,
-    val dubStatus: Set<DubStatus>? = null
+    var dubStatus: Set<DubStatus>? = null,
+    var dubEpisodes: MutableMap<DubStatus, Int> = mutableMapOf(),
+    var episodes: MutableMap<DubStatus, Int> = mutableMapOf()
 ) : SearchResponse()
 
 data class LiveSearchResponse(

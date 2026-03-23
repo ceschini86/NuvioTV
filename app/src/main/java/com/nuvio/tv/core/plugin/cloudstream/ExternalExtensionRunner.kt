@@ -75,10 +75,15 @@ class ExternalExtensionRunner @Inject constructor(
             try {
                 executeInternal(api, tmdbId, mediaType, season, episode)
             } catch (e: Exception) {
-                Log.e(TAG, "Extension ${api.name} failed: ${e.message}", e)
+                Log.e(TAG, "Extension ${api.name} failed: ${e.javaClass.simpleName}: ${e.message}", e)
                 emptyList()
             } catch (e: Error) {
-                Log.e(TAG, "Extension ${api.name} linkage error: ${e.message}", e)
+                val missing = extractMissingClass(e)
+                if (missing != null) {
+                    Log.e(TAG, "Extension ${api.name} MISSING CLASS: $missing", e)
+                } else {
+                    Log.e(TAG, "Extension ${api.name} linkage error: ${e.javaClass.simpleName}: ${e.message}", e)
+                }
                 emptyList()
             }
         } ?: run {
@@ -177,12 +182,25 @@ class ExternalExtensionRunner @Inject constructor(
         val links = mutableListOf<ExtractorLink>()
         val subtitles = mutableListOf<SubtitleFile>()
 
-        // Instrument loadExtractor to see what URLs the extension tries
-        val extractorUrls = mutableListOf<String>()
+        // Instrument loadExtractor to log each call's result
+        data class ExtractorCall(val url: String, var matched: Boolean = false, var linkCount: Int = 0, var error: String? = null)
+        val extractorCalls = mutableListOf<ExtractorCall>()
         val originalDelegate = com.lagradost.cloudstream3.utils._loadExtractorDelegate
         com.lagradost.cloudstream3.utils._loadExtractorDelegate = { url, referer, subCb, cb ->
-            extractorUrls.add(url)
-            originalDelegate(url, referer, subCb, cb)
+            val call = ExtractorCall(url)
+            extractorCalls.add(call)
+            try {
+                val result = originalDelegate(url, referer, subCb) { link ->
+                    call.linkCount++
+                    cb(link)
+                }
+                call.matched = result
+                result
+            } catch (e: Throwable) {
+                call.error = "${e.javaClass.simpleName}: ${e.message?.take(80)}"
+                diagnostics.addStep("loadExtractor ERROR for ${url.take(60)}: ${call.error}")
+                false
+            }
         }
 
         val success = try {
@@ -200,15 +218,20 @@ class ExternalExtensionRunner @Inject constructor(
         }
 
         diagnostics.addStep("loadLinks returned: success=$success, ${links.size} links, ${subtitles.size} subs")
-        if (extractorUrls.isNotEmpty()) {
-            diagnostics.addStep("loadExtractor called ${extractorUrls.size}x:")
-            extractorUrls.take(5).forEach { url ->
-                val domain = try { java.net.URI(url).host } catch (_: Exception) { url.take(40) }
-                diagnostics.addStep("  → $domain")
+        if (extractorCalls.isNotEmpty()) {
+            diagnostics.addStep("loadExtractor called ${extractorCalls.size}x:")
+            extractorCalls.forEach { call ->
+                val domain = try { java.net.URI(call.url).host } catch (_: Exception) { call.url.take(40) }
+                val status = when {
+                    call.error != null -> "ERROR: ${call.error}"
+                    !call.matched -> "NO MATCH"
+                    call.linkCount > 0 -> "${call.linkCount} links"
+                    else -> "matched, 0 links"
+                }
+                diagnostics.addStep("  $domain → $status")
             }
-            if (extractorUrls.size > 5) diagnostics.addStep("  ... and ${extractorUrls.size - 5} more")
         } else {
-            diagnostics.addStep("loadExtractor was NOT called (extension may not use it, or HTTP requests failed)")
+            diagnostics.addStep("loadExtractor was NOT called")
         }
         // Show missing extractor domains
         val missing = extractorRegistry.getMissingExtractorDomains()
@@ -247,10 +270,73 @@ class ExternalExtensionRunner @Inject constructor(
         val year = enrichment.releaseInfo?.take(4)?.toIntOrNull()
         diagnostics.addStep("TMDB: \"$title\" ($year)")
 
-        val query = if (year != null) "$title $year" else title
-        diagnostics.addStep("Searching for: \"$query\"")
-        val searchResults = api.search(query)
-        diagnostics.addStep("Search results: ${searchResults?.size ?: 0}")
+        // Check if search() is actually overridden
+        val searchMethod = try {
+            api.javaClass.getMethod("search", String::class.java, kotlin.coroutines.Continuation::class.java)
+        } catch (_: Exception) { null }
+        val declaringClass = searchMethod?.declaringClass?.name ?: "unknown"
+        diagnostics.addStep("search() declared in: $declaringClass")
+
+        // Install temporary HTTP logging on the app singleton
+        val httpLog = mutableListOf<String>()
+        val originalClient = com.lagradost.cloudstream3.app.baseClient
+        val loggingClient = originalClient.newBuilder()
+            .addInterceptor { chain ->
+                val req = chain.request()
+                httpLog.add("→ ${req.method} ${req.url}")
+                try {
+                    val resp = chain.proceed(req)
+                    httpLog.add("← ${resp.code} (${resp.body?.contentLength() ?: "?"} bytes)")
+                    resp
+                } catch (e: Exception) {
+                    httpLog.add("← FAILED: ${e.javaClass.simpleName}: ${e.message?.take(80)}")
+                    throw e
+                }
+            }
+            .build()
+        com.lagradost.cloudstream3.app.baseClient = loggingClient
+
+        diagnostics.addStep("Searching for: \"$title\"")
+        // Call search(query, page) like real CloudStream's APIRepository does
+        var searchResults = try {
+            api.search(title, 1)?.items
+        } catch (e: Exception) {
+            diagnostics.addStep("search() THREW: ${e.javaClass.simpleName}: ${e.message?.take(120)}")
+            null
+        } catch (e: Error) {
+            val missing = extractMissingClass(e)
+            diagnostics.addStep("search() ERROR: ${missing ?: e.message?.take(120)}")
+            null
+        } finally {
+            // Restore original client
+            com.lagradost.cloudstream3.app.baseClient = originalClient
+        }
+
+        // Show HTTP activity
+        if (httpLog.isEmpty()) {
+            diagnostics.addStep("HTTP: no requests made by search()")
+        } else {
+            diagnostics.addStep("HTTP: ${httpLog.size / 2} request(s)")
+            httpLog.take(6).forEach { diagnostics.addStep("  $it") }
+            if (httpLog.size > 6) diagnostics.addStep("  ... and ${httpLog.size - 6} more")
+        }
+
+        diagnostics.addStep("Search returned: ${if (searchResults == null) "null" else "${searchResults.size} results"}")
+
+        // Fallback: if title has special characters, try simplified version
+        if (searchResults.isNullOrEmpty() && title.contains(Regex("[:\\-–—]"))) {
+            val simplified = title.replace(Regex("[:\\-–—]"), " ").replace(Regex("\\s+"), " ").trim()
+            diagnostics.addStep("Retrying with: \"$simplified\"")
+            searchResults = try {
+                api.search(simplified, 1)?.items
+            } catch (e: Exception) {
+                diagnostics.addStep("search(simplified) THREW: ${e.javaClass.simpleName}: ${e.message?.take(120)}")
+                null
+            } catch (e: Error) {
+                null
+            }
+            diagnostics.addStep("Retry returned: ${if (searchResults == null) "null" else "${searchResults.size} results"}")
+        }
 
         if (searchResults.isNullOrEmpty()) return emptyList()
 
@@ -357,24 +443,33 @@ class ExternalExtensionRunner @Inject constructor(
         )
 
         val data = tmdbLink.toJson()
-        Log.d(TAG, "TmdbProvider ${api.name}: calling loadLinks with TmdbLink: $data")
+        Log.d(TAG, "TmdbProvider ${api.name}: loadLinks TmdbLink=$data")
 
         val links = mutableListOf<ExtractorLink>()
         val subtitles = mutableListOf<SubtitleFile>()
 
-        val success = api.loadLinks(
-            data = data,
-            isCasting = false,
-            subtitleCallback = { subtitles.add(it) },
-            callback = { links.add(it) }
-        )
+        val success = try {
+            api.loadLinks(
+                data = data,
+                isCasting = false,
+                subtitleCallback = { subtitles.add(it) },
+                callback = { links.add(it) }
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "TmdbProvider ${api.name} loadLinks threw: ${e.javaClass.simpleName}: ${e.message}", e)
+            false
+        } catch (e: Error) {
+            val missing = extractMissingClass(e)
+            Log.e(TAG, "TmdbProvider ${api.name} loadLinks error: ${missing ?: e.message}", e)
+            false
+        }
 
         if (!success && links.isEmpty()) {
-            Log.d(TAG, "loadLinks returned false and no links from ${api.name}")
+            Log.w(TAG, "TmdbProvider ${api.name}: loadLinks returned false, 0 links (imdb=$imdbId, tmdb=$tmdbIdInt, title=$movieName)")
             return emptyList()
         }
 
-        Log.d(TAG, "Got ${links.size} links and ${subtitles.size} subtitles from ${api.name}")
+        Log.d(TAG, "TmdbProvider ${api.name}: ${links.size} links, ${subtitles.size} subs")
         return links.map { link -> link.toLocalScraperResult(api.name) }
     }
 
@@ -403,14 +498,36 @@ class ExternalExtensionRunner @Inject constructor(
         val title = enrichment.localizedTitle ?: return emptyList()
         val year = enrichment.releaseInfo?.take(4)?.toIntOrNull()
 
-        // Step 2: Search the extension
-        val query = if (year != null) "$title $year" else title
-        Log.d(TAG, "Searching ${api.name} for: $query")
-        val searchResults = api.search(query)
+        // Step 2: Search the extension using search(query, page) like real CloudStream's APIRepository
+        Log.d(TAG, "SearchBased ${api.name}: searching for \"$title\"")
+        var searchResults = try {
+            api.search(title, 1)?.items
+        } catch (e: Exception) {
+            Log.e(TAG, "SearchBased ${api.name} search() threw: ${e.javaClass.simpleName}: ${e.message}", e)
+            null
+        } catch (e: Error) {
+            val missing = extractMissingClass(e)
+            Log.e(TAG, "SearchBased ${api.name} search() error: ${missing ?: e.message}", e)
+            null
+        }
+        // Fallback: if title has special characters, try simplified version
+        if (searchResults.isNullOrEmpty() && title.contains(Regex("[:\\-–—]"))) {
+            val simplified = title.replace(Regex("[:\\-–—]"), " ").replace(Regex("\\s+"), " ").trim()
+            Log.d(TAG, "SearchBased ${api.name}: retrying with simplified \"$simplified\"")
+            searchResults = try {
+                api.search(simplified, 1)?.items
+            } catch (e: Exception) {
+                Log.e(TAG, "SearchBased ${api.name} search(simplified) threw: ${e.javaClass.simpleName}: ${e.message}", e)
+                null
+            } catch (e: Error) {
+                null
+            }
+        }
         if (searchResults.isNullOrEmpty()) {
-            Log.d(TAG, "No search results from ${api.name} for: $query")
+            Log.w(TAG, "SearchBased ${api.name}: 0 search results for \"$title\"")
             return emptyList()
         }
+        Log.d(TAG, "SearchBased ${api.name}: ${searchResults.size} results")
 
         // Step 3: Find best match
         val bestMatch = findBestMatch(searchResults, title, year, mediaType)
@@ -421,11 +538,21 @@ class ExternalExtensionRunner @Inject constructor(
         Log.d(TAG, "Best match from ${api.name}: ${bestMatch.name} (${bestMatch.url})")
 
         // Step 4: Load the full page
-        val loadResponse = api.load(bestMatch.url)
+        val loadResponse = try {
+            api.load(bestMatch.url)
+        } catch (e: Exception) {
+            Log.e(TAG, "SearchBased ${api.name} load() threw: ${e.javaClass.simpleName}: ${e.message}", e)
+            null
+        } catch (e: Error) {
+            val missing = extractMissingClass(e)
+            Log.e(TAG, "SearchBased ${api.name} load() error: ${missing ?: e.message}", e)
+            null
+        }
         if (loadResponse == null) {
-            Log.e(TAG, "Failed to load ${bestMatch.url} from ${api.name}")
+            Log.w(TAG, "SearchBased ${api.name}: load(${bestMatch.url}) returned null")
             return emptyList()
         }
+        Log.d(TAG, "SearchBased ${api.name}: loaded ${loadResponse.javaClass.simpleName}")
 
         // Step 5: Extract the data string for loadLinks
         val data = extractData(loadResponse, mediaType, season, episode)
@@ -438,19 +565,28 @@ class ExternalExtensionRunner @Inject constructor(
         val links = mutableListOf<ExtractorLink>()
         val subtitles = mutableListOf<SubtitleFile>()
 
-        val success = api.loadLinks(
-            data = data,
-            isCasting = false,
-            subtitleCallback = { subtitles.add(it) },
-            callback = { links.add(it) }
-        )
+        val success = try {
+            api.loadLinks(
+                data = data,
+                isCasting = false,
+                subtitleCallback = { subtitles.add(it) },
+                callback = { links.add(it) }
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "SearchBased ${api.name} loadLinks threw: ${e.javaClass.simpleName}: ${e.message}", e)
+            false
+        } catch (e: Error) {
+            val missing = extractMissingClass(e)
+            Log.e(TAG, "SearchBased ${api.name} loadLinks error: ${missing ?: e.message}", e)
+            false
+        }
 
         if (!success && links.isEmpty()) {
-            Log.d(TAG, "loadLinks returned false and no links from ${api.name}")
+            Log.w(TAG, "SearchBased ${api.name}: loadLinks returned false, 0 links")
             return emptyList()
         }
 
-        Log.d(TAG, "Got ${links.size} links and ${subtitles.size} subtitles from ${api.name}")
+        Log.d(TAG, "SearchBased ${api.name}: ${links.size} links, ${subtitles.size} subs")
 
         // Step 7: Map ExtractorLink → LocalScraperResult
         return links.map { link -> link.toLocalScraperResult(api.name) }

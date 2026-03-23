@@ -7,6 +7,10 @@ import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.json.JsonMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.EnumSet
+import java.util.Locale
 
 // ── Top-level vals/consts that extensions reference via MainAPIKt ──
 
@@ -26,6 +30,9 @@ fun base64DecodeArray(str: String): ByteArray =
 
 fun base64Encode(array: ByteArray): String =
     Base64.encodeToString(array, Base64.NO_WRAP)
+
+fun base64Encode(str: String): String =
+    Base64.encodeToString(str.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
 
 // ── MainPageData / mainPageOf ──
 
@@ -166,6 +173,11 @@ data class SearchResponseList(
     val hasNext: Boolean = false
 )
 
+fun newSearchResponseList(
+    list: List<SearchResponse>,
+    hasNext: Boolean? = null
+): SearchResponseList = SearchResponseList(items = list, hasNext = hasNext ?: false)
+
 fun List<SearchResponse>.toNewSearchResponseList(
     hasNext: Boolean? = null
 ): SearchResponseList = SearchResponseList(items = this, hasNext = hasNext ?: false)
@@ -198,11 +210,42 @@ fun newSubtitleFile(
     headers: Map<String, String>? = null
 ): SubtitleFile = SubtitleFile(lang = lang, url = url, type = type, headers = headers)
 
+// ── URL helpers ──
+
+fun fixUrlNull(url: String?, baseUrl: String? = null): String? {
+    if (url.isNullOrBlank()) return null
+    if (url.startsWith("http://") || url.startsWith("https://")) return url
+    if (url.startsWith("//")) return "https:$url"
+    if (baseUrl != null && url.startsWith("/")) return "${baseUrl.trimEnd('/')}$url"
+    return url
+}
+
+fun getBaseUrl(url: String): String {
+    return try {
+        val uri = java.net.URI(url)
+        "${uri.scheme}://${uri.host}"
+    } catch (_: Exception) {
+        url
+    }
+}
+
+fun fixUrl(url: String, baseUrl: String): String {
+    if (url.startsWith("http://") || url.startsWith("https://")) return url
+    if (url.startsWith("//")) return "https:$url"
+    if (url.startsWith("/")) return "${baseUrl.trimEnd('/')}$url"
+    return "${baseUrl.trimEnd('/')}/$url"
+}
+
 // ── MainAPI class ──
+
+/** Stub settings class for extensions that read provider settings. */
+data class SettingsJson(
+    val enableAdult: Boolean = false
+)
 
 abstract class MainAPI {
     companion object {
-        // Extensions reference MainAPI.Companion for static-like access
+        var settingsForProvider: SettingsJson = SettingsJson()
     }
 
     abstract val name: String
@@ -222,6 +265,12 @@ abstract class MainAPI {
 
     @Transient
     var _networkInterceptor: ExternalNetworkInterface? = null
+
+    /** Paginated search, starts with page: 1 */
+    open suspend fun search(query: String, page: Int): SearchResponseList? {
+        val searchResults = search(query) ?: return null
+        return newSearchResponseList(searchResults, false)
+    }
 
     open suspend fun search(query: String): List<SearchResponse>? = null
 
@@ -281,12 +330,8 @@ abstract class MainAPI {
             ?: NAppResponse("", 0, emptyMap())
     }
 
-    fun fixUrl(url: String): String {
-        if (url.startsWith("http://") || url.startsWith("https://")) return url
-        if (url.startsWith("//")) return "https:$url"
-        if (url.startsWith("/")) return "$mainUrl$url"
-        return "$mainUrl/$url"
-    }
+    // fixUrl/fixUrlNull are defined as extension functions below (not member functions)
+    // so the JVM bytecode matches what extensions expect (static methods in MainAPIKt)
 }
 
 enum class ProviderType {
@@ -303,9 +348,9 @@ enum class VPNStatus {
 data class NAppResponse(
     val text: String,
     val code: Int,
-    val headers: Map<String, String>
+    val headers: Map<String, String>,
+    val url: String = ""
 ) {
-    val url: String get() = ""
     val document: org.jsoup.nodes.Document get() = org.jsoup.Jsoup.parse(text)
     val isSuccessful: Boolean get() = code in 200..299
     override fun toString(): String = text
@@ -329,4 +374,65 @@ interface ExternalNetworkInterface {
         requestBody: Any?,
         timeout: Long
     ): NAppResponse
+}
+
+// ── Extension functions expected by CloudStream3 extensions ──
+// These compile to static methods in MainAPIKt, matching the JVM signatures
+// that pre-compiled .cs3 DEX extensions call.
+
+fun MainAPI.fixUrl(url: String): String {
+    if (url.startsWith("http") || url.startsWith("{\"") || url.startsWith("[")) return url
+    if (url.isEmpty()) return ""
+    if (url.startsWith("//")) return "https:$url"
+    if (url.startsWith("/")) return mainUrl + url
+    return "$mainUrl/$url"
+}
+
+fun MainAPI.fixUrlNull(url: String?): String? {
+    if (url.isNullOrEmpty()) return null
+    return fixUrl(url)
+}
+
+// ── AnimeSearchResponse helpers ──
+
+fun AnimeSearchResponse.addDubStatus(status: DubStatus, episodes: Int? = null) {
+    this.dubStatus = (this.dubStatus as? MutableSet)?.also { it.add(status) }
+        ?: EnumSet.of(status)
+    if (episodes != null && episodes > 0) {
+        this.dubEpisodes[status] = episodes
+    }
+}
+
+fun AnimeSearchResponse.addDubStatus(isDub: Boolean, episodes: Int? = null) {
+    addDubStatus(if (isDub) DubStatus.Dubbed else DubStatus.Subbed, episodes)
+}
+
+fun AnimeSearchResponse.addDubStatus(
+    dubExist: Boolean,
+    subExist: Boolean,
+    dubEpisodes: Int? = null,
+    subEpisodes: Int? = null
+) {
+    if (dubExist) addDubStatus(DubStatus.Dubbed, dubEpisodes)
+    if (subExist) addDubStatus(DubStatus.Subbed, subEpisodes)
+}
+
+fun AnimeSearchResponse.addDubStatus(status: String, episodes: Int? = null) {
+    if (status.contains("(dub)", ignoreCase = true)) {
+        addDubStatus(DubStatus.Dubbed, episodes)
+    } else if (status.contains("(sub)", ignoreCase = true)) {
+        addDubStatus(DubStatus.Subbed, episodes)
+    }
+}
+
+// ── Episode helpers ──
+
+fun Episode.addDate(date: String?, format: String = "yyyy-MM-dd") {
+    try {
+        this.date = SimpleDateFormat(format, Locale.getDefault()).parse(date ?: return)?.time
+    } catch (_: Exception) { }
+}
+
+fun Episode.addDate(date: Date?) {
+    this.date = date?.time
 }

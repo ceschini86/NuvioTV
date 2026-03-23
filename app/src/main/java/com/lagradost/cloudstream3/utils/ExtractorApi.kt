@@ -70,6 +70,15 @@ suspend fun loadExtractor(
     callback: (ExtractorLink) -> Unit
 ): Boolean = loadExtractor(url, null, subtitleCallback, callback)
 
+/** Overload with canRecurse parameter used by some newer extensions. */
+suspend fun loadExtractor(
+    url: String,
+    referer: String?,
+    subtitleCallback: (SubtitleFile) -> Unit,
+    callback: (ExtractorLink) -> Unit,
+    canRecurse: Boolean
+): Boolean = loadExtractor(url, referer, subtitleCallback, callback)
+
 /** Global list of registered extractors (referenced by some extensions). */
 val extractorApis: MutableList<ExtractorApi> = mutableListOf()
 
@@ -91,4 +100,25 @@ fun getPacked(text: String): String? {
     val packedRegex = Regex("""eval\(function\(p,a,c,k,e,[dr]\).*?\}\s*\(.*?\)\)""", RegexOption.DOT_MATCHES_ALL)
     val match = packedRegex.find(text)
     return match?.value
+}
+
+/**
+ * Suspend builder overload of newExtractorLink matching real CloudStream3's signature.
+ * Extensions compiled against real CS3 expect this exact signature in ExtractorApiKt.
+ */
+suspend fun newExtractorLink(
+    source: String,
+    name: String,
+    url: String,
+    type: ExtractorLinkType? = null,
+    initializer: suspend ExtractorLink.() -> Unit = { }
+): ExtractorLink {
+    val link = ExtractorLink(
+        source = source,
+        name = name,
+        url = url,
+        type = type ?: ExtractorLinkType.VIDEO
+    )
+    link.initializer()
+    return link
 }

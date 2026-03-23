@@ -37,6 +37,7 @@ class ExternalExtractorRegistry @Inject constructor() {
 
     /**
      * Try to resolve a URL using registered extractors.
+     * Matches using the same approach as real CloudStream: strip schema and check startsWith.
      * Returns true if a matching extractor was found and executed.
      */
     suspend fun loadExtractor(
@@ -45,16 +46,39 @@ class ExternalExtractorRegistry @Inject constructor() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        val schemaStripped = url.removePrefix("https://").removePrefix("http://")
+
+        // Stage 1: startsWith match (like real CloudStream)
         val matchingExtractor = extractors.firstOrNull { extractor ->
-            url.contains(extractor.mainUrl.removePrefix("https://").removePrefix("http://"))
+            val extractorDomain = extractor.mainUrl
+                .removePrefix("https://").removePrefix("http://")
+                .removeSuffix("/")
+            schemaStripped.startsWith(extractorDomain)
         }
+        // Stage 2: fallback contains match for wildcard-style mainUrls
+            ?: extractors.firstOrNull { extractor ->
+                val extractorDomain = extractor.mainUrl
+                    .removePrefix("https://").removePrefix("http://")
+                    .removeSuffix("/")
+                    .replace("*.", "")
+                    .replace(".*", "")
+                extractorDomain.length > 3 && schemaStripped.contains(extractorDomain)
+            }
 
         if (matchingExtractor != null) {
+            Log.d(TAG, "Matched extractor: ${matchingExtractor.name} for ${url.take(80)}")
+            val links = mutableListOf<ExtractorLink>()
             try {
-                matchingExtractor.getUrl(url, referer, subtitleCallback, callback)
+                matchingExtractor.getUrl(url, referer, { subtitleCallback(it) }) { link ->
+                    links.add(link)
+                    callback(link)
+                }
+                Log.d(TAG, "Extractor ${matchingExtractor.name} returned ${links.size} links")
                 return true
             } catch (e: Exception) {
-                Log.e(TAG, "Extractor ${matchingExtractor.name} failed for $url: ${e.message}")
+                Log.e(TAG, "Extractor ${matchingExtractor.name} EXCEPTION: ${e.javaClass.simpleName}: ${e.message}", e)
+            } catch (e: Error) {
+                Log.e(TAG, "Extractor ${matchingExtractor.name} ERROR: ${e.javaClass.simpleName}: ${e.message}", e)
             }
         } else {
             val domain = try {

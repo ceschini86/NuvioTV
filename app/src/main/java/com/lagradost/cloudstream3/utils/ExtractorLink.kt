@@ -12,16 +12,16 @@ enum class ExtractorLinkType {
 val INFER_TYPE: ExtractorLinkType? = null
 
 open class ExtractorLink(
-    open val source: String,
-    open val name: String,
-    open val url: String,
-    open val referer: String,
-    open val quality: Int = Qualities.Unknown.value,
-    open val type: ExtractorLinkType = ExtractorLinkType.VIDEO,
-    open val headers: Map<String, String> = emptyMap(),
-    open val extractorData: String? = null,
-    @Deprecated("Use type instead") open val isM3u8: Boolean = type == ExtractorLinkType.M3U8,
-    @Deprecated("Use type instead") open val isDash: Boolean = type == ExtractorLinkType.DASH
+    open var source: String,
+    open var name: String,
+    open var url: String,
+    open var referer: String = "",
+    open var quality: Int = Qualities.Unknown.value,
+    open var type: ExtractorLinkType = ExtractorLinkType.VIDEO,
+    open var headers: Map<String, String> = emptyMap(),
+    open var extractorData: String? = null,
+    @Deprecated("Use type instead") open var isM3u8: Boolean = type == ExtractorLinkType.M3U8,
+    @Deprecated("Use type instead") open var isDash: Boolean = type == ExtractorLinkType.DASH
 ) {
     constructor(
         source: String,
@@ -69,36 +69,3 @@ fun newExtractorLink(
     extractorData = extractorData
 )
 
-/** Builder-pattern overload used by CloudStream3 extractors. */
-class ExtractorLinkBuilder(
-    val source: String,
-    val name: String,
-    val url: String,
-    val type: ExtractorLinkType?
-) {
-    var referer: String = ""
-    var quality: Int = Qualities.Unknown.value
-    var headers: Map<String, String> = emptyMap()
-    var extractorData: String? = null
-}
-
-fun newExtractorLink(
-    source: String,
-    name: String,
-    url: String,
-    type: ExtractorLinkType? = null,
-    initializer: ExtractorLinkBuilder.() -> Unit
-): ExtractorLink {
-    val builder = ExtractorLinkBuilder(source, name, url, type)
-    builder.initializer()
-    return ExtractorLink(
-        source = source,
-        name = name,
-        url = url,
-        referer = builder.referer,
-        quality = builder.quality,
-        type = builder.type ?: ExtractorLinkType.VIDEO,
-        headers = builder.headers,
-        extractorData = builder.extractorData
-    )
-}

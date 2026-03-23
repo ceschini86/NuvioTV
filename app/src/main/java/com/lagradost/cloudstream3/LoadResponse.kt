@@ -143,7 +143,7 @@ data class TvSeriesLoadResponse(
     override var comingSoon: Boolean = false,
     override var posterHeaders: Map<String, String>? = null,
     override var backgroundPosterUrl: String? = null,
-    val showStatus: ShowStatus? = null,
+    var showStatus: ShowStatus? = null,
     val seasonNames: List<SeasonData>? = null,
     val nextAiring: NextAiring? = null
 ) : LoadResponse()
@@ -203,10 +203,14 @@ class Score private constructor(private val data: Int) {
             if (value == null) null else Score(value * 10000 / maxScore)
         fun from(value: Double?, maxScore: Int): Score? =
             if (value == null) null else Score((value * 10000 / maxScore).toInt())
+        fun from(value: String?, maxScore: Int): Score? =
+            from(value?.trim()?.toDoubleOrNull()?.let { kotlin.math.abs(it) }, maxScore)
         fun from10(value: Int?): Score? = from(value, 10)
         fun from10(value: Double?): Score? = from(value, 10)
         fun from10(value: Float?): Score? = from(value?.toDouble(), 10)
+        fun from10(value: String?): Score? = from(value, 10)
         fun from100(value: Int?): Score? = from(value, 100)
+        fun from100(value: String?): Score? = from(value, 100)
         fun from5(value: Int?): Score? = from(value, 5)
     }
 }
