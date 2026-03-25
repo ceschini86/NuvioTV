@@ -319,7 +319,7 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
         } else {
             emptyList()
         }
-        fun stableHeroCandidates(row: CatalogRow, candidates: Collection<MetaPreview>): List<MetaPreview> {
+        fun stableHeroCandidates(row: CatalogRow, candidates: kotlin.collections.Collection<MetaPreview>): List<MetaPreview> {
             return candidates.sortedWith(
                 compareBy<MetaPreview> { stableHeroSortKey(row, it) }
                     .thenBy { it.id }

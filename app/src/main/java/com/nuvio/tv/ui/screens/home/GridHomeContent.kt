@@ -291,15 +291,16 @@ fun GridHomeContent(
                                         }
                                         val season = when (item) {
                                             is ContinueWatchingItem.InProgress -> item.progress.season
-                                            is ContinueWatchingItem.NextUp -> item.info.season
+                                            is ContinueWatchingItem.NextUp -> item.info.seedSeason
                                         }
                                         val episode = when (item) {
                                             is ContinueWatchingItem.InProgress -> item.progress.episode
-                                            is ContinueWatchingItem.NextUp -> item.info.episode
+                                            is ContinueWatchingItem.NextUp -> item.info.seedEpisode
                                         }
                                         val isNextUp = item is ContinueWatchingItem.NextUp
                                         onRemoveContinueWatching(contentId, season, episode, isNextUp)
-                                    }
+                                    },
+                                    blurUnwatchedEpisodes = uiState.blurUnwatchedEpisodes
                                 )
                             }
                         }
@@ -438,15 +439,16 @@ fun GridHomeContent(
                             }
                             val season = when (item) {
                                 is ContinueWatchingItem.InProgress -> item.progress.season
-                                is ContinueWatchingItem.NextUp -> item.info.season
+                                is ContinueWatchingItem.NextUp -> item.info.seedSeason
                             }
                             val episode = when (item) {
                                 is ContinueWatchingItem.InProgress -> item.progress.episode
-                                is ContinueWatchingItem.NextUp -> item.info.episode
+                                is ContinueWatchingItem.NextUp -> item.info.seedEpisode
                             }
                             val isNextUp = item is ContinueWatchingItem.NextUp
                             onRemoveContinueWatching(contentId, season, episode, isNextUp)
-                        }
+                        },
+                        blurUnwatchedEpisodes = uiState.blurUnwatchedEpisodes
                     )
                 }
             }
