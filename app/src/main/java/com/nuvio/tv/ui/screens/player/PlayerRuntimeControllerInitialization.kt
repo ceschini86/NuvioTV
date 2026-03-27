@@ -115,7 +115,7 @@ internal fun PlayerRuntimeController.initializePlayer(url: String, headers: Map<
                     DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
                     70_000,
                     DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
-                    DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
+                    5_000
                 )
                 .build()
 
@@ -347,6 +347,7 @@ internal fun PlayerRuntimeController.initializePlayer(url: String, headers: Map<
 
                     override fun onRenderedFirstFrame() {
                         hasRenderedFirstFrame = true
+                        resetErrorRetryState()
                         _uiState.update { it.copy(showLoadingOverlay = false, loadingMessage = null) }
                     }
 
@@ -365,6 +366,10 @@ internal fun PlayerRuntimeController.initializePlayer(url: String, headers: Map<
                             (error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode
                         if (responseCode == 416 && !hasRetriedCurrentStreamAfter416) {
                             retryCurrentStreamFromStartAfter416()
+                            return
+                        }
+                        // Attempt automatic recovery for transient errors.
+                        if (attemptAutoRetry(error, detailedError)) {
                             return
                         }
                         _uiState.update {
@@ -598,6 +603,7 @@ private class SubtitleOffsetRenderersFactory(
             .setEnableFloatOutput(enableFloatOutput)
             .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
             .setAudioProcessors(arrayOf(gainAudioProcessor))
+            .setAudioTrackBufferSizeProvider(FormatAwareAudioTrackBufferProvider())
             .build()
     }
 
