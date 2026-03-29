@@ -273,6 +273,8 @@ private fun ModernCatalogRowItem(
 @Composable
 internal fun ModernRowSection(
     row: HeroCarouselRow,
+    isActiveRow: Boolean,
+    isVerticalRowsScrolling: Boolean,
     rowTitleBottom: Dp,
     defaultBringIntoViewSpec: BringIntoViewSpec,
     focusStateCatalogRowScrollIndex: Int,
@@ -437,6 +439,8 @@ internal fun ModernRowSection(
         val rowItemCount = row.items.size
         LaunchedEffect(
             row.key,
+            isActiveRow,
+            isVerticalRowsScrolling,
             rowItemCount,
             portraitCatalogCardWidth,
             portraitCatalogCardHeight,
@@ -445,6 +449,7 @@ internal fun ModernRowSection(
             continueWatchingCardWidth,
             continueWatchingCardHeight
         ) {
+            if (!isActiveRow || isVerticalRowsScrolling) return@LaunchedEffect
             delay(150) // Wait before spamming image requests to survive rapid vertical D-pad scrolls!
             val cwWidthPx = with(density) { continueWatchingCardWidth.roundToPx() }
             val cwHeightPx = with(density) { continueWatchingCardHeight.roundToPx() }
@@ -683,13 +688,17 @@ private fun ModernCarouselCard(
     val animatedCardWidth by animatedCardWidthState
     // Freeze the logo URL for row cards - enrichment updates must not cause flickering.
     // The first non-blank value wins and is never replaced.
-    val frozenLogoUrl = remember(item.key) { mutableStateOf(item.heroPreview.logo) }
+    // Primary source of truth is the data-layer frozen value (survives navigation);
+    // the remember-state acts as a secondary guard within the same composition.
+    val dataFrozenLogo = item.heroPreview.frozenLogoUrl
+    val frozenLogoUrl = remember(item.key) { mutableStateOf(dataFrozenLogo ?: item.heroPreview.logo) }
     if (frozenLogoUrl.value.isNullOrBlank() && !item.heroPreview.logo.isNullOrBlank()) {
         frozenLogoUrl.value = item.heroPreview.logo
     }
     val effectiveLogoUrl = frozenLogoUrl.value
     // Freeze the backdrop URL for landscape cards - prevents image reload when enrichment updates backdrop.
-    val frozenBackdropUrl = remember(item.key) { mutableStateOf(item.heroPreview.backdrop) }
+    val dataFrozenBackdrop = item.heroPreview.frozenBackdropUrl
+    val frozenBackdropUrl = remember(item.key) { mutableStateOf(dataFrozenBackdrop ?: item.heroPreview.backdrop) }
     if (frozenBackdropUrl.value.isNullOrBlank() && !item.heroPreview.backdrop.isNullOrBlank()) {
         frozenBackdropUrl.value = item.heroPreview.backdrop
     }

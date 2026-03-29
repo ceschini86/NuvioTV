@@ -639,6 +639,26 @@
     <string name="player_more_aspect_ratio">Proporcje obrazu</string>
     <string name="player_more_open_external">Otwórz w zewnętrznym odtwarzaczu</string>
 
+    <!-- StreamInfoOverlay -->
+    <string name="stream_info_section_source">ŹRÓDŁO</string>
+    <string name="stream_info_section_file">PLIK</string>
+    <string name="stream_info_section_video">WIDEO</string>
+    <string name="stream_info_section_audio">AUDIO</string>
+    <string name="stream_info_section_subtitle">NAPISY</string>
+    <string name="stream_info_filename">Nazwa pliku</string>
+    <string name="stream_info_size">Rozmiar</string>
+    <string name="stream_info_codec">Kodek</string>
+    <string name="stream_info_resolution">Rozdzielczość</string>
+    <string name="stream_info_frame_rate">Klatki/s</string>
+    <string name="stream_info_bitrate">Bitrate</string>
+    <string name="stream_info_channels">Kanały</string>
+    <string name="stream_info_sample_rate">Próbkowanie</string>
+    <string name="stream_info_language">Język</string>
+    <string name="stream_info_name">Nazwa</string>
+    <string name="stream_info_source">Źródło</string>
+    <string name="stream_info_subtitle_source_addon">Dodatek</string>
+    <string name="stream_info_subtitle_source_embedded">Wbudowane</string>
+
     <!-- StreamSourcesSidePanel -->
     <string name="sources_title">Źródła</string>
     <string name="sources_reload">Odśwież</string>
@@ -1134,4 +1154,40 @@
     <string name="update_checking">Sprawdzanie aktualizacji…</string>
     <string name="update_download_complete">Pobieranie zakończone. Gotowe do instalacji.</string>
     <string name="update_up_to_date">System jest aktualny. Ostatnie zmiany:</string>
+
+    <string name="detail_more_like_this_powered_by_tmdb">Na podstawie danych TMDB</string>
+    <string name="detail_more_like_this_powered_by_trakt">Na podstawie danych Trakt</string>
+    <string name="library_filter_genre">Gatunek</string>
+    <string name="library_filter_year">Rok</string>
+    <string name="library_source_nuvio">NUVIO</string>
+    <string name="library_source_trakt">TRAKT</string>
+    <string name="library_syncing_library">Synchronizacja biblioteki\u2026</string>
+
+    <string name="genre_action">Akcja</string>
+    <string name="genre_action_adventure">Akcja i przygoda</string>
+    <string name="genre_adventure">Przygodowy</string>
+    <string name="genre_animation">Animacja</string>
+    <string name="genre_comedy">Komedia</string>
+    <string name="genre_crime">Kryminał</string>
+    <string name="genre_documentary">Dokumentalny</string>
+    <string name="genre_drama">Dramat</string>
+    <string name="genre_family">Familijny</string>
+    <string name="genre_fantasy">Fantasy</string>
+    <string name="genre_history">Historyczny</string>
+    <string name="genre_horror">Horror</string>
+    <string name="genre_kids">Dla dzieci</string>
+    <string name="genre_music">Muzyczny</string>
+    <string name="genre_mystery">Tajemnica</string>
+    <string name="genre_news">Wiadomości</string>
+    <string name="genre_reality">Reality</string>
+    <string name="genre_romance">Romans</string>
+    <string name="genre_science_fiction">Sci-Fi</string>
+    <string name="genre_sci_fi_fantasy">Sci-Fi i fantasy</string>
+    <string name="genre_soap">Telenowela</string>
+    <string name="genre_talk">Talk-show</string>
+    <string name="genre_thriller">Thriller</string>
+    <string name="genre_tv_movie">Film TV</string>
+    <string name="genre_war">Wojenny</string>
+    <string name="genre_war_politics">Wojna i polityka</string>
+    <string name="genre_western">Western</string>
 </resources>

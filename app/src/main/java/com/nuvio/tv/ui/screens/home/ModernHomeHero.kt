@@ -56,6 +56,37 @@ private data class ModernHeroSecondaryMeta(
 )
 
 @Composable
+internal fun ModernHeroScene(
+    state: ModernHeroSceneState,
+    bgColor: Color,
+    modifier: Modifier,
+    requestWidthPx: Int,
+    requestHeightPx: Int,
+    onTrailerEnded: () -> Unit,
+    onFirstFrameRendered: () -> Unit
+) {
+    ModernHeroMediaLayer(
+        heroBackdrop = state.heroBackdrop,
+        enrichmentActive = state.enrichmentActive,
+        shouldPlayHeroTrailer = state.shouldPlayTrailer,
+        heroTrailerFirstFrameRendered = state.trailerFirstFrameRendered,
+        heroTrailerUrl = state.trailerUrl,
+        heroTrailerAudioUrl = state.trailerAudioUrl,
+        muted = state.trailerMuted,
+        onTrailerEnded = onTrailerEnded,
+        onFirstFrameRendered = onFirstFrameRendered,
+        modifier = modifier,
+        requestWidthPx = requestWidthPx,
+        requestHeightPx = requestHeightPx
+    )
+    ModernHeroGradientLayer(
+        bgColor = bgColor,
+        isFullScreen = state.fullScreenBackdrop,
+        modifier = modifier
+    )
+}
+
+@Composable
 internal fun ModernHeroMediaLayer(
     heroBackdrop: String?,
     enrichmentActive: Boolean,
@@ -230,7 +261,7 @@ private fun HeroTitleContent(
     trailerPlaying: Boolean = false
 ) {
     if (preview == null) return
-    val descriptionMaxLines = if (portraitMode) 4 else 5
+    val descriptionMaxLines = 4
     val descriptionScale = if (portraitMode) 0.90f else 1f
     val titleScale = if (portraitMode) 0.92f else 1f
     val metaScale = 1f

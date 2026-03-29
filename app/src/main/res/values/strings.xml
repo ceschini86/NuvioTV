@@ -124,6 +124,8 @@
     <string name="cast_role_writer">Writer</string>
     <string name="detail_tab_ratings">Ratings</string>
     <string name="detail_tab_more_like_this">More like this</string>
+    <string name="detail_more_like_this_powered_by_tmdb">Powered by TMDB</string>
+    <string name="detail_more_like_this_powered_by_trakt">Powered by Trakt</string>
     <string name="detail_comments_title">Comments</string>
     <string name="detail_comments_subtitle">Reviews from Trakt</string>
     <string name="detail_section_network">Network</string>
@@ -807,6 +809,26 @@
     <string name="player_more_aspect_ratio">Aspect Ratio</string>
     <string name="player_more_open_external">Open in External Player</string>
 
+    <!-- StreamInfoOverlay -->
+    <string name="stream_info_section_source">SOURCE</string>
+    <string name="stream_info_section_file">FILE</string>
+    <string name="stream_info_section_video">VIDEO</string>
+    <string name="stream_info_section_audio">AUDIO</string>
+    <string name="stream_info_section_subtitle">SUBTITLE</string>
+    <string name="stream_info_filename">Filename</string>
+    <string name="stream_info_size">Size</string>
+    <string name="stream_info_codec">Codec</string>
+    <string name="stream_info_resolution">Resolution</string>
+    <string name="stream_info_frame_rate">Frame Rate</string>
+    <string name="stream_info_bitrate">Bitrate</string>
+    <string name="stream_info_channels">Channels</string>
+    <string name="stream_info_sample_rate">Sample Rate</string>
+    <string name="stream_info_language">Language</string>
+    <string name="stream_info_name">Name</string>
+    <string name="stream_info_source">Source</string>
+    <string name="stream_info_subtitle_source_addon">Addon</string>
+    <string name="stream_info_subtitle_source_embedded">Embedded</string>
+
     <!-- StreamSourcesSidePanel -->
     <string name="sources_title">Sources</string>
     <string name="sources_reload">Reload</string>
@@ -917,6 +939,37 @@
     <string name="library_filter_list">List</string>
     <string name="library_filter_type">Type</string>
     <string name="library_filter_sort">Sort</string>
+    <string name="library_filter_genre">Genre</string>
+    <string name="library_filter_year">Year</string>
+    <!-- Genre names (from TMDB movie + TV) -->
+    <string name="genre_action">Action</string>
+    <string name="genre_adventure">Adventure</string>
+    <string name="genre_animation">Animation</string>
+    <string name="genre_comedy">Comedy</string>
+    <string name="genre_crime">Crime</string>
+    <string name="genre_documentary">Documentary</string>
+    <string name="genre_drama">Drama</string>
+    <string name="genre_family">Family</string>
+    <string name="genre_fantasy">Fantasy</string>
+    <string name="genre_history">History</string>
+    <string name="genre_horror">Horror</string>
+    <string name="genre_music">Music</string>
+    <string name="genre_mystery">Mystery</string>
+    <string name="genre_romance">Romance</string>
+    <string name="genre_science_fiction">Science Fiction</string>
+    <string name="genre_tv_movie">TV Movie</string>
+    <string name="genre_thriller">Thriller</string>
+    <string name="genre_war">War</string>
+    <string name="genre_western">Western</string>
+    <!-- TV-specific genres -->
+    <string name="genre_action_adventure">Action &amp; Adventure</string>
+    <string name="genre_kids">Kids</string>
+    <string name="genre_news">News</string>
+    <string name="genre_reality">Reality</string>
+    <string name="genre_sci_fi_fantasy">Sci-Fi &amp; Fantasy</string>
+    <string name="genre_soap">Soap</string>
+    <string name="genre_talk">Talk</string>
+    <string name="genre_war_politics">War &amp; Politics</string>
     <string name="library_sort_trakt_order">Trakt Order</string>
     <string name="library_sort_added_desc">Added ↓</string>
     <string name="library_sort_added_asc">Added ↑</string>
@@ -938,6 +991,9 @@
     <string name="library_delete_subtitle">This removes the list and all list items from Trakt.</string>
     <string name="library_delete_confirm">Delete</string>
     <string name="library_source_local">LOCAL</string>
+    <string name="library_source_nuvio">NUVIO</string>
+    <string name="library_source_trakt">TRAKT</string>
+    <string name="library_syncing_library">Syncing library\u2026</string>
     <string name="library_type_all">All</string>
     <string name="library_type_items">items</string>
     <string name="library_empty_local_title">No %1$s yet</string>
