@@ -1186,7 +1186,7 @@ private fun PlayerControlsOverlay(
                     ControlButton(
                         icon = if (uiState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         iconPainter = if (uiState.isPlaying) customPausePainter else customPlayPainter,
-                        contentDescription = if (uiState.isPlaying) "Pause" else "Play",
+                        contentDescription = if (uiState.isPlaying) stringResource(R.string.cd_pause) else stringResource(R.string.cd_play),
                         onClick = onPlayPause,
                         focusRequester = playPauseFocusRequester,
                         upFocusRequester = progressBarFocusRequester,
@@ -1209,7 +1209,7 @@ private fun PlayerControlsOverlay(
                         ControlButton(
                             icon = Icons.Default.ClosedCaption,
                             iconPainter = customSubtitlePainter,
-                            contentDescription = "Subtitles",
+                            contentDescription = stringResource(R.string.cd_subtitles),
                             onClick = onShowSubtitleDialog,
                             upFocusRequester = progressBarFocusRequester,
                             onDownKey = onHideControls,
@@ -1221,7 +1221,7 @@ private fun PlayerControlsOverlay(
                         ControlButton(
                             icon = Icons.AutoMirrored.Filled.VolumeUp,
                             iconPainter = customAudioPainter,
-                            contentDescription = "Audio tracks",
+                            contentDescription = stringResource(R.string.cd_audio_tracks),
                             onClick = onShowAudioDialog,
                             upFocusRequester = progressBarFocusRequester,
                             onDownKey = onHideControls,
@@ -1232,7 +1232,7 @@ private fun PlayerControlsOverlay(
                     ControlButton(
                         icon = Icons.Default.SwapHoriz,
                         iconPainter = customSourcePainter,
-                        contentDescription = "Sources",
+                        contentDescription = stringResource(R.string.cd_sources),
                         onClick = onShowSourcesPanel,
                         upFocusRequester = progressBarFocusRequester,
                         onDownKey = onHideControls,
@@ -1243,7 +1243,7 @@ private fun PlayerControlsOverlay(
                         ControlButton(
                             icon = Icons.AutoMirrored.Filled.List,
                             iconPainter = customEpisodesPainter,
-                            contentDescription = "Episodes",
+                            contentDescription = stringResource(R.string.cd_episodes),
                             onClick = onShowEpisodesPanel,
                             upFocusRequester = progressBarFocusRequester,
                             onDownKey = onHideControls,
@@ -1268,7 +1268,7 @@ private fun PlayerControlsOverlay(
                         ) {
                             ControlButton(
                                 icon = Icons.Default.Speed,
-                                contentDescription = "Playback speed",
+                                contentDescription = stringResource(R.string.cd_playback_speed),
                                 onClick = {
                                     onShowSpeedDialog()
                                 },
@@ -1279,7 +1279,7 @@ private fun PlayerControlsOverlay(
                             ControlButton(
                                 icon = Icons.Default.AspectRatio,
                                 iconPainter = customAspectPainter,
-                                contentDescription = "Aspect ratio",
+                                contentDescription = stringResource(R.string.cd_aspect_ratio),
                                 onClick = {
                                     onToggleAspectRatio()
                                 },
@@ -1289,7 +1289,7 @@ private fun PlayerControlsOverlay(
                             )
                             ControlButton(
                                 icon = Icons.AutoMirrored.Filled.OpenInNew,
-                                contentDescription = "Open in external player",
+                                contentDescription = stringResource(R.string.cd_open_external_player),
                                 onClick = {
                                     onOpenInExternalPlayer()
                                 },
@@ -1299,7 +1299,7 @@ private fun PlayerControlsOverlay(
                             )
                             ControlButton(
                                 icon = Icons.Default.Info,
-                                contentDescription = "Stream info",
+                                contentDescription = stringResource(R.string.cd_stream_info),
                                 onClick = {
                                     onShowStreamInfo()
                                 },
@@ -1316,7 +1316,7 @@ private fun PlayerControlsOverlay(
                         } else {
                             Icons.AutoMirrored.Filled.KeyboardArrowRight
                         },
-                        contentDescription = if (uiState.showMoreDialog) "Close more actions" else "More actions",
+                        contentDescription = if (uiState.showMoreDialog) stringResource(R.string.cd_close_more_actions) else stringResource(R.string.cd_more_actions),
                         onClick = onToggleMoreActions,
                         upFocusRequester = progressBarFocusRequester,
                         onDownKey = onHideControls,
@@ -1953,7 +1953,7 @@ private fun SpeedItem(
             if (isSelected) {
                 Icon(
                     imageVector = Icons.Default.Check,
-                    contentDescription = "Selected",
+                    contentDescription = stringResource(R.string.cd_selected),
                     tint = NuvioColors.Secondary,
                     modifier = Modifier.size(24.dp)
                 )
