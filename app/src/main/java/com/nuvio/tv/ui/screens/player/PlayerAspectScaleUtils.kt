@@ -1,5 +1,9 @@
 package com.nuvio.tv.ui.screens.player
 
+import android.view.SurfaceView
+import android.view.TextureView
+import android.view.View
+import android.view.ViewGroup
 import androidx.annotation.StringRes
 import androidx.media3.ui.PlayerView
 import com.nuvio.tv.R
@@ -23,37 +27,41 @@ internal fun aspectModeLabel(mode: AspectMode, getString: (Int) -> String): Stri
     getString(mode.labelResId)
 
 internal fun applyAspectMode(playerView: PlayerView, mode: AspectMode) {
+    val targetView = resolveVideoSurfaceView(playerView) ?: playerView
+    playerView.scaleX = 1.0f
+    playerView.scaleY = 1.0f
+
     when (mode) {
         AspectMode.ORIGINAL -> {
-            playerView.scaleX = 1.0f
-            playerView.scaleY = 1.0f
+            targetView.scaleX = 1.0f
+            targetView.scaleY = 1.0f
         }
 
-        AspectMode.FULL_SCREEN -> applyCoverAspectScale(playerView)
+        AspectMode.FULL_SCREEN -> applyCoverAspectScale(playerView, targetView)
 
         AspectMode.SLIGHT_ZOOM -> {
-            playerView.scaleX = 1.15f
-            playerView.scaleY = 1.15f
+            targetView.scaleX = 1.15f
+            targetView.scaleY = 1.15f
         }
 
         AspectMode.CINEMA_ZOOM -> {
-            playerView.scaleX = 1.33f
-            playerView.scaleY = 1.33f
+            targetView.scaleX = 1.33f
+            targetView.scaleY = 1.33f
         }
 
         AspectMode.VERTICAL_STRETCH -> {
-            playerView.scaleX = 1.0f
-            playerView.scaleY = 1.33f
+            targetView.scaleX = 1.0f
+            targetView.scaleY = 1.33f
         }
 
         AspectMode.HORIZONTAL_STRETCH -> {
-            playerView.scaleX = 1.3333f
-            playerView.scaleY = 1.0f
+            targetView.scaleX = 1.3333f
+            targetView.scaleY = 1.0f
         }
     }
 }
 
-private fun applyCoverAspectScale(playerView: PlayerView) {
+private fun applyCoverAspectScale(playerView: PlayerView, targetView: View) {
     val videoSize = playerView.player?.videoSize
     val videoAspect = if ((videoSize?.height ?: 0) > 0) {
         ((videoSize?.width ?: 0).toFloat() * (videoSize?.pixelWidthHeightRatio ?: 1f)) /
@@ -70,14 +78,35 @@ private fun applyCoverAspectScale(playerView: PlayerView) {
 
     if (videoAspect > 0f && viewAspect > 0f) {
         if (videoAspect > viewAspect) {
-            playerView.scaleX = 1.0f
-            playerView.scaleY = videoAspect / viewAspect
+            targetView.scaleX = 1.0f
+            targetView.scaleY = videoAspect / viewAspect
         } else {
-            playerView.scaleX = viewAspect / videoAspect
-            playerView.scaleY = 1.0f
+            targetView.scaleX = viewAspect / videoAspect
+            targetView.scaleY = 1.0f
         }
     } else {
-        playerView.scaleX = 1.0f
-        playerView.scaleY = 1.0f
+        targetView.scaleX = 1.0f
+        targetView.scaleY = 1.0f
+    }
+}
+
+private fun resolveVideoSurfaceView(playerView: PlayerView): View? {
+    return findVideoSurfaceView(playerView)
+}
+
+private fun findVideoSurfaceView(view: View): View? {
+    return when (view) {
+        is SurfaceView, is TextureView -> view
+        is ViewGroup -> {
+            for (index in 0 until view.childCount) {
+                val child = findVideoSurfaceView(view.getChildAt(index))
+                if (child != null) {
+                    return child
+                }
+            }
+            null
+        }
+
+        else -> null
     }
 }
