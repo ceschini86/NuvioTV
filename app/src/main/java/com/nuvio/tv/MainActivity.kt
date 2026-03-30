@@ -56,6 +56,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -218,7 +219,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         window?.setBackgroundDrawable(null)
         setContent {
-            var hasSelectedProfileThisSession by remember { mutableStateOf(false) }
+            var hasSelectedProfileThisSession by rememberSaveable { mutableStateOf(false) }
             var onboardingCompletedThisSession by remember { mutableStateOf(false) }
             var onboardingProfileSyncInProgress by remember { mutableStateOf(false) }
             val hasSeenAuthQrOnFirstLaunch by appOnboardingDataStore
