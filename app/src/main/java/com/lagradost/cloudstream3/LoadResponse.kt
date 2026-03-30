@@ -158,6 +158,10 @@ abstract class LoadResponse {
             this.actors = actors?.map { ActorData(actor = it) }
         }
 
+        fun LoadResponse.addActorNames(actors: List<String>?) {
+            this.actors = actors?.map { ActorData(actor = Actor(it)) }
+        }
+
         // ── Date ──
 
         fun LoadResponse.addDate(date: String?) {
@@ -237,7 +241,7 @@ data class TvSeriesLoadResponse(
     override var posterHeaders: Map<String, String>? = null,
     override var backgroundPosterUrl: String? = null,
     var showStatus: ShowStatus? = null,
-    val seasonNames: List<SeasonData>? = null,
+    var seasonNames: List<SeasonData>? = null,
     val nextAiring: NextAiring? = null
 ) : LoadResponse()
 
