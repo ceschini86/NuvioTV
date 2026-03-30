@@ -814,6 +814,20 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
         }
         PlayerEvent.OnToggleAspectRatio -> {
             val state = _uiState.value
+            if (state.tunnelingEnabled) {
+                _uiState.update {
+                    it.copy(
+                        showAspectRatioIndicator = true,
+                        aspectRatioIndicatorText = context.getString(R.string.player_aspect_tunneling_unavailable)
+                    )
+                }
+                hideAspectRatioIndicatorJob?.cancel()
+                hideAspectRatioIndicatorJob = scope.launch {
+                    delay(1500)
+                    _uiState.update { it.copy(showAspectRatioIndicator = false) }
+                }
+                return
+            }
             val newMode = nextAspectMode(state.aspectMode)
             val label = aspectModeLabel(newMode, context::getString)
             Log.d("PlayerViewModel", "Aspect mode toggled: ${state.aspectMode} -> $newMode ($label)")

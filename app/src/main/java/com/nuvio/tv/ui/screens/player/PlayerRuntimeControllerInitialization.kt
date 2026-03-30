@@ -78,7 +78,8 @@ internal fun PlayerRuntimeController.initializePlayer(url: String, headers: Map<
             _uiState.update {
                 it.copy(
                     frameRateMatchingMode = playerSettings.frameRateMatchingMode,
-                    resizeMode = playerSettings.resizeMode
+                    resizeMode = playerSettings.resizeMode,
+                    tunnelingEnabled = playerSettings.tunnelingEnabled
                 )
             }
             val afrJob = async {
