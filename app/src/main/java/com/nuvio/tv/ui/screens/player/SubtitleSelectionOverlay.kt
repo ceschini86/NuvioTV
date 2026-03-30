@@ -1710,14 +1710,16 @@ private fun buildSubtitleOptionRailItems(
                 { (index, _) -> index }
             )
         )
+        .distinctBy { (_, subtitle) -> addonSubtitleOptionId(subtitle) }
         .map { (_, subtitle) ->
+            val optionId = addonSubtitleOptionId(subtitle)
             SubtitleOptionRailItem(
-                id = "addon:${subtitle.addonName}:${subtitle.id}:${subtitle.url}",
+                id = optionId,
                 kind = SubtitleOptionKind.ADDON,
                 title = Subtitle.languageCodeToName(PlayerSubtitleUtils.normalizeLanguageCode(subtitle.lang)),
                 sourceLabel = subtitle.addonName,
                 meta = subtitle.id.takeIf { it.isNotBlank() && it != subtitle.lang },
-                isSelected = "addon:${subtitle.addonName}:${subtitle.id}:${subtitle.url}" == selectedOptionId,
+                isSelected = optionId == selectedOptionId,
                 addonSubtitle = subtitle
             )
         }
@@ -1749,7 +1751,7 @@ private fun selectedSubtitleOptionId(
     selectedAddonSubtitle: Subtitle?
 ): String? {
     selectedAddonSubtitle?.let { subtitle ->
-        return "addon:${subtitle.addonName}:${subtitle.id}:${subtitle.url}"
+        return addonSubtitleOptionId(subtitle)
     }
 
     internalTracks
@@ -1765,6 +1767,10 @@ private fun selectedSubtitleOptionId(
         }
 
     return null
+}
+
+private fun addonSubtitleOptionId(subtitle: Subtitle): String {
+    return "addon:${subtitle.addonName}:${subtitle.id}:${subtitle.url}"
 }
 
 private fun normalizeOverlayLanguageKey(language: String?): String {
