@@ -939,6 +939,37 @@
     <string name="library_filter_list">Lista</string>
     <string name="library_filter_type">Tipo</string>
     <string name="library_filter_sort">Ordenar</string>
+    <string name="library_filter_genre">Gênero</string>
+    <string name="library_filter_year">Ano</string>
+     <!-- Genre names (from TMDB movie + TV) -->
+    <string name="genre_action">Ação</string>
+    <string name="genre_adventure">Aventura</string>
+    <string name="genre_animation">Animação</string>
+    <string name="genre_comedy">Comédia</string>
+    <string name="genre_crime">Crime</string>
+    <string name="genre_documentary">Documentário</string>
+    <string name="genre_drama">Drama</string>
+    <string name="genre_family">Família</string>
+    <string name="genre_fantasy">Fantasia</string>
+    <string name="genre_history">História</string>
+    <string name="genre_horror">Terror</string>
+    <string name="genre_music">Música</string>
+    <string name="genre_mystery">Mistério</string>
+    <string name="genre_romance">Romance</string>
+    <string name="genre_science_fiction">Ficção científica</string>
+    <string name="genre_tv_movie">Filme para TV</string>
+    <string name="genre_thriller">Suspense</string>
+    <string name="genre_war">Guerra</string>
+    <string name="genre_western">Faroeste</string>
+    <!-- TV-specific genres -->
+    <string name="genre_action_adventure">Ação e Aventura</string>
+    <string name="genre_kids">Infantil</string>
+    <string name="genre_news">Notícias</string>
+    <string name="genre_reality">Reality</string>
+    <string name="genre_sci_fi_fantasy">Sci-Fi e Fantasia</string>
+    <string name="genre_soap">Novela</string>
+    <string name="genre_talk">Talk Show</string>
+    <string name="genre_war_politics">Guerra e Política</string>
     <string name="library_sort_trakt_order">Ordem do Trakt</string>
     <string name="library_sort_added_desc">Adicionados ↓</string>
     <string name="library_sort_added_asc">Adicionados ↑</string>
@@ -960,12 +991,15 @@
     <string name="library_delete_subtitle">Isso removerá a lista e todos os seus itens do Trakt.</string>
     <string name="library_delete_confirm">Excluir</string>
     <string name="library_source_local">LOCAL</string>
+    string name="library_source_nuvio">NUVIO</string>
+    <string name="library_source_trakt">TRAKT</string>
+    <string name="library_syncing_library">Sincronizando biblioteca…</string>
     <string name="library_type_all">Todos</string>
     <string name="library_type_items">itens</string>
     <string name="library_empty_local_title">Nenhum %1$s ainda</string>
     <string name="library_empty_trakt_title">Nenhum %1$s nesta lista</string>
     <string name="library_empty_local_subtitle">Comece a salvar seus favoritos para vê-los aqui</string>
-    <string name="library_empty_trakt_subtitle">Use o "+" nos detalhes para adicionar itens à biblioteca ou outras listas</string>
+    <string name="library_empty_trakt_subtitle">Use "+" nos detalhes para adicionar itens à biblioteca ou outras listas</string>
 
     <!-- AccountSettingsContent -->
     <string name="account_loading">Carregando\u2026</string>
