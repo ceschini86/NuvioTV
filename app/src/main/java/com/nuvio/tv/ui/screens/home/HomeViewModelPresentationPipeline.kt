@@ -20,8 +20,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private data class CoreLayoutPrefs(
     val layout: HomeLayout,
@@ -52,6 +54,7 @@ private data class LayoutUiPrefs(
     val hideUnreleasedContent: Boolean,
     val showFullReleaseDate: Boolean,
     val modernLandscapePostersEnabled: Boolean,
+    val modernHeroFullScreenBackdropEnabled: Boolean,
     val focusedBackdropExpandEnabled: Boolean,
     val focusedBackdropExpandDelaySeconds: Int,
     val focusedBackdropTrailerEnabled: Boolean,
@@ -110,7 +113,12 @@ internal fun HomeViewModel.observeLayoutPreferencesPipeline() {
         )
     }
 
-    val modernLayoutPrefsFlow = layoutPreferenceDataStore.modernLandscapePostersEnabled
+    val modernLayoutPrefsFlow = combine(
+        layoutPreferenceDataStore.modernLandscapePostersEnabled,
+        layoutPreferenceDataStore.modernHeroFullScreenBackdropEnabled
+    ) { landscapePosters, fullScreenBackdrop ->
+        landscapePosters to fullScreenBackdrop
+    }
 
     val baseLayoutUiPrefsFlow = combine(
         coreLayoutPrefsFlow,
@@ -129,6 +137,7 @@ internal fun HomeViewModel.observeLayoutPreferencesPipeline() {
             hideUnreleasedContent = corePrefs.hideUnreleasedContent,
             showFullReleaseDate = corePrefs.showFullReleaseDate,
             modernLandscapePostersEnabled = false,
+            modernHeroFullScreenBackdropEnabled = false,
             focusedBackdropExpandEnabled = focusedBackdropPrefs.expandEnabled,
             focusedBackdropExpandDelaySeconds = focusedBackdropPrefs.expandDelaySeconds,
             focusedBackdropTrailerEnabled = focusedBackdropPrefs.trailerEnabled,
@@ -146,7 +155,8 @@ internal fun HomeViewModel.observeLayoutPreferencesPipeline() {
             modernLayoutPrefsFlow
         ) { basePrefs, modernPrefs ->
             basePrefs.copy(
-                modernLandscapePostersEnabled = modernPrefs
+                modernLandscapePostersEnabled = modernPrefs.first,
+                modernHeroFullScreenBackdropEnabled = modernPrefs.second
             )
         }
             .distinctUntilChanged()
@@ -176,6 +186,7 @@ internal fun HomeViewModel.observeLayoutPreferencesPipeline() {
                         hideUnreleasedContent = prefs.hideUnreleasedContent,
                         showFullReleaseDate = prefs.showFullReleaseDate,
                         modernLandscapePostersEnabled = prefs.modernLandscapePostersEnabled,
+                        modernHeroFullScreenBackdropEnabled = prefs.modernHeroFullScreenBackdropEnabled,
                         focusedPosterBackdropExpandEnabled = prefs.focusedBackdropExpandEnabled,
                         focusedPosterBackdropExpandDelaySeconds = prefs.focusedBackdropExpandDelaySeconds,
                         focusedPosterBackdropTrailerEnabled = prefs.focusedBackdropTrailerEnabled,
@@ -188,6 +199,60 @@ internal fun HomeViewModel.observeLayoutPreferencesPipeline() {
                 }
                 if (shouldRefreshCatalogPresentation) {
                     scheduleUpdateCatalogRows()
+                }
+            }
+    }
+}
+
+internal fun HomeViewModel.observeModernHomePresentationPipeline() {
+    viewModelScope.launch {
+        uiState
+            .map { state ->
+                ModernHomePresentationInput(
+                    catalogRows = state.catalogRows,
+                    continueWatchingItems = state.continueWatchingItems,
+                    useLandscapePosters = state.modernLandscapePostersEnabled,
+                    showCatalogTypeSuffix = state.catalogTypeSuffixEnabled,
+                    showFullReleaseDate = state.showFullReleaseDate
+                )
+            }
+            .distinctUntilChanged()
+            .collectLatest { input ->
+                val shouldWarmStart = uiState.value.modernHomePresentation.rows.isEmpty()
+                val visibleCatalogRowCount = input.catalogRows.count { it.items.isNotEmpty() }
+                val warmStartCatalogRowCount = if (input.continueWatchingItems.isNotEmpty()) 2 else 3
+
+                if (shouldWarmStart && visibleCatalogRowCount > warmStartCatalogRowCount) {
+                    val warmStartPresentation = withContext(Dispatchers.Default) {
+                        buildModernHomePresentation(
+                            input = input,
+                            cache = modernCarouselRowBuildCache,
+                            context = appContext,
+                            maxCatalogRows = warmStartCatalogRowCount
+                        )
+                    }
+                    _uiState.update { state ->
+                        if (state.modernHomePresentation == warmStartPresentation) {
+                            state
+                        } else {
+                            state.copy(modernHomePresentation = warmStartPresentation)
+                        }
+                    }
+                }
+
+                val presentation = withContext(Dispatchers.Default) {
+                    buildModernHomePresentation(
+                        input = input,
+                        cache = modernCarouselRowBuildCache,
+                        context = appContext
+                    )
+                }
+                _uiState.update { state ->
+                    if (state.modernHomePresentation == presentation) {
+                        state
+                    } else {
+                        state.copy(modernHomePresentation = presentation)
+                    }
                 }
             }
     }
@@ -429,11 +494,13 @@ private fun HomeViewModel.updateCatalogItemWithTmdb(itemId: String, enrichment: 
             merged = merged.copy(
                 name = enrichment.localizedTitle ?: merged.name,
                 description = enrichment.description ?: merged.description,
-                genres = if (enrichment.genres.isNotEmpty()) enrichment.genres else merged.genres
+                genres = if (enrichment.genres.isNotEmpty()) enrichment.genres else merged.genres,
+                imdbRating = enrichment.rating?.toFloat() ?: merged.imdbRating
             )
         }
         if (currentTmdbSettings.useArtwork) {
             merged = merged.copy(
+                background = enrichment.backdrop ?: merged.background,
                 logo = enrichment.logo ?: merged.logo
             )
         }
@@ -557,6 +624,12 @@ internal suspend fun HomeViewModel.enrichHeroItemsPipeline(
             async(Dispatchers.IO) {
                 try {
                     val tmdbId = tmdbService.ensureTmdbId(item.id, item.apiType) ?: return@async item
+
+                    //Pre-warm resolveMetaLookupId returns instantly from cache.
+                    tmdbId.toIntOrNull()?.let { numericId ->
+                        runCatching { tmdbService.tmdbToImdb(numericId, item.apiType) }
+                    }
+
                     val enrichment = tmdbMetadataService.fetchEnrichment(
                         tmdbId = tmdbId,
                         contentType = item.type,

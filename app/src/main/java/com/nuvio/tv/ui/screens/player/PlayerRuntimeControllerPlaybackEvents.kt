@@ -2,6 +2,7 @@ package com.nuvio.tv.ui.screens.player
 
 import android.util.Log
 import androidx.media3.common.Player
+import com.nuvio.tv.R
 import com.nuvio.tv.data.local.SubtitleStyleSettings
 import com.nuvio.tv.data.repository.TraktScrobbleItem
 import com.nuvio.tv.data.repository.extractYear
@@ -792,6 +793,7 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
         PlayerEvent.OnRetry -> {
             hasRenderedFirstFrame = false
             hasRetriedCurrentStreamAfter416 = false
+            resetErrorRetryState()
             resetNextEpisodeCardState(clearEpisode = false)
             _uiState.update { state ->
                 state.copy(
@@ -944,8 +946,8 @@ internal fun PlayerRuntimeController.buildStreamInfoData(): StreamInfoData {
         subtitleCodec = selectedSubtitle?.codec,
         subtitleLanguage = selectedSubtitle?.language ?: addonSub?.lang,
         subtitleSource = when {
-            addonSub != null -> "Addon"
-            selectedSubtitle != null -> "Embedded"
+            addonSub != null -> context.getString(R.string.stream_info_subtitle_source_addon)
+            selectedSubtitle != null -> context.getString(R.string.stream_info_subtitle_source_embedded)
             else -> null
         }
     )

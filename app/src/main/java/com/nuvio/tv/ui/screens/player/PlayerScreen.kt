@@ -497,6 +497,7 @@ fun PlayerScreen(
                 },
                 update = { view ->
                     viewModel.attachMpvView(view)
+                    view.keepScreenOn = uiState.isPlaying || uiState.isBuffering
                     view.applySubtitleStyle(uiState.subtitleStyle)
                 },
                 modifier = Modifier.fillMaxSize()
@@ -1158,7 +1159,7 @@ private fun PlayerControlsOverlay(
                                 exit = fadeOut(animationSpec = tween(durationMillis = 180))
                             ) {
                                 Text(
-                                    text = stringResource(R.string.player_via, uiState.currentStreamName ?: ""),
+                                    text = stringResource(R.string.player_via, (uiState.currentStreamName ?: "").replace("\n", " · ")),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = Color.White.copy(alpha = 0.68f),
                                     maxLines = 2,

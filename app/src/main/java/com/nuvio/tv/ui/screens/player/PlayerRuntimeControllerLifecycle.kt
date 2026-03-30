@@ -31,6 +31,8 @@ internal fun PlayerRuntimeController.releasePlayer(flushPlaybackState: Boolean) 
     playbackPreparationJob = null
     nextEpisodeAutoPlayJob?.cancel()
     nextEpisodeAutoPlayJob = null
+    errorRetryJob?.cancel()
+    errorRetryJob = null
     releaseMpvPlayer()
     _exoPlayer?.release()
     _exoPlayer = null
