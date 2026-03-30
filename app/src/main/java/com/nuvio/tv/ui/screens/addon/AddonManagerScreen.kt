@@ -907,12 +907,33 @@ private fun ConfirmAddonChangesDialog(
                             Spacer(modifier = Modifier.height(8.dp))
                         }
 
+                        if (pendingChange.collectionsChanged) {
+                            Text(
+                                text = "Collections updated",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = NuvioColors.TextPrimary,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 4.dp)
+                            )
+                            Text(
+                                text = "${pendingChange.proposedCollectionCount} collection(s) will replace current collections",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = NuvioColors.TextSecondary,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 8.dp, bottom = 2.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
                         if (
                             pendingChange.addedUrls.isEmpty() &&
                             pendingChange.removedUrls.isEmpty() &&
                             !pendingChange.catalogsReordered &&
                             pendingChange.disabledCatalogNames.isEmpty() &&
-                            pendingChange.enabledCatalogNames.isEmpty()
+                            pendingChange.enabledCatalogNames.isEmpty() &&
+                            !pendingChange.collectionsChanged
                         ) {
                             Text(
                                 text = stringResource(R.string.addon_confirm_no_changes),
