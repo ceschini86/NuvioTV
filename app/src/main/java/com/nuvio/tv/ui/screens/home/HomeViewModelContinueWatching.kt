@@ -259,81 +259,10 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                     elapsedMs = SystemClock.elapsedRealtime() - nextUpStartMs
                 )
 
-                // Derive fully-watched series candidates from both watchedItemsPreferences
-                // (local/Nuvio sync) and nextUpSeeds (Trakt watched show seeds).
+                // Badge evaluation is handled exclusively by publishBadgeUpdate below,
+                // which uses getWatchedShowEpisodes() as the single source of truth.
+                // No seed-based heuristics here.
                 val allWatchedItems = watchedItemsPreferences.allItems.first()
-                val localCandidateIds = allWatchedItems
-                    .filter { it.season != null && it.episode != null }
-                    .map { it.contentId }
-                    .toSet()
-                val seedCandidateIds = nextUpSeeds
-                    .filter { isSeriesTypeCW(it.contentType) && it.season != null && it.episode != null }
-                    .map { it.contentId }
-                    .toSet()
-                val seriesCandidateIds = localCandidateIds + seedCandidateIds
-                val nextUpContentIds = nextUpItems.map { it.info.contentId }.toSet()
-
-                val newFullyWatched = seriesCandidateIds
-                    .filter { contentId ->
-                        val cacheKey = "series:$contentId"
-                        val meta = synchronized(cwMetaCache) { cwMetaCache[cacheKey] }
-                            ?: synchronized(cwMetaCache) { cwMetaCache["tv:$contentId"] }
-                        if (meta == null) return@filter false
-
-                        val episodes = meta.watchableEpisodes()
-                        if (episodes.isEmpty()) return@filter false
-
-                        // Check watchedItemsPreferences (covers Nuvio sync + local playback)
-                        val localWatched = allWatchedItems
-                            .filter { it.contentId == contentId && it.season != null && it.episode != null }
-                            .map { it.season!! to it.episode!! }
-                            .toSet()
-                        if (episodes.all { (it.season!! to it.episode!!) in localWatched }) {
-                            return@filter true
-                        }
-
-                        // For Trakt: if the series has a seed and CW found no next-up,
-                        // it means all episodes in meta are completed on Trakt.
-                        val hasSeed = contentId in seedCandidateIds
-                        val hasNextUp = contentId in nextUpContentIds
-                        hasSeed && !hasNextUp
-                    }
-                    .flatMap { contentId ->
-                        // Include both the candidate ID and the meta ID so badges
-                        // match regardless of whether the catalog uses IMDB or TMDB IDs.
-                        val cacheKey = "series:$contentId"
-                        val meta = synchronized(cwMetaCache) { cwMetaCache[cacheKey] }
-                            ?: synchronized(cwMetaCache) { cwMetaCache["tv:$contentId"] }
-                        val metaId = meta?.id?.takeIf { it.isNotBlank() && it != contentId }
-                        if (metaId != null) listOf(contentId, metaId) else listOf(contentId)
-                    }
-                    .toSet()
-                // Preserve persisted badges that we couldn't validate this cycle.
-                // A badge is only removed if we had meta AND the validation said "not fully watched".
-                val currentIds = fullyWatchedSeriesIds.fullyWatchedSeriesIds.value
-                val activelyRejectedIds = seriesCandidateIds.filter { contentId ->
-                    val cacheKey = "series:$contentId"
-                    val meta = synchronized(cwMetaCache) { cwMetaCache[cacheKey] }
-                        ?: synchronized(cwMetaCache) { cwMetaCache["tv:$contentId"] }
-                    // Only reject if we have meta and it's NOT in newFullyWatched
-                    meta != null && contentId !in newFullyWatched
-                }.toSet()
-                // Also collect the TMDB aliases of rejected IDs so they're removed too.
-                val rejectedWithAliases = activelyRejectedIds.flatMap { contentId ->
-                    val cacheKey = "series:$contentId"
-                    val meta = synchronized(cwMetaCache) { cwMetaCache[cacheKey] }
-                        ?: synchronized(cwMetaCache) { cwMetaCache["tv:$contentId"] }
-                    val metaId = meta?.id?.takeIf { it.isNotBlank() && it != contentId }
-                    if (metaId != null) listOf(contentId, metaId) else listOf(contentId)
-                }.toSet()
-                val preservedPersistedIds = currentIds.filter {
-                    it !in rejectedWithAliases
-                }
-                val finalFullyWatched = (newFullyWatched + preservedPersistedIds).toSet()
-                if (currentIds != finalFullyWatched) {
-                    fullyWatchedSeriesIds.update(finalFullyWatched)
-                }
-
                 // --- Async badge evaluation ---
                 // Resolve meta for all series with watched episodes and evaluate badges.
                 // Uses getWatchedShowEpisodes() as the single source of truth.
@@ -462,7 +391,7 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                                         discoveredOlderNextUpItems.removeAll { old ->
                                             discoveredNextUpItems.any { it.info.contentId == old.info.contentId }
                                         }
-                                        discoveredOlderNextUpItems.addAll(discoveredNextUpItems.filter { it.info.isReleaseAlert })
+                                        discoveredOlderNextUpItems.addAll(discoveredNextUpItems)
                                     }
                                     _uiState.update { state ->
                                         val existingContentIds = state.continueWatchingItems
@@ -474,7 +403,7 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                                             }
                                             .toSet()
                                         val newAlerts = discoveredNextUpItems.filter {
-                                            it.info.contentId !in existingContentIds && it.info.isReleaseAlert
+                                            it.info.contentId !in existingContentIds
                                         }
                                         if (newAlerts.isEmpty()) return@update state
                                         state.copy(continueWatchingItems = state.continueWatchingItems + newAlerts)
@@ -501,7 +430,6 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                     val olderToInclude = persistedOlderItems.filter {
                         it.info.contentId !in recentIds &&
                             it.info.contentId !in inProgressIds &&
-                            it.info.isReleaseAlert &&
                             nextUpDismissKey(it.info.contentId, it.info.seedSeason, it.info.seedEpisode) !in dismissedNextUp
                     }
                     nextUpItems + olderToInclude
@@ -1375,6 +1303,7 @@ private fun isSeriesTypeCW(type: String?): Boolean {
 private fun HomeViewModel.publishBadgeUpdate(
     allWatchedEpisodes: Map<String, Set<Pair<Int, Int>>>
 ) {
+    val validatedNotFullyWatched = mutableSetOf<String>()
     val updatedFullyWatched = allWatchedEpisodes.keys
         .filter { contentId ->
             val cacheKey = "series:$contentId"
@@ -1387,6 +1316,10 @@ private fun HomeViewModel.publishBadgeUpdate(
             val allWatched = episodes.all { (it.season!! to it.episode!!) in watched }
             if (!allWatched && watched.isNotEmpty()) {
                 Log.d("CW-BADGE", "NOT fully watched: $contentId episodes=${episodes.size} watched=${watched.size}")
+                // Track IDs we've validated as NOT fully watched so we can remove stale badges.
+                validatedNotFullyWatched.add(contentId)
+                val metaId = meta.id.takeIf { it.isNotBlank() && it != contentId }
+                if (metaId != null) validatedNotFullyWatched.add(metaId)
             }
             allWatched
         }
@@ -1399,8 +1332,9 @@ private fun HomeViewModel.publishBadgeUpdate(
         }
         .toSet()
     // Merge with persisted badges — don't remove badges we haven't re-validated yet.
+    // But DO remove badges for series we've confirmed are NOT fully watched.
     val current = fullyWatchedSeriesIds.fullyWatchedSeriesIds.value
-    val merged = current + updatedFullyWatched
+    val merged = (current - validatedNotFullyWatched) + updatedFullyWatched
     if (current != merged) {
         fullyWatchedSeriesIds.updateWithValidation(merged, updatedFullyWatched)
     }
