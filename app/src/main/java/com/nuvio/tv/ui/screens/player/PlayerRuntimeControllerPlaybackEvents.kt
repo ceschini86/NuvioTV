@@ -20,6 +20,9 @@ internal const val AUDIO_AMPLIFICATION_MAX_DB = 10
 internal fun PlayerRuntimeController.applyAudioAmplification(db: Int) {
     val clampedDb = db.coerceIn(AUDIO_AMPLIFICATION_MIN_DB, AUDIO_AMPLIFICATION_MAX_DB)
     gainAudioProcessor.setGainDb(clampedDb)
+    if (isUsingMpvEngine()) {
+        mpvView?.applyAudioAmplificationDb(clampedDb)
+    }
     _uiState.update {
         it.copy(
             audioAmplificationDb = clampedDb,

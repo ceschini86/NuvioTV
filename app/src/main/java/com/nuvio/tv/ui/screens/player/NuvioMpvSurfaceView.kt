@@ -7,6 +7,7 @@ import com.nuvio.tv.data.local.SubtitleStyleSettings
 import `is`.xyz.mpv.BaseMPVView
 import `is`.xyz.mpv.Utils
 import java.util.Locale
+import kotlin.math.pow
 import kotlin.math.roundToLong
 
 class NuvioMpvSurfaceView @JvmOverloads constructor(
@@ -95,6 +96,18 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
     fun setPlaybackSpeed(speed: Float) {
         if (!initialized) return
         mpv.setPropertyDouble("speed", speed.toDouble())
+    }
+
+    fun applyAudioAmplificationDb(db: Int) {
+        if (!initialized) return
+        val clampedDb = db.coerceIn(AUDIO_AMPLIFICATION_MIN_DB, AUDIO_AMPLIFICATION_MAX_DB)
+        val linearScale = 10.0.pow(clampedDb / 20.0)
+        val targetVolumePercent = (100.0 * linearScale).coerceIn(0.0, MPV_MAX_VOLUME_PERCENT)
+        runCatching {
+            mpv.setPropertyDouble("volume", targetVolumePercent)
+        }.onFailure {
+            Log.w(TAG, "Failed to apply audio amplification on mpv (db=$clampedDb): ${it.message}")
+        }
     }
 
     fun applyAudioLanguagePreferences(languages: List<String>) {
@@ -365,6 +378,8 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
         mpv.setOptionString("demuxer-max-bytes", "${64 * 1024 * 1024}")
         mpv.setOptionString("demuxer-max-back-bytes", "${64 * 1024 * 1024}")
         mpv.setOptionString("keep-open", "yes")
+        mpv.setOptionString("softvol", "yes")
+        mpv.setOptionString("volume-max", MPV_MAX_VOLUME_PERCENT.toInt().toString())
     }
 
     override fun postInitOptions() {
@@ -447,6 +462,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
         private const val TAG = "NuvioMpvSurfaceView"
         private const val MPV_SUBTITLE_VERTICAL_OFFSET_BASELINE_SHIFT = 24
         private const val MPV_COVER_FALLBACK_SCALE = 1.15f
+        private const val MPV_MAX_VOLUME_PERCENT = 400.0
     }
 }
 

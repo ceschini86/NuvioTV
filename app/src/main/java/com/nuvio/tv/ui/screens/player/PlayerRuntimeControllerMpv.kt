@@ -21,6 +21,7 @@ internal fun PlayerRuntimeController.attachMpvView(view: NuvioMpvSurfaceView?) {
     runCatching {
         view.setMedia(currentStreamUrl, currentHeaders)
         view.setPlaybackSpeed(_uiState.value.playbackSpeed)
+        view.applyAudioAmplificationDb(_uiState.value.audioAmplificationDb)
         view.applyAudioLanguagePreferences(mpvPreferredAudioLanguages)
         view.applySubtitleLanguagePreferences(
             preferred = _uiState.value.subtitleStyle.preferredLanguage,
@@ -84,6 +85,7 @@ internal fun PlayerRuntimeController.initializeMpvPlayer(url: String, headers: M
     runCatching {
         view.setMedia(url, headers)
         view.setPlaybackSpeed(_uiState.value.playbackSpeed)
+        view.applyAudioAmplificationDb(_uiState.value.audioAmplificationDb)
         view.applyAudioLanguagePreferences(mpvPreferredAudioLanguages)
         view.applySubtitleLanguagePreferences(
             preferred = _uiState.value.subtitleStyle.preferredLanguage,
