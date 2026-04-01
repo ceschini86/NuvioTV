@@ -123,6 +123,37 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
         }
     }
 
+    fun applyAspectMode(mode: AspectMode) {
+        when (mode) {
+            AspectMode.ORIGINAL -> {
+                scaleX = 1.0f
+                scaleY = 1.0f
+            }
+
+            AspectMode.FULL_SCREEN -> applyCoverAspectScale()
+
+            AspectMode.SLIGHT_ZOOM -> {
+                scaleX = 1.15f
+                scaleY = 1.15f
+            }
+
+            AspectMode.CINEMA_ZOOM -> {
+                scaleX = 1.33f
+                scaleY = 1.33f
+            }
+
+            AspectMode.VERTICAL_STRETCH -> {
+                scaleX = 1.0f
+                scaleY = 1.33f
+            }
+
+            AspectMode.HORIZONTAL_STRETCH -> {
+                scaleX = 1.3333f
+                scaleY = 1.0f
+            }
+        }
+    }
+
     fun applySubtitleStyle(style: SubtitleStyleSettings) {
         if (!initialized) return
         runCatching {
@@ -364,9 +395,58 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
         return String.format(Locale.US, "#%08X", color)
     }
 
+    private fun applyCoverAspectScale() {
+        val viewAspect = if (width > 0 && height > 0) {
+            width.toFloat() / height.toFloat()
+        } else {
+            0f
+        }
+        val videoAspect = readVideoAspectRatio()
+
+        if (videoAspect != null && videoAspect > 0f && viewAspect > 0f) {
+            if (videoAspect > viewAspect) {
+                scaleX = 1.0f
+                scaleY = videoAspect / viewAspect
+            } else {
+                scaleX = viewAspect / videoAspect
+                scaleY = 1.0f
+            }
+            return
+        }
+
+        // Fallback to a visible zoom when video metadata/aspect is unavailable.
+        scaleX = MPV_COVER_FALLBACK_SCALE
+        scaleY = MPV_COVER_FALLBACK_SCALE
+    }
+
+    private fun readVideoAspectRatio(): Float? {
+        if (!initialized) return null
+
+        val directAspect = runCatching {
+            mpv.getPropertyDouble("video-out-params/aspect")
+                ?: mpv.getPropertyDouble("video-params/aspect")
+        }.getOrNull()
+        if (directAspect != null && directAspect > 0.0) {
+            return directAspect.toFloat()
+        }
+
+        val width = runCatching {
+            mpv.getPropertyInt("video-out-params/dw")
+                ?: mpv.getPropertyInt("video-params/w")
+        }.getOrNull() ?: return null
+        val height = runCatching {
+            mpv.getPropertyInt("video-out-params/dh")
+                ?: mpv.getPropertyInt("video-params/h")
+        }.getOrNull() ?: return null
+        if (width <= 0 || height <= 0) return null
+
+        return width.toFloat() / height.toFloat()
+    }
+
     companion object {
         private const val TAG = "NuvioMpvSurfaceView"
         private const val MPV_SUBTITLE_VERTICAL_OFFSET_BASELINE_SHIFT = 24
+        private const val MPV_COVER_FALLBACK_SCALE = 1.15f
     }
 }
 

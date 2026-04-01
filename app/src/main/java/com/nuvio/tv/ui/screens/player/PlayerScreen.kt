@@ -500,6 +500,7 @@ fun PlayerScreen(
                 update = { view ->
                     viewModel.attachMpvView(view)
                     view.keepScreenOn = uiState.isPlaying || uiState.isBuffering
+                    view.applyAspectMode(uiState.aspectMode)
                     view.applySubtitleStyle(uiState.subtitleStyle)
                 },
                 modifier = Modifier.fillMaxSize()

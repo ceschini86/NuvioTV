@@ -37,6 +37,11 @@ internal fun PlayerRuntimeController.startProgressUpdates() {
                 if (view != null) {
                     val pos = view.currentPositionMs().coerceAtLeast(0L)
                     val playerDuration = view.durationMs().coerceAtLeast(0L)
+                    applyPendingMpvSeekIfNeeded(
+                        view = view,
+                        currentPositionMs = pos,
+                        durationMs = playerDuration
+                    )
                     val playingNow = view.isPlayingNow()
                     val cacheBuffering = view.isPausedForCacheNow() || view.isCoreIdleNow()
                     var firstFrameReady = hasRenderedFirstFrame

@@ -294,15 +294,9 @@ internal fun PlayerRuntimeController.loadSavedProgressFor(season: Int?, episode:
             if (saved.isInProgress()) {
                 pendingResumeProgress = saved
                 if (isUsingMpvEngine()) {
-                    val target = saved.position.coerceAtLeast(0L)
-                    if (target > 0L) {
-                        if (mpvView != null) {
-                            seekPlaybackTo(target)
-                            _uiState.update { it.copy(pendingSeekPosition = null) }
-                            pendingResumeProgress = null
-                        } else {
-                            _uiState.update { it.copy(pendingSeekPosition = target) }
-                        }
+                    _uiState.update { it.copy(pendingSeekPosition = null) }
+                    mpvView?.let { view ->
+                        applyPendingMpvSeekIfNeeded(view)
                     }
                 } else {
                     _exoPlayer?.let { player ->

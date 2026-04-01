@@ -5,6 +5,9 @@ import com.nuvio.tv.data.local.InternalPlayerEngine
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+
+private const val MPV_RESUME_SEEK_TOLERANCE_MS = 1500L
 
 internal fun PlayerRuntimeController.attachMpvView(view: NuvioMpvSurfaceView?) {
     if (mpvView === view) return
@@ -25,14 +28,9 @@ internal fun PlayerRuntimeController.attachMpvView(view: NuvioMpvSurfaceView?) {
         )
         view.applySubtitleStyle(_uiState.value.subtitleStyle)
         view.setSubtitleDelayMs(_uiState.value.subtitleDelayMs)
+        view.applyAspectMode(_uiState.value.aspectMode)
         view.setPaused(false)
-        val pendingSeek = _uiState.value.pendingSeekPosition
-            ?: pendingResumeProgress?.position
-        if (pendingSeek != null && pendingSeek > 0L) {
-            view.seekToMs(pendingSeek)
-            _uiState.update { it.copy(pendingSeekPosition = null) }
-            pendingResumeProgress = null
-        }
+        applyPendingMpvSeekIfNeeded(view)
         hasRenderedFirstFrame = false
         _uiState.update {
             it.copy(
@@ -93,14 +91,9 @@ internal fun PlayerRuntimeController.initializeMpvPlayer(url: String, headers: M
         )
         view.applySubtitleStyle(_uiState.value.subtitleStyle)
         view.setSubtitleDelayMs(_uiState.value.subtitleDelayMs)
+        view.applyAspectMode(_uiState.value.aspectMode)
         view.setPaused(false)
-        val pendingSeek = _uiState.value.pendingSeekPosition
-            ?: pendingResumeProgress?.position
-        if (pendingSeek != null && pendingSeek > 0L) {
-            view.seekToMs(pendingSeek)
-            _uiState.update { it.copy(pendingSeekPosition = null) }
-            pendingResumeProgress = null
-        }
+        applyPendingMpvSeekIfNeeded(view)
 
         hasRenderedFirstFrame = false
         _uiState.update {
@@ -238,6 +231,63 @@ internal fun PlayerRuntimeController.updateMpvAvailableTracks() {
         audioTracks = audioTracks,
         subtitleTracks = internalSubtitleTracks
     )
+}
+
+internal fun PlayerRuntimeController.applyPendingMpvSeekIfNeeded(
+    view: NuvioMpvSurfaceView,
+    currentPositionMs: Long = view.currentPositionMs().coerceAtLeast(0L),
+    durationMs: Long = view.durationMs().coerceAtLeast(0L)
+) {
+    if (!isUsingMpvEngine()) return
+
+    val state = _uiState.value
+    val savedResume = pendingResumeProgress
+    val queuedPosition = state.pendingSeekPosition ?: savedResume?.position
+    if (queuedPosition == null) return
+    if (queuedPosition <= 0L && savedResume == null) {
+        _uiState.update { it.copy(pendingSeekPosition = null) }
+        pendingResumeProgress = null
+        return
+    }
+
+    val target = when {
+        savedResume != null && durationMs > 0L -> {
+            savedResume.resolveResumePosition(durationMs).coerceAtLeast(0L)
+        }
+        savedResume != null -> {
+            val requiresDurationForPercentResume = savedResume.progressPercent != null &&
+                savedResume.duration <= 0L
+            if (requiresDurationForPercentResume) {
+                return
+            }
+            savedResume.position.coerceAtLeast(0L)
+        }
+        else -> queuedPosition.coerceAtLeast(0L)
+    }
+
+    if (target <= 0L) {
+        _uiState.update { it.copy(pendingSeekPosition = null) }
+        pendingResumeProgress = null
+        return
+    }
+
+    val isAlreadyAtTarget = currentPositionMs >= target ||
+        abs(currentPositionMs - target) <= MPV_RESUME_SEEK_TOLERANCE_MS
+    if (isAlreadyAtTarget) {
+        if (state.pendingSeekPosition != null || savedResume != null) {
+            _uiState.update { it.copy(pendingSeekPosition = null) }
+            pendingResumeProgress = null
+        }
+        return
+    }
+
+    val canSeekNow = durationMs > 0L || currentPositionMs > 0L || hasRenderedFirstFrame
+    if (!canSeekNow) return
+
+    view.seekToMs(target)
+    if (state.pendingSeekPosition != target) {
+        _uiState.update { it.copy(pendingSeekPosition = target) }
+    }
 }
 
 internal fun PlayerRuntimeController.isUsingMpvEngine(): Boolean {

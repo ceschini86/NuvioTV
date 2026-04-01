@@ -40,10 +40,12 @@ import io.github.peerless2012.ass.media.type.AssRenderType
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 private const val STARTUP_SUBTITLE_PREFETCH_TIMEOUT_MS = 10_000L
+private const val MPV_AFR_SETTLE_DELAY_MS = 2_000L
 
 internal data class StartupSubtitlePreparation(
     val fetchedSubtitles: List<Subtitle>,
@@ -76,6 +78,7 @@ internal fun PlayerRuntimeController.initializePlayer(url: String, headers: Map<
     scope.launch {
         try {
             resetLoadingOverlayForNewStream()
+            mpvDelayStartAfterAfrSwitch = false
             val playerSettings = playerSettingsDataStore.playerSettings.first()
             val preferredAudioLanguages = resolvePreferredAudioLanguages(
                 preferredAudioLanguage = playerSettings.preferredAudioLanguage,
@@ -108,6 +111,13 @@ internal fun PlayerRuntimeController.initializePlayer(url: String, headers: Map<
                 mpvInitializationInProgress = true
                 try {
                     afrJob.await()
+                    if (mpvDelayStartAfterAfrSwitch) {
+                        Log.d(
+                            PlayerRuntimeController.TAG,
+                            "AFR display mode switched; delaying MPV start by ${MPV_AFR_SETTLE_DELAY_MS}ms"
+                        )
+                        delay(MPV_AFR_SETTLE_DELAY_MS)
+                    }
                     initializeMpvPlayer(url = url, headers = headers)
                     // Keep addon subtitle discovery available on the mpv path too.
                     // Exo does this later in this method, but this branch returns early.
