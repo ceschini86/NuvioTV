@@ -197,7 +197,7 @@
     <string name="settings_profiles">المستخدمين</string>
     <string name="settings_profiles_subtitle">إدارة ملفات المستخدمين.</string>
     <string name="settings_layout">واجهة العرض</string>
-    <string name="settings_layout_subtitle">تنظيم الواجهة الرئيسية وشكل الملصقات.</string>
+    <string name="settings_layout_subtitle">تنظيم الواجهة الرئيسية وشكل البطاقات.</string>
     <string name="settings_plugins">الملحقات</string>
     <string name="settings_plugins_subtitle">المستودعات والمصادر.</string>
     <string name="settings_integration">الخدمات المرتبطة</string>
@@ -294,8 +294,8 @@
     <string name="playback_section_audio_desc">إعدادات الاعلان وضبط الصوت.</string>
     <string name="playback_section_subtitles">الترجمة</string>
     <string name="playback_section_subtitles_desc">تحديد اللغة والمظهر وطريقة المعالجة.</string>
-    <string name="playback_afr_open">مفتوحة</string>
-    <string name="playback_afr_closed">مغلقة</string>
+    <string name="playback_afr_open">مفتوح</string>
+    <string name="playback_afr_closed">مغلق</string>
     <string name="playback_afr_off">معطل</string>
     <string name="playback_afr_off_sub">عدم تغيير معدل تحديث الشاشة.</string>
     <string name="playback_afr_on_start">عند البدء</string>
@@ -324,13 +324,13 @@
     <string name="audio_decoder_prefer_device">الأولوية لفك التشفير عبر الجهاز</string>
     <string name="audio_decoder_prefer_app">الأولوية لفك التشفير عبر التطبيق (FFmpeg)</string>
     <string name="audio_decoder_priority">أولوية فك التشفير</string>
-    <string name="audio_tunneled">التشغيل النفقي (Tunneled)</string>
-    <string name="audio_tunneled_sub">المزامنة المباشرة للصوت والصورة. قد يعالج مشاكل التشغيل في بعض أنظمة Android TV.</string>
-    <string name="audio_dv_sub">معالجة Dolby Vision 7 كترميز HEVC قياسي للأجهزة المفتقرة لدعم تقنية DV</string>
-    <string name="audio_decoder_device_only_desc">استخدام فك التشفير عبر الجهاز فقط. الأكثر توافقاً ولكن قد لا يدعم جميع التنسيقات.</string>
-    <string name="audio_decoder_prefer_device_desc">الأولوية لفك التشفير عبر الجهاز مع الانتقال التلقائي لـ FFmpeg. يُنصح به لمعظم الأجهزة.</string>
-    <string name="audio_decoder_prefer_app_desc">استخدام أنظمة فك تشفير FFmpeg عند توفرها. دعم أفضل للتنسيقات ولكن استهلاك أعلى للمعالج.</string>
-    <string name="audio_decoder_controls">تحديد نوع فك التشفير المستخدم (عبر الجهاز أو برمجي) لمعالجة الصوت والصورة</string>
+    <string name="audio_tunneled">Tunneled Playback</string>
+    <string name="audio_tunneled_sub">Hardware-level audio/video sync. May improve playback on some Android TV devices</string>
+    <string name="audio_dv_sub">Map Dolby Vision Profile 7 to standard HEVC for devices without DV hardware support</string>
+    <string name="audio_decoder_device_only_desc">Only use built-in hardware decoders. Most compatible but may not support all formats.</string>
+    <string name="audio_decoder_prefer_device_desc">Use hardware decoders when available, fall back to FFmpeg. Recommended for most devices.</string>
+    <string name="audio_decoder_prefer_app_desc">Use FFmpeg decoders when available. Better format support but higher CPU usage.</string>
+    <string name="audio_decoder_controls">Controls whether hardware or software (FFmpeg) decoders are used for audio and video</string>
 
     <!-- PlaybackSubtitleSettings -->
     <string name="sub_section">الترجمة</string>
@@ -345,9 +345,9 @@
     <string name="sub_bold_sub">استخدام وزن خط عريض للترجمة</string>
     <string name="sub_text_color">لون النص</string>
     <string name="sub_bg_color">لون الخلفية</string>
-    <string name="sub_outline">الحد الخارجي</string>
-    <string name="sub_outline_sub">إضافة حد حول نص الترجمة لرؤية أفضل</string>
-    <string name="sub_outline_color">لون الحد الخارجي</string>
+    <string name="sub_outline">الاطار الخارجي</string>
+    <string name="sub_outline_sub">إضافة اطار حول نص الترجمة لرؤية أفضل</string>
+    <string name="sub_outline_color">لون الاطار</string>
     <string name="sub_advanced_section">معالجة ترجمة متقدمة</string>
     <string name="sub_libass">Use libass for ASS/SSA subtitles</string>
     <string name="sub_libass_sub">Experimental: advanced ASS/SSA rendering (styles, positioning, animations)</string>
@@ -376,10 +376,10 @@
     <string name="sub_startup_mode_all_desc">تجهيز وإرفاق جميع ترجمات الإضافات قبل التشغيل. أبطأ بدء للتشغيل.</string>
 
     <!-- PlaybackAutoPlaySettings -->
-    <string name="autoplay_reuse_last_link">إعادة استخدام آخر رابط</string>
+    <string name="autoplay_reuse_last_link">إعادة استخدام الرابط الأخير</string>
     <string name="autoplay_reuse_last_link_sub">تشغيل آخر رابط عمل لنفس الفيلم/الحلقة تلقائياً عندما توفر الذاكرة المؤقتة</string>
-    <string name="autoplay_last_link_cache">فترة حفظ آخر رابط</string>
-    <string name="autoplay_mode_manual">يدوي (اختر المصدر)</string>
+    <string name="autoplay_last_link_cache">فترة حفظ الرابط</string>
+    <string name="autoplay_mode_manual">يدوي (اختيار المصدر)</string>
     <string name="autoplay_mode_first">تشغيل أول مصدر تلقائياً</string>
     <string name="autoplay_mode_regex">تشغيل تلقائي عند مطابقة Regex</string>
     <string name="autoplay_stream_selection">اختيار المصدر التلقائي</string>
@@ -423,21 +423,21 @@
 
     <!-- LayoutSettingsScreen -->
     <string name="layout_title">إعدادات التنسيق</string>
-    <string name="layout_subtitle">ضبط تنسيق الرئيسية، ظهور المحتوى، وسلوك الملصقات</string>
+    <string name="layout_subtitle">ضبط تنسيق الصفحة الرئيسية، وظهور المحتوى، وسلوك البطاقات</string>
     <string name="layout_classic">عرض كلاسيكي</string>
     <string name="layout_grid">عرض شبكي</string>
     <string name="layout_modern">عرض حديث</string>
     <string name="layout_classic_desc">تصفح القوائم بشكل أفقي</string>
-    <string name="layout_grid_desc">تصفح كل شيء في شبكة رأسية مع قسم رئيسي</string>
-    <string name="layout_modern_desc">قسم رئيسي ثابت مع صف نشط واحد لتصفح أسرع</string>
+    <string name="layout_grid_desc">تصفح كل شيء في شبكة رأسية مع قسم محتوى مميز</string>
+    <string name="layout_modern_desc">قسم مميز ثابت مع صف نشط واحد لتصفح أسرع</string>
     <string name="layout_section_home">تنسيق الواجهة الرئيسية</string>
-    <string name="layout_section_home_desc">اختر الهيكل ومصدر القسم الرئيسي.</string>
-    <string name="layout_landscape_posters">ملصقات عرضية</string>
-    <string name="layout_landscape_posters_sub">التبديل بين البطاقات الطولية والعرضية في العرض الحديث.</string>
+    <string name="layout_section_home_desc">اختر تصميم القسم ومصدر المحتوى المميز.</string>
+    <string name="layout_landscape_posters">بطاقات أفقية</string>
+    <string name="layout_landscape_posters_sub">إظهار جزء من الصف السفلي في العرض الحديث.</string>
     <string name="layout_preview_row">إظهار صف المعاينة</string>
     <string name="layout_preview_row_sub">إظهار معاينة جزئية للصف السفلي في التنسيق الحديث.</string>
-    <string name="layout_hero_catalogs">قوائم القسم الرئيسي</string>
-    <string name="layout_hero_catalogs_sub">اختر قائمة واحدة أو أكثر لمحتوى القسم الرئيسي.</string>
+    <string name="layout_hero_catalogs">قوائم القسم المميز</string>
+    <string name="layout_hero_catalogs_sub">اختر قائمة واحدة أو أكثر لمحتوى القسم المميز.</string>
     <string name="layout_section_content">محتوى الرئيسية</string>
     <string name="layout_section_content_desc">التحكم في ما يظهر في الرئيسية والبحث.</string>
     <string name="layout_collapse_sidebar">طي الشريط الجانبي</string>
@@ -446,20 +446,20 @@
     <string name="layout_modern_sidebar_sub">تفعيل التنقل عبر شريط جانبي عائم.</string>
     <string name="layout_modern_sidebar_blur">تعتيم الشريط الحديث</string>
     <string name="layout_modern_sidebar_blur_sub">تفعيل تأثير التعتيم لأسطح الشريط الجانبي الحديث.</string>
-    <string name="layout_fullscreen_hero_backdrop">خلفية القسم الرئيسي بملء الشاشة</string>
-    <string name="layout_fullscreen_hero_backdrop_sub">توسيع خلفية القسم الرئيسي لتملأ الشاشة بأكملها.</string>
-    <string name="layout_show_hero">إظهار القسم الرئيسي</string>
-    <string name="layout_show_hero_sub">عرض شريط المحتوى المميز في أعلى الرئيسية.</string>
-    <string name="layout_show_discover">إظهار "استكشف" في البحث</string>
-    <string name="layout_show_discover_sub">إظهار قسم التصفح عندما يكون حقل البحث فارغاً.</string>
-    <string name="layout_poster_labels">إظهار عناوين الملصقات</string>
-    <string name="layout_poster_labels_sub">إظهار العناوين تحت الملصقات في الصفوف والشبكة, و"عرض الكل".</string>
+    <string name="layout_fullscreen_hero_backdrop">خلفية القسم المميز بملء الشاشة</string>
+    <string name="layout_fullscreen_hero_backdrop_sub">توسيع خلفية القسم المميز لتملأ الشاشة بأكملها.</string>
+    <string name="layout_show_hero">إظهار القسم المميز</string>
+    <string name="layout_show_hero_sub">عرض شريط القسم المميز في أعلى الرئيسية.</string>
+    <string name="layout_show_discover">إظهار "استكشاف" في البحث</string>
+    <string name="layout_show_discover_sub">إظهار قسم "استكشاف" عندما يكون حقل البحث فارغاً.</string>
+    <string name="layout_poster_labels">إظهار عناوين البطاقات</string>
+    <string name="layout_poster_labels_sub">إظهار العناوين تحت البطاقات في الصفوف والشبكة, و"عرض الكل".</string>
     <string name="layout_addon_name">إظهار اسم الإضافة</string>
     <string name="layout_addon_name_sub">إظهار اسم المصدر تحت عناوين القوائم.</string>
-    <string name="layout_catalog_type">اظهار نوع القوائم</string>
+    <string name="layout_catalog_type">إظهار نوع القوائم</string>
     <string name="layout_catalog_type_sub">إظهار النوع بجانب اسم القوائم (أفلام/مسلسلات).</string>
-    <string name="layout_hide_unreleased">إخفاء المحتوى غير المصدر</string>
-    <string name="layout_hide_unreleased_sub">إخفاء الأفلام والبرامج التي لم يتم إصدارها بعد.</string>
+    <string name="layout_hide_unreleased">إخفاء المحتوى الذي لم يصدر بعد</string>
+    <string name="layout_hide_unreleased_sub">إخفاء الأفلام والمسلسلات التي لم يتم تصدر بعد.</string>
     <string name="layout_section_detail">صفحة التفاصيل</string>
     <string name="layout_section_detail_desc">إعدادات شاشات التفاصيل والحلقات.</string>
     <string name="layout_blur_unwatched">تعتيم الحلقات غير المشاهدة</string>
@@ -472,27 +472,27 @@
     <string name="layout_prefer_external_meta_sub">استخدام البيانات الوصفية من إضافة خارجية بدلاً من إضافة القوائم.</string>
     <string name="layout_show_full_release_date">إظهار تاريخ الإصدار الكامل</string>
     <string name="layout_show_full_release_date_sub">للأفلام، إظهار تاريخ الإصدار الكامل بدلاً من السنة فقط.</string>
-    <string name="layout_section_focused">الملصق المحدد</string>
-    <string name="layout_section_focused_desc">اعدادات متقدمة لسلوك المصلق المحدد.</string>
-    <string name="layout_expand_poster">تكبير الملصق المحدد ليكون خلفية</string>
-    <string name="layout_expand_poster_sub">تكبير الملصق المحدد تلقائياً عند التوقف عليه.</string>
-    <string name="layout_expand_delay">مدة انتظار تكبير الملصق</string>
-    <string name="layout_expand_delay_sub">الوقت المطلوب للانتظار قبل تكبير الملصق المحدد.</string>
+    <string name="layout_section_focused">البطاقة المحددة</string>
+    <string name="layout_section_focused_desc">إعدادات متقدمة لسلوك البطاقة المحددة.</string>
+    <string name="layout_expand_poster">تكبير البطاقة المحددة لتصبح خلفية</string>
+    <string name="layout_expand_poster_sub">تكبير البطاقة المحددة تلقائياً عند التوقف عليه.</string>
+    <string name="layout_expand_delay">مدة انتظار تكبير الصور الخلفية</string>
+    <string name="layout_expand_delay_sub">الوقت المطلوب للانتظار قبل تكبير البطاقة المحددة.</string>
     <string name="layout_autoplay_trailer">تشغيل الإعلان تلقائياً</string>
     <string name="layout_autoplay_trailer_expanded">تشغيل الإعلان في الخلفية الممتدة</string>
-    <string name="layout_autoplay_trailer_sub">تشغيل الاعلان اللمحتوى المحدد تلقائياً عند توفره.</string>
+    <string name="layout_autoplay_trailer_sub">تشغيل الإعلان تلقائيًا للمحتوى المحدد عند توفره.</string>
     <string name="layout_autoplay_trailer_expanded_sub">تشغيل الإعلان داخل الخلفية الممتدة عند توفره.</string>
     <string name="layout_trailer_muted">تشغيل الإعلان بدون صوت</string>
     <string name="layout_trailer_muted_sub_preview">كتم صوت الإعلان أثناء المعاينة التلقائية.</string>
     <string name="layout_trailer_muted_sub_expanded">كتم صوت الإعلان في البطاقات الممتدة.</string>
-    <string name="layout_section_card_style">نمط الملصقات</string>
+    <string name="layout_section_card_style">نمط البطاقات</string>
     <string name="layout_section_card_style_desc">ضبط عرض البطاقة وزوايا الانحناء.</string>
-    <string name="layout_open">مفتوحة</string>
-    <string name="layout_closed">مغلقة</string>
-    <string name="layout_trailer_location">موقع تشغيل الإعلان الحديث</string>
+    <string name="layout_open">مفتوح</string>
+    <string name="layout_closed">مغلق</string>
+    <string name="layout_trailer_location">موقع تشغيل الإعلان في العرض الحديث</string>
     <string name="layout_trailer_location_sub">اختر أين يتم تشغيل معاينة الإعلان في الواجهة الحديثة.</string>
     <string name="layout_trailer_expanded_card">البطاقة الممتدة</string>
-    <string name="layout_trailer_hero_media">القسم الرئيسي</string>
+    <string name="layout_trailer_hero_media">القسم المميز</string>
     <string name="layout_preset_compact">مدمج</string>
     <string name="layout_preset_dense">كثيف</string>
     <string name="layout_preset_standard">قياسي</string>
@@ -503,7 +503,7 @@
     <string name="layout_preset_subtle">لطيف</string>
     <string name="layout_preset_classic">كلاسيكي</string>
     <string name="layout_preset_rounded">مستدير</string>
-    <string name="layout_preset_pill">بيضاوي</string>
+    <string name="layout_preset_pill">كبسولة</string>
     <string name="layout_card_width">العرض</string>
     <string name="layout_card_radius">نصف قطر الزاوية</string>
     <string name="layout_reset_default">استعادة الافتراضي</string>
@@ -518,19 +518,19 @@
     <string name="mdblist_api_key_title">مفتاح API</string>
     <string name="mdblist_api_key_subtitle">مطلوب لجلب التقييمات من MDBList</string>
     <string name="mdblist_trakt_title">Trakt</string>
-    <string name="mdblist_trakt_subtitle">إظهار درجة Trakt</string>
+    <string name="mdblist_trakt_subtitle">عرض تقييم Trakt</string>
     <string name="mdblist_imdb_title">IMDb</string>
-    <string name="mdblist_imdb_subtitle">إظهار درجة IMDb (وإخفاء سطر IMDb الافتراضي عند توفره)</string>
+    <string name="mdblist_imdb_subtitle">عرض تقييم IMDb (وإخفاء سطر IMDb الافتراضي عند توفره)</string>
     <string name="mdblist_tmdb_title">TMDB</string>
-    <string name="mdblist_tmdb_subtitle">إظهار درجة TMDB</string>
+    <string name="mdblist_tmdb_subtitle">عرض تقييم TMDB</string>
     <string name="mdblist_letterboxd_title">Letterboxd</string>
-    <string name="mdblist_letterboxd_subtitle">إظهار درجة Letterboxd</string>
+    <string name="mdblist_letterboxd_subtitle">عرض تقييم Letterboxd</string>
     <string name="mdblist_tomatoes_title">Rotten Tomatoes</string>
-    <string name="mdblist_tomatoes_subtitle">إظهار درجة النقاد</string>
+    <string name="mdblist_tomatoes_subtitle">عرض تقييم النقاد</string>
     <string name="mdblist_audience_title">درجة الجمهور</string>
-    <string name="mdblist_audience_subtitle">إظهار درجة الجمهور</string>
+    <string name="mdblist_audience_subtitle">عرض تقييم الجمهور</string>
     <string name="mdblist_metacritic_title">Metacritic</string>
-    <string name="mdblist_metacritic_subtitle">إظهار درجة Metacritic</string>
+    <string name="mdblist_metacritic_subtitle">عرض تقييم Metacritic</string>
     <string name="mdblist_dialog_title">مفتاح MDBList API</string>
     <string name="mdblist_dialog_subtitle">أدخل مفتاح API الخاص بك لجلب التقييمات الخارجية</string>
     <string name="mdblist_dialog_placeholder">أدخل مفتاح MDBList API</string>
@@ -583,8 +583,8 @@
     <string name="tmdb_language_dialog_title">لغة TMDB</string>
 
     <!-- TraktScreen -->
-    <string name="trakt_description">زامن قائمة المشاهدة، مستوى المشاهدة، استكمال، السجلات، وقوائمك الشخصية مع Trakt.</string>
-    <string name="trakt_connected_as">متصل كـ %1$s</string>
+    <string name="trakt_description">مزامنة قائمة المشاهدة، مستوى المشاهدة، استكمال، السجلات، وقوائمك الشخصية مع Trakt.</string>
+    <string name="trakt_connected_as">متصل باسم %1$s</string>
     <string name="trakt_account_login">تسجيل دخول الحساب</string>
     <string name="trakt_awaiting_instruction">اذهب إلى trakt.tv/activate وأدخل هذا الرمز:</string>
     <string name="trakt_waiting_approval">بانتظار الموافقة…</string>
@@ -621,7 +621,7 @@
     <string name="trakt_comments_now_hidden">تم الآن إخفاء مراجعات Trakt في صفحات التفاصيل</string>
     <string name="trakt_cached_label">مخزن مؤقتاً</string>
     <string name="trakt_stat_movies">أفلام</string>
-    <string name="trakt_stat_shows">برامج/مسلسلات</string>
+    <string name="trakt_stat_shows">مسلسلات</string>
     <string name="trakt_stat_episodes">حلقات</string>
     <string name="trakt_stat_watched_hours">ساعات المشاهدة</string>
     <string name="trakt_disconnect">قطع الاتصال</string>
@@ -672,8 +672,8 @@
     <string name="profile_subtitle">إدارة ملفات المستخدمين لهذا الحساب.</string>
     <string name="profile_manage_button">إدارة الملفات الشخصية</string>
     <string name="profile_manage_title">إدارة الملفات الشخصية</string>
-    <string name="profile_manage_subtitle">اختر ملفاً للتعديل، التبديل، أو إنشاء ملف جديد</string>
-    <string name="profile_manage_hint">اختر ملفاً شخصياً لإدارته</string>
+    <string name="profile_manage_subtitle">حدد ملفاً شخصياً لتعديله أو التبديل إليه أو إنشاء ملف جديد</string>
+    <string name="profile_manage_hint">حدد ملفاً شخصياً لإدارته</string>
     <string name="profile_primary_label">أساسي</string>
     <string name="profile_shares_primary">يشارك الملف الرئيسي %1$s</string>
     <string name="profile_edit_label">تعديل</string>
@@ -681,18 +681,18 @@
     <string name="profile_create_title">إنشاء ملف شخصي</string>
     <string name="profile_edit_title">تعديل الملف الشخصي %1$s</string>
     <string name="profile_name_placeholder">اسم الملف الشخصي</string>
-    <string name="profile_avatar_color">لون الرمز التعبيري</string>
+    <string name="profile_avatar_color">لون الصورة الرمزية</string>
     <string name="profile_use_primary_addons">استخدام إضافات الملف الأساسي</string>
-    <string name="profile_use_primary_plugins">استخدام برمجيات الملف الأساسي</string>
+    <string name="profile_use_primary_plugins">استخدام ملحقات الملف الأساسي</string>
     <string name="profile_creating">جاري الإنشاء\u2026</string>
     <string name="profile_create_btn">إنشاء</string>
     <string name="profile_confirm">تأكيد</string>
     <string name="profile_delete">حذف</string>
     <string name="profile_addons">الإضافات</string>
     <string name="profile_plugins">الملحقات</string>
-    <string name="profile_choose_avatar">اختيار الرمز التعبيري</string>
+    <string name="profile_choose_avatar">اختيار الصورة الرمزية</string>
     <string name="profile_avatar_none_selected">لم يتم تحديد رمز تعبيري</string>
-    <string name="profile_avatar_focus_hint">قف على الرمز التعبيري لعرض اسمه</string>
+    <string name="profile_avatar_focus_hint">قف على الصورة الرمزية لعرض الاسم</string>
     <string name="profile_avatar_category_all">الكل</string>
     <string name="profile_avatar_category_anime">أنمي</string>
     <string name="profile_avatar_category_animation">رسوم متحركة</string>
@@ -756,8 +756,8 @@
     <string name="addon_qr_close">إغلاق</string>
     <string name="addon_confirm_title">تأكيد تغييرات &amp; الإضافات والقوائم</string>
     <string name="addon_confirm_subtitle">تم إجراء التغييرات التالية من هاتفك:</string>
-    <string name="addon_confirm_added">تمت إضافة:</string>
-    <string name="addon_confirm_removed">تمت إزالة:</string>
+    <string name="addon_confirm_added">تمت الإضافة:</string>
+    <string name="addon_confirm_removed">تمت الإزالة:</string>
     <string name="addon_confirm_catalog_reordered">تم تغيير ترتيب القوائم</string>
     <string name="addon_confirm_catalogs_disabled">قوائم تم تعطيلها في الرئيسية:</string>
     <string name="addon_confirm_catalogs_enabled">قوائم تم تفعيلها في الرئيسية:</string>
@@ -845,10 +845,10 @@
     <string name="episodes_panel_title">الحلقات</string>
     <string name="episodes_panel_streams_title">المصادر</string>
     <string name="player_speed_normal">عادي</string>
-    <string name="player_aspect_fit">احتواء (الأصلي)</string>
+    <string name="player_aspect_fit">ملائمة (الأصلي)</string>
     <string name="player_aspect_stretch">تمدد</string>
-    <string name="player_aspect_fit_width">احتواء العرض</string>
-    <string name="player_aspect_fit_height">احتواء الارتفاع</string>
+    <string name="player_aspect_fit_width">ملائمة العرض</string>
+    <string name="player_aspect_fit_height">ملائمة الارتفاع</string>
     <string name="player_aspect_crop">مقصوص</string>
 
     <!-- AudioDialog -->
@@ -857,8 +857,8 @@
     <string name="audio_dialog_tab_mix">المزج</string>
     <string name="audio_mix_label">تضخيم (PCM)</string>
     <string name="audio_mix_value_db">%1$d ديسيبل</string>
-    <string name="audio_mix_persist_on">الاحتفاظ بين الجلسات: مفعل</string>
-    <string name="audio_mix_persist_off">الاحتفاظ بين الجلسات: معطل</string>
+    <string name="audio_mix_persist_on">الحفظ بين الجلسات: مفعل</string>
+    <string name="audio_mix_persist_off">الحفظ بين الجلسات: معطل</string>
     <string name="audio_mix_range">النطاق: %1$d ديسيبل إلى %2$d ديسيبل</string>
     <string name="audio_mix_range_saved">النطاق: %1$d ديسيبل إلى %2$d ديسيبل (محفوظ)</string>
     <string name="audio_mix_unavailable">التضخيم غير متاح على هذا الجهاز</string>
@@ -869,7 +869,7 @@
     <string name="subtitle_loading_addon">جاري تحميل الترجمات من الإضافات\u2026</string>
     <string name="subtitle_no_addon">لا توجد ترجمات متاحة من الإضافات</string>
     <string name="subtitle_text_color">لون النص</string>
-    <string name="subtitle_outline_color">لون الحد الخارجي</string>
+    <string name="subtitle_outline_color">لون الاطار</string>
     <string name="subtitle_reset_defaults">استعادة الافتراضيات</string>
     <string name="subtitle_tab_builtin">مدمج</string>
     <string name="subtitle_tab_addons">إضافات</string>
@@ -882,7 +882,7 @@
     <string name="subtitle_section_advanced">متقدم</string>
     <string name="subtitle_font_size">حجم الخط</string>
     <string name="subtitle_bold">عريض</string>
-    <string name="subtitle_outline">حد خارجي</string>
+    <string name="subtitle_outline">اطار خارجي</string>
     <string name="subtitle_bottom_offset">إزاحة السفلية</string>
     <string name="subtitle_on">مفعل</string>
     <string name="subtitle_off">معطل</string>
@@ -893,7 +893,7 @@
     <string name="subtitle_style_font_size">حجم الخط</string>
     <string name="subtitle_style_bold">عريض</string>
     <string name="subtitle_style_text_color">لون النص</string>
-    <string name="subtitle_style_outline">حد خارجي</string>
+    <string name="subtitle_style_outline">اطار خارجي</string>
     <string name="subtitle_style_bottom_offset">إزاحة السفلية</string>
     <string name="subtitle_style_defaults">الافتراضيات</string>
     <string name="subtitle_style_on">مفعل</string>
@@ -927,7 +927,7 @@
     <string name="search_placeholder">أبحث عن أفلام &amp; مسلسلات</string>
     <string name="search_start_title">ابدأ البحث</string>
     <string name="search_start_subtitle">أدخل حرفين على الأقل</string>
-    <string name="search_start_subtitle_no_discover">قسم الاستكشاف معطل. أدخل حرفين على الأقل</string>
+    <string name="search_start_subtitle_no_discover">ميزة "استكشاف" معطلة. أدخل حرفين على الأقل</string>
     <string name="search_voice_no_speech">لم يتم رصد صوت. حاول مجدداً.</string>
     <string name="search_voice_mic_permission">إذن الميكروفون مطلوب للبحث الصوتي.</string>
     <string name="search_voice_failed">فشل التعرف على الصوت. حاول مجدداً.</string>
@@ -1069,8 +1069,8 @@
     <string name="plugin_qr_close">إغلاق</string>
     <string name="plugin_confirm_title">تأكيد تغييرات المستودعات</string>
     <string name="plugin_confirm_subtitle">تم إجراء التغييرات التالية من هاتفك:</string>
-    <string name="plugin_confirm_added">تمت إضافة:</string>
-    <string name="plugin_confirm_removed">تمت إزالة:</string>
+    <string name="plugin_confirm_added">تمت الإضافة:</string>
+    <string name="plugin_confirm_removed">تمت الإزالة:</string>
     <string name="plugin_confirm_no_changes">لم يتم رصد تغييرات</string>
     <string name="plugin_confirm_total">إجمالي المستودعات: %1$d</string>
     <string name="plugin_confirm_reject">رفض</string>
@@ -1131,7 +1131,7 @@
     <string name="ratings_season_summary">الموسم %1$d - %2$d حلقة</string>
 
     <!-- SearchDiscoverSection -->
-    <string name="discover_title">استكشف</string>
+    <string name="discover_title">استكشاف</string>
     <string name="discover_load_more">تحميل المزيد</string>
     <string name="discover_loading">جاري التحميل...</string>
     <string name="discover_filter_type">النوع</string>
@@ -1165,7 +1165,7 @@
 
     <!-- SidebarNavigation / MainActivity -->
     <string name="nav_home">الرئيسية</string>
-    <string name="nav_discover">استكشف</string>
+    <string name="nav_discover">استكشاف</string>
     <string name="nav_search">البحث</string>
     <string name="nav_library">المكتبة</string>
     <string name="nav_addons">الإضافات</string>
