@@ -560,10 +560,10 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             }
         }
         is PlayerEvent.OnSetPlaybackSpeed -> {
-            val selectedAudioIsEac3 = _exoPlayer?.let(::selectedAudioIsEac3) == true
+            val requiresPcm = _exoPlayer?.let(::selectedAudioRequiresPcmForSpeed) == true
             playbackSpeedAwareAudioOutputProvider?.updatePlaybackSpeed(
                 event.speed,
-                selectedAudioIsEac3 = selectedAudioIsEac3
+                selectedAudioRequiresPcmForSpeed = requiresPcm
             )
             _exoPlayer?.let { player ->
                 player.setPlaybackSpeed(event.speed)

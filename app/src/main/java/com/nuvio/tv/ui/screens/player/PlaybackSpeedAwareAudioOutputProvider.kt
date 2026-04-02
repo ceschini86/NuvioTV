@@ -16,16 +16,16 @@ internal class PlaybackSpeedAwareAudioOutputProvider(
     private var playbackSpeed: Float = 1f
 
     @Volatile
-    private var forcePcmForCurrentEac3Session: Boolean = false
+    private var forcePcmForCurrentSession: Boolean = false
 
-    fun updatePlaybackSpeed(speed: Float, selectedAudioIsEac3: Boolean = false) {
+    fun updatePlaybackSpeed(speed: Float, selectedAudioRequiresPcmForSpeed: Boolean = false) {
         val normalizedSpeed = speed.takeIf { it > 0f } ?: 1f
-        val wasForcingPcm = forcePcmForCurrentEac3Session
-        if (selectedAudioIsEac3 && normalizedSpeed != 1f) {
-            forcePcmForCurrentEac3Session = true
+        val wasForcingPcm = forcePcmForCurrentSession
+        if (selectedAudioRequiresPcmForSpeed && normalizedSpeed != 1f) {
+            forcePcmForCurrentSession = true
         }
         playbackSpeed = normalizedSpeed
-        val isForcingPcm = forcePcmForCurrentEac3Session
+        val isForcingPcm = forcePcmForCurrentSession
         if (wasForcingPcm != isForcingPcm) {
             listeners.forEach(AudioOutputProvider.Listener::onFormatSupportChanged)
         }
@@ -52,13 +52,33 @@ internal class PlaybackSpeedAwareAudioOutputProvider(
     }
 
     private fun shouldForcePcm(format: Format): Boolean {
-        if (!forcePcmForCurrentEac3Session) {
+        if (!forcePcmForCurrentSession) {
             return false
         }
-        return when (format.sampleMimeType) {
-            MimeTypes.AUDIO_E_AC3,
-            MimeTypes.AUDIO_E_AC3_JOC -> true
-            else -> format.codecs?.contains("ec-3", ignoreCase = true) == true
+        val mimeType = format.sampleMimeType
+        if (mimeType != null && (
+                mimeType == MimeTypes.AUDIO_E_AC3 ||
+                mimeType == MimeTypes.AUDIO_E_AC3_JOC ||
+                mimeType == MimeTypes.AUDIO_AC3 ||
+                mimeType == MimeTypes.AUDIO_AC4 ||
+                mimeType == MimeTypes.AUDIO_TRUEHD ||
+                mimeType == MimeTypes.AUDIO_DTS ||
+                mimeType == MimeTypes.AUDIO_DTS_HD ||
+                mimeType == MimeTypes.AUDIO_DTS_EXPRESS ||
+                mimeType.startsWith("audio/vnd.dts")
+            )
+        ) {
+            return true
         }
+        val codecs = format.codecs
+        if (codecs != null) {
+            return codecs.contains("ac-3", ignoreCase = true) ||
+                    codecs.contains("ac-4", ignoreCase = true) ||
+                    codecs.contains("ec-3", ignoreCase = true) ||
+                    codecs.contains("dts", ignoreCase = true) ||
+                    codecs.contains("truehd", ignoreCase = true) ||
+                    codecs.contains("dtshd", ignoreCase = true)
+        }
+        return false
     }
 }

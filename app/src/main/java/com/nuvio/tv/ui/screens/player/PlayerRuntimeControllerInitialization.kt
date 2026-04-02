@@ -231,7 +231,7 @@ internal fun PlayerRuntimeController.initializePlayer(url: String, headers: Map<
                 setAudioAttributes(audioAttributes, true)
                 playbackSpeedAwareAudioOutputProvider?.updatePlaybackSpeed(
                     _uiState.value.playbackSpeed,
-                    selectedAudioIsEac3(this)
+                    selectedAudioRequiresPcmForSpeed(this)
                 )
                 setPlaybackSpeed(_uiState.value.playbackSpeed)
 
