@@ -35,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.focus.FocusRequester
@@ -158,11 +159,13 @@ private fun NuvioTextField(
 private fun NuvioButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     content: @Composable () -> Unit
 ) {
     Button(
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier.then(if (!enabled) Modifier.alpha(0.35f) else Modifier),
+        enabled = enabled,
         colors = ButtonDefaults.colors(
             containerColor = NuvioColors.BackgroundCard,
             contentColor = NuvioColors.TextPrimary,
@@ -237,7 +240,8 @@ fun CollectionEditorScreen(
                     modifier = Modifier.weight(1f),
                     placeholder = "Collection name"
                 )
-                NuvioButton(onClick = { viewModel.save { onBack() } }) {
+                val canSaveCollection = uiState.title.isNotBlank() && uiState.folders.isNotEmpty()
+                NuvioButton(onClick = { viewModel.save { onBack() } }, enabled = canSaveCollection) {
                     Text("Save")
                 }
             }
@@ -521,7 +525,8 @@ private fun FolderEditorContent(
                 NuvioButton(onClick = { viewModel.cancelFolderEdit() }) {
                     Text("Cancel")
                 }
-                NuvioButton(onClick = { viewModel.saveFolderEdit() }) {
+                val canSaveFolder = (uiState.editingFolder?.catalogSources?.isNotEmpty() == true)
+                NuvioButton(onClick = { viewModel.saveFolderEdit() }, enabled = canSaveFolder) {
                     Text("Save")
                 }
             }

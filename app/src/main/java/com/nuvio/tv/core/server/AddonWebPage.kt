@@ -1621,6 +1621,27 @@ function catalogSourceLabel(src) {
   return src.catalogId + ' - ' + toTitleCase(src.type) + ' (' + src.addonId + ')';
 }
 
+function getCollectionErrors(col) {
+  var errors = [];
+  if (!col.title || !col.title.trim()) errors.push('Missing title');
+  if (!col.folders || col.folders.length === 0) errors.push('No folders');
+  (col.folders || []).forEach(function(f, fi) {
+    if (!f.catalogSources || f.catalogSources.length === 0) {
+      errors.push((f.title || 'Folder ' + (fi + 1)) + ': no sources');
+    }
+  });
+  return errors;
+}
+
+function updateSaveButtonState() {
+  var hasIssues = collections.some(function(col) { return getCollectionErrors(col).length > 0; });
+  var saveBtn = document.getElementById('saveBtn');
+  if (saveBtn && !saveBtn._polling) {
+    saveBtn.style.opacity = hasIssues ? '0.35' : '';
+    saveBtn.style.pointerEvents = hasIssues ? 'none' : '';
+  }
+}
+
 function renderCollections() {
   var container = document.getElementById('collectionsList');
   var empty = document.getElementById('collectionsEmptyState');
@@ -1635,13 +1656,15 @@ function renderCollections() {
 
     var isExpanded = (expandedCollection === ci);
     var folderCount = (col.folders || []).length;
+    var errors = getCollectionErrors(col);
 
     // ── Collection header: arrow + title + action buttons ──
     var headerHtml =
       '<div class="collection-header collapse-header" onclick="toggleCollectionExpand(' + ci + ')">' +
         '<span class="collapse-arrow' + (isExpanded ? ' open' : '') + '">&#9654;</span>' +
-        '<input class="collection-title-input" value="' + escapeAttr(col.title) + '" onchange="updateCollectionTitle(' + ci + ',this.value)" onclick="event.stopPropagation()" placeholder="Collection name">' +
+        '<input class="collection-title-input" value="' + escapeAttr(col.title) + '" onchange="updateCollectionTitle(' + ci + ',this.value);updateSaveButtonState()" onclick="event.stopPropagation()" placeholder="Collection name">' +
         (disabled ? '<span class="badge-collection-disabled">Hidden</span>' : '') +
+        (errors.length > 0 ? '<span style="font-size:0.6rem;font-weight:700;color:rgba(255,180,60,0.9);background:rgba(255,180,60,0.12);padding:0.2rem 0.5rem;border-radius:100px;flex-shrink:0">' + errors.length + ' issue' + (errors.length > 1 ? 's' : '') + '</span>' : '') +
         '<div class="col-actions" onclick="event.stopPropagation()">' +
           '<button class="btn-order" onclick="moveCollection(' + ci + ',-1)"' + (ci === 0 ? ' disabled' : '') + '>' +
             '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 15l-6-6-6 6"/></svg>' +
@@ -1674,12 +1697,12 @@ function renderCollections() {
           '<input type="url" placeholder="Image URL (optional)" value="' + escapeAttr(col.backdropImageUrl || '') + '" oninput="updateCollectionBackdrop(' + ci + ',this.value)">' +
         '</div>' +
         '<div class="col-setting-row">' +
-          '<span class="col-meta-label">View</span>' +
-          '<select onchange="updateCollectionViewMode(' + ci + ',this.value)">' +
-            '<option value="TABBED_GRID"' + ((col.viewMode === 'TABBED_GRID' || !col.viewMode) ? ' selected' : '') + '>Tabs</option>' +
-            '<option value="ROWS"' + (col.viewMode === 'ROWS' ? ' selected' : '') + '>Rows</option>' +
-            '<option value="FOLLOW_LAYOUT"' + (col.viewMode === 'FOLLOW_LAYOUT' ? ' selected' : '') + '>Follow Home Layout</option>' +
-          '</select>' +
+          '<span class="col-meta-label">View Mode</span>' +
+          '<div class="cover-mode-picker">' +
+            '<button class="cover-mode-btn' + ((col.viewMode === 'TABBED_GRID' || !col.viewMode) ? ' active' : '') + '" onclick="updateCollectionViewMode(' + ci + ',\'TABBED_GRID\')">Tabs</button>' +
+            '<button class="cover-mode-btn' + (col.viewMode === 'ROWS' ? ' active' : '') + '" onclick="updateCollectionViewMode(' + ci + ',\'ROWS\')">Rows</button>' +
+            '<button class="cover-mode-btn' + (col.viewMode === 'FOLLOW_LAYOUT' ? ' active' : '') + '" onclick="updateCollectionViewMode(' + ci + ',\'FOLLOW_LAYOUT\')">Follow Home</button>' +
+          '</div>' +
         '</div>' +
         ((col.viewMode === 'TABBED_GRID' || !col.viewMode) ?
         '<div class="col-setting-row">' +
@@ -1840,6 +1863,7 @@ function renderCollections() {
 
     container.appendChild(card);
   });
+  updateSaveButtonState();
 }
 
 function escapeAttr(str) {
