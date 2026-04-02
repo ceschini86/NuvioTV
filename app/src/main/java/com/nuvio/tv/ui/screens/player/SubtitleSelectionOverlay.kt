@@ -45,7 +45,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.res.stringResource
 import androidx.tv.material3.Card
@@ -742,6 +744,8 @@ private fun SubtitleStyleRail(
     onStyleFocused: (String) -> Unit,
     onEvent: (PlayerEvent) -> Unit
 ) {
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val moveLeftKey = if (isRtl) android.view.KeyEvent.KEYCODE_DPAD_RIGHT else android.view.KeyEvent.KEYCODE_DPAD_LEFT
     RailColumn(width = 280.dp, title = stringResource(R.string.subtitle_style_title)) {
         LazyColumn(
             state = listState,
@@ -760,7 +764,7 @@ private fun SubtitleStyleRail(
                         .focusRequester(requireNotNull(focusRequesters[StyleFocusKey.DelaySet]))
                         .onPreviewKeyEvent { event ->
                             when (event.nativeKeyEvent.keyCode) {
-                                android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                moveLeftKey -> {
                                     when (event.nativeKeyEvent.action) {
                                         android.view.KeyEvent.ACTION_DOWN -> {
                                             onMoveLeft()
@@ -893,7 +897,7 @@ private fun SubtitleStyleRail(
                         .focusRequester(requireNotNull(focusRequesters[StyleFocusKey.Reset]))
                         .onPreviewKeyEvent { event ->
                             when (event.nativeKeyEvent.keyCode) {
-                                android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                moveLeftKey -> {
                                     when (event.nativeKeyEvent.action) {
                                         android.view.KeyEvent.ACTION_DOWN -> {
                                             onMoveLeft()
@@ -952,6 +956,8 @@ private fun SubtitleLanguageCard(
     onFocused: () -> Unit
 ) {
     val textColor = if (isSelected) NuvioColors.OnSecondary else Color.White
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val moveToOptionsKey = if (isRtl) android.view.KeyEvent.KEYCODE_DPAD_LEFT else android.view.KeyEvent.KEYCODE_DPAD_RIGHT
 
     Card(
         onClick = onClick,
@@ -960,7 +966,7 @@ private fun SubtitleLanguageCard(
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .onPreviewKeyEvent { event ->
                 when (event.nativeKeyEvent.keyCode) {
-                    android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    moveToOptionsKey -> {
                         val moveRight = onMoveRight ?: return@onPreviewKeyEvent false
                         when (event.nativeKeyEvent.action) {
                             android.view.KeyEvent.ACTION_DOWN -> {
@@ -1028,6 +1034,9 @@ private fun SubtitleOptionCard(
     } else {
         NuvioColors.TextTertiary
     }
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val moveLeftKey = if (isRtl) android.view.KeyEvent.KEYCODE_DPAD_RIGHT else android.view.KeyEvent.KEYCODE_DPAD_LEFT
+    val moveRightKey = if (isRtl) android.view.KeyEvent.KEYCODE_DPAD_LEFT else android.view.KeyEvent.KEYCODE_DPAD_RIGHT
 
     Card(
         onClick = onClick,
@@ -1036,7 +1045,7 @@ private fun SubtitleOptionCard(
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .onPreviewKeyEvent { event ->
                 when (event.nativeKeyEvent.keyCode) {
-                    android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    moveLeftKey -> {
                         when (event.nativeKeyEvent.action) {
                             android.view.KeyEvent.ACTION_DOWN -> {
                                 onMoveLeft()
@@ -1048,7 +1057,7 @@ private fun SubtitleOptionCard(
                         }
                     }
 
-                    android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    moveRightKey -> {
                         when (event.nativeKeyEvent.action) {
                             android.view.KeyEvent.ACTION_DOWN -> {
                                 onMoveRight()
@@ -1285,6 +1294,8 @@ private fun StepperButton(
     onFocused: ((String) -> Unit)? = null
 ) {
     var isFocused by remember { mutableStateOf(false) }
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val moveLeftKey = if (isRtl) android.view.KeyEvent.KEYCODE_DPAD_RIGHT else android.view.KeyEvent.KEYCODE_DPAD_LEFT
 
     IconButton(
         onClick = onClick,
@@ -1293,7 +1304,7 @@ private fun StepperButton(
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .onPreviewKeyEvent { event ->
                 when (event.nativeKeyEvent.keyCode) {
-                    android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    moveLeftKey -> {
                         val moveLeft = onMoveLeft ?: return@onPreviewKeyEvent false
                         when (event.nativeKeyEvent.action) {
                             android.view.KeyEvent.ACTION_DOWN -> {
@@ -1345,6 +1356,8 @@ private fun ToggleChip(
     onFocused: ((String) -> Unit)? = null,
     onClick: () -> Unit
 ) {
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val moveLeftKey = if (isRtl) android.view.KeyEvent.KEYCODE_DPAD_RIGHT else android.view.KeyEvent.KEYCODE_DPAD_LEFT
     Card(
         onClick = onClick,
         modifier = if (focusRequester != null) {
@@ -1352,7 +1365,7 @@ private fun ToggleChip(
                 .focusRequester(focusRequester)
                 .onPreviewKeyEvent { event ->
                     when (event.nativeKeyEvent.keyCode) {
-                        android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
+                        moveLeftKey -> {
                             val moveLeft = onMoveLeft ?: return@onPreviewKeyEvent false
                             when (event.nativeKeyEvent.action) {
                                 android.view.KeyEvent.ACTION_DOWN -> {
@@ -1375,7 +1388,7 @@ private fun ToggleChip(
             Modifier
                 .onPreviewKeyEvent { event ->
                     when (event.nativeKeyEvent.keyCode) {
-                        android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
+                        moveLeftKey -> {
                             val moveLeft = onMoveLeft ?: return@onPreviewKeyEvent false
                             when (event.nativeKeyEvent.action) {
                                 android.view.KeyEvent.ACTION_DOWN -> {
@@ -1448,6 +1461,8 @@ private fun ColorChip(
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val moveLeftKey = if (isRtl) android.view.KeyEvent.KEYCODE_DPAD_RIGHT else android.view.KeyEvent.KEYCODE_DPAD_LEFT
 
     Card(
         onClick = { if (enabled) onClick() },
@@ -1460,7 +1475,7 @@ private fun ColorChip(
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .onPreviewKeyEvent { event ->
                 when (event.nativeKeyEvent.keyCode) {
-                    android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    moveLeftKey -> {
                         val moveLeft = onMoveLeft ?: return@onPreviewKeyEvent false
                         when (event.nativeKeyEvent.action) {
                             android.view.KeyEvent.ACTION_DOWN -> {
