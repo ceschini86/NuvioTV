@@ -1045,11 +1045,7 @@ private suspend fun HomeViewModel.findNextUpEpisodeFromMetaSeed(
         }
         return null
     }
-    val nextVideo = run {
-        // Fetch watched episodes for this show to skip already-watched episodes (matching mobile)
-        val watchedEpisodes = watchProgressRepository.getWatchedShowEpisodes()[contentId]
-        resolveNextUpVideoFromMeta(progress, meta, showUnairedNextUp, watchedEpisodes)
-    } ?: run {
+    val nextVideo = resolveNextUpVideoFromMeta(progress, meta, showUnairedNextUp) ?: run {
         debug?.recordNextUpResult(
             progress = progress,
             reason = "no-next-video-after-seed",
