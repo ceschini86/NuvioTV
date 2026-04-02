@@ -33,7 +33,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "ExtExtensionRunner"
-private const val EXECUTION_TIMEOUT_MS = 60_000L
+private const val EXECUTION_TIMEOUT_MS = 120_000L
 private const val MIN_TITLE_SIMILARITY = 0.5
 
 /**
@@ -64,23 +64,18 @@ class ExternalExtensionRunner @Inject constructor(
             return@withContext emptyList()
         }
 
-        withTimeoutOrNull(EXECUTION_TIMEOUT_MS) {
-            try {
-                executeInternal(api, tmdbId, mediaType, season, episode)
-            } catch (e: Exception) {
-                Log.e(TAG, "Extension ${api.name} failed: ${e.javaClass.simpleName}: ${e.message}", e)
-                emptyList()
-            } catch (e: Error) {
-                val missing = extractMissingClass(e)
-                if (missing != null) {
-                    Log.e(TAG, "Extension ${api.name} MISSING CLASS: $missing", e)
-                } else {
-                    Log.e(TAG, "Extension ${api.name} linkage error: ${e.javaClass.simpleName}: ${e.message}", e)
-                }
-                emptyList()
+        try {
+            executeInternal(api, tmdbId, mediaType, season, episode)
+        } catch (e: Exception) {
+            Log.e(TAG, "Extension ${api.name} failed: ${e.javaClass.simpleName}: ${e.message}", e)
+            emptyList()
+        } catch (e: Error) {
+            val missing = extractMissingClass(e)
+            if (missing != null) {
+                Log.e(TAG, "Extension ${api.name} MISSING CLASS: $missing", e)
+            } else {
+                Log.e(TAG, "Extension ${api.name} linkage error: ${e.javaClass.simpleName}: ${e.message}", e)
             }
-        } ?: run {
-            Log.w(TAG, "Extension ${api.name} timed out after ${EXECUTION_TIMEOUT_MS}ms")
             emptyList()
         }
     }
@@ -191,7 +186,7 @@ class ExternalExtensionRunner @Inject constructor(
             diagnostics.addStep("Missing extractors: ${missing.take(5).joinToString()}")
         }
 
-        return links.map { it.toLocalScraperResult(api.name) }
+        return links.filterValid().map { it.toLocalScraperResult(api.name) }
     }
 
     private suspend fun executeSearchBasedWithDiagnostics(
@@ -327,7 +322,7 @@ class ExternalExtensionRunner @Inject constructor(
         )
 
         diagnostics.addStep("loadLinks returned: success=$success, ${links.size} links, ${subtitles.size} subs")
-        return links.map { it.toLocalScraperResult(api.name) }
+        return links.filterValid().map { it.toLocalScraperResult(api.name) }
     }
 
     private fun extractMissingClass(e: Error): String? {
@@ -349,6 +344,18 @@ class ExternalExtensionRunner @Inject constructor(
         return executeSearchBased(api, tmdbId, mediaType, season, episode)
     }
 
+    /**
+     * Execute a TmdbProvider extension using the same flow as CloudStream:
+     * 1. Construct the JSON that the extension's load() expects
+     * 2. Call api.load(json) → extension fetches metadata, constructs its internal LinkData
+     * 3. Extract the data string from the LoadResponse
+     * 4. Call api.loadLinks(data, ...) → extension resolves streams
+     *
+     * TmdbProvider extensions (StreamPlay, Ultima, etc.) override load() to accept
+     * JSON like {"id":803796,"type":"movie"}, NOT a TMDB URL. They then construct
+     * their own internal data classes (LinkData) with fields like "id", "imdbId",
+     * "title" etc. that differ from TmdbLink's field names.
+     */
     private suspend fun executeTmdbProvider(
         api: MainAPI,
         tmdbId: String,
@@ -357,32 +364,70 @@ class ExternalExtensionRunner @Inject constructor(
         episode: Int?
     ): List<LocalScraperResult> {
         val tmdbIdInt = tmdbId.toIntOrNull()
-        val contentType = when (mediaType.lowercase()) {
-            "movie" -> ContentType.MOVIE
-            else -> ContentType.SERIES
+        val isMovie = mediaType.lowercase() == "movie"
+        val type = if (isMovie) "movie" else "tv"
+
+        // Construct the JSON that TmdbProvider extensions expect in load()
+        // This matches what their search() returns as URLs
+        val loadJson = """{"id":$tmdbIdInt,"type":"$type"}"""
+
+        Log.d(TAG, "TmdbProvider ${api.name}: load($loadJson)")
+        val loadResponse = try {
+            api.load(loadJson)
+        } catch (e: Exception) {
+            Log.w(TAG, "TmdbProvider ${api.name} load(json) threw: ${e.javaClass.simpleName}: ${e.message?.take(100)}")
+            null
+        } catch (e: Error) {
+            val missing = extractMissingClass(e)
+            Log.w(TAG, "TmdbProvider ${api.name} load(json) error: ${missing ?: e.message?.take(100)}")
+            null
         }
-        val enrichment = tmdbMetadataService.fetchEnrichment(tmdbId, contentType)
-        val movieName = enrichment?.localizedTitle
 
-        val imdbId = if (tmdbIdInt != null) {
-            tmdbService.tmdbToImdb(tmdbIdInt, mediaType)
-        } else null
+        if (loadResponse != null) {
+            Log.d(TAG, "TmdbProvider ${api.name}: loaded ${loadResponse.javaClass.simpleName}")
+            val data = extractData(loadResponse, mediaType, season, episode)
+            if (data != null) {
+                Log.d(TAG, "TmdbProvider ${api.name}: loadLinks data=${data.take(200)}")
+                return executeTmdbLoadLinks(api, data)
+            }
+            Log.w(TAG, "TmdbProvider ${api.name}: no data for S${season}E${episode}")
+        }
 
-        val tmdbLink = TmdbLink(
-            imdbID = imdbId,
-            tmdbID = tmdbIdInt,
-            episode = episode,
-            season = season,
-            movieName = movieName
-        )
+        // Fallback: try with TMDB URL format (standard TmdbProvider.load())
+        val tmdbUrl = if (isMovie) {
+            "https://www.themoviedb.org/movie/$tmdbId"
+        } else {
+            "https://www.themoviedb.org/tv/$tmdbId"
+        }
+        Log.d(TAG, "TmdbProvider ${api.name}: fallback load($tmdbUrl)")
+        val fallbackResponse = try {
+            api.load(tmdbUrl)
+        } catch (e: Exception) {
+            Log.w(TAG, "TmdbProvider ${api.name} fallback load(url) threw: ${e.javaClass.simpleName}: ${e.message?.take(100)}")
+            null
+        } catch (e: Error) { null }
 
-        val data = tmdbLink.toJson()
-        Log.d(TAG, "TmdbProvider ${api.name}: loadLinks TmdbLink=$data")
+        if (fallbackResponse != null) {
+            val data = extractData(fallbackResponse, mediaType, season, episode)
+            if (data != null) {
+                Log.d(TAG, "TmdbProvider ${api.name}: fallback loadLinks data=${data.take(200)}")
+                return executeTmdbLoadLinks(api, data)
+            }
+        }
 
-        val links = mutableListOf<ExtractorLink>()
-        val subtitles = mutableListOf<SubtitleFile>()
+        Log.w(TAG, "TmdbProvider ${api.name}: both load() paths failed")
+        return emptyList()
+    }
 
-        val success = try {
+    private suspend fun executeTmdbLoadLinks(
+        api: MainAPI,
+        data: String
+    ): List<LocalScraperResult> {
+        // Use thread-safe list so links collected during loadLinks survive timeout
+        val links = java.util.Collections.synchronizedList(mutableListOf<ExtractorLink>())
+        val subtitles = java.util.Collections.synchronizedList(mutableListOf<SubtitleFile>())
+
+        try {
             api.loadLinks(
                 data = data,
                 isCasting = false,
@@ -390,21 +435,20 @@ class ExternalExtensionRunner @Inject constructor(
                 callback = { links.add(it) }
             )
         } catch (e: Exception) {
-            Log.e(TAG, "TmdbProvider ${api.name} loadLinks threw: ${e.javaClass.simpleName}: ${e.message}", e)
-            false
+            // TimeoutCancellationException or other — links collected so far are still valid
+            Log.w(TAG, "TmdbProvider ${api.name} loadLinks ended: ${e.javaClass.simpleName} (${links.size} links collected)")
         } catch (e: Error) {
             val missing = extractMissingClass(e)
-            Log.e(TAG, "TmdbProvider ${api.name} loadLinks error: ${missing ?: e.message}", e)
-            false
+            Log.w(TAG, "TmdbProvider ${api.name} loadLinks error: ${missing ?: e.message} (${links.size} links collected)")
         }
 
-        if (!success && links.isEmpty()) {
-            Log.w(TAG, "TmdbProvider ${api.name}: loadLinks returned false, 0 links (imdb=$imdbId, tmdb=$tmdbIdInt, title=$movieName)")
+        if (links.isEmpty()) {
+            Log.w(TAG, "TmdbProvider ${api.name}: 0 links collected")
             return emptyList()
         }
 
         Log.d(TAG, "TmdbProvider ${api.name}: ${links.size} links, ${subtitles.size} subs")
-        return links.map { link -> link.toLocalScraperResult(api.name) }
+        return links.filterValid().map { link -> link.toLocalScraperResult(api.name) }
     }
 
     private suspend fun executeSearchBased(
@@ -511,7 +555,7 @@ class ExternalExtensionRunner @Inject constructor(
         }
 
         Log.d(TAG, "SearchBased ${api.name}: ${links.size} links, ${subtitles.size} subs")
-        return links.map { link -> link.toLocalScraperResult(api.name) }
+        return links.filterValid().map { link -> link.toLocalScraperResult(api.name) }
     }
 
     /** Extract year from SearchResponse concrete types (not in the interface). */
@@ -625,6 +669,21 @@ class ExternalExtensionRunner @Inject constructor(
             }
         }
         return dp[m][n]
+    }
+
+    /** Filter out broken ExtractorLinks (invalid URLs, error strings, etc.) */
+    private fun List<ExtractorLink>.filterValid(): List<ExtractorLink> {
+        return filter { link ->
+            val url = link.url
+            when {
+                url.isBlank() -> false
+                url == "error" || url == "null" -> false
+                !url.startsWith("http://") && !url.startsWith("https://") -> false
+                else -> true
+            }.also { valid ->
+                if (!valid) Log.w(TAG, "Filtered invalid link: source=${link.source}, url=${url.take(60)}")
+            }
+        }
     }
 
     private fun ExtractorLink.toLocalScraperResult(providerName: String): LocalScraperResult {
