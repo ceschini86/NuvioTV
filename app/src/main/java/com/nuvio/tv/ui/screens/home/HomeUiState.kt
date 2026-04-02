@@ -136,6 +136,16 @@ sealed class GridItem {
         val addonId: String,
         val type: String
     ) : GridItem()
+    @Immutable
+    data class CollectionHeader(
+        val collectionId: String,
+        val title: String
+    ) : GridItem()
+    @Immutable
+    data class CollectionFolder(
+        val collectionId: String,
+        val folder: com.nuvio.tv.domain.model.CollectionFolder
+    ) : GridItem()
 }
 
 sealed class HomeEvent {

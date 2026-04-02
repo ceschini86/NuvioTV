@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -54,9 +53,14 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.Icon
-import com.nuvio.tv.domain.model.Collection
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.nuvio.tv.domain.model.CollectionFolder
 import com.nuvio.tv.domain.model.MetaPreview
-import com.nuvio.tv.ui.components.CollectionRowSection
+import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.ui.components.GridContentCard
 import com.nuvio.tv.ui.components.GridContinueWatchingSection
 import com.nuvio.tv.ui.components.HeroCarousel
@@ -203,31 +207,7 @@ fun GridHomeContent(
             var firstGridFocusableAssigned = false
             val contentOccurrencesByCatalogAndId = mutableMapOf<String, Int>()
 
-            // Build a map of catalog keys to the collections that should precede them
-            val collectionRows = uiState.homeRows.filterIsInstance<HomeRow.CollectionRow>()
-            val insertedCollectionIds = mutableSetOf<String>()
-            var firstSectionSeen = false
-
             gridItems.forEach { gridItem ->
-                // Insert collection rows before the first SectionDivider
-                if (gridItem is GridItem.SectionDivider && !firstSectionSeen) {
-                    firstSectionSeen = true
-                    collectionRows.forEach { collectionHomeRow ->
-                        if (insertedCollectionIds.add(collectionHomeRow.collection.id)) {
-                            item(
-                                key = "collection_${collectionHomeRow.collection.id}",
-                                span = { GridItemSpan(maxLineSpan) },
-                                contentType = "collection_row"
-                            ) {
-                                CollectionRowSection(
-                                    collection = collectionHomeRow.collection,
-                                    onFolderClick = onNavigateToFolderDetail,
-                                    modifier = Modifier.offset(x = (-48).dp)
-                                )
-                            }
-                        }
-                    }
-                }
                 when (gridItem) {
                     is GridItem.Hero -> {
                         item(
@@ -395,6 +375,67 @@ fun GridHomeContent(
                                         gridItem.addonId,
                                         gridItem.type
                                     )
+                                }
+                            )
+                        }
+                    }
+
+                    is GridItem.CollectionHeader -> {
+                        if (!continueWatchingInserted && continueWatchingItems.isNotEmpty()) {
+                            continueWatchingInserted = true
+                            item(
+                                key = "continue_watching_before_col",
+                                span = { GridItemSpan(maxLineSpan) },
+                                contentType = "continue_watching"
+                            ) {
+                                GridContinueWatchingSection(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    fullWidth = gridWidth,
+                                    items = continueWatchingItems,
+                                    focusedItemIndex = if (shouldRequestInitialFocus && !hasHero) 0 else -1,
+                                    onItemClick = { onContinueWatchingClick(it) },
+                                    onStartFromBeginning = onContinueWatchingStartFromBeginning,
+                                    showManualPlayOption = showContinueWatchingManualPlayOption,
+                                    onPlayManually = onContinueWatchingPlayManually,
+                                    onDetailsClick = { item ->
+                                        onNavigateToDetail(
+                                            when (item) { is ContinueWatchingItem.InProgress -> item.progress.contentId; is ContinueWatchingItem.NextUp -> item.info.contentId },
+                                            when (item) { is ContinueWatchingItem.InProgress -> item.progress.contentType; is ContinueWatchingItem.NextUp -> item.info.contentType },
+                                            ""
+                                        )
+                                    },
+                                    onRemoveItem = { item ->
+                                        onRemoveContinueWatching(
+                                            when (item) { is ContinueWatchingItem.InProgress -> item.progress.contentId; is ContinueWatchingItem.NextUp -> item.info.contentId },
+                                            when (item) { is ContinueWatchingItem.InProgress -> item.progress.season; is ContinueWatchingItem.NextUp -> item.info.seedSeason },
+                                            when (item) { is ContinueWatchingItem.InProgress -> item.progress.episode; is ContinueWatchingItem.NextUp -> item.info.seedEpisode },
+                                            item is ContinueWatchingItem.NextUp
+                                        )
+                                    },
+                                    blurUnwatchedEpisodes = uiState.blurUnwatchedEpisodes
+                                )
+                            }
+                        }
+                        item(
+                            key = "col_header_${gridItem.collectionId}",
+                            span = { GridItemSpan(maxLineSpan) },
+                            contentType = "collection_header"
+                        ) {
+                            SectionDivider(catalogName = gridItem.title)
+                        }
+                    }
+
+                    is GridItem.CollectionFolder -> {
+                        item(
+                            key = "col_folder_${gridItem.collectionId}_${gridItem.folder.id}",
+                            span = { GridItemSpan(1) },
+                            contentType = "collection_folder"
+                        ) {
+                            GridCollectionFolderCard(
+                                folder = gridItem.folder,
+                                posterCardStyle = posterCardStyle,
+                                onClick = {
+                                    onNavigateToFolderDetail(gridItem.collectionId, gridItem.folder.id)
                                 }
                             )
                         }
@@ -570,6 +611,82 @@ private fun SeeAllGridCard(
                     color = NuvioColors.TextSecondary,
                     textAlign = TextAlign.Center
                 )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun GridCollectionFolderCard(
+    folder: CollectionFolder,
+    posterCardStyle: PosterCardStyle,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val cardShape = RoundedCornerShape(posterCardStyle.cornerRadius)
+    Card(
+        onClick = onClick,
+        modifier = modifier
+            .fillMaxWidth()
+            .aspectRatio(posterCardStyle.aspectRatio),
+        shape = CardDefaults.shape(shape = cardShape),
+        colors = CardDefaults.colors(
+            containerColor = NuvioColors.BackgroundCard,
+            focusedContainerColor = NuvioColors.BackgroundCard
+        ),
+        border = CardDefaults.border(
+            focusedBorder = Border(
+                border = BorderStroke(posterCardStyle.focusedBorderWidth, NuvioColors.FocusRing),
+                shape = cardShape
+            )
+        ),
+        scale = CardDefaults.scale(focusedScale = posterCardStyle.focusedScale)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (!folder.coverImageUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = folder.coverImageUrl,
+                    contentDescription = folder.title,
+                    modifier = Modifier.fillMaxSize().clip(cardShape),
+                    contentScale = ContentScale.Crop
+                )
+            } else if (!folder.coverEmoji.isNullOrBlank()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(text = folder.coverEmoji, fontSize = 36.sp)
+                }
+            } else {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = folder.title.take(2).uppercase(),
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = NuvioColors.TextSecondary
+                    )
+                }
+            }
+
+            if (!folder.hideTitle) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))
+                            )
+                        )
+                        .padding(8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = folder.title,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         }
     }
