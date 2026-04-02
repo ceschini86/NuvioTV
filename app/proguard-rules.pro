@@ -89,6 +89,6 @@
 -renamesourcefileattribute SourceFile
 
 # MPV (native JNI callbacks)
-# Methods on is.xyz.mpv.MPV are looked up by name from native code (GetMethodID),
-# so they must not be removed or renamed by R8.
--keep class is.xyz.mpv.MPV { *; }
+# Native code reflects into multiple classes/methods under is.xyz.mpv,
+# so keep the whole package to avoid JNI lookup crashes after R8.
+-keep class is.xyz.mpv.** { *; }
