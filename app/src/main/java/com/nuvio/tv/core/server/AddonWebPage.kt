@@ -416,92 +416,369 @@ object AddonWebPage {
   }
   .tab-content { display: none; }
   .tab-content.active { display: block; }
+  /* ── Collection cards ── */
   .collection-card {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
-    padding: 1rem;
-    margin-bottom: 0.75rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 16px;
+    margin-bottom: 1rem;
+    overflow: hidden;
+    transition: opacity 0.2s;
   }
+  .collection-disabled { opacity: 0.4; }
   .collection-header {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 0.5rem;
+    gap: 0.5rem;
+    padding: 0.875rem 1rem;
   }
   .collection-title-input {
     flex: 1;
     background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 8px;
-    padding: 0.5rem 0.75rem;
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0;
+    padding: 0.25rem 0;
     color: #fff;
     font-family: inherit;
-    font-size: 0.9rem;
+    font-size: 1rem;
     font-weight: 600;
+    letter-spacing: -0.01em;
   }
-  .collection-title-input:focus {
-    border-color: rgba(255, 255, 255, 0.4);
+  .collection-title-input:focus { border-bottom-color: rgba(255, 255, 255, 0.5); outline: none; }
+  .collection-title-input::placeholder { color: rgba(255,255,255,0.2); }
+  .col-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+  }
+  .col-meta-row {
+    display: flex;
+    align-items: center;
+    padding: 0 1rem;
+    gap: 0.5rem;
+  }
+  .col-meta-label {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: rgba(255,255,255,0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    min-width: 60px;
+    flex-shrink: 0;
+  }
+  .folder-summary {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.25);
+    padding: 0 1rem 0.75rem;
+  }
+  .badge-collection-disabled {
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: rgba(207, 102, 121, 0.9);
+    background: rgba(207, 102, 121, 0.12);
+    padding: 0.2rem 0.5rem;
+    border-radius: 100px;
+    flex-shrink: 0;
+  }
+  .collapse-header { cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none; }
+  .collapse-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    transition: transform 0.25s ease;
+    font-size: 0.8rem;
+    color: rgba(255,255,255,0.25);
+    flex-shrink: 0;
+  }
+  .collapse-arrow.open { transform: rotate(90deg); }
+
+  /* ── Collection settings section ── */
+  .col-settings {
+    padding: 0.5rem 1rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    border-top: 1px solid rgba(255,255,255,0.05);
+  }
+  .col-setting-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-height: 36px;
+  }
+  .col-setting-row select, .col-setting-row input[type="url"] {
+    flex: 1;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 0.45rem 0.6rem;
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.8rem;
+    min-width: 0;
+  }
+  .col-setting-row select:focus, .col-setting-row input:focus {
+    border-color: rgba(255,255,255,0.25);
     outline: none;
   }
-  .folder-card {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 8px;
-    padding: 0.75rem;
-    margin-top: 0.5rem;
+  .col-setting-row select option { background: #111; color: #fff; }
+  .col-setting-row img {
+    width: 44px;
+    height: 25px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.08);
+    flex-shrink: 0;
   }
+
+  /* ── Toggle switch (replaces checkboxes) ── */
+  .toggle-switch {
+    position: relative;
+    width: 40px;
+    height: 22px;
+    flex-shrink: 0;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .toggle-track {
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,0.12);
+    border-radius: 11px;
+    transition: background 0.2s;
+  }
+  .toggle-switch input:checked + .toggle-track { background: rgba(255,255,255,0.85); }
+  .toggle-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    background: #000;
+    border-radius: 50%;
+    transition: transform 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  .toggle-switch input:checked ~ .toggle-thumb { transform: translateX(18px); background: #000; }
+  .toggle-switch:not(:has(input:checked)) .toggle-thumb { background: rgba(255,255,255,0.6); }
+  .toggle-label {
+    font-size: 0.8rem;
+    color: rgba(255,255,255,0.5);
+    flex: 1;
+  }
+
+  /* ── Folder cards ── */
+  .folder-card {
+    background: rgba(255,255,255,0.025);
+    border-top: 1px solid rgba(255,255,255,0.05);
+    padding: 0;
+    margin: 0;
+  }
+  .folder-card:last-of-type { border-bottom: 1px solid rgba(255,255,255,0.05); }
   .folder-header {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    margin-bottom: 0.5rem;
+    padding: 0.65rem 1rem;
   }
   .folder-title-input {
     flex: 1;
     background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 6px;
-    padding: 0.4rem 0.6rem;
+    border: none;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    border-radius: 0;
+    padding: 0.2rem 0;
     color: #fff;
     font-family: inherit;
-    font-size: 0.85rem;
+    font-size: 0.875rem;
+    font-weight: 500;
   }
-  .folder-title-input:focus {
-    border-color: rgba(255, 255, 255, 0.35);
-    outline: none;
-  }
-  .folder-meta {
+  .folder-title-input:focus { border-bottom-color: rgba(255,255,255,0.4); outline: none; }
+  .folder-title-input::placeholder { color: rgba(255,255,255,0.2); }
+
+  /* ── Folder expanded settings ── */
+  .folder-settings {
+    padding: 0.75rem 1rem 1rem;
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
+    flex-direction: column;
+    gap: 0.75rem;
   }
-  .folder-meta select, .folder-meta input {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 6px;
-    padding: 0.35rem 0.5rem;
-    color: #fff;
-    font-family: inherit;
-    font-size: 0.8rem;
+  .folder-settings-group {
+    background: rgba(255,255,255,0.03);
+    border-radius: 10px;
+    overflow: hidden;
   }
-  .folder-meta select:focus, .folder-meta input:focus {
-    border-color: rgba(255, 255, 255, 0.3);
-    outline: none;
+  .folder-settings-group-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: rgba(255,255,255,0.25);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0.6rem 0.75rem 0.35rem;
   }
-  .folder-meta select option { background: #1a1a1a; color: #fff; }
-  .source-item {
+  .folder-setting-item {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.35rem 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.04);
-    font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.6);
+    padding: 0.5rem 0.75rem;
+    min-height: 40px;
   }
-  .source-item:first-child { border-top: none; }
+  .folder-setting-item + .folder-setting-item {
+    border-top: 1px solid rgba(255,255,255,0.04);
+  }
+  .folder-setting-item select, .folder-setting-item input[type="url"] {
+    flex: 1;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 0.4rem 0.55rem;
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.8rem;
+    min-width: 0;
+  }
+  .folder-setting-item select:focus, .folder-setting-item input:focus {
+    border-color: rgba(255,255,255,0.25);
+    outline: none;
+  }
+  .folder-setting-item select option { background: #111; color: #fff; }
+  .folder-setting-item img {
+    width: 32px;
+    height: 32px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.08);
+    flex-shrink: 0;
+  }
+  .folder-setting-label {
+    font-size: 0.8rem;
+    color: rgba(255,255,255,0.45);
+    min-width: 55px;
+    flex-shrink: 0;
+  }
+
+  /* ── Cover mode picker ── */
+  .cover-mode-picker {
+    display: flex;
+    gap: 0;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.08);
+    flex: 1;
+  }
+  .cover-mode-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,0.4);
+    font-family: inherit;
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.45rem 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .cover-mode-btn + .cover-mode-btn { border-left: 1px solid rgba(255,255,255,0.06); }
+  .cover-mode-btn.active {
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+  }
+  .cover-mode-btn:hover:not(.active) { background: rgba(255,255,255,0.05); }
+
+  /* ── Emoji picker ── */
+  .emoji-picker-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 36px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 0 0.4rem;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .emoji-picker-btn:hover { border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.08); }
+  .emoji-grid-wrap {
+    display: none;
+    margin-top: 0.5rem;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 0.6rem;
+  }
+  .emoji-grid-wrap.open { display: block; }
+  .emoji-grid-search {
+    width: 100%;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 0.5rem 0.65rem;
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.8rem;
+    margin-bottom: 0.5rem;
+  }
+  .emoji-grid-search:focus { border-color: rgba(255,255,255,0.25); outline: none; }
+  .emoji-grid { max-height: 220px; overflow-y: auto; }
+  .emoji-grid [data-cat] {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 2px;
+  }
+  .emoji-cat-label { grid-column: 1 / -1; }
+  .emoji-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    aspect-ratio: 1;
+    font-size: 1.25rem;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background 0.15s;
+    border: none;
+    background: transparent;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .emoji-cell:hover { background: rgba(255,255,255,0.1); }
+
+  /* ── Catalog sources ── */
+  .source-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.78rem;
+    color: rgba(255,255,255,0.55);
+  }
+  .source-item + .source-item { border-top: 1px solid rgba(255,255,255,0.04); }
   .source-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .source-search-input {
+    width: 100%;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 0.5rem 0.65rem;
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.8rem;
+    margin-bottom: 0.25rem;
+  }
+  .source-search-input:focus { border-color: rgba(255,255,255,0.25); outline: none; }
+
+  /* ── Shared small buttons ── */
   .btn-icon {
     display: inline-flex;
     align-items: center;
@@ -509,159 +786,20 @@ object AddonWebPage {
     width: 26px;
     height: 26px;
     background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255,255,255,0.08);
     border-radius: 6px;
-    color: rgba(255, 255, 255, 0.4);
-    font-size: 0.75rem;
+    color: rgba(255,255,255,0.35);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.2s;
     padding: 0;
     flex-shrink: 0;
     -webkit-tap-highlight-color: transparent;
   }
-  .btn-icon:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.25);
-    color: #fff;
-  }
-  .btn-icon.danger { border-color: rgba(207, 102, 121, 0.3); color: rgba(207, 102, 121, 0.7); }
-  .btn-icon.danger:hover { background: rgba(207, 102, 121, 0.15); color: #CF6679; }
-  .add-source-row {
-    display: flex;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
-  }
-  .add-source-row select {
-    flex: 1;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 6px;
-    padding: 0.35rem 0.5rem;
-    color: #fff;
-    font-family: inherit;
-    font-size: 0.8rem;
-  }
-  .add-source-row select:focus { border-color: rgba(255, 255, 255, 0.3); outline: none; }
-  .add-source-row select option { background: #1a1a1a; color: #fff; }
-  .folder-toggle-row {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-top: 0.35rem;
-    font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.5);
-  }
-  .folder-toggle-row input[type="checkbox"] {
-    accent-color: #fff;
-  }
-  .emoji-picker-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 36px;
-    height: 36px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 8px;
-    font-size: 1.2rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    padding: 0 0.4rem;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .emoji-picker-btn:hover { border-color: rgba(255, 255, 255, 0.3); background: rgba(255, 255, 255, 0.08); }
-  .emoji-grid-wrap {
-    display: none;
-    margin-top: 0.5rem;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    padding: 0.5rem;
-  }
-  .emoji-grid-wrap.open { display: block; }
-  .emoji-grid-search {
-    width: 100%;
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 6px;
-    padding: 0.4rem 0.6rem;
-    color: #fff;
-    font-family: inherit;
-    font-size: 0.8rem;
-    margin-bottom: 0.4rem;
-  }
-  .emoji-grid-search:focus { border-color: rgba(255, 255, 255, 0.3); outline: none; }
-  .emoji-grid {
-    max-height: 250px;
-    overflow-y: auto;
-  }
-  .emoji-grid [data-cat] {
-    display: grid;
-    grid-template-columns: repeat(8, 1fr);
-    gap: 2px;
-  }
-  .emoji-cat-label {
-    grid-column: 1 / -1;
-  }
-  .emoji-cell {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    aspect-ratio: 1;
-    font-size: 1.3rem;
-    cursor: pointer;
-    border-radius: 6px;
-    transition: background 0.15s;
-    border: none;
-    background: transparent;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .emoji-cell:hover { background: rgba(255, 255, 255, 0.1); }
-  .source-search-input {
-    width: 100%;
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 6px;
-    padding: 0.4rem 0.6rem;
-    color: #fff;
-    font-family: inherit;
-    font-size: 0.8rem;
-    margin-bottom: 0.35rem;
-  }
-  .source-search-input:focus { border-color: rgba(255, 255, 255, 0.3); outline: none; }
-  .collection-disabled { opacity: 0.45; }
-  .collapse-header {
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-    user-select: none;
-  }
-  .collapse-arrow {
-    display: inline-block;
-    transition: transform 0.2s ease;
-    margin-right: 0.25rem;
-    font-size: 0.7rem;
-    color: rgba(255, 255, 255, 0.3);
-  }
-  .collapse-arrow.open { transform: rotate(90deg); }
-  .folder-summary {
-    font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.3);
-    padding: 0.25rem 0;
-  }
-  .badge-collection-disabled {
-    display: inline-block;
-    font-size: 0.6rem;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: rgba(207, 102, 121, 0.95);
-    border: 1px solid rgba(207, 102, 121, 0.35);
-    padding: 0.12rem 0.45rem;
-    border-radius: 100px;
-    margin-left: 0.5rem;
-    vertical-align: middle;
-  }
+  .btn-icon:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); color: #fff; }
+  .btn-icon:disabled { opacity: 0.15; cursor: not-allowed; pointer-events: none; }
+  .btn-icon.danger { border-color: rgba(207,102,121,0.25); color: rgba(207,102,121,0.6); }
+  .btn-icon.danger:hover { background: rgba(207,102,121,0.12); color: #CF6679; }
+  .sources-filtering .btn-icon:not(.danger) { opacity: 0.15; pointer-events: none; }
   .import-overlay {
     position: fixed;
     top: 0; left: 0; width: 100%; height: 100%;
@@ -926,6 +1064,19 @@ function filterCatalogSources(ci, fi, query) {
   var items = container.children;
   for (var i = 0; i < items.length; i++) {
     var text = items[i].getAttribute('data-label') || '';
+    items[i].style.display = (!q || text.toLowerCase().indexOf(q) >= 0) ? '' : 'none';
+  }
+}
+
+function filterActiveSources(ci, fi, query) {
+  var container = document.getElementById('active-src-list-' + ci + '-' + fi);
+  if (!container) return;
+  var q = query.toLowerCase();
+  if (q) { container.classList.add('sources-filtering'); }
+  else { container.classList.remove('sources-filtering'); }
+  var items = container.querySelectorAll('.source-item');
+  for (var i = 0; i < items.length; i++) {
+    var text = items[i].textContent || '';
     items[i].style.display = (!q || text.toLowerCase().indexOf(q) >= 0) ? '' : 'none';
   }
 }
@@ -1398,6 +1549,21 @@ function updateFolderTileShape(ci, fi, val) {
   collections[ci].folders[fi].tileShape = val;
 }
 
+function setFolderCoverMode(ci, fi, mode) {
+  var folder = collections[ci].folders[fi];
+  if (!folder._coverMode) folder._coverMode = folder.coverEmoji ? 'emoji' : (folder.coverImageUrl ? 'image' : 'none');
+  folder._coverMode = mode;
+  if (mode === 'none') {
+    folder.coverEmoji = null;
+    folder.coverImageUrl = null;
+  } else if (mode === 'emoji') {
+    folder.coverImageUrl = null;
+  } else if (mode === 'image') {
+    folder.coverEmoji = null;
+  }
+  renderCollections();
+}
+
 function updateCollectionViewMode(ci, val) {
   collections[ci].viewMode = val;
   renderCollections();
@@ -1463,51 +1629,66 @@ function renderCollections() {
     card.className = 'collection-card' + (disabled ? ' collection-disabled' : '');
 
     var isExpanded = (expandedCollection === ci);
-    var toggleClass = disabled ? 'btn btn-toggle disabled' : 'btn btn-toggle';
     var folderCount = (col.folders || []).length;
+
+    // ── Collection header: arrow + title + action buttons ──
     var headerHtml =
       '<div class="collection-header collapse-header" onclick="toggleCollectionExpand(' + ci + ')">' +
         '<span class="collapse-arrow' + (isExpanded ? ' open' : '') + '">&#9654;</span>' +
-        '<div class="addon-order" onclick="event.stopPropagation()">' +
-          '<button class="btn-order" onclick="event.stopPropagation();moveCollection(' + ci + ',-1)"' + (ci === 0 ? ' disabled' : '') + '>' +
-            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>' +
-          '</button>' +
-          '<button class="btn-order" onclick="event.stopPropagation();moveCollection(' + ci + ',1)"' + (ci === collections.length - 1 ? ' disabled' : '') + '>' +
-            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>' +
-          '</button>' +
-        '</div>' +
         '<input class="collection-title-input" value="' + escapeAttr(col.title) + '" onchange="updateCollectionTitle(' + ci + ',this.value)" onclick="event.stopPropagation()" placeholder="Collection name">' +
         (disabled ? '<span class="badge-collection-disabled">Hidden</span>' : '') +
-        '<button class="' + toggleClass + '" onclick="event.stopPropagation();toggleCollection(' + ci + ')" style="padding:0.4rem 0.75rem;font-size:0.7rem">' + (disabled ? 'Show' : 'Hide') + '</button>' +
-        '<button class="btn btn-remove" onclick="event.stopPropagation();removeCollection(' + ci + ')">Remove</button>' +
-      '</div>' +
-      (!isExpanded ? '<div class="folder-summary">' + folderCount + ' folder' + (folderCount !== 1 ? 's' : '') + '</div>' : '');
+        '<div class="col-actions" onclick="event.stopPropagation()">' +
+          '<button class="btn-order" onclick="moveCollection(' + ci + ',-1)"' + (ci === 0 ? ' disabled' : '') + '>' +
+            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 15l-6-6-6 6"/></svg>' +
+          '</button>' +
+          '<button class="btn-order" onclick="moveCollection(' + ci + ',1)"' + (ci === collections.length - 1 ? ' disabled' : '') + '>' +
+            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>' +
+          '</button>' +
+          '<button class="btn-icon" onclick="toggleCollection(' + ci + ')" title="' + (disabled ? 'Show' : 'Hide') + '">' +
+            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="' + (disabled ? 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 9a3 3 0 100 6 3 3 0 000-6z' : 'M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19M1 1l22 22') + '"/></svg>' +
+          '</button>' +
+          '<button class="btn-icon danger" onclick="removeCollection(' + ci + ')" title="Remove">' +
+            '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>' +
+          '</button>' +
+        '</div>' +
+      '</div>';
 
-    var backdropHtml = '';
-    var foldersHtml = '';
     if (!isExpanded) {
-      card.innerHTML = headerHtml;
+      card.innerHTML = headerHtml +
+        '<div class="folder-summary">' + folderCount + ' folder' + (folderCount !== 1 ? 's' : '') + '</div>';
       container.appendChild(card);
       return;
     }
-    backdropHtml =
-      '<div class="folder-meta" style="padding:0.5rem 0.75rem;border-bottom:1px solid rgba(255,255,255,0.06);flex-wrap:nowrap">' +
-        '<img id="col-backdrop-preview-' + ci + '" src="' + escapeAttr(col.backdropImageUrl || '') + '" style="width:48px;height:27px;object-fit:cover;border-radius:4px;border:1px solid rgba(255,255,255,0.1);flex-shrink:0;' + (col.backdropImageUrl ? '' : 'display:none') + '" onerror="this.style.display=\'none\'">' +
-        '<input type="url" placeholder="Backdrop image URL (optional)" value="' + escapeAttr(col.backdropImageUrl || '') + '" oninput="updateCollectionBackdrop(' + ci + ',this.value)" style="flex:1;min-width:120px">' +
-      '</div>' +
-      '<div class="folder-meta" style="padding:0.5rem 0.75rem;border-bottom:1px solid rgba(255,255,255,0.06);flex-wrap:nowrap;align-items:center">' +
-        '<span style="font-size:0.75rem;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:0.05em;flex-shrink:0">View Mode</span>' +
-        '<select onchange="updateCollectionViewMode(' + ci + ',this.value)">' +
-          '<option value="TABBED_GRID"' + ((col.viewMode === 'TABBED_GRID' || !col.viewMode) ? ' selected' : '') + '>Tabs</option>' +
-          '<option value="ROWS"' + (col.viewMode === 'ROWS' ? ' selected' : '') + '>Rows</option>' +
-          '<option value="FOLLOW_LAYOUT"' + (col.viewMode === 'FOLLOW_LAYOUT' ? ' selected' : '') + '>Follow Home Layout</option>' +
-        '</select>' +
-      '</div>' +
-      ((col.viewMode === 'TABBED_GRID' || !col.viewMode) ?
-      '<div class="folder-toggle-row" style="padding:0.25rem 0.75rem;border-bottom:1px solid rgba(255,255,255,0.06)">' +
-        '<input type="checkbox" id="sat-' + ci + '"' + (col.showAllTab !== false ? ' checked' : '') + ' onchange="updateCollectionShowAllTab(' + ci + ',this.checked)">' +
-        '<label for="sat-' + ci + '">Show "All" tab</label>' +
-      '</div>' : '');
+
+    // ── Collection settings (expanded) ──
+    var settingsHtml =
+      '<div class="col-settings">' +
+        '<div class="col-setting-row">' +
+          '<span class="col-meta-label">Backdrop</span>' +
+          '<img id="col-backdrop-preview-' + ci + '" src="' + escapeAttr(col.backdropImageUrl || '') + '" style="' + (col.backdropImageUrl ? '' : 'display:none') + '" onerror="this.style.display=\'none\'">' +
+          '<input type="url" placeholder="Image URL (optional)" value="' + escapeAttr(col.backdropImageUrl || '') + '" oninput="updateCollectionBackdrop(' + ci + ',this.value)">' +
+        '</div>' +
+        '<div class="col-setting-row">' +
+          '<span class="col-meta-label">View</span>' +
+          '<select onchange="updateCollectionViewMode(' + ci + ',this.value)">' +
+            '<option value="TABBED_GRID"' + ((col.viewMode === 'TABBED_GRID' || !col.viewMode) ? ' selected' : '') + '>Tabs</option>' +
+            '<option value="ROWS"' + (col.viewMode === 'ROWS' ? ' selected' : '') + '>Rows</option>' +
+            '<option value="FOLLOW_LAYOUT"' + (col.viewMode === 'FOLLOW_LAYOUT' ? ' selected' : '') + '>Follow Home Layout</option>' +
+          '</select>' +
+        '</div>' +
+        ((col.viewMode === 'TABBED_GRID' || !col.viewMode) ?
+        '<div class="col-setting-row">' +
+          '<span class="toggle-label">Show "All" tab</span>' +
+          '<label class="toggle-switch" onclick="event.stopPropagation()">' +
+            '<input type="checkbox"' + (col.showAllTab !== false ? ' checked' : '') + ' onchange="updateCollectionShowAllTab(' + ci + ',this.checked)">' +
+            '<span class="toggle-track"></span>' +
+            '<span class="toggle-thumb"></span>' +
+          '</label>' +
+        '</div>' : '') +
+      '</div>';
+
+    // ── Folders ──
+    var foldersHtml = '';
     (col.folders || []).forEach(function(folder, fi) {
       var sourcesHtml = '';
       (folder.catalogSources || []).forEach(function(src, si) {
@@ -1528,95 +1709,129 @@ function renderCollections() {
           '</div>';
       });
 
-      // Build categorized emoji grid
       var emojiCellsHtml = '';
       EMOJI_CATEGORIES.forEach(function(cat, catIdx) {
         emojiCellsHtml += '<div data-cat="' + cat.name + '">';
-        emojiCellsHtml += '<div class="emoji-cat-label" style="grid-column:1/-1;font-size:0.7rem;font-weight:600;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.05em;padding:0.4rem 0 0.2rem">' + escapeHtml(cat.name) + '</div>';
+        emojiCellsHtml += '<div class="emoji-cat-label" style="grid-column:1/-1;font-size:0.65rem;font-weight:600;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:0.06em;padding:0.5rem 0 0.25rem">' + escapeHtml(cat.name) + '</div>';
         cat.emojis.forEach(function(em, emIdx) {
           emojiCellsHtml += '<button class="emoji-cell" onclick="selectEmoji(' + ci + ',' + fi + ',' + catIdx + ',' + emIdx + ')">' + em + '</button>';
         });
         emojiCellsHtml += '</div>';
       });
 
-      // Build clickable catalog source list (instead of select)
       var existingSources = (folder.catalogSources || []);
       var sourceListHtml = '';
-      availableCatalogs.forEach(function(c) {
+      availableCatalogs.filter(function(c) { return c.type !== 'collection'; }).forEach(function(c) {
         var val = c.key.split('_')[0] + '::' + c.type + '::' + c.key.split('_').slice(2).join('_');
         var parts = val.split('::');
         var alreadyAdded = existingSources.some(function(s) { return s.addonId === parts[0] && s.type === parts[1] && s.catalogId === parts[2]; });
         var label = c.catalogName + ' - ' + toTitleCase(c.type) + ' (' + c.addonName + ')';
         if (alreadyAdded) {
-          sourceListHtml += '<div class="source-item" data-label="' + escapeAttr(label) + '" style="padding:0.35rem 0.5rem;opacity:0.4">' +
+          sourceListHtml += '<div class="source-item" data-label="' + escapeAttr(label) + '" style="padding:0.4rem 0.75rem;opacity:0.4">' +
             '<span class="source-label">' + escapeHtml(label) + '</span>' +
-            '<span style="font-size:0.7rem;color:rgba(130,200,130,0.9);flex-shrink:0">✓ Added</span>' +
+            '<span style="font-size:0.7rem;color:rgba(130,200,130,0.85);flex-shrink:0">Added</span>' +
           '</div>';
         } else {
-          sourceListHtml += '<div class="source-item" data-label="' + escapeAttr(label) + '" style="cursor:pointer;padding:0.35rem 0.5rem" onclick="addCatalogSourceByVal(' + ci + ',' + fi + ',\'' + escapeAttr(val) + '\')">' +
-            '<span class="source-label" style="color:rgba(255,255,255,0.5)">' + escapeHtml(label) + '</span>' +
-            '<span style="font-size:0.7rem;color:rgba(255,255,255,0.25);flex-shrink:0">+ Add</span>' +
+          sourceListHtml += '<div class="source-item" data-label="' + escapeAttr(label) + '" style="cursor:pointer;padding:0.4rem 0.75rem" onclick="addCatalogSourceByVal(' + ci + ',' + fi + ',\'' + escapeAttr(val) + '\')">' +
+            '<span class="source-label" style="color:rgba(255,255,255,0.45)">' + escapeHtml(label) + '</span>' +
+            '<span style="font-size:0.7rem;color:rgba(255,255,255,0.2);flex-shrink:0">+ Add</span>' +
           '</div>';
         }
       });
 
       var isFolderExpanded = (expandedFolder === ci + '-' + fi);
       var srcCount = (folder.catalogSources || []).length;
-      var folderCover = folder.coverEmoji || (folder.coverImageUrl ? '🖼️' : '📁');
+      var coverMode = folder._coverMode || (folder.coverEmoji ? 'emoji' : (folder.coverImageUrl ? 'image' : 'none'));
 
       foldersHtml +=
         '<div class="folder-card">' +
           '<div class="folder-header collapse-header" onclick="toggleFolderExpand(' + ci + ',' + fi + ')">' +
             '<span class="collapse-arrow' + (isFolderExpanded ? ' open' : '') + '">&#9654;</span>' +
-            '<div class="addon-order" onclick="event.stopPropagation()">' +
-              '<button class="btn-order" onclick="event.stopPropagation();moveFolder(' + ci + ',' + fi + ',-1)"' + (fi === 0 ? ' disabled' : '') + ' style="width:24px;height:24px">' +
+            '<input class="folder-title-input" value="' + escapeAttr(folder.title) + '" onchange="updateFolderTitle(' + ci + ',' + fi + ',this.value)" onclick="event.stopPropagation()" placeholder="Folder name">' +
+            (!isFolderExpanded ? '<span style="font-size:0.7rem;color:rgba(255,255,255,0.3);background:rgba(255,255,255,0.06);padding:0.15rem 0.5rem;border-radius:100px;flex-shrink:0">' + srcCount + ' source' + (srcCount !== 1 ? 's' : '') + '</span>' : '') +
+            '<div class="col-actions" onclick="event.stopPropagation()">' +
+              '<button class="btn-order" onclick="moveFolder(' + ci + ',' + fi + ',-1)"' + (fi === 0 ? ' disabled' : '') + ' style="width:22px;height:22px">' +
                 '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 15l-6-6-6 6"/></svg>' +
               '</button>' +
-              '<button class="btn-order" onclick="event.stopPropagation();moveFolder(' + ci + ',' + fi + ',1)"' + (fi === col.folders.length - 1 ? ' disabled' : '') + ' style="width:24px;height:24px">' +
+              '<button class="btn-order" onclick="moveFolder(' + ci + ',' + fi + ',1)"' + (fi === col.folders.length - 1 ? ' disabled' : '') + ' style="width:22px;height:22px">' +
                 '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>' +
               '</button>' +
+              '<button class="btn-icon danger" onclick="removeFolder(' + ci + ',' + fi + ')" style="width:22px;height:22px">' +
+                '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>' +
+              '</button>' +
             '</div>' +
-            '<span style="font-size:1rem;flex-shrink:0">' + folderCover + '</span>' +
-            '<input class="folder-title-input" value="' + escapeAttr(folder.title) + '" onchange="updateFolderTitle(' + ci + ',' + fi + ',this.value)" onclick="event.stopPropagation()" placeholder="Folder name">' +
-            (!isFolderExpanded ? '<span style="font-size:0.7rem;color:rgba(255,255,255,0.25);flex-shrink:0">' + srcCount + ' src</span>' : '') +
-            '<button class="btn-icon danger" onclick="event.stopPropagation();removeFolder(' + ci + ',' + fi + ')">' +
-              '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>' +
-            '</button>' +
           '</div>' +
           (isFolderExpanded ?
-          '<div class="folder-meta">' +
-            '<button class="emoji-picker-btn" onclick="toggleEmojiPicker(' + ci + ',' + fi + ')">' +
-              (folder.coverEmoji ? escapeHtml(folder.coverEmoji) : '😀') +
-            '</button>' +
-            (folder.coverEmoji ? '<button class="btn-icon danger" onclick="clearEmoji(' + ci + ',' + fi + ')" title="Clear emoji" style="width:24px;height:24px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg></button>' : '') +
-            '<img id="cover-preview-' + ci + '-' + fi + '" src="' + escapeAttr(folder.coverImageUrl || '') + '" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid rgba(255,255,255,0.1);flex-shrink:0;' + (folder.coverImageUrl ? '' : 'display:none') + '" onerror="this.style.display=\'none\'">' +
-            '<input type="url" placeholder="Cover image URL" value="' + escapeAttr(folder.coverImageUrl || '') + '" oninput="updateFolderCoverImage(' + ci + ',' + fi + ',this.value)" style="flex:1;min-width:120px">' +
-            '<select onchange="updateFolderTileShape(' + ci + ',' + fi + ',this.value)">' +
-              '<option value="POSTER"' + (folder.tileShape === 'POSTER' ? ' selected' : '') + '>Poster</option>' +
-              '<option value="LANDSCAPE"' + (folder.tileShape === 'LANDSCAPE' ? ' selected' : '') + '>Landscape</option>' +
-              '<option value="SQUARE"' + ((folder.tileShape === 'SQUARE' || !folder.tileShape) ? ' selected' : '') + '>Square</option>' +
-            '</select>' +
-          '</div>' +
-          '<div id="emoji-grid-' + ci + '-' + fi + '" class="emoji-grid-wrap">' +
-            '<input class="emoji-grid-search" placeholder="Search category..." oninput="filterEmoji(' + ci + ',' + fi + ',this.value)">' +
-            '<div class="emoji-grid" id="emoji-cells-' + ci + '-' + fi + '">' + emojiCellsHtml + '</div>' +
-          '</div>' +
-          '<div class="folder-toggle-row">' +
-            '<input type="checkbox" id="ht-' + ci + '-' + fi + '"' + (folder.hideTitle ? ' checked' : '') + ' onchange="updateFolderHideTitle(' + ci + ',' + fi + ',this.checked)">' +
-            '<label for="ht-' + ci + '-' + fi + '">Hide title</label>' +
-          '</div>' +
-          '<div style="margin-top:0.5rem">' +
-            '<div style="font-size:0.75rem;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem">Catalog Sources</div>' +
-            sourcesHtml +
-            '<input class="source-search-input" placeholder="Search catalogs..." oninput="filterCatalogSources(' + ci + ',' + fi + ',this.value)" id="src-search-' + ci + '-' + fi + '">' +
-            '<div id="src-list-' + ci + '-' + fi + '" style="max-height:200px;overflow-y:auto;border:1px solid rgba(255,255,255,0.06);border-radius:6px;margin-top:0.25rem">' + sourceListHtml + '</div>' +
+          '<div class="folder-settings">' +
+            '<div class="folder-settings-group">' +
+              '<div class="folder-settings-group-label">Cover</div>' +
+              '<div class="folder-setting-item">' +
+                '<div class="cover-mode-picker">' +
+                  '<button class="cover-mode-btn' + (coverMode === 'none' ? ' active' : '') + '" onclick="setFolderCoverMode(' + ci + ',' + fi + ',\'none\')">None</button>' +
+                  '<button class="cover-mode-btn' + (coverMode === 'emoji' ? ' active' : '') + '" onclick="setFolderCoverMode(' + ci + ',' + fi + ',\'emoji\')">Emoji</button>' +
+                  '<button class="cover-mode-btn' + (coverMode === 'image' ? ' active' : '') + '" onclick="setFolderCoverMode(' + ci + ',' + fi + ',\'image\')">Image</button>' +
+                '</div>' +
+              '</div>' +
+              (coverMode === 'emoji' ?
+              '<div class="folder-setting-item">' +
+                '<button class="emoji-picker-btn" onclick="toggleEmojiPicker(' + ci + ',' + fi + ')">' +
+                  (folder.coverEmoji ? escapeHtml(folder.coverEmoji) : '😀') +
+                '</button>' +
+                '<span style="font-size:0.78rem;color:rgba(255,255,255,0.3);flex:1">Tap to pick emoji</span>' +
+              '</div>' +
+              '<div id="emoji-grid-' + ci + '-' + fi + '" class="emoji-grid-wrap" style="margin:0 0.75rem 0.5rem">' +
+                '<input class="emoji-grid-search" placeholder="Search emoji..." oninput="filterEmoji(' + ci + ',' + fi + ',this.value)">' +
+                '<div class="emoji-grid" id="emoji-cells-' + ci + '-' + fi + '">' + emojiCellsHtml + '</div>' +
+              '</div>' : '') +
+              (coverMode === 'image' ?
+              '<div class="folder-setting-item">' +
+                '<img id="cover-preview-' + ci + '-' + fi + '" src="' + escapeAttr(folder.coverImageUrl || '') + '" style="' + (folder.coverImageUrl ? '' : 'display:none') + '" onerror="this.style.display=\'none\'">' +
+                '<input type="url" placeholder="Cover image URL" value="' + escapeAttr(folder.coverImageUrl || '') + '" oninput="updateFolderCoverImage(' + ci + ',' + fi + ',this.value)">' +
+              '</div>' : '') +
+            '</div>' +
+            '<div class="folder-settings-group">' +
+              '<div class="folder-settings-group-label">Display</div>' +
+              '<div class="folder-setting-item">' +
+                '<span class="folder-setting-label">Shape</span>' +
+                '<select onchange="updateFolderTileShape(' + ci + ',' + fi + ',this.value)">' +
+                  '<option value="POSTER"' + (folder.tileShape === 'POSTER' ? ' selected' : '') + '>Poster</option>' +
+                  '<option value="LANDSCAPE"' + (folder.tileShape === 'LANDSCAPE' ? ' selected' : '') + '>Landscape</option>' +
+                  '<option value="SQUARE"' + ((folder.tileShape === 'SQUARE' || !folder.tileShape) ? ' selected' : '') + '>Square</option>' +
+                '</select>' +
+              '</div>' +
+              '<div class="folder-setting-item">' +
+                '<span class="toggle-label">Hide title</span>' +
+                '<label class="toggle-switch">' +
+                  '<input type="checkbox" id="ht-' + ci + '-' + fi + '"' + (folder.hideTitle ? ' checked' : '') + ' onchange="updateFolderHideTitle(' + ci + ',' + fi + ',this.checked)">' +
+                  '<span class="toggle-track"></span>' +
+                  '<span class="toggle-thumb"></span>' +
+                '</label>' +
+              '</div>' +
+            '</div>' +
+            '<div class="folder-settings-group">' +
+              '<div class="folder-settings-group-label">Active Sources</div>' +
+              '<div style="padding:0.5rem 0.75rem">' +
+                '<input class="source-search-input" placeholder="Filter active sources..." oninput="filterActiveSources(' + ci + ',' + fi + ',this.value)" id="active-src-search-' + ci + '-' + fi + '">' +
+                '<div id="active-src-list-' + ci + '-' + fi + '" style="max-height:180px;overflow-y:auto;border:1px solid rgba(255,255,255,0.05);border-radius:8px;margin-top:0.25rem">' +
+                sourcesHtml +
+                (sourcesHtml ? '' : '<div style="padding:0.4rem 0.5rem;font-size:0.78rem;color:rgba(255,255,255,0.2)">No sources added yet</div>') +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="folder-settings-group" style="margin-top:0.5rem">' +
+              '<div class="folder-settings-group-label">Add Sources</div>' +
+              '<div style="padding:0.5rem 0.75rem">' +
+                '<input class="source-search-input" placeholder="Search catalogs..." oninput="filterCatalogSources(' + ci + ',' + fi + ',this.value)" id="src-search-' + ci + '-' + fi + '">' +
+                '<div id="src-list-' + ci + '-' + fi + '" style="max-height:200px;overflow-y:auto;border:1px solid rgba(255,255,255,0.05);border-radius:8px;margin-top:0.25rem">' + sourceListHtml + '</div>' +
+              '</div>' +
+            '</div>' +
           '</div>'
           : '') +
         '</div>';
     });
 
-    card.innerHTML = headerHtml + backdropHtml + foldersHtml +
-      '<button class="btn" onclick="addFolder(' + ci + ')" style="width:100%;margin-top:0.5rem;padding:0.6rem;font-size:0.8rem">+ Add Folder</button>';
+    card.innerHTML = headerHtml + settingsHtml + foldersHtml +
+      '<div style="padding:0.5rem 1rem 0.875rem"><button class="btn" onclick="addFolder(' + ci + ')" style="width:100%;padding:0.6rem;font-size:0.8rem">+ Add Folder</button></div>';
 
     container.appendChild(card);
   });

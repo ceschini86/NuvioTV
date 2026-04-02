@@ -160,7 +160,7 @@ private fun TabbedGridContent(
             .fillMaxWidth()
             .padding(start = 48.dp, end = 48.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         if (!folder.coverImageUrl.isNullOrBlank()) {
             AsyncImage(
@@ -191,7 +191,6 @@ private fun TabbedGridContent(
             TabRow(
                 selectedTabIndex = uiState.selectedTabIndex,
                 modifier = Modifier
-                    .weight(1f)
                     .focusRestorer {
                         tabFocusRequesters.getOrNull(uiState.selectedTabIndex) ?: FocusRequester.Default
                     }
