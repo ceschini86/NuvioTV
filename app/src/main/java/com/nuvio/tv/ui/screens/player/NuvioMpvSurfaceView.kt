@@ -375,6 +375,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
         mpv.setOptionString("opengl-es", "yes")
         // Preserve native ASS/SSA styling behavior on MPV.
         mpv.setOptionString("sub-ass-override", "no")
+        mpv.setOptionString("sub-font", "Roboto")
         mpv.setOptionString("sub-use-margins", "yes")
         mpv.setOptionString("sub-ass-force-margins", "yes")
         mpv.setOptionString("hwdec", "mediacodec,mediacodec-copy")
@@ -473,10 +474,10 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
         private const val MPV_MAX_VOLUME_PERCENT = 400.0
         private const val SUBTITLE_VERTICAL_OFFSET_MIN = -20
         private const val SUBTITLE_VERTICAL_OFFSET_MAX = 50
-        private const val MPV_SUB_POS_AT_BOTTOM = 98.0
-        private const val MPV_SUB_POS_AT_TOP = 65.0
-        private const val MPV_SUB_MARGIN_Y_MIN = 4
-        private const val MPV_SUB_MARGIN_Y_MAX = 64
+        private const val MPV_SUB_POS_AT_BOTTOM = 103.4
+        private const val MPV_SUB_POS_AT_TOP = 72.4
+        private const val MPV_SUB_MARGIN_Y_MIN = 0
+        private const val MPV_SUB_MARGIN_Y_MAX = 60
     }
 }
 
