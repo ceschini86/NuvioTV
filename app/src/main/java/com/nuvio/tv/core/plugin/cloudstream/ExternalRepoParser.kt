@@ -6,6 +6,9 @@ import com.nuvio.tv.domain.model.ExternalRepoManifest
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -58,13 +61,13 @@ class ExternalRepoParser @Inject constructor(
                 val manifest = repoManifestAdapter.fromJson(trimmed)
                 if (manifest != null && manifest.pluginLists.isNotEmpty()) {
                     Log.d(TAG, "Parsed as repo manifest: ${manifest.name}, ${manifest.pluginLists.size} plugin lists")
-                    val allPlugins = mutableListOf<ExternalPluginEntry>()
-                    for (listUrl in manifest.pluginLists) {
-                        val resolvedUrl = resolveUrl(url, listUrl)
-                        val plugins = fetchPluginList(resolvedUrl)
-                        if (plugins != null) {
-                            allPlugins.addAll(plugins)
-                        }
+                    val allPlugins = coroutineScope {
+                        manifest.pluginLists.map { listUrl ->
+                            async {
+                                val resolvedUrl = resolveUrl(url, listUrl)
+                                fetchPluginList(resolvedUrl) ?: emptyList()
+                            }
+                        }.awaitAll().flatten()
                     }
                     return@withContext ExternalRepoParseResult(
                         name = manifest.name,

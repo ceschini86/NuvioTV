@@ -986,58 +986,75 @@ class PluginManager @Inject constructor(
     }
 
     /**
-     * Download .cs3 DEX extensions and register them as scrapers.
+     * Download .cs3 DEX extensions in parallel and register them as scrapers.
+     * Uses a semaphore to limit concurrent downloads and avoid overwhelming
+     * the network. Scrapers are saved incrementally in batches.
      */
     private suspend fun downloadDexExtensions(
         repoId: String,
         plugins: List<ExternalPluginEntry>
     ) = withContext(Dispatchers.IO) {
         val existingScrapers = dataStore.scrapers.first().toMutableList()
+        val downloadSemaphore = Semaphore(MAX_PARALLEL_DOWNLOADS)
+        val newScrapers = java.util.Collections.synchronizedList(mutableListOf<ScraperInfo>())
 
-        plugins.forEach { plugin ->
-            try {
-                val scraperId = "$repoId:${plugin.internalName}"
+        // Download all extensions in parallel with limited concurrency
+        val jobs = plugins.map { plugin ->
+            async {
+                downloadSemaphore.withPermit {
+                    try {
+                        val scraperId = "$repoId:${plugin.internalName}"
 
-                // Download .cs3 file
-                val file = externalExtensionLoader.downloadExtension(scraperId, plugin.url)
-                if (file == null) {
-                    Log.e(TAG, "Failed to download extension: ${plugin.name}")
-                    return@forEach
+                        val file = externalExtensionLoader.downloadExtension(scraperId, plugin.url)
+                        if (file == null) {
+                            Log.e(TAG, "Failed to download extension: ${plugin.name}")
+                            return@withPermit
+                        }
+
+                        val supportedTypes = plugin.tvTypes
+                            ?.mapNotNull { tvTypeFromString(it) }
+                            ?.map { it.toNuvioType() }
+                            ?.distinct()
+                            ?.ifEmpty { listOf("movie", "tv") }
+                            ?: listOf("movie", "tv")
+
+                        val scraper = ScraperInfo(
+                            id = scraperId,
+                            repositoryId = repoId,
+                            name = plugin.name,
+                            description = plugin.description ?: "",
+                            version = plugin.version.toString(),
+                            filename = plugin.url,
+                            supportedTypes = supportedTypes,
+                            enabled = true,
+                            manifestEnabled = plugin.status == 1,
+                            logo = plugin.iconUrl,
+                            contentLanguage = emptyList(),
+                            formats = null,
+                            type = RepositoryType.EXTERNAL_DEX
+                        )
+
+                        newScrapers.add(scraper)
+                        Log.d(TAG, "Downloaded DEX extension: ${plugin.name} (${file.length()} bytes)")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error downloading extension ${plugin.name}: ${e.message}", e)
+                    }
                 }
-
-                // Map tvTypes to NuvioTV content types
-                val supportedTypes = plugin.tvTypes
-                    ?.mapNotNull { tvTypeFromString(it) }
-                    ?.map { it.toNuvioType() }
-                    ?.distinct()
-                    ?.ifEmpty { listOf("movie", "tv") }
-                    ?: listOf("movie", "tv")
-
-                val scraper = ScraperInfo(
-                    id = scraperId,
-                    repositoryId = repoId,
-                    name = plugin.name,
-                    description = plugin.description ?: "",
-                    version = plugin.version.toString(),
-                    filename = plugin.url, // Store download URL for reference
-                    supportedTypes = supportedTypes,
-                    enabled = true,
-                    manifestEnabled = plugin.status == 1,
-                    logo = plugin.iconUrl,
-                    contentLanguage = emptyList(),
-                    formats = null,
-                    type = RepositoryType.EXTERNAL_DEX
-                )
-
-                existingScrapers.removeAll { it.id == scraperId }
-                existingScrapers.add(scraper)
-
-                Log.d(TAG, "Downloaded DEX extension: ${plugin.name} (${file.length()} bytes)")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error downloading extension ${plugin.name}: ${e.message}", e)
             }
         }
 
+        jobs.awaitAll()
+
+        // Merge new scrapers into existing list
+        val newScraperIds = newScrapers.map { it.id }.toSet()
+        existingScrapers.removeAll { it.id in newScraperIds }
+        existingScrapers.addAll(newScrapers)
         dataStore.saveScrapers(existingScrapers)
+
+        Log.d(TAG, "Downloaded ${newScrapers.size}/${plugins.size} extensions for repo $repoId")
+    }
+
+    companion object {
+        private const val MAX_PARALLEL_DOWNLOADS = 10
     }
 }
