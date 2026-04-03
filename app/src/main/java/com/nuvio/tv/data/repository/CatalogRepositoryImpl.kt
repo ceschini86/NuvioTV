@@ -63,12 +63,17 @@ class CatalogRepositoryImpl @Inject constructor(
 
         when (val result = safeApiCall { api.getCatalog(url) }) {
             is NetworkResult.Success -> {
-                val items = result.data.metas.map { it.toDomain() }
+                val items = result.data.metas.map { it.toDomain() }.distinctBy { it.id }
                 Log.d(
                     TAG,
                     "Catalog fetch success addonId=$addonId type=$type catalogId=$catalogId items=${items.size}"
                 )
 
+                val effectiveSkipStep = if (skip == 0 && items.isNotEmpty() && items.size < skipStep) {
+                    items.size
+                } else {
+                    skipStep
+                }
                 val catalogRow = CatalogRow(
                     addonId = addonId,
                     addonName = addonName,
@@ -80,9 +85,9 @@ class CatalogRepositoryImpl @Inject constructor(
                     items = items,
                     isLoading = false,
                     hasMore = supportsSkip && items.isNotEmpty(),
-                    currentPage = if (skipStep > 0) skip / skipStep else 0,
+                    currentPage = if (effectiveSkipStep > 0) skip / effectiveSkipStep else 0,
                     supportsSkip = supportsSkip,
-                    skipStep = skipStep
+                    skipStep = effectiveSkipStep
                 )
                 catalogCache[cacheKey] = catalogRow
                 // Only emit fresh data if it differs from cache
@@ -153,6 +158,6 @@ class CatalogRepositoryImpl @Inject constructor(
             .sortedBy { it.key }
             .joinToString("&") { "${it.key}=${it.value}" }
         val normalizedBaseUrl = addonBaseUrl.trim().trimEnd('/').lowercase()
-        return "${normalizedBaseUrl}_${addonId}_${type}_${catalogId}_${skip}_${skipStep}_${normalizedArgs}"
+        return "${normalizedBaseUrl}_${addonId}_${type}_${catalogId}_${skip}_${normalizedArgs}"
     }
 }

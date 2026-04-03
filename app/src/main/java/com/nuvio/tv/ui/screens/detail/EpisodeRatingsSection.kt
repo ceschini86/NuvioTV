@@ -129,7 +129,7 @@ fun EpisodeRatingsSection(
                     modifier = Modifier.padding(horizontal = 48.dp, vertical = 12.dp)
                 )
             }
-            !error.isNullOrBlank() -> {
+            error != null -> {
                 Text(
                     text = error,
                     style = MaterialTheme.typography.bodyMedium,
@@ -188,7 +188,7 @@ fun EpisodeRatingsSection(
                             scale = CardDefaults.scale(focusedScale = 1f)
                         ) {
                             Text(
-                                text = "S$season",
+                                text = stringResource(R.string.ratings_season_label, season),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = NuvioColors.TextPrimary,
                                 modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
@@ -242,7 +242,7 @@ fun EpisodeRatingsSection(
                                 verticalArrangement = Arrangement.Center
                             ) {
                                 Text(
-                                    text = "E${episodeRating.episodeNumber}",
+                                    text = stringResource(R.string.ratings_episode_label, episodeRating.episodeNumber),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = episodeRating.chipTextColor
                                 )

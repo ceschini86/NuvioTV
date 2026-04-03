@@ -96,6 +96,8 @@ fun SearchScreen(
     onOpenDiscover: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val watchedMovieIds by viewModel.watchedMovieIds.collectAsState()
+    val watchedSeriesIds by viewModel.watchedSeriesIds.collectAsState()
     val context = LocalContext.current
     val view = LocalView.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -405,8 +407,7 @@ fun SearchScreen(
 
     Box(
         modifier = Modifier
-            .fillMaxSize()
-            .background(NuvioColors.Background),
+            .fillMaxSize(),
         contentAlignment = Alignment.TopCenter
     ) {
         if (isDiscoverMode) {
@@ -426,6 +427,7 @@ fun SearchScreen(
                         submitCurrentQuery(uiState.query.trim())
                     },
                     showVoiceSearch = isVoiceSearchAvailable,
+                    isVoiceListening = isVoiceListening,
                     onVoiceSearch = launchVoiceSearch,
                     onMoveToResults = { focusResults = true },
                     onOpenDiscover = onOpenDiscover,
@@ -477,6 +479,7 @@ fun SearchScreen(
                             submitCurrentQuery(uiState.query.trim())
                         },
                         showVoiceSearch = isVoiceSearchAvailable,
+                        isVoiceListening = isVoiceListening,
                         onVoiceSearch = launchVoiceSearch,
                         onMoveToResults = {
                             focusResults = true
@@ -552,8 +555,8 @@ fun SearchScreen(
                     uiState.catalogRows.isEmpty() || uiState.catalogRows.none { it.items.isNotEmpty() } -> {
                         item {
                             EmptyScreenState(
-                                title = "No Results",
-                                subtitle = "Try searching with different keywords",
+                                title = stringResource(R.string.search_no_results_title),
+                                subtitle = stringResource(R.string.search_no_results_subtitle),
                                 icon = Icons.Default.Search
                             )
                         }
@@ -574,6 +577,10 @@ fun SearchScreen(
                                 showAddonName = uiState.catalogAddonNameEnabled,
                                 showCatalogTypeSuffix = uiState.catalogTypeSuffixEnabled,
                                 enableRowFocusRestorer = false,
+                                isItemWatched = { item ->
+                                    val isSeries = item.apiType.equals("series", ignoreCase = true) || item.apiType.equals("tv", ignoreCase = true)
+                                    if (isSeries) item.id in watchedSeriesIds else item.id in watchedMovieIds
+                                },
                                 focusedItemIndex = if (focusResults && index == 0) 0 else -1,
                                 onItemFocused = {
                                     if (focusResults) {
@@ -673,6 +680,7 @@ private fun SearchInputField(
     onQueryChanged: (String) -> Unit,
     onSubmit: () -> Unit,
     showVoiceSearch: Boolean,
+    isVoiceListening: Boolean,
     onVoiceSearch: () -> Unit,
     onMoveToResults: () -> Unit,
     onOpenDiscover: () -> Unit,
@@ -704,7 +712,7 @@ private fun SearchInputField(
         ) {
             Icon(
                 imageVector = Icons.Default.Explore,
-                contentDescription = "Open discover",
+                contentDescription = stringResource(R.string.cd_open_discover),
                 tint = NuvioColors.TextPrimary
             )
         }
@@ -725,19 +733,19 @@ private fun SearchInputField(
                     .onFocusChanged { isVoiceButtonFocused = it.isFocused }
                     .size(56.dp)
                     .border(
-                        width = if (isVoiceButtonFocused) 2.dp else 1.dp,
-                        color = if (isVoiceButtonFocused) NuvioColors.FocusRing else NuvioColors.Border,
+                        width = if (isVoiceButtonFocused || isVoiceListening) 2.dp else 1.dp,
+                        color = if (isVoiceListening) NuvioColors.Primary else if (isVoiceButtonFocused) NuvioColors.FocusRing else NuvioColors.Border,
                         shape = RoundedCornerShape(12.dp)
                     )
                     .background(
-                        color = NuvioColors.BackgroundCard,
+                        color = if (isVoiceListening) NuvioColors.Primary.copy(alpha = 0.2f) else NuvioColors.BackgroundCard,
                         shape = RoundedCornerShape(12.dp)
                     )
             ) {
                 Icon(
                     imageVector = Icons.Default.Mic,
-                    contentDescription = "Voice search",
-                    tint = NuvioColors.TextPrimary
+                    contentDescription = stringResource(R.string.cd_voice_search),
+                    tint = if (isVoiceListening) NuvioColors.Primary else NuvioColors.TextPrimary
                 )
             }
 

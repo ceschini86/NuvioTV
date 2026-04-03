@@ -29,7 +29,7 @@ class WatchedItemsPreferences @Inject constructor(
     private val gson = Gson()
     private val watchedItemsKey = stringSetPreferencesKey("watched_items")
 
-    private val allItems: Flow<List<WatchedItem>> = profileManager.activeProfileId.flatMapLatest { pid ->
+    internal val allItems: Flow<List<WatchedItem>> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { preferences ->
             val raw = preferences[watchedItemsKey] ?: emptySet()
             raw.mapNotNull { json ->
@@ -131,6 +131,12 @@ class WatchedItemsPreferences @Inject constructor(
             preferences[watchedItemsKey] = deduped.values
                 .map { gson.toJson(it) }
                 .toSet()
+        }
+    }
+
+    suspend fun clearAll() {
+        store().edit { preferences ->
+            preferences.remove(watchedItemsKey)
         }
     }
 }
