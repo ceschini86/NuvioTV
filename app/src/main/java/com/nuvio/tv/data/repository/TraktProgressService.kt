@@ -148,6 +148,11 @@ class TraktProgressService @Inject constructor(
     private val metadataState = MutableStateFlow<Map<String, ContentMetadata>>(emptyMap())
     private val watchedMoviesState = MutableStateFlow<Set<String>>(emptySet())
     private val watchedShowSeedsState = MutableStateFlow<List<WatchProgress>>(emptyList())
+    /** Content IDs of shows hidden from progress_watched on Trakt (dropped shows). */
+    @Volatile
+    private var hiddenProgressShowIds: Set<String> = emptySet()
+    private var hiddenProgressShowsLoadedAtMs: Long = 0L
+    private val hiddenProgressShowsMutex = Mutex()
     /** Per-show set of watched (season, episode) pairs from /sync/watched/shows. */
     @Volatile
     private var watchedShowEpisodesMap: Map<String, Set<Pair<Int, Int>>> = emptyMap()
@@ -348,6 +353,7 @@ class TraktProgressService @Inject constructor(
             remote.forEach { mergedByKey[progressKey(it)] = it }
             validOptimistic.forEach { (key, value) -> mergedByKey[key] = value }
             mergedByKey.values
+                .filter { !isShowHiddenFromProgress(it.contentId) }
                 .map { enrichWithMetadata(it, metadata) }
                 .sortedByDescending { it.lastWatched }
         }
@@ -364,6 +370,7 @@ class TraktProgressService @Inject constructor(
             .onStart {
                 emit(getWatchedShowSeedsSnapshot(forceRefresh = false))
             }
+            .map { seeds -> seeds.filter { !isShowHiddenFromProgress(it.contentId) } }
             .distinctUntilChanged()
     }
 
@@ -795,6 +802,7 @@ class TraktProgressService @Inject constructor(
         if (!force && watchedShowSeedsStale && hasLoadedWatchedShowSeeds) {
             getWatchedShowSeedsSnapshot(forceRefresh = true)
         }
+        ensureHiddenProgressShows(force = force)
     }
 
     private suspend fun hasActivityChanged(): Boolean {
@@ -931,6 +939,62 @@ class TraktProgressService @Inject constructor(
         if (!entry.hasCompletedSnapshot) return false
         if (entry.activityVersion != episodeProgressActivityVersion.get()) return false
         return now - entry.updatedAtMs <= episodeProgressCacheTtlMs
+    }
+
+    /**
+     * Returns true if the given content ID belongs to a show hidden from
+     * Trakt's "progress watched" section (i.e. dropped/abandoned shows).
+     */
+    fun isShowHiddenFromProgress(contentId: String): Boolean {
+        val ids = hiddenProgressShowIds
+        if (ids.isEmpty()) return false
+        val canonical = canonicalLookupKey(contentId)
+        return ids.contains(contentId) || ids.contains(canonical)
+    }
+
+    private suspend fun ensureHiddenProgressShows(force: Boolean) {
+        val now = System.currentTimeMillis()
+        val ttlMs = 30 * 60_000L // refresh every 30 minutes
+        hiddenProgressShowsMutex.withLock {
+            if (!force && hiddenProgressShowsLoadedAtMs > 0 && now - hiddenProgressShowsLoadedAtMs < ttlMs) {
+                return
+            }
+        }
+        val ids = fetchHiddenProgressShowIds()
+        hiddenProgressShowsMutex.withLock {
+            hiddenProgressShowIds = ids
+            hiddenProgressShowsLoadedAtMs = System.currentTimeMillis()
+        }
+        trace("hidden-progress-shows refreshed: ${ids.size} shows")
+    }
+
+    private suspend fun fetchHiddenProgressShowIds(): Set<String> {
+        val allIds = mutableSetOf<String>()
+        var page = 1
+        val limit = 100
+        while (true) {
+            val response = traktAuthService.executeAuthorizedRequest { authHeader ->
+                traktApi.getHiddenItems(
+                    authorization = authHeader,
+                    section = "progress_watched",
+                    type = "show",
+                    page = page,
+                    limit = limit
+                )
+            } ?: break
+            if (!response.isSuccessful) break
+            val items = response.body().orEmpty()
+            if (items.isEmpty()) break
+            for (item in items) {
+                val ids = item.show?.ids ?: continue
+                ids.imdb?.takeIf { it.isNotBlank() }?.let { allIds.add(it) }
+                ids.tmdb?.let { allIds.add("tmdb:$it") }
+                ids.trakt?.let { allIds.add("trakt:$it") }
+            }
+            if (items.size < limit) break
+            page++
+        }
+        return allIds
     }
 
     private suspend fun getWatchedMoviesSnapshot(forceRefresh: Boolean): Set<String> {
