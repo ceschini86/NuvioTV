@@ -19,6 +19,7 @@ internal fun PlayerRuntimeController.attachMpvView(view: NuvioMpvSurfaceView?) {
     if (mpvInitializationInProgress) return
 
     runCatching {
+        performPendingMpvHardRestartIfNeeded(view)
         view.setMedia(currentStreamUrl, currentHeaders)
         view.setPlaybackSpeed(_uiState.value.playbackSpeed)
         view.applyAudioAmplificationDb(_uiState.value.audioAmplificationDb)
@@ -96,6 +97,7 @@ internal fun PlayerRuntimeController.initializeMpvPlayer(
     }
 
     runCatching {
+        performPendingMpvHardRestartIfNeeded(view)
         view.setMedia(url, headers)
         view.setPlaybackSpeed(_uiState.value.playbackSpeed)
         view.applyAudioAmplificationDb(_uiState.value.audioAmplificationDb)
@@ -257,12 +259,28 @@ internal fun PlayerRuntimeController.updateMpvAvailableTracks() {
     )
 }
 
+private fun PlayerRuntimeController.performPendingMpvHardRestartIfNeeded(view: NuvioMpvSurfaceView): Boolean {
+    if (!pendingMpvHardRestartOnNextAttach) return false
+    pendingMpvHardRestartOnNextAttach = false
+    runCatching {
+        Log.d(PlayerRuntimeController.TAG, "Applying MPV hard restart for startup engine failover")
+        view.releasePlayer()
+    }.onFailure {
+        Log.w(PlayerRuntimeController.TAG, "MPV hard restart release failed: ${it.message}")
+    }
+    return true
+}
+
 internal fun PlayerRuntimeController.applyPendingMpvSeekIfNeeded(
     view: NuvioMpvSurfaceView,
     currentPositionMs: Long = view.currentPositionMs().coerceAtLeast(0L),
     durationMs: Long = view.durationMs().coerceAtLeast(0L)
 ) {
     if (!isUsingMpvEngine()) return
+    if (delayMpvResumeSeekUntilVideoTrack) {
+        if (!view.hasVideoTrackSelectedNow()) return
+        delayMpvResumeSeekUntilVideoTrack = false
+    }
 
     val state = _uiState.value
     val savedResume = pendingResumeProgress

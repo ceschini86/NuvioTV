@@ -41,6 +41,9 @@ internal fun PlayerRuntimeController.maybeAutoSwitchInternalPlayerOnStartupError
         )
     }
 
+    val switchingToMpv = targetEngine == InternalPlayerEngine.MVP_PLAYER
+    pendingMpvHardRestartOnNextAttach = switchingToMpv
+    delayMpvResumeSeekUntilVideoTrack = switchingToMpv
     releasePlayer(flushPlaybackState = false)
     initializePlayer(
         url = currentStreamUrl,

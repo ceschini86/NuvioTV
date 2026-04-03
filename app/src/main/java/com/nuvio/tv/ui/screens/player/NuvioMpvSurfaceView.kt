@@ -37,12 +37,47 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
         }
         applyHeaders(headers)
         if (hasQueuedInitialMedia) {
+            ensureSurfaceAttachedIfAlreadyAvailable()
             mpv.command("loadfile", url, "replace")
         } else {
             playFile(url)
+            ensureSurfaceAttachedIfAlreadyAvailable()
             hasQueuedInitialMedia = true
         }
         lastMediaRequestKey = requestKey
+        applyDefaultTrackSelectionForNewLoad()
+    }
+
+    fun setMediaUsingLoadfile(url: String, headers: Map<String, String>) {
+        ensureInitialized()
+        val requestKey = buildMediaRequestKey(url = url, headers = headers)
+        applyHeaders(headers)
+        if (holder.surface?.isValid == true) {
+            ensureSurfaceAttachedIfAlreadyAvailable()
+            mpv.command("loadfile", url, "replace")
+        } else {
+            playFile(url)
+        }
+        hasQueuedInitialMedia = true
+        lastMediaRequestKey = requestKey
+        applyDefaultTrackSelectionForNewLoad()
+    }
+
+    private fun ensureSurfaceAttachedIfAlreadyAvailable() {
+        if (!initialized) return
+        val currentHolder = holder
+        val currentSurface = currentHolder.surface ?: return
+        if (!currentSurface.isValid) return
+        runCatching {
+            // Some fallback transitions initialize mpv after the Surface is already alive.
+            // In that path, SurfaceHolder callback may not fire again, so force attach.
+            surfaceCreated(currentHolder)
+        }.onFailure {
+            Log.w(TAG, "Failed to force MPV surface attach: ${it.message}")
+        }
+    }
+
+    private fun applyDefaultTrackSelectionForNewLoad() {
         runCatching {
             // Let mpv choose the default streams for every new media load.
             mpv.setPropertyString("aid", "auto")
@@ -91,6 +126,12 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
         if (!initialized) return 0L
         val seconds = mpv.getPropertyDouble("duration/full") ?: 0.0
         return (seconds * 1000.0).roundToLong().coerceAtLeast(0L)
+    }
+
+    fun hasVideoTrackSelectedNow(): Boolean {
+        if (!initialized) return false
+        val vid = mpv.getPropertyString("vid")?.trim()
+        return !vid.isNullOrBlank() && !vid.equals("no", ignoreCase = true)
     }
 
     fun setPlaybackSpeed(speed: Float) {
