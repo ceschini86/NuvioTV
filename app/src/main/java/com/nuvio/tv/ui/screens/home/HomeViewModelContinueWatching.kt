@@ -54,6 +54,78 @@ private data class ContinueWatchingSettingsSnapshot(
     val watchedItemsVersion: Int  // triggers re-evaluation when watched items change
 )
 
+/**
+ * Lightweight projection of [Meta] for CW pipeline caching.
+ * Drops cast, crew, trailers, streams, release dates, and other heavy fields
+ * that are never read by continue-watching or badge evaluation.
+ */
+internal data class CwMetaSummary(
+    val id: String,
+    val name: String,
+    val poster: String?,
+    val backdropUrl: String?,
+    val logo: String?,
+    val description: String?,
+    val genres: List<String>,
+    val releaseInfo: String?,
+    val imdbRating: Float?,
+    val videos: List<CwVideoSummary>
+) {
+    fun watchableEpisodes(): List<CwVideoSummary> {
+        val today = java.time.LocalDate.now()
+        val candidates = videos.filter { (it.season ?: 0) > 0 }
+        val unavailableSeasons = candidates.groupBy { it.season }
+            .filter { (_, eps) ->
+                val first = eps.minByOrNull { it.episode ?: Int.MAX_VALUE } ?: return@filter false
+                val released = first.released?.substringBefore('T')?.trim()
+                if (!released.isNullOrBlank()) {
+                    try {
+                        return@filter java.time.LocalDate.parse(
+                            released,
+                            java.time.format.DateTimeFormatter.ISO_LOCAL_DATE
+                        ).isAfter(today)
+                    } catch (_: java.time.format.DateTimeParseException) { }
+                }
+                false
+            }.keys
+        return if (unavailableSeasons.isEmpty()) candidates
+        else candidates.filter { it.season !in unavailableSeasons }
+    }
+}
+
+internal data class CwVideoSummary(
+    val id: String,
+    val title: String?,
+    val released: String?,
+    val thumbnail: String?,
+    val season: Int?,
+    val episode: Int?,
+    val overview: String?
+)
+
+private fun Meta.toCwSummary(): CwMetaSummary = CwMetaSummary(
+    id = id,
+    name = name,
+    poster = poster,
+    backdropUrl = backdropUrl,
+    logo = logo,
+    description = description,
+    genres = genres,
+    releaseInfo = releaseInfo,
+    imdbRating = imdbRating,
+    videos = videos.map { v ->
+        CwVideoSummary(
+            id = v.id,
+            title = v.title,
+            released = v.released,
+            thumbnail = v.thumbnail,
+            season = v.season,
+            episode = v.episode,
+            overview = v.overview
+        )
+    }
+)
+
 private data class NextUpTmdbData(
     val thumbnail: String?,
     val backdrop: String?,
@@ -276,8 +348,9 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                     // multiple TMDB shows share the same IMDB (e.g. Monsters vs Monster).
                     val idsToResolve = allWatchedEpisodes.keys.filter { contentId ->
                         val cacheKey = "series:$contentId"
-                        synchronized(cwMetaCache) {
-                            cwMetaCache[cacheKey] == null && cwMetaCache["tv:$contentId"] == null
+                        synchronized(cwBadgeEpisodeCache) {
+                            !cwBadgeEpisodeCache.containsKey(cacheKey) &&
+                                !cwBadgeEpisodeCache.containsKey("tv:$contentId")
                         }
                     }
                     val staleIds = fullyWatchedSeriesIds.filterStaleIds(idsToResolve.toSet())
@@ -290,27 +363,15 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                         sortedStaleIds.map { contentId ->
                             async {
                                 metaSemaphore.withPermit {
-                                    // Skip if meta was already cached by a prior resolve
-                                    // (e.g. IMDB resolve cached it, TMDB alias not needed).
-                                    val alreadyCached = synchronized(cwMetaCache) {
-                                        cwMetaCache["series:$contentId"] != null || cwMetaCache["tv:$contentId"] != null
+                                    // Skip if already resolved by a prior task in this batch.
+                                    val alreadyCached = synchronized(cwBadgeEpisodeCache) {
+                                        cwBadgeEpisodeCache.containsKey("series:$contentId") ||
+                                            cwBadgeEpisodeCache.containsKey("tv:$contentId")
                                     }
                                     if (!alreadyCached) {
-                                        val seed = WatchProgress(
-                                            contentId = contentId,
-                                            contentType = "series",
-                                            name = contentId,
-                                            poster = null, backdrop = null, logo = null,
-                                            videoId = contentId,
-                                            season = 1, episode = 1,
-                                            episodeTitle = null,
-                                            position = 1L, duration = 1L,
-                                            lastWatched = 0L,
-                                            progressPercent = 100f
-                                        )
-                                        val meta = resolveMetaForProgress(seed, cwMetaCache)
-                                        if (meta == null) {
-                                            Log.d("CW-BADGE", "meta resolve FAILED for $contentId")
+                                        val episodes = resolveBadgeEpisodes(contentId, "series")
+                                        if (episodes == null) {
+                                            Log.d("CW-BADGE", "badge resolve FAILED for $contentId")
                                         }
                                     }
                                     if (resolvedCount.incrementAndGet() % batchSize == 0) {
@@ -325,9 +386,10 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                     publishBadgeUpdate(allWatchedEpisodes)
                 }
 
-                // --- CW next-up injection (Nuvio sync only) ---
+                // --- CW next-up injection ---
                 // Discover next-up items for older seeds and inject release alerts into CW.
-                if (!useTraktProgress) {
+                // Hidden (dropped) shows are already filtered out by observeWatchedShowSeeds().
+                if (true) {
                     val recentSeedContentIds = recentNextUpSeeds
                         .filter { isSeriesTypeCW(it.contentType) && it.season != null && it.episode != null }
                         .map { it.contentId }
@@ -418,12 +480,8 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                 debug.markPhase("merge-lightweight")
                 // Include previously discovered older next-up items so they survive collectLatest restarts.
                 // Skip for Trakt users — async inject is disabled for them.
-                val persistedOlderItems = if (!useTraktProgress) {
-                    synchronized(discoveredOlderNextUpItems) {
-                        discoveredOlderNextUpItems.toList()
-                    }
-                } else {
-                    emptyList()
+                val persistedOlderItems = synchronized(discoveredOlderNextUpItems) {
+                    discoveredOlderNextUpItems.toList()
                 }
                 val allNextUpItems = if (persistedOlderItems.isNotEmpty()) {
                     val recentIds = nextUpItems.map { it.info.contentId }.toSet()
@@ -581,8 +639,8 @@ private fun choosePreferredNextUpSeed(items: List<WatchProgress>): WatchProgress
 
 private suspend fun HomeViewModel.resolveCurrentEpisodeDescription(
     progress: WatchProgress,
-    meta: Meta,
-    video: Video?,
+    meta: CwMetaSummary,
+    video: CwVideoSummary?,
     debug: CwDebugSession? = null
 ): String? {
     if (isSeriesTypeCW(progress.contentType)) {
@@ -615,7 +673,7 @@ private suspend fun HomeViewModel.resolveCurrentEpisodeDescription(
     return meta.description?.takeIf { it.isNotBlank() }
 }
 
-private fun resolveVideoForProgress(progress: WatchProgress, meta: Meta): Video? {
+private fun resolveVideoForProgress(progress: WatchProgress, meta: CwMetaSummary): CwVideoSummary? {
     if (!isSeriesTypeCW(progress.contentType)) return null
     val videos = meta.videos.filter { it.season != null && it.episode != null && it.season != 0 }
     if (videos.isEmpty()) return null
@@ -866,7 +924,7 @@ private suspend fun HomeViewModel.buildNextUpItem(
 
 private suspend fun HomeViewModel.enrichInProgressItem(
     item: ContinueWatchingItem.InProgress,
-    metaCache: MutableMap<String, Meta?>,
+    metaCache: MutableMap<String, CwMetaSummary?>,
     debug: CwDebugSession? = null
 ): ContinueWatchingItem.InProgress {
     val meta = resolveMetaForProgress(item.progress, metaCache, debug)
@@ -911,7 +969,7 @@ private suspend fun HomeViewModel.enrichInProgressItem(
 
 private suspend fun HomeViewModel.enrichNextUpItem(
     item: ContinueWatchingItem.NextUp,
-    metaCache: MutableMap<String, Meta?>,
+    metaCache: MutableMap<String, CwMetaSummary?>,
     debug: CwDebugSession? = null
 ): ContinueWatchingItem.NextUp {
     val progressSeed = item.info.toProgressSeed()
@@ -1081,7 +1139,7 @@ private suspend fun HomeViewModel.findNextUpEpisodeFromMetaSeed(
                 nextSeason,
                 nextEpisode
             ),
-        episodeTitle = nextVideo.title.takeIf { it.isNotBlank() },
+        episodeTitle = nextVideo.title?.takeIf { it.isNotBlank() },
         released = nextVideo.released?.trim()?.takeIf { it.isNotBlank() },
         hasAired = nextVideo.released?.let(::parseEpisodeReleaseDate)?.let { !it.isAfter(LocalDate.now(ZoneId.systemDefault())) } ?: true,
         airDateLabel = nextVideo.released?.let(::parseEpisodeReleaseDate)?.takeIf { it.isAfter(LocalDate.now(ZoneId.systemDefault())) }?.let(::formatEpisodeAirDateLabel),
@@ -1101,23 +1159,23 @@ private suspend fun HomeViewModel.findNextUpEpisodeFromMetaSeed(
 
 private fun resolveNextUpVideoFromMeta(
     progress: WatchProgress,
-    meta: Meta
-): Video? = resolveNextUpVideoFromMeta(progress, meta, showUnairedNextUp = true)
+    meta: CwMetaSummary
+): CwVideoSummary? = resolveNextUpVideoFromMeta(progress, meta, showUnairedNextUp = true)
 
 private const val CW_NEXT_UP_NEW_SEASON_UNAIRED_WINDOW_DAYS = 7
 
 private fun resolveNextUpVideoFromMeta(
     progress: WatchProgress,
-    meta: Meta,
+    meta: CwMetaSummary,
     showUnairedNextUp: Boolean
-): Video? {
+): CwVideoSummary? {
     val episodes = meta.videos
         .filter { video ->
             val season = video.season
             val episode = video.episode
             season != null && episode != null && season != 0
         }
-        .sortedWith(compareBy<Video>({ it.season ?: Int.MAX_VALUE }, { it.episode ?: Int.MAX_VALUE }))
+        .sortedWith(compareBy<CwVideoSummary>({ it.season ?: Int.MAX_VALUE }, { it.episode ?: Int.MAX_VALUE }))
 
     if (episodes.isEmpty()) return null
 
@@ -1182,9 +1240,9 @@ private const val CW_META_NEGATIVE_CACHE_TTL_MS = 5 * 60_000L
 
 private suspend fun HomeViewModel.resolveMetaForProgress(
     progress: WatchProgress,
-    metaCache: MutableMap<String, Meta?>,
+    metaCache: MutableMap<String, CwMetaSummary?>,
     debug: CwDebugSession? = null
-): Meta? {
+): CwMetaSummary? {
     val startedAtMs = SystemClock.elapsedRealtime()
     val cacheKey = "${progress.contentType}:${progress.contentId}"
     synchronized(metaCache) {
@@ -1215,7 +1273,7 @@ private suspend fun HomeViewModel.resolveMetaForProgress(
     val typeCandidates = listOf(progress.contentType, "series", "tv").distinct()
     val useAllAddons = externalMetaPrefetchEnabled
     val resolved = run {
-        var meta: Meta? = null
+        var summary: CwMetaSummary? = null
         var attempts = 0
         for (type in typeCandidates) {
             for (candidateId in idCandidates) {
@@ -1268,18 +1326,18 @@ private suspend fun HomeViewModel.resolveMetaForProgress(
                     }
                     NetworkResult.Loading -> Unit
                 }
-                meta = (result as? NetworkResult.Success<*>)?.data as? Meta
-                if (meta != null) break
+                summary = ((result as? NetworkResult.Success<*>)?.data as? Meta)?.toCwSummary()
+                if (summary != null) break
             }
-            if (meta != null) break
+            if (summary != null) break
         }
         debug?.recordMetaResolveFinished(
             progress = progress,
             elapsedMs = SystemClock.elapsedRealtime() - startedAtMs,
-            success = meta != null,
+            success = summary != null,
             attempts = attempts
         )
-        meta
+        summary
     }
 
     synchronized(metaCache) {
@@ -1291,6 +1349,61 @@ private suspend fun HomeViewModel.resolveMetaForProgress(
         }
     }
     return resolved
+}
+
+/**
+ * Lightweight badge-only resolve: fetches meta and extracts only aired (season, episode) pairs.
+ * Does NOT populate cwMetaCache — keeps memory minimal for badge evaluation of many series.
+ */
+private suspend fun HomeViewModel.resolveBadgeEpisodes(
+    contentId: String,
+    contentType: String
+): Set<Pair<Int, Int>>? {
+    val cacheKey = "$contentType:$contentId"
+    synchronized(cwBadgeEpisodeCache) {
+        if (cwBadgeEpisodeCache.containsKey(cacheKey)) return cwBadgeEpisodeCache[cacheKey]
+    }
+    // If cwMetaCache already has this entry, extract from there instead of fetching again.
+    val existingSummary = synchronized(cwMetaCache) {
+        cwMetaCache[cacheKey] ?: cwMetaCache["series:$contentId"] ?: cwMetaCache["tv:$contentId"]
+    }
+    if (existingSummary != null) {
+        val episodes = existingSummary.watchableEpisodes()
+            .mapNotNull { v -> v.season?.let { s -> v.episode?.let { e -> s to e } } }
+            .toSet()
+        synchronized(cwBadgeEpisodeCache) { cwBadgeEpisodeCache[cacheKey] = episodes }
+        return episodes
+    }
+
+    val idCandidates = buildList {
+        add(contentId)
+        if (contentId.startsWith("tmdb:")) add(contentId.substringAfter(':'))
+        if (contentId.startsWith("trakt:")) add(contentId.substringAfter(':'))
+    }.distinct()
+    val typeCandidates = listOf(contentType, "series", "tv").distinct()
+    val useAllAddons = externalMetaPrefetchEnabled
+
+    for (type in typeCandidates) {
+        for (candidateId in idCandidates) {
+            val result = withTimeoutOrNull(2_500L) {
+                if (useAllAddons) {
+                    metaRepository.getMetaFromAllAddons(type = type, id = candidateId)
+                        .first { it !is NetworkResult.Loading }
+                } else {
+                    metaRepository.getMetaFromPrimaryAddon(type = type, id = candidateId)
+                        .first { it !is NetworkResult.Loading }
+                }
+            } ?: continue
+            val meta = (result as? NetworkResult.Success<*>)?.data as? Meta ?: continue
+            val episodes = meta.watchableEpisodes()
+                .mapNotNull { v -> v.season?.let { s -> v.episode?.let { e -> s to e } } }
+                .toSet()
+            synchronized(cwBadgeEpisodeCache) { cwBadgeEpisodeCache[cacheKey] = episodes }
+            return episodes
+        }
+    }
+    synchronized(cwBadgeEpisodeCache) { cwBadgeEpisodeCache[cacheKey] = null }
+    return null
 }
 
 private fun buildLightweightEpisodeVideoId(
@@ -1369,28 +1482,17 @@ private fun HomeViewModel.publishBadgeUpdate(
     val updatedFullyWatched = allWatchedEpisodes.keys
         .filter { contentId ->
             val cacheKey = "series:$contentId"
-            val meta = synchronized(cwMetaCache) { cwMetaCache[cacheKey] }
-                ?: synchronized(cwMetaCache) { cwMetaCache["tv:$contentId"] }
-            if (meta == null) return@filter false
-            val episodes = meta.watchableEpisodes()
-            if (episodes.isEmpty()) return@filter false
+            val airedEpisodes = synchronized(cwBadgeEpisodeCache) {
+                cwBadgeEpisodeCache[cacheKey] ?: cwBadgeEpisodeCache["tv:$contentId"]
+            } ?: return@filter false
+            if (airedEpisodes.isEmpty()) return@filter false
             val watched = allWatchedEpisodes[contentId] ?: return@filter false
-            val allWatched = episodes.all { (it.season!! to it.episode!!) in watched }
+            val allWatched = airedEpisodes.all { it in watched }
             if (!allWatched && watched.isNotEmpty()) {
-                Log.d("CW-BADGE", "NOT fully watched: $contentId episodes=${episodes.size} watched=${watched.size}")
-                // Track IDs we've validated as NOT fully watched so we can remove stale badges.
+                Log.d("CW-BADGE", "NOT fully watched: $contentId episodes=${airedEpisodes.size} watched=${watched.size}")
                 validatedNotFullyWatched.add(contentId)
-                val metaId = meta.id.takeIf { it.isNotBlank() && it != contentId }
-                if (metaId != null) validatedNotFullyWatched.add(metaId)
             }
             allWatched
-        }
-        .flatMap { contentId ->
-            val cacheKey = "series:$contentId"
-            val meta = synchronized(cwMetaCache) { cwMetaCache[cacheKey] }
-                ?: synchronized(cwMetaCache) { cwMetaCache["tv:$contentId"] }
-            val metaId = meta?.id?.takeIf { it.isNotBlank() && it != contentId }
-            if (metaId != null) listOf(contentId, metaId) else listOf(contentId)
         }
         .toSet()
     // Merge with persisted badges — don't remove badges we haven't re-validated yet.
@@ -1444,7 +1546,7 @@ private fun parseEpisodeReleaseInstant(raw: String?): Instant? {
 
 private suspend fun HomeViewModel.resolveContinueWatchingTmdbData(
     progress: WatchProgress,
-    meta: Meta,
+    meta: CwMetaSummary,
     season: Int,
     episode: Int,
     debug: CwDebugSession? = null
@@ -1558,7 +1660,7 @@ private suspend fun HomeViewModel.resolveContinueWatchingTmdbData(
 
 private suspend fun HomeViewModel.resolveTmdbIdForNextUp(
     progress: WatchProgress,
-    meta: Meta,
+    meta: CwMetaSummary,
     debug: CwDebugSession? = null
 ): String? {
     val startedAtMs = SystemClock.elapsedRealtime()
@@ -1609,8 +1711,8 @@ private suspend fun HomeViewModel.resolveTmdbIdForNextUp(
 
 private fun shouldFetchNextUpTmdbFallback(
     item: ContinueWatchingItem.NextUp,
-    meta: Meta,
-    video: Video?
+    meta: CwMetaSummary,
+    video: CwVideoSummary?
 ): Boolean {
     val hasName = !(item.info.name.isBlank() && meta.name.isNullOrBlank())
     val hasPoster = item.info.poster != null || meta.poster.normalizeImageUrl() != null
