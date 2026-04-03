@@ -1,0 +1,146 @@
+package com.nuvio.tv.data.local
+
+import android.content.Context
+import android.util.Log
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import com.nuvio.tv.core.profile.ProfileManager
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import java.io.File
+import javax.inject.Inject
+import javax.inject.Singleton
+
+data class CwEnrichmentEntry(
+    val episodeThumbnail: String? = null,
+    val episodeDescription: String? = null,
+    val episodeImdbRating: Float? = null,
+    val genres: List<String> = emptyList(),
+    val releaseInfo: String? = null,
+    val backdrop: String? = null,
+    val poster: String? = null,
+    val logo: String? = null,
+    val name: String? = null
+)
+
+data class CachedNextUpItem(
+    val contentId: String,
+    val contentType: String,
+    val name: String,
+    val poster: String?,
+    val backdrop: String?,
+    val logo: String?,
+    val videoId: String,
+    val season: Int,
+    val episode: Int,
+    val episodeTitle: String?,
+    val episodeDescription: String? = null,
+    val thumbnail: String?,
+    val released: String? = null,
+    val hasAired: Boolean = true,
+    val airDateLabel: String? = null,
+    val lastWatched: Long,
+    val imdbRating: Float? = null,
+    val genres: List<String> = emptyList(),
+    val releaseInfo: String? = null,
+    val sortTimestamp: Long,
+    val releaseTimestamp: Long? = null,
+    val isReleaseAlert: Boolean = false,
+    val isNewSeasonRelease: Boolean = false,
+    val seedSeason: Int? = null,
+    val seedEpisode: Int? = null
+)
+
+@Singleton
+class ContinueWatchingEnrichmentCache @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val profileManager: ProfileManager
+) {
+    companion object {
+        private const val TAG = "CwEnrichCache"
+    }
+
+    private val gson = Gson()
+    private val mutex = Mutex()
+
+    private fun cacheFile(): File {
+        val profileId = profileManager.activeProfileId.value
+        val dir = File(context.cacheDir, "cw_enrichment")
+        dir.mkdirs()
+        return File(dir, "profile_${profileId}.json")
+    }
+
+    suspend fun getAll(): Map<String, CwEnrichmentEntry> = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            try {
+                val file = cacheFile()
+                if (!file.exists()) return@withContext emptyMap()
+                val json = file.readText()
+                gson.fromJson(json, object : TypeToken<Map<String, CwEnrichmentEntry>>() {}.type)
+                    ?: emptyMap()
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to read cache: ${e.message}")
+                emptyMap()
+            }
+        }
+    }
+
+    suspend fun save(entries: Map<String, CwEnrichmentEntry>) = withContext(Dispatchers.IO) {
+        if (entries.isEmpty()) return@withContext
+        mutex.withLock {
+            try {
+                val file = cacheFile()
+                val existing = if (file.exists()) {
+                    try {
+                        gson.fromJson<Map<String, CwEnrichmentEntry>>(
+                            file.readText(),
+                            object : TypeToken<Map<String, CwEnrichmentEntry>>() {}.type
+                        ) ?: emptyMap()
+                    } catch (_: Exception) { emptyMap() }
+                } else emptyMap()
+                val merged = existing.toMutableMap()
+                merged.putAll(entries)
+                file.writeText(gson.toJson(merged))
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to write cache: ${e.message}")
+            }
+        }
+    }
+
+    // --- Next Up snapshot cache ---
+
+    private fun nextUpFile(): File {
+        val profileId = profileManager.activeProfileId.value
+        val dir = File(context.cacheDir, "cw_enrichment")
+        dir.mkdirs()
+        return File(dir, "nextup_${profileId}.json")
+    }
+
+    suspend fun getNextUpSnapshot(): List<CachedNextUpItem> = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            try {
+                val file = nextUpFile()
+                if (!file.exists()) return@withContext emptyList()
+                gson.fromJson(file.readText(), object : TypeToken<List<CachedNextUpItem>>() {}.type)
+                    ?: emptyList()
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to read next-up cache: ${e.message}")
+                emptyList()
+            }
+        }
+    }
+
+    suspend fun saveNextUpSnapshot(items: List<CachedNextUpItem>) = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            try {
+                val file = nextUpFile()
+                file.writeText(gson.toJson(items))
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to write next-up cache: ${e.message}")
+            }
+        }
+    }
+}

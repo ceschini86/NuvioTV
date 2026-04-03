@@ -263,13 +263,39 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                     cutoffMs = cutoffMs
                 )
 
+                // Load cached enrichment data to avoid flicker on lightweight render
+                val (cachedEnrichment, cachedNextUp) = coroutineScope {
+                    val enrichmentDeferred = async(Dispatchers.IO) {
+                        runCatching { cwEnrichmentCache.getAll() }.getOrDefault(emptyMap())
+                    }
+                    val nextUpDeferred = async(Dispatchers.IO) {
+                        runCatching { cwEnrichmentCache.getNextUpSnapshot() }.getOrDefault(emptyList())
+                    }
+                    enrichmentDeferred.await() to nextUpDeferred.await()
+                }
                 val inProgressOnly = buildList {
                     deduplicateInProgress(
                         recentItems.filter { shouldTreatAsInProgressForContinueWatching(it) }
                     ).forEach { progress ->
+                        val cached = cachedEnrichment[progress.contentId]
+                        val displayProgress = if (cached != null && (cached.backdrop != null || cached.poster != null || cached.logo != null || cached.name != null)) {
+                            progress.copy(
+                                backdrop = cached.backdrop ?: progress.backdrop,
+                                poster = cached.poster ?: progress.poster,
+                                logo = cached.logo ?: progress.logo,
+                                name = cached.name?.takeIf { it.isNotBlank() } ?: progress.name
+                            )
+                        } else {
+                            progress
+                        }
                         add(
                             ContinueWatchingItem.InProgress(
-                                progress = progress
+                                progress = displayProgress,
+                                episodeThumbnail = cached?.episodeThumbnail,
+                                episodeDescription = cached?.episodeDescription,
+                                episodeImdbRating = cached?.episodeImdbRating,
+                                genres = cached?.genres ?: emptyList(),
+                                releaseInfo = cached?.releaseInfo
                             )
                         )
                     }
@@ -277,8 +303,45 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                 debug.recordInProgressCount(inProgressOnly.size)
 
                 debug.markPhase("render-in-progress")
-                if (inProgressOnly.isNotEmpty()) {
-                    val initialItems = inProgressOnly.map { it as ContinueWatchingItem }
+                // Render in-progress items + cached next-up immediately
+                val cachedNextUpItems = cachedNextUp.mapNotNull { cached ->
+                    // Skip if this show is already in-progress (suppression)
+                    if (inProgressOnly.any { it.progress.contentId == cached.contentId }) return@mapNotNull null
+                    ContinueWatchingItem.NextUp(
+                        info = NextUpInfo(
+                            contentId = cached.contentId,
+                            contentType = cached.contentType,
+                            name = cached.name,
+                            poster = cached.poster,
+                            backdrop = cached.backdrop,
+                            logo = cached.logo,
+                            videoId = cached.videoId,
+                            season = cached.season,
+                            episode = cached.episode,
+                            episodeTitle = cached.episodeTitle,
+                            episodeDescription = cached.episodeDescription,
+                            thumbnail = cached.thumbnail,
+                            released = cached.released,
+                            hasAired = cached.hasAired,
+                            airDateLabel = cached.airDateLabel,
+                            lastWatched = cached.lastWatched,
+                            imdbRating = cached.imdbRating,
+                            genres = cached.genres,
+                            releaseInfo = cached.releaseInfo,
+                            sortTimestamp = cached.sortTimestamp,
+                            releaseTimestamp = cached.releaseTimestamp,
+                            isReleaseAlert = cached.isReleaseAlert,
+                            isNewSeasonRelease = cached.isNewSeasonRelease,
+                            seedSeason = cached.seedSeason,
+                            seedEpisode = cached.seedEpisode
+                        )
+                    )
+                }
+                if (inProgressOnly.isNotEmpty() || cachedNextUpItems.isNotEmpty()) {
+                    val initialItems = mergeContinueWatchingItems(
+                        inProgressItems = inProgressOnly,
+                        nextUpItems = cachedNextUpItems
+                    )
                     _uiState.update { state ->
                         if (state.continueWatchingItems == initialItems) {
                             state
@@ -308,9 +371,21 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                             val partialCount = partialNextUpItems.size
                             if (partialCount > publishedPartialNextUpCount.get()) {
                                 publishedPartialNextUpCount.set(partialCount)
+                                val cachedPartialNextUp = partialNextUpItems.map { nextUp ->
+                                    val cached = cachedEnrichment[nextUp.info.contentId]
+                                    if (cached != null) {
+                                        nextUp.copy(info = nextUp.info.copy(
+                                            thumbnail = cached.episodeThumbnail ?: nextUp.info.thumbnail,
+                                            backdrop = cached.backdrop ?: nextUp.info.backdrop,
+                                            poster = cached.poster ?: nextUp.info.poster,
+                                            logo = cached.logo ?: nextUp.info.logo,
+                                            name = cached.name?.takeIf { it.isNotBlank() } ?: nextUp.info.name
+                                        ))
+                                    } else nextUp
+                                }
                                 val partialItems = mergeContinueWatchingItems(
                                     inProgressItems = inProgressOnly,
-                                    nextUpItems = partialNextUpItems
+                                    nextUpItems = cachedPartialNextUp
                                 )
                                 _uiState.update { state ->
                                     if (state.continueWatchingItems == partialItems) {
@@ -497,7 +572,22 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                 }
                 val normalItems = mergeContinueWatchingItems(
                     inProgressItems = inProgressOnly,
-                    nextUpItems = allNextUpItems
+                    nextUpItems = allNextUpItems.map { nextUp ->
+                        val cached = cachedEnrichment[nextUp.info.contentId]
+                        if (cached != null) {
+                            nextUp.copy(info = nextUp.info.copy(
+                                thumbnail = cached.episodeThumbnail ?: nextUp.info.thumbnail,
+                                backdrop = cached.backdrop ?: nextUp.info.backdrop,
+                                poster = cached.poster ?: nextUp.info.poster,
+                                logo = cached.logo ?: nextUp.info.logo,
+                                name = cached.name?.takeIf { it.isNotBlank() } ?: nextUp.info.name,
+                                episodeDescription = cached.episodeDescription ?: nextUp.info.episodeDescription,
+                                imdbRating = cached.episodeImdbRating ?: nextUp.info.imdbRating,
+                                genres = cached.genres.ifEmpty { nextUp.info.genres },
+                                releaseInfo = cached.releaseInfo ?: nextUp.info.releaseInfo
+                            ))
+                        } else nextUp
+                    }
                 )
 
                 _uiState.update { state ->
@@ -513,8 +603,11 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                 )
 
                 // Rich metadata only runs after the final lightweight CW list is visible.
+                // If TMDB enrichment is enabled for CW, skip grace period to avoid
+                // visible flash of addon data being replaced by TMDB data.
                 debug.markPhase("enrichment-grace")
-                val enrichmentDelayMs = remainingContinueWatchingEnrichmentGraceMs()
+                val tmdbEnrichCw = currentTmdbSettings.enabled && currentTmdbSettings.enrichContinueWatching
+                val enrichmentDelayMs = if (tmdbEnrichCw) 0L else remainingContinueWatchingEnrichmentGraceMs()
                 debug.recordEnrichmentDelay(enrichmentDelayMs)
                 if (enrichmentDelayMs > 0L) {
                     delay(enrichmentDelayMs)
@@ -926,15 +1019,33 @@ private suspend fun HomeViewModel.enrichInProgressItem(
     item: ContinueWatchingItem.InProgress,
     metaCache: MutableMap<String, CwMetaSummary?>,
     debug: CwDebugSession? = null
-): ContinueWatchingItem.InProgress {
+): ContinueWatchingItem.InProgress = coroutineScope {
+    val shouldEnrichTmdb = currentTmdbSettings.enabled && currentTmdbSettings.enrichContinueWatching
+
+    // Start TMDB ID resolve early (cache hit = instant, cache miss = network)
+    val tmdbIdDeferred = if (shouldEnrichTmdb) {
+        async(Dispatchers.IO) {
+            val cacheKey = "${item.progress.contentType}:${item.progress.contentId}"
+            synchronized(cwTmdbIdCache) { cwTmdbIdCache[cacheKey] }
+                ?: runCatching { tmdbService.ensureTmdbId(item.progress.contentId, item.progress.contentType) }.getOrNull()
+        }
+    } else null
+
     val meta = resolveMetaForProgress(item.progress, metaCache, debug)
     if (meta == null) {
-        return item
+        return@coroutineScope item
     }
     val video = resolveVideoForProgress(item.progress, meta)
     val genres = meta.genres.take(3)
     val releaseInfo = meta.releaseInfo?.takeIf { it.isNotBlank() }
-    val tmdbData = if (currentTmdbSettings.enabled && currentTmdbSettings.enrichContinueWatching) {
+    val tmdbData = if (shouldEnrichTmdb) {
+        // Use early-resolved TMDB ID if available, otherwise fall back to full resolve
+        val earlyTmdbId = tmdbIdDeferred?.await()
+        if (earlyTmdbId != null) {
+            // Cache the early result
+            val cacheKey = "${item.progress.contentType}:${item.progress.contentId}"
+            synchronized(cwTmdbIdCache) { cwTmdbIdCache[cacheKey] = earlyTmdbId }
+        }
         resolveContinueWatchingTmdbData(
             progress = item.progress,
             meta = meta,
@@ -945,7 +1056,7 @@ private suspend fun HomeViewModel.enrichInProgressItem(
     } else null
     val imdbRating = tmdbData?.rating?.toFloat() ?: meta.imdbRating
     val settings = currentTmdbSettings
-    return item.copy(
+    item.copy(
         progress = item.progress.copy(
             name = if (settings.useBasicInfo) tmdbData?.name ?: meta.name else meta.name,
             poster = item.progress.poster ?: meta.poster.normalizeImageUrl() ?: if (settings.useArtwork) tmdbData?.poster.normalizeImageUrl() else null,
@@ -971,11 +1082,28 @@ private suspend fun HomeViewModel.enrichNextUpItem(
     item: ContinueWatchingItem.NextUp,
     metaCache: MutableMap<String, CwMetaSummary?>,
     debug: CwDebugSession? = null
-): ContinueWatchingItem.NextUp {
+): ContinueWatchingItem.NextUp = coroutineScope {
     val progressSeed = item.info.toProgressSeed()
-    val meta = resolveMetaForProgress(progressSeed, metaCache, debug) ?: return item
+    val shouldEnrichTmdb = currentTmdbSettings.enabled && currentTmdbSettings.enrichContinueWatching
+
+    // Start TMDB ID resolve early (cache hit = instant, cache miss = network)
+    val tmdbIdDeferred = if (shouldEnrichTmdb) {
+        async(Dispatchers.IO) {
+            val cacheKey = "${progressSeed.contentType}:${progressSeed.contentId}"
+            synchronized(cwTmdbIdCache) { cwTmdbIdCache[cacheKey] }
+                ?: runCatching { tmdbService.ensureTmdbId(progressSeed.contentId, progressSeed.contentType) }.getOrNull()
+        }
+    } else null
+
+    val meta = resolveMetaForProgress(progressSeed, metaCache, debug) ?: return@coroutineScope item
     val video = resolveNextUpVideoFromMeta(progressSeed, meta)
-    val tmdbData = if (currentTmdbSettings.enabled && currentTmdbSettings.enrichContinueWatching) {
+
+    val tmdbData = if (shouldEnrichTmdb) {
+        val earlyTmdbId = tmdbIdDeferred?.await()
+        if (earlyTmdbId != null) {
+            val cacheKey = "${progressSeed.contentType}:${progressSeed.contentId}"
+            synchronized(cwTmdbIdCache) { cwTmdbIdCache[cacheKey] = earlyTmdbId }
+        }
         resolveContinueWatchingTmdbData(
             progress = progressSeed,
             meta = meta,
@@ -1035,7 +1163,7 @@ private suspend fun HomeViewModel.enrichNextUpItem(
                 "released=${enrichedInfo.released} hasAired=${enrichedInfo.hasAired} title=${enrichedInfo.episodeTitle}"
         )
     }
-    return item.copy(info = enrichedInfo)
+    item.copy(info = enrichedInfo)
 }
 
 private suspend fun HomeViewModel.findNextUpEpisodeFromMetaSeed(
@@ -1434,13 +1562,98 @@ private fun HomeViewModel.persistLocalContinueWatchingMetadata(
     val localItems = enrichedItems.indices.mapNotNull { index ->
         val original = originalItems.getOrNull(index) as? ContinueWatchingItem.InProgress ?: return@mapNotNull null
         val enriched = enrichedItems.getOrNull(index) as? ContinueWatchingItem.InProgress ?: return@mapNotNull null
-        enriched.progress
-            .takeIf { it.source == WatchProgress.SOURCE_LOCAL }
-            ?.takeIf { it != original.progress }
+        enriched.progress.takeIf { it != original.progress }
     }
-    if (localItems.isEmpty()) return
+
+    // Persist enrichment extras for InProgress items
+    val enrichmentEntries = mutableMapOf<String, com.nuvio.tv.data.local.CwEnrichmentEntry>()
+    enrichedItems.forEach { item ->
+        when (item) {
+            is ContinueWatchingItem.InProgress -> {
+                val hasData = item.episodeThumbnail != null ||
+                    item.episodeDescription != null ||
+                    item.episodeImdbRating != null ||
+                    item.genres.isNotEmpty() ||
+                    item.releaseInfo != null ||
+                    item.progress.backdrop != null ||
+                    item.progress.poster != null
+                if (hasData) {
+                    enrichmentEntries[item.progress.contentId] = com.nuvio.tv.data.local.CwEnrichmentEntry(
+                        episodeThumbnail = item.episodeThumbnail,
+                        episodeDescription = item.episodeDescription,
+                        episodeImdbRating = item.episodeImdbRating,
+                        genres = item.genres,
+                        releaseInfo = item.releaseInfo,
+                        backdrop = item.progress.backdrop,
+                        poster = item.progress.poster,
+                        logo = item.progress.logo,
+                        name = item.progress.name.takeIf { it.isNotBlank() }
+                    )
+                }
+            }
+            is ContinueWatchingItem.NextUp -> {
+                val info = item.info
+                val hasData = info.thumbnail != null ||
+                    info.backdrop != null ||
+                    info.poster != null ||
+                    info.episodeDescription != null
+                if (hasData) {
+                    enrichmentEntries[info.contentId] = com.nuvio.tv.data.local.CwEnrichmentEntry(
+                        episodeThumbnail = info.thumbnail,
+                        episodeDescription = info.episodeDescription,
+                        episodeImdbRating = info.imdbRating,
+                        genres = info.genres,
+                        releaseInfo = info.releaseInfo,
+                        backdrop = info.backdrop,
+                        poster = info.poster,
+                        logo = info.logo,
+                        name = info.name.takeIf { it.isNotBlank() }
+                    )
+                }
+            }
+        }
+    }
+
+    // Build next-up snapshot for cache
+    val nextUpSnapshot = enrichedItems.mapNotNull { item ->
+        val nextUp = item as? ContinueWatchingItem.NextUp ?: return@mapNotNull null
+        val info = nextUp.info
+        com.nuvio.tv.data.local.CachedNextUpItem(
+            contentId = info.contentId,
+            contentType = info.contentType,
+            name = info.name,
+            poster = info.poster,
+            backdrop = info.backdrop,
+            logo = info.logo,
+            videoId = info.videoId,
+            season = info.season,
+            episode = info.episode,
+            episodeTitle = info.episodeTitle,
+            episodeDescription = info.episodeDescription,
+            thumbnail = info.thumbnail,
+            released = info.released,
+            hasAired = info.hasAired,
+            airDateLabel = info.airDateLabel,
+            lastWatched = info.lastWatched,
+            imdbRating = info.imdbRating,
+            genres = info.genres,
+            releaseInfo = info.releaseInfo,
+            sortTimestamp = info.sortTimestamp,
+            releaseTimestamp = info.releaseTimestamp,
+            isReleaseAlert = info.isReleaseAlert,
+            isNewSeasonRelease = info.isNewSeasonRelease,
+            seedSeason = info.seedSeason,
+            seedEpisode = info.seedEpisode
+        )
+    }
 
     viewModelScope.launch(Dispatchers.IO) {
+        if (enrichmentEntries.isNotEmpty()) {
+            runCatching { cwEnrichmentCache.save(enrichmentEntries) }
+        }
+        if (nextUpSnapshot.isNotEmpty()) {
+            runCatching { cwEnrichmentCache.saveNextUpSnapshot(nextUpSnapshot) }
+        }
         val persistable = localItems.filter { it.hasRenderableMetadata() }
         if (persistable.isEmpty()) return@launch
         runCatching {

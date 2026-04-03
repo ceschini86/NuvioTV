@@ -1773,6 +1773,94 @@ class TraktProgressService @Inject constructor(
             !notFound.episodes.isNullOrEmpty()
     }
 
+    /**
+     * Mark multiple episodes as watched on Trakt in a single API call.
+     * Groups episodes by show and sends one POST /sync/history request.
+     */
+    suspend fun markSeasonWatchedBatch(progressList: List<WatchProgress>) {
+        if (progressList.isEmpty()) return
+        val first = progressList.first()
+        val ids = resolveHistoryIds(first)
+        if (!ids.hasAnyId()) {
+            Log.w(TAG, "markSeasonWatchedBatch: no valid Trakt IDs for ${first.contentId}")
+            return
+        }
+        val watchedAt = toTraktUtcDateTime(System.currentTimeMillis())
+        val episodesBySeason = progressList
+            .filter { it.season != null && it.episode != null }
+            .groupBy { it.season!! }
+            .mapValues { (_, episodes) ->
+                episodes.map { ep ->
+                    TraktHistoryEpisodeAddDto(
+                        number = ep.episode,
+                        watchedAt = watchedAt
+                    )
+                }
+            }
+        val body = TraktHistoryAddRequestDto(
+            shows = listOf(
+                TraktHistoryShowAddDto(
+                    title = first.name.takeIf { it.isNotBlank() },
+                    year = null,
+                    ids = ids,
+                    seasons = episodesBySeason.map { (seasonNumber, episodes) ->
+                        TraktHistorySeasonAddDto(
+                            number = seasonNumber,
+                            episodes = episodes
+                        )
+                    }
+                )
+            )
+        )
+        Log.d(TAG, "markSeasonWatchedBatch: ${progressList.size} episodes in ${episodesBySeason.size} season(s)")
+        val response = traktAuthService.executeAuthorizedWriteRequest { authHeader ->
+            traktApi.addHistory(authHeader, body)
+        }
+        Log.d(TAG, "markSeasonWatchedBatch RESPONSE: code=${response?.code()} " +
+            "added=${response?.body()?.added}")
+        if (response?.isSuccessful != true) {
+            throw IllegalStateException("Trakt batch mark watched failed (${response?.code()})")
+        }
+        refreshNow()
+    }
+
+    /**
+     * Remove multiple episodes from Trakt history in a single API call.
+     */
+    suspend fun removeSeasonFromHistoryBatch(
+        contentId: String,
+        episodes: List<Pair<Int, Int>>
+    ) {
+        if (episodes.isEmpty()) return
+        val ids = toTraktIds(parseContentIds(contentId))
+        if (!ids.hasAnyId()) {
+            Log.w(TAG, "removeSeasonFromHistoryBatch: no valid Trakt IDs for $contentId")
+            return
+        }
+        val episodesBySeason = episodes.groupBy { it.first }
+        val body = TraktHistoryRemoveRequestDto(
+            shows = listOf(
+                TraktHistoryShowRemoveDto(
+                    ids = ids,
+                    seasons = episodesBySeason.map { (seasonNumber, eps) ->
+                        TraktHistorySeasonRemoveDto(
+                            number = seasonNumber,
+                            episodes = eps.map { (_, episodeNumber) ->
+                                TraktHistoryEpisodeRemoveDto(number = episodeNumber)
+                            }
+                        )
+                    }
+                )
+            )
+        )
+        Log.d(TAG, "removeSeasonFromHistoryBatch: ${episodes.size} episodes in ${episodesBySeason.size} season(s)")
+        val response = traktAuthService.executeAuthorizedWriteRequest { authHeader ->
+            traktApi.removeHistory(authHeader, body)
+        }
+        Log.d(TAG, "removeSeasonFromHistoryBatch RESPONSE: code=${response?.code()}")
+        refreshNow()
+    }
+
     private fun buildHistoryAddRequest(
         progress: WatchProgress,
         title: String?,

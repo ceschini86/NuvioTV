@@ -16,6 +16,7 @@ import com.nuvio.tv.data.local.MDBListSettingsDataStore
 import com.nuvio.tv.data.local.TmdbSettingsDataStore
 import com.nuvio.tv.data.local.TraktSettingsDataStore
 import com.nuvio.tv.data.local.WatchedItemsPreferences
+import com.nuvio.tv.data.local.ContinueWatchingEnrichmentCache
 import com.nuvio.tv.data.trailer.TrailerService
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogDescriptor
@@ -67,7 +68,8 @@ class HomeViewModel @Inject constructor(
     internal val mdbListRepository: MDBListRepository,
     internal val trailerService: TrailerService,
     internal val watchedItemsPreferences: WatchedItemsPreferences,
-    internal val watchedSeriesStateHolder: com.nuvio.tv.data.local.WatchedSeriesStateHolder
+    internal val watchedSeriesStateHolder: com.nuvio.tv.data.local.WatchedSeriesStateHolder,
+    internal val cwEnrichmentCache: ContinueWatchingEnrichmentCache
 ) : ViewModel() {
     companion object {
         internal const val TAG = "HomeViewModel"
