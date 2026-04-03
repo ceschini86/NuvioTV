@@ -148,7 +148,7 @@ class TraktProgressService @Inject constructor(
     private val metadataState = MutableStateFlow<Map<String, ContentMetadata>>(emptyMap())
     private val watchedMoviesState = MutableStateFlow<Set<String>>(emptySet())
     private val watchedShowSeedsState = MutableStateFlow<List<WatchProgress>>(emptyList())
-    /** Content IDs of shows hidden from progress_watched on Trakt (dropped shows). */
+    /** Content IDs of shows dropped on Trakt (from users/hidden/dropped). */
     @Volatile
     private var hiddenProgressShowIds: Set<String> = emptySet()
     private var hiddenProgressShowsLoadedAtMs: Long = 0L
@@ -976,7 +976,7 @@ class TraktProgressService @Inject constructor(
             val response = traktAuthService.executeAuthorizedRequest { authHeader ->
                 traktApi.getHiddenItems(
                     authorization = authHeader,
-                    section = "progress_watched",
+                    section = "dropped",
                     type = "show",
                     page = page,
                     limit = limit
