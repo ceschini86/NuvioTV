@@ -14,18 +14,6 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
-data class CwEnrichmentEntry(
-    val episodeThumbnail: String? = null,
-    val episodeDescription: String? = null,
-    val episodeImdbRating: Float? = null,
-    val genres: List<String> = emptyList(),
-    val releaseInfo: String? = null,
-    val backdrop: String? = null,
-    val poster: String? = null,
-    val logo: String? = null,
-    val name: String? = null
-)
-
 data class CachedNextUpItem(
     val contentId: String,
     val contentType: String,
@@ -87,50 +75,6 @@ class ContinueWatchingEnrichmentCache @Inject constructor(
 
     private val gson = Gson()
     private val mutex = Mutex()
-
-    private fun cacheFile(): File {
-        val profileId = profileManager.activeProfileId.value
-        val dir = File(context.cacheDir, "cw_enrichment")
-        dir.mkdirs()
-        return File(dir, "profile_${profileId}.json")
-    }
-
-    suspend fun getAll(): Map<String, CwEnrichmentEntry> = withContext(Dispatchers.IO) {
-        mutex.withLock {
-            try {
-                val file = cacheFile()
-                if (!file.exists()) return@withContext emptyMap()
-                val json = file.readText()
-                gson.fromJson(json, object : TypeToken<Map<String, CwEnrichmentEntry>>() {}.type)
-                    ?: emptyMap()
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to read cache: ${e.message}")
-                emptyMap()
-            }
-        }
-    }
-
-    suspend fun save(entries: Map<String, CwEnrichmentEntry>) = withContext(Dispatchers.IO) {
-        if (entries.isEmpty()) return@withContext
-        mutex.withLock {
-            try {
-                val file = cacheFile()
-                val existing = if (file.exists()) {
-                    try {
-                        gson.fromJson<Map<String, CwEnrichmentEntry>>(
-                            file.readText(),
-                            object : TypeToken<Map<String, CwEnrichmentEntry>>() {}.type
-                        ) ?: emptyMap()
-                    } catch (_: Exception) { emptyMap() }
-                } else emptyMap()
-                val merged = existing.toMutableMap()
-                merged.putAll(entries)
-                file.writeText(gson.toJson(merged))
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to write cache: ${e.message}")
-            }
-        }
-    }
 
     // --- Next Up snapshot cache ---
 

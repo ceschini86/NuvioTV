@@ -263,32 +263,32 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                     cutoffMs = cutoffMs
                 )
 
-                // Load cached enrichment data to avoid flicker on lightweight render
-                val (cachedEnrichment, cachedNextUp, cachedInProgress) = coroutineScope {
-                    val enrichmentDeferred = async(Dispatchers.IO) {
-                        runCatching { cwEnrichmentCache.getAll() }.getOrDefault(emptyMap())
-                    }
+                // Load cached CW snapshots for instant render before Trakt responds
+                val (cachedNextUp, cachedInProgress) = coroutineScope {
                     val nextUpDeferred = async(Dispatchers.IO) {
                         runCatching { cwEnrichmentCache.getNextUpSnapshot() }.getOrDefault(emptyList())
                     }
                     val inProgressDeferred = async(Dispatchers.IO) {
                         runCatching { cwEnrichmentCache.getInProgressSnapshot() }.getOrDefault(emptyList())
                     }
-                    Triple(enrichmentDeferred.await(), nextUpDeferred.await(), inProgressDeferred.await())
+                    nextUpDeferred.await() to inProgressDeferred.await()
                 }
+                // Build enrichment lookup from cached snapshots (replaces old CwEnrichmentEntry)
+                val cachedEnrichmentFromInProgress = cachedInProgress.associateBy { it.contentId }
+                val cachedEnrichmentFromNextUp = cachedNextUp.associateBy { it.contentId }
                 val inProgressOnly = buildList {
                     val liveInProgress = deduplicateInProgress(
                         recentItems.filter { shouldTreatAsInProgressForContinueWatching(it) }
                     )
                     if (liveInProgress.isNotEmpty()) {
                         liveInProgress.forEach { progress ->
-                            val cached = cachedEnrichment[progress.contentId]
-                            val displayProgress = if (cached != null && (cached.backdrop != null || cached.poster != null || cached.logo != null || cached.name != null)) {
+                            val cached = cachedEnrichmentFromInProgress[progress.contentId]
+                            val displayProgress = if (cached != null && (cached.backdrop != null || cached.poster != null || cached.logo != null || cached.name.isNotBlank())) {
                                 progress.copy(
                                     backdrop = cached.backdrop ?: progress.backdrop,
                                     poster = cached.poster ?: progress.poster,
                                     logo = cached.logo ?: progress.logo,
-                                    name = cached.name?.takeIf { it.isNotBlank() } ?: progress.name
+                                    name = cached.name.takeIf { it.isNotBlank() } ?: progress.name
                                 )
                             } else {
                                 progress
@@ -407,14 +407,14 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                             if (partialCount > publishedPartialNextUpCount.get()) {
                                 publishedPartialNextUpCount.set(partialCount)
                                 val cachedPartialNextUp = partialNextUpItems.map { nextUp ->
-                                    val cached = cachedEnrichment[nextUp.info.contentId]
+                                    val cached = cachedEnrichmentFromNextUp[nextUp.info.contentId]
                                     if (cached != null) {
                                         nextUp.copy(info = nextUp.info.copy(
-                                            thumbnail = cached.episodeThumbnail ?: nextUp.info.thumbnail,
+                                            thumbnail = cached.thumbnail ?: nextUp.info.thumbnail,
                                             backdrop = cached.backdrop ?: nextUp.info.backdrop,
                                             poster = cached.poster ?: nextUp.info.poster,
                                             logo = cached.logo ?: nextUp.info.logo,
-                                            name = cached.name?.takeIf { it.isNotBlank() } ?: nextUp.info.name
+                                            name = cached.name.takeIf { it.isNotBlank() } ?: nextUp.info.name
                                         ))
                                     } else nextUp
                                 }
@@ -608,16 +608,16 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                 val normalItems = mergeContinueWatchingItems(
                     inProgressItems = inProgressOnly,
                     nextUpItems = allNextUpItems.map { nextUp ->
-                        val cached = cachedEnrichment[nextUp.info.contentId]
+                        val cached = cachedEnrichmentFromNextUp[nextUp.info.contentId]
                         if (cached != null) {
                             nextUp.copy(info = nextUp.info.copy(
-                                thumbnail = cached.episodeThumbnail ?: nextUp.info.thumbnail,
+                                thumbnail = cached.thumbnail ?: nextUp.info.thumbnail,
                                 backdrop = cached.backdrop ?: nextUp.info.backdrop,
                                 poster = cached.poster ?: nextUp.info.poster,
                                 logo = cached.logo ?: nextUp.info.logo,
-                                name = cached.name?.takeIf { it.isNotBlank() } ?: nextUp.info.name,
+                                name = cached.name.takeIf { it.isNotBlank() } ?: nextUp.info.name,
                                 episodeDescription = cached.episodeDescription ?: nextUp.info.episodeDescription,
-                                imdbRating = cached.episodeImdbRating ?: nextUp.info.imdbRating,
+                                imdbRating = cached.imdbRating ?: nextUp.info.imdbRating,
                                 genres = cached.genres.ifEmpty { nextUp.info.genres },
                                 releaseInfo = cached.releaseInfo ?: nextUp.info.releaseInfo
                             ))
@@ -961,7 +961,7 @@ private suspend fun HomeViewModel.enrichVisibleContinueWatchingItems(
     true
 }
 
-private fun mergeContinueWatchingItems(
+internal fun mergeContinueWatchingItems(
     inProgressItems: List<ContinueWatchingItem.InProgress>,
     nextUpItems: List<ContinueWatchingItem.NextUp>
 ): List<ContinueWatchingItem> {
@@ -1600,55 +1600,6 @@ private fun HomeViewModel.persistLocalContinueWatchingMetadata(
         enriched.progress.takeIf { it != original.progress }
     }
 
-    // Persist enrichment extras for InProgress items
-    val enrichmentEntries = mutableMapOf<String, com.nuvio.tv.data.local.CwEnrichmentEntry>()
-    enrichedItems.forEach { item ->
-        when (item) {
-            is ContinueWatchingItem.InProgress -> {
-                val hasData = item.episodeThumbnail != null ||
-                    item.episodeDescription != null ||
-                    item.episodeImdbRating != null ||
-                    item.genres.isNotEmpty() ||
-                    item.releaseInfo != null ||
-                    item.progress.backdrop != null ||
-                    item.progress.poster != null
-                if (hasData) {
-                    enrichmentEntries[item.progress.contentId] = com.nuvio.tv.data.local.CwEnrichmentEntry(
-                        episodeThumbnail = item.episodeThumbnail,
-                        episodeDescription = item.episodeDescription,
-                        episodeImdbRating = item.episodeImdbRating,
-                        genres = item.genres,
-                        releaseInfo = item.releaseInfo,
-                        backdrop = item.progress.backdrop,
-                        poster = item.progress.poster,
-                        logo = item.progress.logo,
-                        name = item.progress.name.takeIf { it.isNotBlank() }
-                    )
-                }
-            }
-            is ContinueWatchingItem.NextUp -> {
-                val info = item.info
-                val hasData = info.thumbnail != null ||
-                    info.backdrop != null ||
-                    info.poster != null ||
-                    info.episodeDescription != null
-                if (hasData) {
-                    enrichmentEntries[info.contentId] = com.nuvio.tv.data.local.CwEnrichmentEntry(
-                        episodeThumbnail = info.thumbnail,
-                        episodeDescription = info.episodeDescription,
-                        episodeImdbRating = info.imdbRating,
-                        genres = info.genres,
-                        releaseInfo = info.releaseInfo,
-                        backdrop = info.backdrop,
-                        poster = info.poster,
-                        logo = info.logo,
-                        name = info.name.takeIf { it.isNotBlank() }
-                    )
-                }
-            }
-        }
-    }
-
     // Build next-up snapshot for cache
     val nextUpSnapshot = enrichedItems.mapNotNull { item ->
         val nextUp = item as? ContinueWatchingItem.NextUp ?: return@mapNotNull null
@@ -1710,9 +1661,6 @@ private fun HomeViewModel.persistLocalContinueWatchingMetadata(
     }
 
     viewModelScope.launch(Dispatchers.IO) {
-        if (enrichmentEntries.isNotEmpty()) {
-            runCatching { cwEnrichmentCache.save(enrichmentEntries) }
-        }
         if (nextUpSnapshot.isNotEmpty()) {
             runCatching { cwEnrichmentCache.saveNextUpSnapshot(nextUpSnapshot) }
         }

@@ -299,6 +299,79 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun loadContinueWatching() {
+        // Immediately restore last known CW from disk cache for instant display.
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val cachedInProgress = runCatching { cwEnrichmentCache.getInProgressSnapshot() }.getOrDefault(emptyList())
+            val cachedNextUp = runCatching { cwEnrichmentCache.getNextUpSnapshot() }.getOrDefault(emptyList())
+            if (cachedInProgress.isEmpty() && cachedNextUp.isEmpty()) return@launch
+            val inProgressItems = cachedInProgress.map { cached ->
+                ContinueWatchingItem.InProgress(
+                    progress = com.nuvio.tv.domain.model.WatchProgress(
+                        contentId = cached.contentId,
+                        contentType = cached.contentType,
+                        name = cached.name,
+                        poster = cached.poster,
+                        backdrop = cached.backdrop,
+                        logo = cached.logo,
+                        videoId = cached.videoId,
+                        season = cached.season,
+                        episode = cached.episode,
+                        episodeTitle = cached.episodeTitle,
+                        position = cached.position,
+                        duration = cached.duration,
+                        lastWatched = cached.lastWatched,
+                        progressPercent = cached.progressPercent
+                    ),
+                    episodeThumbnail = cached.episodeThumbnail,
+                    episodeDescription = cached.episodeDescription,
+                    episodeImdbRating = cached.episodeImdbRating,
+                    genres = cached.genres,
+                    releaseInfo = cached.releaseInfo
+                )
+            }
+            val nextUpItems = cachedNextUp.map { cached ->
+                ContinueWatchingItem.NextUp(
+                    info = NextUpInfo(
+                        contentId = cached.contentId,
+                        contentType = cached.contentType,
+                        name = cached.name,
+                        poster = cached.poster,
+                        backdrop = cached.backdrop,
+                        logo = cached.logo,
+                        videoId = cached.videoId,
+                        season = cached.season,
+                        episode = cached.episode,
+                        episodeTitle = cached.episodeTitle,
+                        episodeDescription = cached.episodeDescription,
+                        thumbnail = cached.thumbnail,
+                        released = cached.released,
+                        hasAired = cached.hasAired,
+                        airDateLabel = cached.airDateLabel,
+                        lastWatched = cached.lastWatched,
+                        imdbRating = cached.imdbRating,
+                        genres = cached.genres,
+                        releaseInfo = cached.releaseInfo,
+                        sortTimestamp = cached.sortTimestamp,
+                        releaseTimestamp = cached.releaseTimestamp,
+                        isReleaseAlert = cached.isReleaseAlert,
+                        isNewSeasonRelease = cached.isNewSeasonRelease,
+                        seedSeason = cached.seedSeason,
+                        seedEpisode = cached.seedEpisode
+                    )
+                )
+            }
+            val items = mergeContinueWatchingItems(
+                inProgressItems = inProgressItems,
+                nextUpItems = nextUpItems
+            )
+            if (items.isNotEmpty()) {
+                _uiState.update { state ->
+                    if (state.continueWatchingItems.isEmpty()) {
+                        state.copy(continueWatchingItems = items)
+                    } else state
+                }
+            }
+        }
         loadContinueWatchingPipeline()
     }
 
