@@ -20,6 +20,8 @@ private val subtitleAutoSyncHttpClient: OkHttpClient by lazy {
         .build()
 }
 
+private const val AUTO_SYNC_REACTION_COMPENSATION_MS = 300L
+
 internal fun PlayerRuntimeController.showSubtitleTimingDialog() {
     _uiState.update {
         it.copy(
@@ -59,7 +61,7 @@ internal fun PlayerRuntimeController.captureSubtitleAutoSyncTime() {
 internal fun PlayerRuntimeController.applySubtitleAutoSyncCue(cueStartTimeMs: Long) {
     val capturePositionMs =
         _uiState.value.subtitleAutoSyncCapturedVideoMs ?: _exoPlayer?.currentPosition ?: return
-    val newDelayMs = (capturePositionMs - cueStartTimeMs)
+    val newDelayMs = (capturePositionMs - cueStartTimeMs - AUTO_SYNC_REACTION_COMPENSATION_MS)
         .toInt()
         .coerceIn(SUBTITLE_DELAY_MIN_MS, SUBTITLE_DELAY_MAX_MS)
 
