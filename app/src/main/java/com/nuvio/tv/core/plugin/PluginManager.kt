@@ -12,6 +12,7 @@ import com.nuvio.tv.domain.model.ExternalPluginEntry
 import com.nuvio.tv.domain.model.LocalScraperResult
 import com.nuvio.tv.domain.model.PluginManifest
 import com.nuvio.tv.domain.model.PluginRepository
+import com.nuvio.tv.domain.model.RemotePluginInfo
 import com.nuvio.tv.domain.model.RepositoryType
 import com.nuvio.tv.domain.model.ScraperInfo
 import com.nuvio.tv.domain.model.ScraperManifestInfo
@@ -20,6 +21,8 @@ import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.channels.Channel
@@ -212,11 +215,30 @@ class PluginManager @Inject constructor(
 
     var isSyncingFromRemote = false
 
+    /** Prevents concurrent reconciliation from StartupSyncService and AccountViewModel */
+    private val reconcileMutex = Mutex()
+
+    @Volatile
+    private var pendingPushAfterSync = false
+
+    /**
+     * Call after setting isSyncingFromRemote = false to push any changes
+     * that were made during reconciliation (e.g. repo removals).
+     */
+    fun flushPendingSync() {
+        if (pendingPushAfterSync) {
+            pendingPushAfterSync = false
+            Log.d(TAG, "flushPendingSync: firing deferred push")
+            triggerRemoteSync()
+        }
+    }
+
     private var syncJob: kotlinx.coroutines.Job? = null
 
     private fun triggerRemoteSync() {
         if (isSyncingFromRemote) {
-            Log.d(TAG, "triggerRemoteSync: skipped (syncing from remote)")
+            Log.d(TAG, "triggerRemoteSync: skipped (syncing from remote), will push after sync")
+            pendingPushAfterSync = true
             return
         }
         if (!authManager.isAuthenticated) {
@@ -297,6 +319,48 @@ class PluginManager @Inject constructor(
         }
     }
 
+    /**
+     * Add a repository with a type hint from Supabase sync.
+     * Skips wrong detection paths when the type is already known,
+     * making reconciliation faster and more resilient to network issues.
+     */
+    private suspend fun addRepositoryWithTypeHint(
+        manifestUrl: String,
+        typeHint: RepositoryType?
+    ): Result<PluginRepository> = withContext(Dispatchers.IO) {
+        try {
+            val sanitizedUrl = sanitizeScheme(manifestUrl).trimEnd('/')
+
+            when (typeHint) {
+                RepositoryType.EXTERNAL_DEX -> {
+                    Log.d(TAG, "addRepositoryWithTypeHint: EXTERNAL_DEX hint, trying external format: $sanitizedUrl")
+                    val externalResult = externalRepoParser.tryParse(sanitizedUrl)
+                    if (externalResult != null) {
+                        return@withContext addExternalRepository(sanitizedUrl, externalResult)
+                    }
+                    // Hint was wrong or parse failed — fall through to auto-detect
+                    Log.w(TAG, "addRepositoryWithTypeHint: EXTERNAL_DEX hint failed, falling back to auto-detect")
+                }
+                RepositoryType.NUVIO_JS -> {
+                    Log.d(TAG, "addRepositoryWithTypeHint: NUVIO_JS hint, trying manifest: $sanitizedUrl")
+                    val canonicalManifestUrl = canonicalizeManifestUrl(sanitizedUrl)
+                    val manifest = fetchManifest(canonicalManifestUrl)
+                    if (manifest != null) {
+                        return@withContext addNuvioRepository(canonicalManifestUrl, manifest)
+                    }
+                    Log.w(TAG, "addRepositoryWithTypeHint: NUVIO_JS hint failed, falling back to auto-detect")
+                }
+                null -> { /* No hint — use auto-detect */ }
+            }
+
+            // Fall back to full auto-detection
+            addRepository(sanitizedUrl)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to add repository with hint: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
     private suspend fun addNuvioRepository(
         canonicalManifestUrl: String,
         manifest: PluginManifest
@@ -323,6 +387,14 @@ class PluginManager @Inject constructor(
         repoUrl: String,
         parseResult: com.nuvio.tv.core.plugin.cloudstream.ExternalRepoParseResult
     ): Result<PluginRepository> {
+        // Prevent duplicate repos by URL
+        val existingRepo = dataStore.repositories.first()
+            .find { normalizeUrl(it.url) == normalizeUrl(repoUrl) }
+        if (existingRepo != null) {
+            Log.d(TAG, "External repository already exists: ${existingRepo.name} (${existingRepo.url})")
+            return Result.success(existingRepo)
+        }
+
         val repo = PluginRepository(
             id = UUID.randomUUID().toString(),
             name = parseResult.name,
@@ -364,19 +436,32 @@ class PluginManager @Inject constructor(
 
         // Remove repository
         dataStore.removeRepository(repoId)
-        triggerRemoteSync()
+
+        // Push synchronously when user-initiated (not during reconciliation)
+        // to prevent the next sync pull from re-adding the removed repo
+        if (!isSyncingFromRemote && authManager.isAuthenticated) {
+            Log.d(TAG, "removeRepository: pushing removal to remote synchronously")
+            pluginSyncService.pushToRemote()
+        } else if (isSyncingFromRemote) {
+            pendingPushAfterSync = true
+        }
     }
 
     
+    /**
+     * Reconcile local plugin repos with the remote list from Supabase.
+     * @param remotePlugins list of remote plugin info (URL + optional type hint)
+     * @param removeMissingLocal if true, remove local repos not in the remote list
+     */
     suspend fun reconcileWithRemoteRepoUrls(
-        remoteUrls: List<String>,
+        remotePlugins: List<RemotePluginInfo>,
         removeMissingLocal: Boolean = true
-    ) {
-        val normalizedRemote = remoteUrls
-            .map { canonicalizeRepoUrl(it) }
-            .filter { it.isNotEmpty() }
-            .distinctBy { normalizeUrl(it) }
-        val remoteUrlSet = normalizedRemote.map { normalizeUrl(it) }.toSet()
+    ) = reconcileMutex.withLock {
+        val normalizedRemote = remotePlugins
+            .map { it.copy(url = canonicalizeRepoUrl(it.url)) }
+            .filter { it.url.isNotEmpty() }
+            .distinctBy { normalizeUrl(it.url) }
+        val remoteUrlSet = normalizedRemote.map { normalizeUrl(it.url) }.toSet()
 
         val initialLocalRepos = dataStore.repositories.first()
         val initialLocalByNormalizedUrl = initialLocalRepos.associateBy { normalizeUrl(it.url) }
@@ -393,19 +478,28 @@ class PluginManager @Inject constructor(
         if (shouldRemoveMissingLocal) {
             initialLocalRepos
                 .filter { normalizeUrl(it.url) !in remoteUrlSet }
-                .forEach { repo -> removeRepository(repo.id) }
+                .forEach { repo ->
+                    Log.d(TAG, "reconcile: removing local repo not in remote: ${repo.name} (${repo.url})")
+                    removeRepository(repo.id)
+                }
         }
 
-        normalizedRemote.forEach { remoteUrl ->
-            if (initialLocalByNormalizedUrl[normalizeUrl(remoteUrl)] == null) {
-                addRepository(remoteUrl)
+        normalizedRemote.forEach { remotePlugin ->
+            if (initialLocalByNormalizedUrl[normalizeUrl(remotePlugin.url)] == null) {
+                val typeHint = remotePlugin.repoType?.let {
+                    try { RepositoryType.valueOf(it) } catch (_: Exception) { null }
+                }
+                val result = addRepositoryWithTypeHint(remotePlugin.url, typeHint)
+                if (result.isFailure) {
+                    Log.e(TAG, "reconcile: failed to add repo ${remotePlugin.url}: ${result.exceptionOrNull()?.message}")
+                }
             }
         }
 
         val currentRepos = dataStore.repositories.first()
         val currentByNormalizedUrl = currentRepos.associateBy { normalizeUrl(it.url) }
         val remoteOrderedRepos = normalizedRemote
-            .mapNotNull { currentByNormalizedUrl[normalizeUrl(it)] }
+            .mapNotNull { currentByNormalizedUrl[normalizeUrl(it.url)] }
         val extras = currentRepos
             .filter { normalizeUrl(it.url) !in remoteUrlSet }
 
@@ -413,6 +507,18 @@ class PluginManager @Inject constructor(
         if (reordered.map { it.id } != currentRepos.map { it.id }) {
             dataStore.saveRepositories(reordered)
         }
+    }
+
+    /** Convenience overload for plain URL lists (no type hints) */
+    @JvmName("reconcileWithRemoteRepoUrlStrings")
+    suspend fun reconcileWithRemoteRepoUrls(
+        remoteUrls: List<String>,
+        removeMissingLocal: Boolean = true
+    ) {
+        reconcileWithRemoteRepoUrls(
+            remotePlugins = remoteUrls.map { RemotePluginInfo(url = it) },
+            removeMissingLocal = removeMissingLocal
+        )
     }
     
     /**

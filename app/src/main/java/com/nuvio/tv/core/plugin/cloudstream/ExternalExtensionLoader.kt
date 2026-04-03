@@ -200,6 +200,13 @@ class ExternalExtensionLoader @Inject constructor(
         try {
             val targetFile = File(extensionsDir, "${safeFileName(scraperId)}.cs3")
 
+            // Remove existing read-only file before writing (DEX files are set
+            // read-only for API 28+ compat, so overwriting would fail with EACCES)
+            if (targetFile.exists()) {
+                targetFile.setWritable(true)
+                targetFile.delete()
+            }
+
             val request = Request.Builder()
                 .url(downloadUrl)
                 .header("User-Agent", "NuvioTV/1.0")

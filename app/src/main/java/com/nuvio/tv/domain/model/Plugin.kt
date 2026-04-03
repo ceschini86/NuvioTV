@@ -11,6 +11,14 @@ enum class RepositoryType {
 }
 
 /**
+ * Plugin info returned from Supabase sync, with optional type hint.
+ */
+data class RemotePluginInfo(
+    val url: String,
+    val repoType: String? = null
+)
+
+/**
  * Represents a plugin repository containing scrapers
  */
 data class PluginRepository(
