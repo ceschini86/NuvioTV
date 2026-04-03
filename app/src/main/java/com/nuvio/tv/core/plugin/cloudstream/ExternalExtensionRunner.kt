@@ -504,6 +504,10 @@ class ExternalExtensionRunner @Inject constructor(
         val bestMatch = findBestMatch(searchResults, title, year, mediaType)
         if (bestMatch == null) {
             Log.d(TAG, "No suitable match in ${api.name} results for: $title ($year)")
+            searchResults.take(5).forEachIndexed { i, r ->
+                val sim = calculateSimilarity(r.name, title)
+                Log.d(TAG, "  [$i] \"${r.name}\" (sim=${String.format("%.2f", sim)}, type=${r.type})")
+            }
             return emptyList()
         }
         Log.d(TAG, "Best match from ${api.name}: ${bestMatch.name} (${bestMatch.url})")

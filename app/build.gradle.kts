@@ -311,6 +311,9 @@ dependencies {
     // NiceHTTP — HTTP client used by CloudStream extensions via `app.get()`
     implementation(libs.nicehttp)
 
+    // Conscrypt — TLS provider with browser-compatible fingerprint for Cloudflare bypass
+    implementation(libs.conscrypt.android)
+
     // CloudStream library — provides core API classes for extension compatibility
     implementation(libs.cloudstream.library) {
         // Exclude heavy deps we don't need or that conflict

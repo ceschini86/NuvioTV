@@ -5,6 +5,7 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
+import android.util.Log
 import com.lagradost.cloudstream3.AcraApplication
 import com.lagradost.cloudstream3.app
 import com.lagradost.nicehttp.ignoreAllSSLErrors
@@ -16,7 +17,9 @@ import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
+import org.conscrypt.Conscrypt
 import java.io.File
+import java.security.Security
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
@@ -53,15 +56,18 @@ class NuvioApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
 
+        // Install Conscrypt as the primary TLS provider.
+        // This gives OkHttp a browser-compatible TLS fingerprint (JA3/JA4),
+        // which is critical for bypassing Cloudflare's bot detection.
+        // Without it, Cloudflare blocks OkHttp even with valid cf_clearance cookies.
+        try {
+            Security.insertProviderAt(Conscrypt.newProvider(), 1)
+        } catch (e: Exception) {
+            Log.w("NuvioApplication", "Failed to install Conscrypt: ${e.message}")
+        }
+
         // Initialize the CloudStream NiceHTTP singleton's OkHttpClient.
-        // Extensions call app.get()/post() for HTTP — the default OkHttpClient
-        // doesn't ignore SSL errors, causing connections to scraper sites with
-        // bad certificates to fail silently. This matches CloudStream's own
-        // RequestsHelper.initClient() setup.
-        //
-        // The cookie jar maintains cookies across extension HTTP requests.
-        // Many streaming sites require cookies from initial page loads to
-        // authenticate subsequent stream URL requests.
+        // Matches CloudStream's RequestsHelper.initClient() setup.
         app.baseClient = OkHttpClient.Builder()
             .cookieJar(extensionCookieJar)
             .followRedirects(true)
