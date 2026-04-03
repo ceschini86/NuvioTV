@@ -222,10 +222,10 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
                 (normalizedOffset * (MPV_SUB_POS_AT_BOTTOM - MPV_SUB_POS_AT_TOP))
             val subMarginY = (MPV_SUB_MARGIN_Y_MIN +
                 (normalizedOffset * (MPV_SUB_MARGIN_Y_MAX - MPV_SUB_MARGIN_Y_MIN))).toInt()
-            val outlineSize = if (style.outlineEnabled) {
-                style.outlineWidth.coerceIn(1, 6).toDouble()
-            } else {
-                0.0
+            val outlineSize = when {
+                !style.outlineEnabled -> 0.0
+                isAssOrSsaSubtitleSelectedNow() -> style.outlineWidth.coerceIn(1, 6).toDouble()
+                else -> 1.0
             }
             val backgroundAlpha = (style.backgroundColor ushr 24) and 0xFF
             val borderStyle = if (backgroundAlpha > 0) "opaque-box" else "outline-and-shadow"
@@ -243,6 +243,32 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
         }.onFailure {
             Log.w(TAG, "Failed to apply subtitle style on mpv: ${it.message}")
         }
+    }
+
+    private fun isAssOrSsaSubtitleSelectedNow(): Boolean {
+        if (!initialized) return false
+        val trackCount = mpv.getPropertyInt("track-list/count") ?: return false
+        if (trackCount <= 0) return false
+
+        val selectedSubtitleId = mpv.getPropertyString("sid")?.toIntOrNull()
+            ?: mpv.getPropertyInt("current-tracks/sub/id")
+
+        for (i in 0 until trackCount) {
+            val type = mpv.getPropertyString("track-list/$i/type")?.lowercase(Locale.US) ?: continue
+            if (type != "sub") continue
+
+            val isSelectedByFlag = mpv.getPropertyBoolean("track-list/$i/selected") == true
+            val trackId = mpv.getPropertyInt("track-list/$i/id")
+            val isSelected = isSelectedByFlag || (selectedSubtitleId != null && trackId == selectedSubtitleId)
+            if (!isSelected) continue
+
+            val codec = mpv.getPropertyString("track-list/$i/codec")
+                ?.trim()
+                ?.lowercase(Locale.US)
+                ?: return false
+            return codec.contains("ass") || codec.contains("ssa")
+        }
+        return false
     }
 
     fun selectAudioTrackById(trackId: Int): Boolean {
