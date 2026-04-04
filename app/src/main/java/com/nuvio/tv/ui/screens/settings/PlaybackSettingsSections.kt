@@ -66,7 +66,8 @@ private enum class PlaybackSection {
     GENERAL,
     STREAM_SELECTION,
     AUDIO_TRAILER,
-    SUBTITLES
+    SUBTITLES,
+    P2P
 }
 
 private data class PlaybackGeneralUi(
@@ -131,19 +132,23 @@ internal fun PlaybackSettingsSections(
     onSetSubtitleBold: (Boolean) -> Unit,
     onSetSubtitleOutlineEnabled: (Boolean) -> Unit,
     onSetUseLibass: (Boolean) -> Unit,
-    onSetLibassRenderType: (com.nuvio.tv.data.local.LibassRenderType) -> Unit
+    onSetLibassRenderType: (com.nuvio.tv.data.local.LibassRenderType) -> Unit,
+    p2pEnabled: Boolean = false,
+    onSetP2pEnabled: (Boolean) -> Unit = {}
 ) {
     var generalExpanded by rememberSaveable { mutableStateOf(false) }
     var afrExpanded by rememberSaveable { mutableStateOf(false) }
     var streamExpanded by rememberSaveable { mutableStateOf(false) }
     var audioTrailerExpanded by rememberSaveable { mutableStateOf(false) }
     var subtitlesExpanded by rememberSaveable { mutableStateOf(false) }
+    var p2pExpanded by rememberSaveable { mutableStateOf(false) }
 
     val defaultGeneralHeaderFocus = remember { FocusRequester() }
     val afrHeaderFocus = remember { FocusRequester() }
     val streamHeaderFocus = remember { FocusRequester() }
     val audioTrailerHeaderFocus = remember { FocusRequester() }
     val subtitlesHeaderFocus = remember { FocusRequester() }
+    val p2pHeaderFocus = remember { FocusRequester() }
     val generalHeaderFocus = initialFocusRequester ?: defaultGeneralHeaderFocus
 
     var focusedSection by remember { mutableStateOf<PlaybackSection?>(null) }
@@ -159,6 +164,8 @@ internal fun PlaybackSettingsSections(
     val strSectionAudioDesc = stringResource(R.string.playback_section_audio_desc)
     val strSectionSubtitles = stringResource(R.string.playback_section_subtitles)
     val strSectionSubtitlesDesc = stringResource(R.string.playback_section_subtitles_desc)
+    val strSectionP2p = stringResource(R.string.settings_p2p_title)
+    val strSectionP2pDesc = stringResource(R.string.settings_p2p_subtitle)
     val generalUi = PlaybackGeneralUi(
         isExternalPlayer = playerSettings.playerPreference == PlayerPreference.EXTERNAL,
         frameRateMatchingLabel = frameRateMatchingModeLabel(
@@ -194,6 +201,11 @@ internal fun PlaybackSettingsSections(
     LaunchedEffect(subtitlesExpanded, focusedSection) {
         if (!subtitlesExpanded && focusedSection == PlaybackSection.SUBTITLES) {
             subtitlesHeaderFocus.requestFocus()
+        }
+    }
+    LaunchedEffect(p2pExpanded, focusedSection) {
+        if (!p2pExpanded && focusedSection == PlaybackSection.P2P) {
+            p2pHeaderFocus.requestFocus()
         }
     }
 
@@ -385,6 +397,27 @@ internal fun PlaybackSettingsSections(
                 onItemFocused = { focusedSection = PlaybackSection.SUBTITLES },
                 enabled = !generalUi.isExternalPlayer
             )
+        }
+
+        playbackCollapsibleSection(
+            keyPrefix = "p2p",
+            title = strSectionP2p,
+            description = strSectionP2pDesc,
+            expanded = p2pExpanded,
+            onToggle = { p2pExpanded = !p2pExpanded },
+            focusRequester = p2pHeaderFocus,
+            onHeaderFocused = { focusedSection = PlaybackSection.P2P }
+        ) {
+            item(key = "p2p_enabled") {
+                ToggleSettingsItem(
+                    icon = Icons.Default.Info,
+                    title = strSectionP2p,
+                    subtitle = strSectionP2pDesc,
+                    isChecked = p2pEnabled,
+                    onCheckedChange = onSetP2pEnabled,
+                    onFocused = { focusedSection = PlaybackSection.P2P }
+                )
+            }
         }
     }
 }

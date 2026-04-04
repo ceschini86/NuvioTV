@@ -21,6 +21,9 @@ class TorrentStreamServer(
 ) : NanoHTTPD(port) {
 
     @Volatile
+    var active: Boolean = true
+
+    @Volatile
     var servingFile: File? = null
 
     @Volatile
@@ -119,41 +122,46 @@ class TorrentStreamServer(
     }
 
     /**
-     * Requests the needed pieces and blocks until they are all downloaded.
-     * Times out after [PIECE_WAIT_TIMEOUT_MS] to avoid hanging forever.
+     * Requests the needed pieces and blocks until the immediate read window
+     * is downloaded. Waits indefinitely — only returns when pieces are ready
+     * or the server is stopped. This prevents ExoPlayer from reading
+     * incomplete data and erroring out.
      */
     private fun waitForPieces(start: Long, end: Long) {
         if (pieceLength <= 0) return
         val startPiece = (start / pieceLength).toInt()
         val endPiece = (end / pieceLength).toInt()
 
+        // Only wait for a small window from the read start, not the whole range
+        val waitEnd = startPiece + MAX_WAIT_PIECES.coerceAtMost(endPiece - startPiece)
+
         try {
-            onPiecesNeeded(startPiece, endPiece)
+            onPiecesNeeded(startPiece, waitEnd)
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to request pieces $startPiece-$endPiece", e)
+            Log.w(TAG, "Failed to request pieces $startPiece-$waitEnd", e)
             return
         }
 
-        val deadline = System.currentTimeMillis() + PIECE_WAIT_TIMEOUT_MS
-        while (System.currentTimeMillis() < deadline) {
+        // Wait until pieces are ready or the server is stopped — no timeout.
+        // The torrent engine is downloading these pieces at TOP_PRIORITY.
+        while (active) {
             try {
-                if (arePiecesReady(startPiece, endPiece)) return
+                if (arePiecesReady(startPiece, waitEnd)) return
             } catch (e: Exception) {
                 Log.w(TAG, "Error checking piece readiness", e)
                 return
             }
             try {
-                Thread.sleep(100)
+                Thread.sleep(200)
             } catch (e: InterruptedException) {
                 return
             }
         }
-        Log.w(TAG, "Timed out waiting for pieces $startPiece-$endPiece")
     }
 
     companion object {
         private const val TAG = "TorrentStreamServer"
-        private const val PIECE_WAIT_TIMEOUT_MS = 30_000L
+        private const val MAX_WAIT_PIECES = 5
 
         fun startOnAvailablePort(
             onPiecesNeeded: (startPiece: Int, endPiece: Int) -> Unit,

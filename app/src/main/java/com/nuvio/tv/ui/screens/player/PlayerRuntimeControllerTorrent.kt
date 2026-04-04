@@ -90,7 +90,14 @@ internal fun PlayerRuntimeController.observeTorrentState() {
                 is TorrentState.Buffering -> {
                     val speed = formatSpeed(torrentState.downloadSpeed)
                     val peerInfo = "${torrentState.seeds} seeds \u00B7 ${torrentState.peers} peers"
-                    val message = "$peerInfo \u00B7 $speed"
+                    val mbProgress = if (torrentState.totalBufferBytes > 0) {
+                        "${formatMB(torrentState.bufferedBytes)} / ${formatMB(torrentState.totalBufferBytes)}"
+                    } else ""
+                    val message = listOfNotNull(
+                        mbProgress.ifEmpty { null },
+                        peerInfo,
+                        speed
+                    ).joinToString(" \u00B7 ")
 
                     if (!hasRenderedFirstFrame) {
                         // Initial load: full loading overlay with progress bar
@@ -120,6 +127,10 @@ internal fun PlayerRuntimeController.observeTorrentState() {
                     }
                 }
                 is TorrentState.Streaming -> {
+                    val speed = formatSpeed(torrentState.downloadSpeed)
+                    val bufferedAhead = formatMB(torrentState.bufferedAheadBytes)
+                    val peerInfo = "${torrentState.seeds} seeds \u00B7 ${torrentState.peers} peers"
+                    val streamingMessage = "$bufferedAhead buffered \u00B7 $peerInfo \u00B7 $speed"
                     _uiState.update {
                         it.copy(
                             loadingProgress = null,
@@ -129,7 +140,7 @@ internal fun PlayerRuntimeController.observeTorrentState() {
                             torrentSeeds = torrentState.seeds,
                             torrentBufferProgress = torrentState.bufferProgress,
                             torrentTotalProgress = torrentState.totalProgress,
-                            torrentBufferingMessage = null
+                            torrentBufferingMessage = streamingMessage
                         )
                     }
                 }
@@ -205,3 +216,5 @@ private fun formatSpeed(bytesPerSec: Long): String {
         else -> "$bytesPerSec B/s"
     }
 }
+
+private fun formatMB(bytes: Long): String = String.format("%.1f MB", bytes / 1_048_576.0)

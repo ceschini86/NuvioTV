@@ -115,9 +115,11 @@ internal fun PlayerRuntimeController.initializePlayer(url: String, headers: Map<
                 else -> requestedLibassRenderType
             }
             val loadControl = if (isTorrentStream) {
-                // Reduced buffer for torrent streams to avoid requesting data far ahead
+                // Duration-based buffering only — no byte cap.
+                // The HTTP server blocks until pieces are downloaded,
+                // so ExoPlayer won't read beyond what's available.
                 DefaultLoadControl.Builder()
-                    .setTargetBufferBytes(20 * 1024 * 1024)
+                    .setTargetBufferBytes(DefaultLoadControl.DEFAULT_TARGET_BUFFER_BYTES)
                     .setBufferDurationsMs(
                         10_000,
                         30_000,

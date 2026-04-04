@@ -70,6 +70,8 @@ class TorrentEngine @Inject constructor(
     private var totalPieces: Int = 0
     private var currentSettings: TorrentSettingsData = TorrentSettingsData()
     private var estimatedBytesPerSec: Long = FALLBACK_BITRATE_BYTES_PER_SEC
+    @Volatile
+    private var lastPlaybackBytePos: Long = 0L
 
     private val cacheDir: File
         get() = File(context.cacheDir, "torrent_cache").also { it.mkdirs() }
@@ -179,6 +181,7 @@ class TorrentEngine @Inject constructor(
         statsJob?.cancel()
         statsJob = null
 
+        streamServer?.active = false
         streamServer?.stop()
         streamServer = null
 
@@ -191,6 +194,7 @@ class TorrentEngine @Inject constructor(
         currentHandle = null
         currentFileIndex = -1
         totalPieces = 0
+        lastPlaybackBytePos = 0L
 
         handle?.let {
             try {
@@ -228,6 +232,7 @@ class TorrentEngine @Inject constructor(
 
             // Update bitrate estimate from actual duration now that ExoPlayer knows it
             estimatedBytesPerSec = (fileSize / (durationMs / 1000L)).coerceAtLeast(100_000)
+            lastPlaybackBytePos = bytePosition
 
             prioritizePiecesForPosition(handle, torrentInfo, currentFileIndex, bytePosition)
         } catch (e: Exception) {
@@ -471,7 +476,7 @@ class TorrentEngine @Inject constructor(
                     i in currentPiece..streamWindowEnd -> Priority.TOP_PRIORITY
                     // 30-60s lookahead
                     i in (streamWindowEnd + 1)..lookaheadEnd -> Priority.DEFAULT
-                    else -> Priority.LOW
+                    else -> Priority.IGNORE
                 }
                 handle.piecePriority(i, priority)
             }
@@ -530,7 +535,9 @@ class TorrentEngine @Inject constructor(
                     progress = progress,
                     downloadSpeed = status.downloadPayloadRate().toLong(),
                     peers = status.numPeers(),
-                    seeds = status.numSeeds()
+                    seeds = status.numSeeds(),
+                    bufferedBytes = (readyCount.toLong() * pieceLength).coerceAtMost(bufferBytes),
+                    totalBufferBytes = bufferBytes
                 )
 
                 if (readyCount >= requiredPieces && hasLastPiece && hasHeaderPieces) {
@@ -560,7 +567,6 @@ class TorrentEngine @Inject constructor(
                 prioritizePiecesForRange(handle, torrentInfo, fileIndex, startPiece, endPiece)
             },
             arePiecesReady = { startPiece, endPiece ->
-                // Check that all pieces in the requested range are downloaded
                 val h = currentHandle ?: return@startOnAvailablePort false
                 try {
                     val adjStart = firstFilePiece + startPiece
@@ -604,14 +610,32 @@ class TorrentEngine @Inject constructor(
             while (isActive) {
                 try {
                     val status = handle.status()
+                    val torrentInfo = handle.torrentFile()
                     val currentState = _state.value
+
+                    // Calculate how many bytes are buffered ahead of playback
+                    var bufferedAheadBytes = 0L
+                    if (torrentInfo != null && lastPlaybackBytePos > 0) {
+                        val pieceLength = torrentInfo.pieceLength().toLong()
+                        val fileOffset = torrentInfo.files().fileOffset(currentFileIndex)
+                        val currentPiece = ((fileOffset + lastPlaybackBytePos) / pieceLength).toInt()
+                        val lastPiece = ((fileOffset + torrentInfo.files().fileSize(currentFileIndex) - 1) / pieceLength).toInt()
+                            .coerceAtMost(torrentInfo.numPieces() - 1)
+                        var consecutive = 0
+                        for (i in currentPiece..lastPiece) {
+                            if (handle.havePiece(i)) consecutive++ else break
+                        }
+                        bufferedAheadBytes = consecutive * pieceLength
+                    }
+
                     if (currentState is TorrentState.Streaming) {
                         _state.value = currentState.copy(
                             downloadSpeed = status.downloadPayloadRate().toLong(),
                             uploadSpeed = status.uploadPayloadRate().toLong(),
                             peers = status.numPeers(),
                             seeds = status.numSeeds(),
-                            totalProgress = status.progress()
+                            totalProgress = status.progress(),
+                            bufferedAheadBytes = bufferedAheadBytes
                         )
                     }
                 } catch (e: CancellationException) {

@@ -18,13 +18,14 @@ import javax.inject.Singleton
 private val Context.torrentDataStore by preferencesDataStore(name = "torrent_settings")
 
 data class TorrentSettingsData(
+    val p2pEnabled: Boolean = false,
     val maxCacheSizeMb: Int = 2048,
     val maxConnections: Int = 200,
     val bufferPiecesBeforePlayback: Int = 15,
     val enableDht: Boolean = true,
     val enableEncryption: Boolean = true,
     val enableUpload: Boolean = true,
-    val autoClearCacheOnExit: Boolean = false
+    val autoClearCacheOnExit: Boolean = true
 )
 
 @Singleton
@@ -34,6 +35,7 @@ class TorrentSettings @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private object Keys {
+        val P2P_ENABLED = booleanPreferencesKey("p2p_enabled")
         val MAX_CACHE_SIZE_MB = intPreferencesKey("max_cache_size_mb")
         val MAX_CONNECTIONS = intPreferencesKey("max_connections")
         val BUFFER_PIECES = intPreferencesKey("buffer_pieces_before_playback")
@@ -45,14 +47,21 @@ class TorrentSettings @Inject constructor(
 
     val settings: Flow<TorrentSettingsData> = context.torrentDataStore.data.map { prefs ->
         TorrentSettingsData(
+            p2pEnabled = prefs[Keys.P2P_ENABLED] ?: false,
             maxCacheSizeMb = prefs[Keys.MAX_CACHE_SIZE_MB] ?: 2048,
             maxConnections = prefs[Keys.MAX_CONNECTIONS] ?: 200,
             bufferPiecesBeforePlayback = prefs[Keys.BUFFER_PIECES] ?: 15,
             enableDht = prefs[Keys.ENABLE_DHT] ?: true,
             enableEncryption = prefs[Keys.ENABLE_ENCRYPTION] ?: true,
             enableUpload = prefs[Keys.ENABLE_UPLOAD] ?: true,
-            autoClearCacheOnExit = prefs[Keys.AUTO_CLEAR_CACHE] ?: false
+            autoClearCacheOnExit = prefs[Keys.AUTO_CLEAR_CACHE] ?: true
         )
+    }
+
+    fun setP2pEnabled(enabled: Boolean) {
+        scope.launch {
+            context.torrentDataStore.edit { it[Keys.P2P_ENABLED] = enabled }
+        }
     }
 
     fun setEnableUpload(enabled: Boolean) {
