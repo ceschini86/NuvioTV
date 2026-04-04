@@ -1223,7 +1223,7 @@ private suspend fun HomeViewModel.enrichNextUpItem(
         imdbRating = if (settings.useBasicInfo) tmdbData?.rating?.toFloat() ?: meta.imdbRating ?: item.info.imdbRating else meta.imdbRating ?: item.info.imdbRating,
         genres = meta.genres.take(3).ifEmpty { item.info.genres },
         releaseInfo = meta.releaseInfo?.takeIf { it.isNotBlank() } ?: item.info.releaseInfo,
-        sortTimestamp = releaseState.sortTimestamp,
+        sortTimestamp = item.info.sortTimestamp,
         releaseTimestamp = releaseState.releaseTimestamp,
         isReleaseAlert = releaseState.isReleaseAlert,
         isNewSeasonRelease = releaseState.isNewSeasonRelease
