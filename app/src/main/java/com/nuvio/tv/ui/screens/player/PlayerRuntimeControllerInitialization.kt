@@ -95,6 +95,7 @@ internal fun PlayerRuntimeController.initializePlayer(
                 deviceLanguages = resolveDeviceAudioLanguages()
             )
             mpvPreferredAudioLanguages = preferredAudioLanguages
+            mpvHardwareDecodeModeSetting = playerSettings.mpvHardwareDecodeMode
             val effectiveInternalPlayerEngine = overrideInternalPlayerEngine ?: playerSettings.internalPlayerEngine
             runtimeInternalPlayerEngineOverride = overrideInternalPlayerEngine
             currentInternalPlayerEngine = effectiveInternalPlayerEngine

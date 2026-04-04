@@ -20,6 +20,7 @@ internal fun PlayerRuntimeController.attachMpvView(view: NuvioMpvSurfaceView?) {
 
     runCatching {
         performPendingMpvHardRestartIfNeeded(view)
+        view.applyHardwareDecodeMode(mpvHardwareDecodeModeSetting)
         view.setMedia(currentStreamUrl, currentHeaders)
         view.setPlaybackSpeed(_uiState.value.playbackSpeed)
         view.applyAudioAmplificationDb(_uiState.value.audioAmplificationDb)
@@ -98,6 +99,7 @@ internal fun PlayerRuntimeController.initializeMpvPlayer(
 
     runCatching {
         performPendingMpvHardRestartIfNeeded(view)
+        view.applyHardwareDecodeMode(mpvHardwareDecodeModeSetting)
         view.setMedia(url, headers)
         view.setPlaybackSpeed(_uiState.value.playbackSpeed)
         view.applyAudioAmplificationDb(_uiState.value.audioAmplificationDb)
