@@ -160,20 +160,7 @@ internal fun PlayerRuntimeController.initializePlayer(
                 requestedLibassRenderType == AssRenderType.OVERLAY_CANVAS -> AssRenderType.EFFECTS_CANVAS
                 else -> requestedLibassRenderType
             }
-            val loadControl = if (isTorrentStream) {
-                // Duration-based buffering only — no byte cap.
-                // The HTTP server blocks until pieces are downloaded,
-                // so ExoPlayer won't read beyond what's available.
-                DefaultLoadControl.Builder()
-                    .setTargetBufferBytes(DefaultLoadControl.DEFAULT_TARGET_BUFFER_BYTES)
-                    .setBufferDurationsMs(
-                        10_000,
-                        30_000,
-                        2_500,
-                        3_000
-                    )
-                    .build()
-            } else {
+            val loadControl = run {
                 DefaultLoadControl.Builder()
                     .setTargetBufferBytes(100 * 1024 * 1024)
                     .setBufferDurationsMs(
@@ -366,9 +353,6 @@ internal fun PlayerRuntimeController.initializePlayer(
                             }
                             tryApplyPendingResumeProgress(this@apply)
                             _uiState.value.pendingSeekPosition?.let { position ->
-                                if (isTorrentStream) {
-                                    onTorrentSeek(position, duration)
-                                }
                                 seekTo(position)
                                 _uiState.update { it.copy(pendingSeekPosition = null) }
                             }

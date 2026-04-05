@@ -6,7 +6,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import com.nuvio.tv.core.plugin.PluginManager
-import com.nuvio.tv.core.torrent.TorrentEngine
+import com.nuvio.tv.core.torrent.TorrentService
 import com.nuvio.tv.data.local.InternalPlayerEngine
 import com.nuvio.tv.data.local.NextEpisodeThresholdMode
 import com.nuvio.tv.data.local.PlayerSettingsDataStore
@@ -51,7 +51,7 @@ class PlayerRuntimeController(
     internal val layoutPreferenceDataStore: com.nuvio.tv.data.local.LayoutPreferenceDataStore,
     internal val watchedItemsPreferences: com.nuvio.tv.data.local.WatchedItemsPreferences,
     internal val trackPreferenceDataStore: com.nuvio.tv.data.local.TrackPreferenceDataStore,
-    internal val torrentEngine: TorrentEngine,
+    internal val torrentService: TorrentService,
     savedStateHandle: SavedStateHandle,
     internal val scope: CoroutineScope
 ) {

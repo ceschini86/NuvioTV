@@ -1,7 +1,7 @@
 package com.nuvio.tv.ui.screens.player
 
 import android.app.Activity
-import kotlinx.coroutines.flow.first
+import android.util.Log
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.lang.ref.WeakReference
@@ -16,34 +16,27 @@ internal fun PlayerRuntimeController.startInitialPlaybackIfNeeded() {
     initialPlaybackStarted = true
 
     val infoHash = navigationArgs.infoHash
+    Log.d("PlayerStartup", "startInitialPlayback: infoHash=$infoHash, streamUrl=${initialStreamUrl.take(80)}")
     if (infoHash != null) {
         torrentStreamJob = scope.launch {
             try {
-                // Wait for saved watch progress to load before starting the torrent,
-                // so we can download pieces from the resume position instead of byte 0.
-                if (!navigationArgs.startFromBeginning && contentId != null) {
-                    val progress = if (currentSeason != null && currentEpisode != null) {
-                        watchProgressRepository.getEpisodeProgress(contentId!!, currentSeason!!, currentEpisode!!).first()
-                    } else {
-                        watchProgressRepository.getProgress(contentId!!).first()
-                    }
-                    if (progress != null && progress.isInProgress()) {
-                        pendingResumeProgress = progress
-                    }
-                }
-
+                Log.d("PlayerStartup", "Starting torrent stream for $infoHash")
                 observeTorrentState()
                 val localUrl = startTorrentStream(infoHash, navigationArgs.fileIdx)
+                Log.d("PlayerStartup", "Torrent stream ready: $localUrl")
                 currentStreamUrl = localUrl
                 currentHeaders = emptyMap()
+                // Use loadSavedProgress = true — TorrServer handles seeking via
+                // HTTP Range requests, so ExoPlayer's standard resume logic works.
                 preparePlaybackBeforeStart(
                     url = localUrl,
                     headers = emptyMap(),
-                    loadSavedProgress = false
+                    loadSavedProgress = true
                 )
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
+                Log.e("PlayerStartup", "Failed to start torrent", e)
                 _uiState.update {
                     it.copy(
                         error = "Failed to start torrent: ${e.message}",

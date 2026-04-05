@@ -100,10 +100,6 @@ internal fun PlayerRuntimeController.startProgressUpdates() {
                         duration = playerDuration.coerceAtLeast(0L)
                     )
                 }
-                // Advance the torrent download window as playback progresses
-                if (isTorrentStream && playerDuration > 0) {
-                    torrentEngine.updatePlaybackPosition(pos, playerDuration)
-                }
                 updateActiveSkipInterval(pos)
                 evaluateNextEpisodeCardVisibility(
                     positionMs = pos,
@@ -551,9 +547,6 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
                 _uiState.update { it.copy(currentPosition = target) }
                 pendingPreviewSeekPosition = null
                 scheduleProgressSyncAfterSeek()
-                if (isTorrentStream) {
-                    onTorrentSeek(target, lastKnownDuration)
-                }
                 if (_uiState.value.showControls) {
                     showControlsTemporarily()
                 } else {
@@ -566,9 +559,6 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             seekPlaybackTo(event.position)
             _uiState.update { it.copy(currentPosition = event.position) }
             scheduleProgressSyncAfterSeek()
-            if (isTorrentStream) {
-                onTorrentSeek(event.position, lastKnownDuration)
-            }
             if (_uiState.value.showControls) {
                 showControlsTemporarily()
             } else {

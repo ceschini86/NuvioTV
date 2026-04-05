@@ -166,8 +166,7 @@ android {
 
     sourceSets {
         getByName("main") {
-            // Keep local jniLibs disabled; use dependency-provided native libs only.
-            jniLibs.srcDirs("src/main/_jni_disabled")
+            jniLibs.srcDirs("src/main/jniLibs")
         }
     }
 
@@ -183,7 +182,7 @@ android {
                 "lib/*/libavutil.so",
                 "lib/*/libswscale.so",
                 "lib/*/libswresample.so",
-                "lib/*/libtorrent4j.so"
+                "lib/*/libtorrserver.so"
             )
         }
     }
@@ -318,12 +317,6 @@ dependencies {
     implementation(libs.nanohttpd)
     implementation(libs.zxing.core)
 
-    // P2P / Torrent streaming (libtorrent4j)
-    implementation(libs.libtorrent4j)
-    implementation(libs.libtorrent4j.android.arm)
-    implementation(libs.libtorrent4j.android.arm64)
-    implementation(libs.libtorrent4j.android.x86)
-    implementation(libs.libtorrent4j.android.x8664)
 
     // Supabase
     implementation(platform(libs.supabase.bom))
