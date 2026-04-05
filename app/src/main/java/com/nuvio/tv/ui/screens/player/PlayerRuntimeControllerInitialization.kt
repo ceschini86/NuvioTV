@@ -10,6 +10,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
 import androidx.media3.common.text.Cue
@@ -61,7 +62,8 @@ private suspend fun PlayerRuntimeController.resolveCurrentStreamMimeType(
     currentStreamMimeType = PlayerMediaSourceFactory.probeMimeType(
         url = url,
         headers = headers,
-        filename = currentFilename
+        filename = currentFilename,
+        responseHeaders = currentStreamResponseHeaders
     )
     Log.d(
         PlayerRuntimeController.TAG,
@@ -87,8 +89,11 @@ internal fun PlayerRuntimeController.initializePlayer(
                 startupEngineFailoverTriggered = false
             }
             resetLoadingOverlayForNewStream()
+            hasTriedAudioPcmFallback = false
+            hasTriedDv7HevcFallback = false
             mpvDelayStartAfterAfrSwitch = false
             val playerSettings = playerSettingsDataStore.playerSettings.first()
+            cachedDecoderPriority = playerSettings.decoderPriority
             val preferredAudioLanguages = resolvePreferredAudioLanguages(
                 preferredAudioLanguage = playerSettings.preferredAudioLanguage,
                 secondaryPreferredAudioLanguage = playerSettings.secondaryPreferredAudioLanguage,
@@ -225,7 +230,7 @@ internal fun PlayerRuntimeController.initializePlayer(
                 playbackSpeedProvider = { _uiState.value.playbackSpeed },
                 onPlaybackSpeedAwareAudioOutputProviderCreated = { playbackSpeedAwareAudioOutputProvider = it }
             ).setExtensionRendererMode(playerSettings.decoderPriority)
-                .setMapDV7ToHevc(playerSettings.mapDV7ToHevc)
+                .setMapDV7ToHevc(playerSettings.mapDV7ToHevc || forceDv7ToHevc)
 
             if (showLoadingStatus) _uiState.update { it.copy(loadingMessage = context.getString(R.string.player_loading_building)) }
             val buildDefaultPlayer = {
@@ -307,6 +312,8 @@ internal fun PlayerRuntimeController.initializePlayer(
                         url = url,
                         headers = headers,
                         subtitleConfigurations = startupSubtitleConfigurations,
+                        filename = currentFilename,
+                        responseHeaders = currentStreamResponseHeaders,
                         mimeTypeOverride = currentStreamMimeType
                     )
                 )
@@ -402,6 +409,11 @@ internal fun PlayerRuntimeController.initializePlayer(
                     override fun onRenderedFirstFrame() {
                         hasRenderedFirstFrame = true
                         resetErrorRetryState()
+                        // Restore speed after PCM fallback — audio sink is already
+                        // configured in PCM mode and won't revert to passthrough.
+                        if (hasTriedAudioPcmFallback) {
+                            _exoPlayer?.playbackParameters = PlaybackParameters(1f)
+                        }
                         _uiState.update {
                             it.copy(
                                 showLoadingOverlay = false,
@@ -415,18 +427,8 @@ internal fun PlayerRuntimeController.initializePlayer(
                         if (isReleasingPlayer && error.errorCode == PlaybackException.ERROR_CODE_TIMEOUT) {
                             return
                         }
-                        val detailedError = buildString {
-                            append(error.message ?: "Playback error")
-                            val cause = error.cause
-                            if (cause is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) {
-                                append(" (HTTP ${cause.responseCode})")
-                            } else if (cause != null) {
-                                append(": ${cause.message}")
-                            }
-                            append(" [${error.errorCode}]")
-                        }
-                        val responseCode =
-                            (error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode
+                        val detailedError = error.toDisplayMessage()
+                        val responseCode = error.findInvalidResponseCodeException()?.responseCode
                         if (responseCode == 416 && !hasRetriedCurrentStreamAfter416) {
                             retryCurrentStreamFromStartAfter416()
                             return
@@ -439,6 +441,12 @@ internal fun PlayerRuntimeController.initializePlayer(
                             return
                         }
                         // Attempt automatic recovery for transient errors.
+                        if (tryAudioTrackPcmFallback(error)) {
+                            return
+                        }
+                        if (tryDv7HevcFallback(error)) {
+                            return
+                        }
                         if (attemptAutoRetry(error, detailedError)) {
                             return
                         }
@@ -466,7 +474,7 @@ internal fun PlayerRuntimeController.initializePlayer(
             }
             _uiState.update {
                 it.copy(
-                    error = e.message ?: "Failed to initialize player",
+                    error = e.toDisplayMessage("Failed to initialize player"),
                     showLoadingOverlay = false
                 )
             }

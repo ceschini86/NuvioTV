@@ -2,14 +2,16 @@ package com.nuvio.tv.ui.screens.player
 
 import android.util.Log
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.HttpDataSource
+import com.nuvio.tv.R
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 private const val MAX_AUTO_RETRIES = 2
 private const val RETRY_DELAY_MS = 1_500L
-
 /**
  * Determines whether the given [PlaybackException] is transient and worth retrying.
  *
@@ -47,6 +49,64 @@ internal fun isRetryablePlaybackError(error: PlaybackException): Boolean {
 
         else -> false
     }
+}
+
+internal fun PlaybackException.findInvalidResponseCodeException(): HttpDataSource.InvalidResponseCodeException? {
+    var current: Throwable? = cause
+    while (current != null) {
+        if (current is HttpDataSource.InvalidResponseCodeException) return current
+        current = current.cause
+    }
+    return null
+}
+
+internal fun PlaybackException.toDisplayMessage(): String {
+    val responseException = findInvalidResponseCodeException()
+    if (responseException != null) {
+        val statusText = responseException.responseMessage?.takeIf { it.isNotBlank() }
+        return buildString {
+            append("HTTP ")
+            append(responseException.responseCode)
+            statusText?.let {
+                append(' ')
+                append(it)
+            }
+            append(" [")
+            append(errorCodeName)
+            append(']')
+        }
+    }
+
+    val meaningfulMessage = findMostRelevantCauseMessage()
+    return if (meaningfulMessage != null) {
+        "$meaningfulMessage [$errorCodeName]"
+    } else {
+        errorCodeName
+    }
+}
+
+internal fun Throwable.toDisplayMessage(fallback: String = "Playback error"): String {
+    val meaningfulMessage = findMostRelevantCauseMessage()
+    return meaningfulMessage ?: message?.takeIf { it.isNotBlank() } ?: fallback
+}
+
+private fun Throwable.findMostRelevantCauseMessage(): String? {
+    val candidates = buildList {
+        var current: Throwable? = this@findMostRelevantCauseMessage
+        while (current != null) {
+            current.message
+                ?.trim()
+                ?.takeIf {
+                    it.isNotBlank() &&
+                        !it.equals("Playback error", ignoreCase = true) &&
+                        !it.equals("Source error", ignoreCase = true) &&
+                        !it.equals("Unexpected runtime error", ignoreCase = true)
+                }
+                ?.let(::add)
+            current = current.cause
+        }
+    }
+    return candidates.firstOrNull()
 }
 
 /**
@@ -129,3 +189,117 @@ internal fun PlayerRuntimeController.resetErrorRetryState() {
     errorRetryJob?.cancel()
     errorRetryJob = null
 }
+
+/**
+ * Silent PCM audio fallback for ERROR_CODE_AUDIO_TRACK_INIT_FAILED (5001).
+ *
+ * When the decoder is set to EXTENSION_RENDERER_MODE_ON (decoderPriority == 1,
+ * the default) and tunneling is NOT active, audio passthrough may fail on certain devices/formats.
+ * Instead of tearing down and re-building the entire player, we apply an
+ * imperceptible speed change (1.00001×) which forces ExoPlayer to decode audio
+ * through the software PCM pipeline — identical to what happens when the user
+ * manually changes playback speed.
+ *
+ * This is a one-shot attempt per stream; if it fails again the normal retry
+ * logic takes over.
+ */
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun PlayerRuntimeController.tryAudioTrackPcmFallback(
+    error: PlaybackException
+): Boolean {
+    if (error.errorCode != PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED) return false
+    if (hasTriedAudioPcmFallback) return false
+    if (cachedDecoderPriority != 1) return false // Only for EXTENSION_RENDERER_MODE_ON
+    if (_uiState.value.tunnelingEnabled) return false
+
+    hasTriedAudioPcmFallback = true
+
+    val player = _exoPlayer ?: return false
+    val savedPosition = player.currentPosition.takeIf { it > 0L } ?: 0L
+
+    Log.d(
+        PlayerRuntimeController.TAG,
+        "Audio track init failed (5001) — forcing PCM via speed trick, position=${savedPosition}ms"
+    )
+
+    // Show loading overlay with fallback info instead of error screen.
+    val fallbackMessage = context.getString(R.string.player_loading_fallback_pcm_audio)
+    _uiState.update {
+        it.copy(
+            error = null,
+            showLoadingOverlay = true,
+            loadingMessage = fallbackMessage,
+            showPauseOverlay = false
+        )
+    }
+
+    // An imperceptible speed offset disables audio passthrough and forces
+    // software PCM decoding through the GainAudioProcessor pipeline.
+    val currentSpeed = _uiState.value.playbackSpeed
+    val pcmSpeed = if (currentSpeed == 1f) 1.00001f else currentSpeed
+    player.playbackParameters = PlaybackParameters(pcmSpeed)
+
+    if (savedPosition > 0L) {
+        player.seekTo(savedPosition)
+    }
+    player.prepare()
+    player.playWhenReady = true
+
+    return true
+}
+
+/**
+ * DV7-to-HEVC decoder fallback for ERROR_CODE_DECODER_INIT_FAILED (4003).
+ *
+ * When decoderPriority == 1 (EXTENSION_RENDERER_MODE_ON) and the decoder
+ * fails to initialise, this is often caused by Dolby Vision profile 7
+ * content on devices without a DV decoder.  Enabling the DV7-to-HEVC
+ * mapping allows the HEVC decoder to handle the stream instead.
+ *
+ * Unlike the PCM fallback this requires a full player rebuild because
+ * the mapping is baked into the renderers factory at build time.
+ * Tunneling state does not matter for this fallback.
+ */
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun PlayerRuntimeController.tryDv7HevcFallback(
+    error: PlaybackException
+): Boolean {
+    if (error.errorCode != PlaybackException.ERROR_CODE_DECODER_INIT_FAILED) return false
+    if (hasTriedDv7HevcFallback) return false
+    if (cachedDecoderPriority != 1) return false
+    // Skip if DV7-to-HEVC is already active — nothing more we can do.
+    if (forceDv7ToHevc) return false
+
+    hasTriedDv7HevcFallback = true
+    forceDv7ToHevc = true
+
+    val savedPosition = _exoPlayer?.currentPosition?.takeIf { it > 0L } ?: 0L
+
+    Log.d(
+        PlayerRuntimeController.TAG,
+        "Decoder init failed (4003) — retrying with DV7-to-HEVC mapping, position=${savedPosition}ms"
+    )
+
+    resetErrorRetryState()
+
+    // Show loading overlay with fallback info instead of error screen.
+    val fallbackMessage = context.getString(R.string.player_loading_fallback_hevc_decoder)
+    errorRetryJob = scope.launch {
+        _uiState.update {
+            it.copy(
+                error = null,
+                showLoadingOverlay = true,
+                loadingMessage = fallbackMessage,
+                showPauseOverlay = false
+            )
+        }
+
+        releasePlayer(flushPlaybackState = false)
+        if (savedPosition > 0L) {
+            _uiState.update { it.copy(pendingSeekPosition = savedPosition) }
+        }
+        initializePlayer(currentStreamUrl, currentHeaders)
+    }
+    return true
+}
+

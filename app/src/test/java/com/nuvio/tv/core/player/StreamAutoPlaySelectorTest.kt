@@ -187,6 +187,7 @@ class StreamAutoPlaySelectorTest {
         title = null,
         description = null,
         url = url,
+        sources = null,
         ytId = null,
         infoHash = null,
         fileIdx = null,
