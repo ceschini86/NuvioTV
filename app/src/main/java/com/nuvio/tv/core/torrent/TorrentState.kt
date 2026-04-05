@@ -14,7 +14,8 @@ sealed class TorrentState {
         val peers: Int,
         val seeds: Int,
         val bufferProgress: Float,
-        val totalProgress: Float
+        val totalProgress: Float,
+        val preloadedBytes: Long = 0L
     ) : TorrentState()
 
     data class Error(val message: String) : TorrentState()

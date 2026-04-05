@@ -100,6 +100,22 @@ internal fun PlayerRuntimeController.startProgressUpdates() {
                         duration = playerDuration.coerceAtLeast(0L)
                     )
                 }
+                // Update torrent rebuffer progress from ExoPlayer's buffer state
+                if (isTorrentStream && _uiState.value.isBuffering && hasRenderedFirstFrame) {
+                    val bufferedAheadMs = (player.bufferedPosition - pos).coerceAtLeast(0)
+                    val bufferedSec = bufferedAheadMs / 1000f
+                    val speed = formatTorrentSpeed(_uiState.value.torrentDownloadSpeed)
+                    val peerInfo = "${_uiState.value.torrentSeeds} seeds \u00B7 ${_uiState.value.torrentPeers} peers"
+                    val bufLabel = String.format("%.0fs", bufferedSec)
+                    val message = "$bufLabel buffered \u00B7 $peerInfo \u00B7 $speed"
+                    val progress = (bufferedSec / 10f).coerceIn(0f, 1f)
+                    _uiState.update {
+                        it.copy(
+                            torrentBufferingMessage = message,
+                            torrentBufferingProgress = progress
+                        )
+                    }
+                }
                 updateActiveSkipInterval(pos)
                 evaluateNextEpisodeCardVisibility(
                     positionMs = pos,
@@ -1023,4 +1039,12 @@ internal fun PlayerRuntimeController.buildStreamInfoData(): StreamInfoData {
             else -> null
         }
     )
+}
+
+private fun formatTorrentSpeed(bytesPerSec: Long): String {
+    return when {
+        bytesPerSec >= 1_048_576 -> String.format("%.1f MB/s", bytesPerSec / 1_048_576.0)
+        bytesPerSec >= 1_024 -> String.format("%.0f KB/s", bytesPerSec / 1_024.0)
+        else -> "$bytesPerSec B/s"
+    }
 }

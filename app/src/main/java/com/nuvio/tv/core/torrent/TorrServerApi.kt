@@ -25,6 +25,9 @@ data class TorrServerStats(
     val uploadSpeed: Long,
     val peers: Int,
     val seeds: Int,
+    val preloadedBytes: Long,
+    val loadedSize: Long,
+    val torrentSize: Long,
     val files: List<TorrServerFile>
 )
 
@@ -105,6 +108,9 @@ class TorrServerApi @Inject constructor(
                     uploadSpeed = json.optLong("upload_speed", 0),
                     peers = json.optInt("active_peers", 0),
                     seeds = json.optInt("connected_seeders", 0),
+                    preloadedBytes = json.optLong("preloaded_bytes", 0),
+                    loadedSize = json.optLong("loaded_size", 0),
+                    torrentSize = json.optLong("torrent_size", 0),
                     files = files
                 )
             }
