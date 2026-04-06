@@ -11,6 +11,7 @@ import com.nuvio.tv.domain.model.CollectionFolder
 import com.nuvio.tv.domain.model.FolderViewMode
 import com.nuvio.tv.domain.model.PosterShape
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import java.util.UUID
@@ -95,6 +96,16 @@ class CollectionsDataStore @Inject constructor(
 
     fun importFromJson(json: String): List<Collection> {
         return parseCollections(json)
+    }
+
+    suspend fun getCurrentCollections(): List<Collection> {
+        val prefs = store().data.first()
+        return parseCollections(prefs[collectionsKey])
+    }
+
+    suspend fun exportCurrentProfileJson(): String? {
+        val prefs = store().data.first()
+        return prefs[collectionsKey]
     }
 
     fun validateCollectionsJson(json: String): ValidationResult {
