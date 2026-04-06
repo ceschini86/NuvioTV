@@ -14,11 +14,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,11 +33,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.withFrameNanos
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -63,6 +70,9 @@ fun FolderDetailScreen(
     onBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val rowsFocusState by viewModel.rowsFocusState.collectAsStateWithLifecycle()
+    val followLayoutFocusState by viewModel.followLayoutFocusState.collectAsStateWithLifecycle()
+    val tabFocusStates by viewModel.tabFocusStates.collectAsStateWithLifecycle()
     val folder = uiState.folder
 
     if (uiState.isLoading) {
@@ -82,7 +92,10 @@ fun FolderDetailScreen(
     if (uiState.viewMode == FolderViewMode.FOLLOW_LAYOUT) {
         FollowLayoutContent(
             uiState = uiState,
-            onNavigateToDetail = onNavigateToDetail
+            focusState = followLayoutFocusState,
+            onNavigateToDetail = onNavigateToDetail,
+            onSaveFocusState = viewModel::saveFollowLayoutFocusState,
+            onSaveGridFocusState = viewModel::saveFollowLayoutGridFocusState
         )
     } else {
         Column(
@@ -94,14 +107,25 @@ fun FolderDetailScreen(
                 FolderViewMode.TABBED_GRID -> TabbedGridContent(
                     uiState = uiState,
                     folder = folder,
+                    tabFocusState = tabFocusStates[uiState.selectedTabIndex] ?: FolderDetailGridFocusState(),
                     onSelectTab = viewModel::selectTab,
-                    onNavigateToDetail = onNavigateToDetail
+                    onNavigateToDetail = onNavigateToDetail,
+                    onSaveFocusState = { verticalIndex, verticalOffset, focusedItemKey ->
+                        viewModel.saveTabFocusState(
+                            tabIndex = uiState.selectedTabIndex,
+                            verticalScrollIndex = verticalIndex,
+                            verticalScrollOffset = verticalOffset,
+                            focusedItemKey = focusedItemKey
+                        )
+                    }
                 )
                 FolderViewMode.ROWS -> {
                     FolderHeader(folder = folder)
                     RowsContent(
                         uiState = uiState,
-                        onNavigateToDetail = onNavigateToDetail
+                        focusState = rowsFocusState,
+                        onNavigateToDetail = onNavigateToDetail,
+                        onSaveFocusState = viewModel::saveRowsFocusState
                     )
                 }
                 FolderViewMode.FOLLOW_LAYOUT -> {} // handled above
@@ -150,8 +174,10 @@ private fun FolderHeader(folder: com.nuvio.tv.domain.model.CollectionFolder) {
 private fun TabbedGridContent(
     uiState: FolderDetailUiState,
     folder: com.nuvio.tv.domain.model.CollectionFolder,
+    tabFocusState: FolderDetailGridFocusState,
     onSelectTab: (Int) -> Unit,
-    onNavigateToDetail: (String, String, String) -> Unit
+    onNavigateToDetail: (String, String, String) -> Unit,
+    onSaveFocusState: (Int, Int, String?) -> Unit
 ) {
     val tabFocusRequesters = remember(uiState.tabs.size) { uiState.tabs.indices.map { FocusRequester() } }
 
@@ -246,10 +272,53 @@ private fun TabbedGridContent(
         currentTab.catalogRow != null -> {
             val items = currentTab.catalogRow.items
             val posterCardStyle = PosterCardDefaults.Style
-            val itemFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
-            var lastFocusedItemKey by remember { mutableStateOf<String?>(null) }
+            val itemFocusRequesters = remember(uiState.selectedTabIndex) { mutableMapOf<String, FocusRequester>() }
+            var lastFocusedItemKey by remember(
+                uiState.selectedTabIndex,
+                tabFocusState.focusedItemKey
+            ) {
+                mutableStateOf(tabFocusState.focusedItemKey)
+            }
+            val gridState = rememberLazyGridState(
+                initialFirstVisibleItemIndex = tabFocusState.verticalScrollIndex,
+                initialFirstVisibleItemScrollOffset = tabFocusState.verticalScrollOffset
+            )
+
+            DisposableEffect(Unit) {
+                onDispose {
+                    onSaveFocusState(
+                        gridState.firstVisibleItemIndex,
+                        gridState.firstVisibleItemScrollOffset,
+                        lastFocusedItemKey
+                    )
+                }
+            }
+
+            LaunchedEffect(tabFocusState.verticalScrollIndex, tabFocusState.verticalScrollOffset) {
+                val targetIndex = tabFocusState.verticalScrollIndex
+                val targetOffset = tabFocusState.verticalScrollOffset
+                if (gridState.firstVisibleItemIndex == targetIndex &&
+                    gridState.firstVisibleItemScrollOffset == targetOffset
+                ) {
+                    return@LaunchedEffect
+                }
+                if (targetIndex > 0 || targetOffset > 0) {
+                    gridState.scrollToItem(targetIndex, targetOffset)
+                }
+            }
+
+            LaunchedEffect(items, tabFocusState.hasSavedFocus, tabFocusState.focusedItemKey) {
+                val targetKey = tabFocusState.focusedItemKey ?: return@LaunchedEffect
+                if (!tabFocusState.hasSavedFocus) return@LaunchedEffect
+                val requester = itemFocusRequesters[targetKey] ?: return@LaunchedEffect
+                repeat(2) { withFrameNanos { } }
+                if (runCatching { requester.requestFocus() }.isSuccess) {
+                    lastFocusedItemKey = targetKey
+                }
+            }
 
             LazyVerticalGrid(
+                state = gridState,
                 columns = GridCells.Adaptive(minSize = posterCardStyle.width),
                 modifier = Modifier
                     .fillMaxSize()
@@ -294,11 +363,46 @@ private fun TabbedGridContent(
 @Composable
 private fun RowsContent(
     uiState: FolderDetailUiState,
-    onNavigateToDetail: (String, String, String) -> Unit
+    focusState: HomeScreenFocusState,
+    onNavigateToDetail: (String, String, String) -> Unit,
+    onSaveFocusState: (Int, Int, Int, Int, Map<String, Int>) -> Unit
 ) {
     val sourceTabs = uiState.tabs.filter { !it.isAllTab }
+    val columnListState = rememberLazyListState(
+        initialFirstVisibleItemIndex = focusState.verticalScrollIndex,
+        initialFirstVisibleItemScrollOffset = focusState.verticalScrollOffset
+    )
+    val rowStates = remember { mutableMapOf<String, LazyListState>() }
+    val currentFocusedRowIndex = remember { intArrayOf(focusState.focusedRowIndex) }
+    val currentFocusedItemIndex = remember { intArrayOf(focusState.focusedItemIndex) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            onSaveFocusState(
+                columnListState.firstVisibleItemIndex,
+                columnListState.firstVisibleItemScrollOffset,
+                currentFocusedRowIndex[0],
+                currentFocusedItemIndex[0],
+                rowStates.mapValues { it.value.firstVisibleItemIndex }
+            )
+        }
+    }
+
+    LaunchedEffect(focusState.verticalScrollIndex, focusState.verticalScrollOffset) {
+        val targetIndex = focusState.verticalScrollIndex
+        val targetOffset = focusState.verticalScrollOffset
+        if (columnListState.firstVisibleItemIndex == targetIndex &&
+            columnListState.firstVisibleItemScrollOffset == targetOffset
+        ) {
+            return@LaunchedEffect
+        }
+        if (targetIndex > 0 || targetOffset > 0) {
+            columnListState.scrollToItem(targetIndex, targetOffset)
+        }
+    }
 
     LazyColumn(
+        state = columnListState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(top = 16.dp, bottom = 48.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -343,12 +447,32 @@ private fun RowsContent(
                         }
                     }
                     tab.catalogRow != null -> {
+                        val catalogRow = tab.catalogRow
+                        val rowKey = "${catalogRow.addonId}_${catalogRow.apiType}_${catalogRow.catalogId}"
+                        val listState = rowStates.getOrPut(rowKey) {
+                            LazyListState(
+                                firstVisibleItemIndex = focusState.catalogRowScrollStates[rowKey] ?: 0
+                            )
+                        }
                         CatalogRowSection(
-                            catalogRow = tab.catalogRow,
+                            catalogRow = catalogRow,
                             onItemClick = onNavigateToDetail,
                             showPosterLabels = true,
                             showAddonName = false,
-                            showCatalogTypeSuffix = false
+                            showCatalogTypeSuffix = false,
+                            listState = listState,
+                            focusedItemIndex = if (
+                                focusState.hasSavedFocus &&
+                                focusState.focusedRowIndex == index
+                            ) {
+                                focusState.focusedItemIndex
+                            } else {
+                                -1
+                            },
+                            onItemFocused = { itemIndex ->
+                                currentFocusedRowIndex[0] = index
+                                currentFocusedItemIndex[0] = itemIndex
+                            }
                         )
                     }
                 }
@@ -360,7 +484,10 @@ private fun RowsContent(
 @Composable
 private fun FollowLayoutContent(
     uiState: FolderDetailUiState,
-    onNavigateToDetail: (String, String, String) -> Unit
+    focusState: HomeScreenFocusState,
+    onNavigateToDetail: (String, String, String) -> Unit,
+    onSaveFocusState: (Int, Int, Int, Int, Map<String, Int>) -> Unit,
+    onSaveGridFocusState: (Int, Int, String?) -> Unit
 ) {
     val homeState = uiState.followLayoutHomeState
 
@@ -371,7 +498,6 @@ private fun FollowLayoutContent(
         return
     }
 
-    val focusState = remember { HomeScreenFocusState() }
     val posterCardStyle = remember {
         PosterCardStyle(
             width = homeState.posterCardWidthDp.dp,
@@ -379,8 +505,6 @@ private fun FollowLayoutContent(
             cornerRadius = homeState.posterCardCornerRadiusDp.dp
         )
     }
-    val noOpSaveFocus: (Int, Int, Int, Int, Map<String, Int>) -> Unit = remember { { _, _, _, _, _ -> } }
-    val noOpSaveGridFocus: (Int, Int) -> Unit = remember { { _, _ -> } }
     val noOpCwClick: (ContinueWatchingItem) -> Unit = remember { { } }
     val noOpRemoveCw: (String, Int?, Int?, Boolean) -> Unit = remember { { _, _, _, _ -> } }
     val noOpSeeAll: (String, String, String) -> Unit = remember { { _, _, _ -> } }
@@ -399,7 +523,7 @@ private fun FollowLayoutContent(
             onNavigateToFolderDetail = noOpFolderDetail,
             onRemoveContinueWatching = noOpRemoveCw,
             onRequestTrailerPreview = { },
-            onSaveFocusState = noOpSaveFocus
+            onSaveFocusState = onSaveFocusState
         )
         HomeLayout.GRID -> GridHomeContent(
             uiState = homeState,
@@ -410,7 +534,7 @@ private fun FollowLayoutContent(
             onNavigateToFolderDetail = noOpFolderDetail,
             onRemoveContinueWatching = noOpRemoveCw,
             posterCardStyle = posterCardStyle,
-            onSaveGridFocusState = noOpSaveGridFocus
+            onSaveGridFocusState = onSaveGridFocusState
         )
         HomeLayout.MODERN -> ModernHomeContent(
             uiState = homeState,
@@ -423,7 +547,7 @@ private fun FollowLayoutContent(
             onLoadMoreCatalog = noOpSeeAll,
             onRemoveContinueWatching = noOpRemoveCw,
             onNavigateToFolderDetail = noOpFolderDetail,
-            onSaveFocusState = noOpSaveFocus
+            onSaveFocusState = onSaveFocusState
         )
     }
 }

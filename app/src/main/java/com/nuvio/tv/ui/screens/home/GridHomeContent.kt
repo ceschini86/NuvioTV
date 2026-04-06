@@ -27,11 +27,14 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Brush
@@ -88,20 +91,36 @@ fun GridHomeContent(
     onCatalogItemLongPress: (MetaPreview, String) -> Unit = { _, _ -> },
     posterCardStyle: PosterCardStyle = PosterCardDefaults.Style,
     onItemFocus: (com.nuvio.tv.domain.model.MetaPreview) -> Unit = {},
-    onSaveGridFocusState: (Int, Int) -> Unit
+    onSaveGridFocusState: (Int, Int, String?) -> Unit
 ) {
     val gridState = rememberLazyGridState(
         initialFirstVisibleItemIndex = gridFocusState.verticalScrollIndex,
         initialFirstVisibleItemScrollOffset = gridFocusState.verticalScrollOffset
     )
+    val focusRequesters = remember { mutableMapOf<String, FocusRequester>() }
+    var lastFocusedGridItemKey by remember { mutableStateOf(gridFocusState.focusedItemKey) }
 
     // Save scroll state when leaving
     DisposableEffect(Unit) {
         onDispose {
             onSaveGridFocusState(
                 gridState.firstVisibleItemIndex,
-                gridState.firstVisibleItemScrollOffset
+                gridState.firstVisibleItemScrollOffset,
+                lastFocusedGridItemKey
             )
+        }
+    }
+
+    LaunchedEffect(gridFocusState.verticalScrollIndex, gridFocusState.verticalScrollOffset) {
+        val targetIndex = gridFocusState.verticalScrollIndex
+        val targetOffset = gridFocusState.verticalScrollOffset
+        if (gridState.firstVisibleItemIndex == targetIndex &&
+            gridState.firstVisibleItemScrollOffset == targetOffset
+        ) {
+            return@LaunchedEffect
+        }
+        if (targetIndex > 0 || targetOffset > 0) {
+            gridState.scrollToItem(targetIndex, targetOffset)
         }
     }
 
@@ -109,6 +128,16 @@ fun GridHomeContent(
     val gridItems = uiState.gridItems
     val continueWatchingItems = uiState.continueWatchingItems
     val continueWatchingOffset = if (continueWatchingItems.isNotEmpty()) 1 else 0
+
+    LaunchedEffect(gridItems, gridFocusState.hasSavedFocus, gridFocusState.focusedItemKey) {
+        val targetKey = gridFocusState.focusedItemKey ?: return@LaunchedEffect
+        if (!gridFocusState.hasSavedFocus) return@LaunchedEffect
+        val requester = focusRequesters[targetKey] ?: return@LaunchedEffect
+        repeat(2) { withFrameNanos { } }
+        if (runCatching { requester.requestFocus() }.isSuccess) {
+            lastFocusedGridItemKey = targetKey
+        }
+    }
 
     // Build index-to-section mapping for sticky header
     val sectionMapping = remember(gridItems, continueWatchingOffset) {
@@ -137,8 +166,14 @@ fun GridHomeContent(
             }
         }
     }
-    val shouldRequestInitialFocus = remember(gridFocusState.verticalScrollIndex, gridFocusState.verticalScrollOffset) {
-        gridFocusState.verticalScrollIndex == 0 && gridFocusState.verticalScrollOffset == 0
+    val shouldRequestInitialFocus = remember(
+        gridFocusState.hasSavedFocus,
+        gridFocusState.verticalScrollIndex,
+        gridFocusState.verticalScrollOffset
+    ) {
+        !gridFocusState.hasSavedFocus &&
+            gridFocusState.verticalScrollIndex == 0 &&
+            gridFocusState.verticalScrollOffset == 0
     }
     val heroFocusRequester = remember { FocusRequester() }
     val firstGridItemFocusRequester = remember { FocusRequester() }
@@ -328,13 +363,17 @@ fun GridHomeContent(
                             span = { GridItemSpan(1) },
                             contentType = "content"
                         ) {
+                            val itemKey = "content_${gridItem.catalogId}_${gridItem.item.id}_$occurrence"
                             GridContentCard(
                                 item = gridItem.item,
-                                focusRequester = focusRequester,
+                                focusRequester = focusRequester ?: focusRequesters.getOrPut(itemKey) { FocusRequester() },
                                 posterCardStyle = posterCardStyle,
                                 showLabel = uiState.posterLabelsEnabled,
                                 isWatched = isCatalogItemWatched(gridItem.item),
-                                onFocused = { onItemFocus(gridItem.item) },
+                                onFocused = {
+                                    lastFocusedGridItemKey = itemKey
+                                    onItemFocus(gridItem.item)
+                                },
                                 onClick = {
                                     onNavigateToDetail(
                                         gridItem.item.id,
@@ -431,9 +470,12 @@ fun GridHomeContent(
                             span = { GridItemSpan(1) },
                             contentType = "collection_folder"
                         ) {
+                            val itemKey = "col_folder_${gridItem.collectionId}_${gridItem.folder.id}"
                             GridCollectionFolderCard(
                                 folder = gridItem.folder,
                                 posterCardStyle = posterCardStyle,
+                                focusRequester = focusRequesters.getOrPut(itemKey) { FocusRequester() },
+                                onFocused = { lastFocusedGridItemKey = itemKey },
                                 onClick = {
                                     onNavigateToFolderDetail(gridItem.collectionId, gridItem.folder.id)
                                 }
@@ -622,6 +664,8 @@ private fun GridCollectionFolderCard(
     folder: CollectionFolder,
     posterCardStyle: PosterCardStyle,
     onClick: () -> Unit,
+    focusRequester: FocusRequester? = null,
+    onFocused: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val cardShape = RoundedCornerShape(posterCardStyle.cornerRadius)
@@ -629,7 +673,9 @@ private fun GridCollectionFolderCard(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .aspectRatio(posterCardStyle.aspectRatio),
+            .aspectRatio(posterCardStyle.aspectRatio)
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .onFocusChanged { if (it.isFocused) onFocused() },
         shape = CardDefaults.shape(shape = cardShape),
         colors = CardDefaults.colors(
             containerColor = NuvioColors.BackgroundCard,

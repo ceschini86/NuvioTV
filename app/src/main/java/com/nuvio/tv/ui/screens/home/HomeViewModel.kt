@@ -409,13 +409,16 @@ class HomeViewModel @Inject constructor(
         verticalScrollIndex: Int,
         verticalScrollOffset: Int,
         focusedRowIndex: Int = 0,
-        focusedItemIndex: Int = 0
+        focusedItemIndex: Int = 0,
+        focusedItemKey: String? = null
     ) {
         _gridFocusState.value = HomeScreenFocusState(
             verticalScrollIndex = verticalScrollIndex,
             verticalScrollOffset = verticalScrollOffset,
             focusedRowIndex = focusedRowIndex,
-            focusedItemIndex = focusedItemIndex
+            focusedItemIndex = focusedItemIndex,
+            focusedItemKey = focusedItemKey,
+            hasSavedFocus = true
         )
     }
 

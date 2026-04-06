@@ -430,8 +430,8 @@ private fun GridHomeRoute(
         onItemFocus = { item ->
             viewModel.onItemFocus(item)
         },
-        onSaveGridFocusState = { vi, vo ->
-            viewModel.saveGridFocusState(vi, vo)
+        onSaveGridFocusState = { vi, vo, key ->
+            viewModel.saveGridFocusState(vi, vo, focusedItemKey = key)
         }
     )
 }
