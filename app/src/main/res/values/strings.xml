@@ -41,6 +41,9 @@
     <string name="web_installed">Installed</string>
     <string name="web_no_repos">No repositories installed</string>
     <string name="web_error_repo_exists">This repository is already in the list</string>
+    <string name="web_manage_collections_title">Manage Collections</string>
+    <string name="web_manage_collections_subtitle">Create and manage your custom collections</string>
+    <string name="web_status_msg_collections_updated">Your collections have been updated on the TV.</string>
 
     <!-- HomeScreen -->
     <string name="home_no_addons">No addons installed. Add one to get started.</string>
