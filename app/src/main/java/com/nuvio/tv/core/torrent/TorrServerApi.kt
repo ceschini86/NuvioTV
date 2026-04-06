@@ -51,6 +51,7 @@ class TorrServerApi @Inject constructor(
         val body = JSONObject().apply {
             put("action", "add")
             put("link", magnetLink)
+            put("save_to_db", false)
             if (title != null) put("title", title)
         }
 

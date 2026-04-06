@@ -26,7 +26,7 @@ class TorrServerBinary @Inject constructor(
         private const val TAG = "TorrServerBinary"
         const val PORT = 8091
         private const val STARTUP_TIMEOUT_MS = 15_000L
-        private const val HEALTH_CHECK_INTERVAL_MS = 1_000L
+        private const val HEALTH_CHECK_INTERVAL_MS = 200L
     }
 
     private var process: Process? = null
@@ -63,6 +63,10 @@ class TorrServerBinary @Inject constructor(
 
         if (!isBinaryAvailable) {
             throw TorrentException("TorrServer binary not found at ${binaryFile.absolutePath}")
+        }
+
+        if (!binaryFile.canExecute()) {
+            binaryFile.setExecutable(true)
         }
 
         val pb = ProcessBuilder(
