@@ -264,6 +264,59 @@ fun CollectionEditorScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
+        item(key = "pin_to_top") {
+            Card(
+                onClick = { viewModel.setPinToTop(!uiState.pinToTop) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.colors(
+                    containerColor = NuvioColors.BackgroundCard,
+                    focusedContainerColor = NuvioColors.FocusBackground
+                ),
+                border = CardDefaults.border(
+                    focusedBorder = Border(
+                        border = BorderStroke(2.dp, NuvioColors.FocusRing),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                ),
+                shape = CardDefaults.shape(RoundedCornerShape(12.dp)),
+                scale = CardDefaults.scale(focusedScale = 1.02f)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Pin Above Catalogs",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = NuvioColors.TextPrimary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Show this collection above all regular home catalogs. Multiple pinned collections follow collection creation order.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NuvioColors.TextSecondary
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = uiState.pinToTop,
+                        onCheckedChange = { viewModel.setPinToTop(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = NuvioColors.Secondary,
+                            checkedTrackColor = NuvioColors.Secondary.copy(alpha = 0.3f),
+                            uncheckedThumbColor = NuvioColors.TextSecondary,
+                            uncheckedTrackColor = NuvioColors.BackgroundCard
+                        )
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
         item(key = "view_mode") {
             Text(
                 text = "View Mode",

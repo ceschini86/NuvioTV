@@ -20,6 +20,7 @@ class CollectionConfigServer(
         val id: String,
         val title: String,
         val backdropImageUrl: String? = null,
+        val pinToTop: Boolean = false,
         val viewMode: String = "TABBED_GRID",
         val showAllTab: Boolean = true,
         val folders: List<FolderInfo>

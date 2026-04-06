@@ -521,6 +521,7 @@ class AddonManagerViewModel @Inject constructor(
                 id = col.id,
                 title = col.title,
                 backdropImageUrl = col.backdropImageUrl,
+                pinToTop = col.pinToTop,
                 viewMode = col.viewMode.name,
                 showAllTab = col.showAllTab,
                 folders = col.folders.map { folder ->

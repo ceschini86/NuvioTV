@@ -172,6 +172,7 @@ class CollectionsDataStore @Inject constructor(
         val id: String,
         val title: String,
         val backdropImageUrl: String? = null,
+        val pinToTop: Boolean = false,
         val viewMode: String = "TABBED_GRID",
         val showAllTab: Boolean = true,
         val folders: List<SerializableFolder> = emptyList()
@@ -199,6 +200,7 @@ class CollectionsDataStore @Inject constructor(
         id = id,
         title = title,
         backdropImageUrl = backdropImageUrl,
+        pinToTop = pinToTop,
         viewMode = viewMode.name,
         showAllTab = showAllTab,
         folders = folders.map { folder ->
@@ -224,6 +226,7 @@ class CollectionsDataStore @Inject constructor(
         id = id,
         title = title,
         backdropImageUrl = backdropImageUrl,
+        pinToTop = pinToTop,
         viewMode = FolderViewMode.fromString(viewMode),
         showAllTab = showAllTab,
         folders = folders.map { folder ->

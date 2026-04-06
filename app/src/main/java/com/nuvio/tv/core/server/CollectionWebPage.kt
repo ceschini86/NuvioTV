@@ -520,7 +520,7 @@ function filterActiveSources(ci, fi, query) {
 }
 
 function addCollection() {
-  collections.push({ id: generateId(), title: 'New Collection', backdropImageUrl: null, viewMode: 'TABBED_GRID', showAllTab: true, folders: [] });
+  collections.push({ id: generateId(), title: 'New Collection', backdropImageUrl: null, pinToTop: false, viewMode: 'TABBED_GRID', showAllTab: true, folders: [] });
   expandedCollection = collections.length - 1;
   expandedFolder = null;
   renderCollections();
@@ -574,6 +574,10 @@ function updateCollectionViewMode(ci, val) {
 
 function updateCollectionShowAllTab(ci, checked) {
   collections[ci].showAllTab = checked;
+}
+
+function updateCollectionPinToTop(ci, checked) {
+  collections[ci].pinToTop = checked;
 }
 
 function addFolder(ci) {
@@ -757,6 +761,14 @@ function renderCollections() {
           '<span class="col-meta-label">Backdrop</span>' +
           '<img id="col-backdrop-preview-' + ci + '" src="' + escapeAttr(col.backdropImageUrl || '') + '" style="' + (col.backdropImageUrl ? '' : 'display:none') + '" onerror="this.style.display=\'none\'">' +
           '<input type="url" placeholder="Image URL (optional)" value="' + escapeAttr(col.backdropImageUrl || '') + '" oninput="updateCollectionBackdrop(' + ci + ',this.value)">' +
+        '</div>' +
+        '<div class="col-setting-row">' +
+          '<span class="toggle-label">Pin above catalogs</span>' +
+          '<label class="toggle-switch" onclick="event.stopPropagation()">' +
+            '<input type="checkbox"' + (col.pinToTop ? ' checked' : '') + ' onchange="updateCollectionPinToTop(' + ci + ',this.checked)">' +
+            '<span class="toggle-track"></span>' +
+            '<span class="toggle-thumb"></span>' +
+          '</label>' +
         '</div>' +
         '<div class="col-setting-row">' +
           '<span class="col-meta-label">View Mode</span>' +

@@ -396,11 +396,19 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
     heroItemOrder = baseHeroItems.map { it.id }
 
     val computedHomeRows = buildList {
+        collectionsCache.forEach { collection ->
+            val key = "collection_${collection.id}"
+            if (collection.pinToTop && key !in disabledHomeCatalogKeys) {
+                add(HomeRow.CollectionRow(collection))
+            }
+        }
         for (key in orderedKeys) {
             if (key in disabledHomeCatalogKeys) continue
             val collectionEntry = collectionsSnapshot[key]
             if (collectionEntry != null) {
-                add(HomeRow.CollectionRow(collectionEntry))
+                if (!collectionEntry.pinToTop) {
+                    add(HomeRow.CollectionRow(collectionEntry))
+                }
             } else {
                 val catalogRow = displayRows.find { row ->
                     "${row.addonId}_${row.apiType}_${row.catalogId}" == key
