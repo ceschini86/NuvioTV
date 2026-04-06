@@ -156,7 +156,7 @@ private fun FolderCard(
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(shape),
-                    contentScale = ContentScale.Crop
+                    contentScale = ContentScale.FillBounds
                 )
             } else if (!folder.coverEmoji.isNullOrBlank()) {
                 Box(

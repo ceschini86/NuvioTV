@@ -151,7 +151,7 @@ private fun FolderHeader(folder: com.nuvio.tv.domain.model.CollectionFolder) {
                     .width(48.dp)
                     .height(48.dp)
                     .clip(RoundedCornerShape(8.dp)),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.FillBounds
             )
         } else if (!folder.coverEmoji.isNullOrBlank()) {
             Text(
@@ -196,7 +196,7 @@ private fun TabbedGridContent(
                     .width(48.dp)
                     .height(48.dp)
                     .clip(RoundedCornerShape(8.dp)),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.FillBounds
             )
         } else if (!folder.coverEmoji.isNullOrBlank()) {
             Text(

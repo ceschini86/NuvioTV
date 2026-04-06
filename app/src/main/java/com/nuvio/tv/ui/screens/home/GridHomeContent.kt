@@ -695,7 +695,7 @@ private fun GridCollectionFolderCard(
                     model = folder.coverImageUrl,
                     contentDescription = folder.title,
                     modifier = Modifier.fillMaxSize().clip(cardShape),
-                    contentScale = ContentScale.Crop
+                    contentScale = ContentScale.FillBounds
                 )
             } else if (!folder.coverEmoji.isNullOrBlank()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

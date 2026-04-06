@@ -464,7 +464,7 @@ internal fun buildCollectionFolderItem(
     }
     val imageUrl = firstNonBlank(folder.coverImageUrl, collection.backdropImageUrl)
     val heroImageUrl = if (useLandscapePosters) {
-        firstNonBlank(collection.backdropImageUrl, folder.coverImageUrl)
+        firstNonBlank(folder.coverImageUrl, collection.backdropImageUrl)
     } else {
         imageUrl
     }
@@ -483,7 +483,7 @@ internal fun buildCollectionFolderItem(
             imdbText = null,
             genres = emptyList(),
             poster = imageUrl,
-            backdrop = firstNonBlank(collection.backdropImageUrl, folder.coverImageUrl),
+            backdrop = firstNonBlank(folder.coverImageUrl, collection.backdropImageUrl),
             imageUrl = heroImageUrl
         ),
         payload = ModernPayload.CollectionFolder(

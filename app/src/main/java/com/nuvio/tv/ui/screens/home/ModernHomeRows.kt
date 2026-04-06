@@ -770,6 +770,10 @@ private fun ModernCarouselCard(
     } else {
         item.imageUrl ?: item.heroPreview.poster ?: item.heroPreview.backdrop
     }
+    val imageContentScale = when (item.payload) {
+        is ModernPayload.CollectionFolder -> ContentScale.FillBounds
+        else -> ContentScale.Crop
+    }
     // Keep decode target stable across expand/collapse to avoid recreating image requests/painters
     // purely due to animated width changes.
     val maxRequestCardWidth = if (focusedPosterBackdropExpandEnabled) {
@@ -925,7 +929,7 @@ private fun ModernCarouselCard(
                             placeholder = backgroundPainter,
                             error = backgroundPainter,
                             fallback = backgroundPainter,
-                            contentScale = ContentScale.Crop
+                            contentScale = imageContentScale
                         )
                     } else {
                         MonochromePosterPlaceholder()
