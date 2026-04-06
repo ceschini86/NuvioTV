@@ -1367,17 +1367,28 @@ class TraktProgressService @Inject constructor(
 
         val mergedByKey = linkedMapOf<String, WatchProgress>()
 
+        // In-progress items first, then completed episodes override them.
+        (inProgressMovies + inProgressEpisodes)
+            .sortedByDescending { it.lastWatched }
+            .forEach { progress ->
+                mergedByKey[progressKey(progress)] = progress
+            }
+
         recentCompletedEpisodes
             .sortedByDescending { it.lastWatched }
             .forEach { progress ->
                 mergedByKey[progressKey(progress)] = progress
             }
 
-        (inProgressMovies + inProgressEpisodes)
-            .sortedByDescending { it.lastWatched }
-            .forEach { progress ->
-                mergedByKey[progressKey(progress)] = progress
-            }
+        val completedEpisodeKeys = recentCompletedEpisodes
+            .filter { it.season != null && it.episode != null }
+            .map { "${it.contentId}_s${it.season}e${it.episode}" }
+            .toSet()
+        mergedByKey.entries.removeAll { (key, progress) ->
+            progress.source == WatchProgress.SOURCE_TRAKT_PLAYBACK &&
+                progress.season != null && progress.episode != null &&
+                "${progress.contentId}_s${progress.season}e${progress.episode}" in completedEpisodeKeys
+        }
 
         return mergedByKey.values.sortedByDescending { it.lastWatched }
     }

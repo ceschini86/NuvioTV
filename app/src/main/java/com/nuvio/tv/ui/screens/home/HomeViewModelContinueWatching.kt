@@ -303,8 +303,9 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                                 )
                             )
                         }
-                    } else if (useTraktProgress && cachedInProgress.isNotEmpty()) {
-                        // Trakt hasn't responded yet — restore last known in-progress items from disk.
+                    }
+                    // For Trakt: show cached in-progress until Trakt responds (items non-empty).
+                    if (liveInProgress.isEmpty() && useTraktProgress && cachedInProgress.isNotEmpty() && items.isEmpty()) {
                         cachedInProgress.forEach { cached ->
                             add(
                                 ContinueWatchingItem.InProgress(
