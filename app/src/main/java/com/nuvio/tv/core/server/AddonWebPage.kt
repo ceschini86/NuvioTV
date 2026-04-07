@@ -867,12 +867,20 @@ object AddonWebPage {
 
   <div class="section-block">
     <div class="section-label">${context.getString(R.string.web_home_catalogs)}</div>
+    <div class="add-section" style="display:flex;gap:0.5rem">
+      <button class="btn" onclick="enableAllCatalogs()" style="flex:1">Enable All</button>
+      <button class="btn" onclick="disableAllCatalogs()" style="flex:1">Disable All</button>
+    </div>
     <ul class="addon-list" id="catalogList"></ul>
     <div class="empty-state" id="catalogEmptyState">${context.getString(R.string.web_no_catalogs)}</div>
   </div>
 
   <div class="section-block">
     <div class="section-label">Collections</div>
+    <div class="add-section" style="display:flex;gap:0.5rem">
+      <button class="btn" onclick="enableAllCollections()" style="flex:1">Enable All</button>
+      <button class="btn" onclick="disableAllCollections()" style="flex:1">Disable All</button>
+    </div>
     <div class="add-section" style="display:flex;gap:0.5rem">
       <button class="btn" onclick="addCollection()" style="flex:1">+ New Collection</button>
       <button class="btn" onclick="exportCollections()" style="flex:1">Export</button>
@@ -1245,6 +1253,50 @@ function toggleCatalog(index) {
     else if (!item.isDisabled && idx >= 0) disabledCollectionKeys.splice(idx, 1);
   }
   renderCatalogs();
+}
+
+function enableAllCatalogs() {
+  catalogs.forEach(function(item) {
+    item.isDisabled = false;
+    if (item.isCollection) {
+      var key = 'collection_' + item.collectionId;
+      var idx = disabledCollectionKeys.indexOf(key);
+      if (idx >= 0) disabledCollectionKeys.splice(idx, 1);
+    }
+  });
+  renderCatalogs();
+}
+
+function disableAllCatalogs() {
+  catalogs.forEach(function(item) {
+    item.isDisabled = true;
+    if (item.isCollection) {
+      var key = 'collection_' + item.collectionId;
+      if (disabledCollectionKeys.indexOf(key) < 0) disabledCollectionKeys.push(key);
+    }
+  });
+  renderCatalogs();
+}
+
+function enableAllCollections() {
+  disabledCollectionKeys = [];
+  catalogs.forEach(function(item) {
+    if (item.isCollection) item.isDisabled = false;
+  });
+  renderCatalogs();
+  renderCollections();
+}
+
+function disableAllCollections() {
+  collections.forEach(function(col) {
+    var key = 'collection_' + col.id;
+    if (disabledCollectionKeys.indexOf(key) < 0) disabledCollectionKeys.push(key);
+  });
+  catalogs.forEach(function(item) {
+    if (item.isCollection) item.isDisabled = true;
+  });
+  renderCatalogs();
+  renderCollections();
 }
 
 async function addAddon() {

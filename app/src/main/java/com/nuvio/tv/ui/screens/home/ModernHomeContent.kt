@@ -101,6 +101,7 @@ import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.domain.model.FocusedPosterTrailerPlaybackTarget
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.ui.components.ContinueWatchingCard
+import com.nuvio.tv.ui.components.HeroCarousel
 import com.nuvio.tv.ui.components.ContinueWatchingOptionsDialog
 import com.nuvio.tv.ui.components.MonochromePosterPlaceholder
 import com.nuvio.tv.ui.components.TrailerPlayer
@@ -343,7 +344,21 @@ fun ModernHomeContent(
         }
     }
 
-    if (carouselRows.isEmpty()) return
+    if (carouselRows.isEmpty()) {
+        // No carousel rows but hero items may exist — show standalone hero
+        if (uiState.heroSectionEnabled && uiState.heroItems.isNotEmpty()) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                HeroCarousel(
+                    items = uiState.heroItems,
+                    onItemClick = { item ->
+                        onNavigateToDetail(item.id, item.apiType, "")
+                    },
+                    onItemFocus = onItemFocus
+                )
+            }
+        }
+        return
+    }
     val carouselLookups = remember(carouselRows) {
         val rowIndexByKey = LinkedHashMap<String, Int>(carouselRows.size)
         val rowByKey = LinkedHashMap<String, HeroCarouselRow>(carouselRows.size)
@@ -544,7 +559,20 @@ fun ModernHomeContent(
 
         val hadActiveRow = focusHolder.activeRowKey != null
         val existingActive = focusHolder.activeRowKey?.let(rowByKey::get)
-        val resolvedActive = existingActive ?: carouselRows.first()
+        val firstRow = carouselRows.first()
+        // When new rows appear before the auto-selected row (e.g., catalogs
+        // load after collections), move focus to the new first row — but only
+        // if the user hasn't manually navigated away from the initial position.
+        val autoSelectedStale = hadActiveRow && existingActive != null &&
+            existingActive.key != firstRow.key &&
+            rowIndexByKey.getOrDefault(existingActive.key, 0) > 0 &&
+            !restoredFromSavedState &&
+            pendingRowFocusKey == existingActive.key
+        val resolvedActive = when {
+            autoSelectedStale -> firstRow
+            existingActive != null -> existingActive
+            else -> firstRow
+        }
         val resolvedIndex = focusedItemByRow[resolvedActive.key]
             ?.coerceIn(0, (resolvedActive.items.size - 1).coerceAtLeast(0))
             ?: 0
@@ -555,7 +583,7 @@ fun ModernHomeContent(
         focusedItemByRow[resolvedActive.key] = resolvedIndex
         heroItem = resolvedActive.items.getOrNull(resolvedIndex)?.heroPreview
             ?: resolvedActive.items.firstOrNull()?.heroPreview
-        if (!focusState.hasSavedFocus && (!hadActiveRow || existingActive == null)) {
+        if (!focusState.hasSavedFocus && (!hadActiveRow || existingActive == null || autoSelectedStale)) {
             pendingRowFocusKey = resolvedActive.key
             pendingRowFocusIndex = resolvedIndex
             pendingRowFocusNonce++

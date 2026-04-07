@@ -18,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -28,10 +29,15 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.Collection
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
 import com.nuvio.tv.ui.components.CatalogRowSection
 import com.nuvio.tv.ui.components.CollectionRowSection
 import com.nuvio.tv.ui.components.ContinueWatchingSection
 import com.nuvio.tv.ui.components.HeroCarousel
+import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.components.PosterCardStyle
 
 /** Minimum interval between processed key repeat events to prevent HWUI overload. */
@@ -145,18 +151,40 @@ fun ClassicHomeContent(
 
     val heroVisible = uiState.heroSectionEnabled && uiState.heroItems.isNotEmpty()
 
-    LaunchedEffect(shouldRequestInitialFocus, heroVisible, uiState.heroItems.size) {
+    // Hero is "expected" when the user has explicitly selected hero catalogs —
+    // those load late via loadHeroCatalogsPipeline (after the 300ms preference
+    // debounce).  Until the hero resolves, we defer content focus so rows
+    // can't steal it.
+    val heroExpected = uiState.heroSectionEnabled && uiState.heroCatalogKeys.isNotEmpty()
+    val heroResolved = !heroExpected || heroVisible
+    val deferContentFocus = shouldRequestInitialFocus && !heroResolved
+
+    LaunchedEffect(shouldRequestInitialFocus, heroVisible) {
         if (!shouldRequestInitialFocus || !heroVisible) return@LaunchedEffect
-        repeat(2) { withFrameNanos { } }
-        try {
-            heroFocusRequester.requestFocus()
-        } catch (_: IllegalStateException) {
+        columnListState.scrollToItem(0)
+        repeat(8) {
+            withFrameNanos { }
+            val focused = runCatching { heroFocusRequester.requestFocus(); true }
+                .getOrDefault(false)
+            if (focused) return@LaunchedEffect
         }
     }
 
     // Throttle D-pad key repeats to prevent HWUI overload when a key is held down.
     var lastKeyRepeatTime by remember { mutableStateOf(0L) }
     val contentFocusRequester = LocalContentFocusRequester.current
+
+    if (deferContentFocus) {
+        // Show spinner while waiting for hero data to arrive — prevents
+        // content rows from claiming focus before the hero is ready.
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            LoadingIndicator()
+        }
+        return
+    }
 
     LazyColumn(
         state = columnListState,
