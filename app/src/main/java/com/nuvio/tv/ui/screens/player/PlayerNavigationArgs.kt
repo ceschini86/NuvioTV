@@ -30,7 +30,8 @@ internal data class PlayerNavigationArgs(
     val streamDescription: String?,
     val infoHash: String?,
     val fileIdx: Int?,
-    val sourcesJson: String?
+    val sourcesJson: String?,
+    val contentLanguage: String?
 ) {
     val torrentTrackers: List<String>
         get() {
@@ -80,7 +81,8 @@ internal data class PlayerNavigationArgs(
                 streamDescription = decodedOrNull("streamDescription"),
                 infoHash = savedStateHandle.get<String>("infoHash")?.takeIf { it.isNotEmpty() },
                 fileIdx = savedStateHandle.get<String>("fileIdx")?.toIntOrNull(),
-                sourcesJson = decodedOrNull("sources")
+                sourcesJson = decodedOrNull("sources"),
+                contentLanguage = decodedOrNull("contentLanguage")
             )
         }
     }

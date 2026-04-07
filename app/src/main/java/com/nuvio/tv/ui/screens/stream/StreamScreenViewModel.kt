@@ -74,6 +74,7 @@ class StreamScreenViewModel @Inject constructor(
     private val year: String? = savedStateHandle.getOptionalString("year")
     private val contentId: String? = savedStateHandle.getOptionalString("contentId")
     private val contentName: String? = savedStateHandle.getOptionalString("contentName")
+    private val contentLanguage: String? = savedStateHandle.getOptionalString("contentLanguage")
     private val manualSelection: Boolean = savedStateHandle.get<String>("manualSelection")
         ?.toBooleanStrictOrNull()
         ?: false
@@ -243,7 +244,8 @@ class StreamScreenViewModel @Inject constructor(
                                 bingeGroup = null,
                                 filename = cached.filename,
                                 videoHash = cached.videoHash,
-                                videoSize = cached.videoSize
+                                videoSize = cached.videoSize,
+                                contentLanguage = contentLanguage
                             )
                         )
                     }
@@ -266,7 +268,9 @@ class StreamScreenViewModel @Inject constructor(
                     addonStreamGroups,
                     installedAddonOrder
                 )
+                // Pre-sort once — filterByAddon just filters without re-sorting
                 val allStreams = orderedAddonStreams.flatMap { it.streams }
+                    .sortedByDescending { it.qualityValue }
                 val availableAddons = orderedAddonStreams.map { it.addonName }
                 val selectedAutoPlayStream = if (autoPlayHandledForSession || !isAllLoaded) {
                     null
@@ -353,7 +357,6 @@ class StreamScreenViewModel @Inject constructor(
                         is NetworkResult.Success -> {
                             lastSuccessData = result.data
                             applySuccess(result.data, isAllLoaded = false)
-                            // After timeout, auto-select on first result that arrives
                             if (timeoutElapsed && !autoSelectTriggered) {
                                 autoSelectTriggered = true
                                 applySuccess(result.data, isAllLoaded = true)
@@ -668,7 +671,8 @@ class StreamScreenViewModel @Inject constructor(
             addonLogo = stream.addonLogo,
             streamDescription = stream.description,
             fileIdx = stream.fileIdx,
-            sources = stream.sources
+            sources = stream.sources,
+            contentLanguage = contentLanguage
         )
 
         val url = playbackInfo.url
@@ -726,5 +730,6 @@ data class StreamPlaybackInfo(
     val addonLogo: String? = null,
     val streamDescription: String? = null,
     val fileIdx: Int? = null,
-    val sources: List<String>? = null
+    val sources: List<String>? = null,
+    val contentLanguage: String? = null
 )

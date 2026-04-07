@@ -171,6 +171,7 @@ fun LoadingOverlay(
                             LoadingIndicator()
                         }
                     }
+
                 }
 
                 if (!message.isNullOrBlank() || progress != null) {
