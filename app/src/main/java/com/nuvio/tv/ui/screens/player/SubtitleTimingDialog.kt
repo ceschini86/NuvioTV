@@ -3,6 +3,7 @@
 package com.nuvio.tv.ui.screens.player
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Card
+import androidx.tv.material3.Border
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
@@ -293,7 +295,7 @@ private fun CueSelectionPanel(
                     8.dp
             ),
             state = cueListState,
-            contentPadding = PaddingValues(vertical = 4.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
             verticalArrangement = Arrangement.spacedBy(CUE_ROW_SPACING)
         ) {
             itemsIndexed(
@@ -325,6 +327,8 @@ private fun CueRow(
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
+    val focusedContainer = MaterialTheme.colorScheme.secondary.copy(alpha = 0.9f)
+    val focusedTextColor = MaterialTheme.colorScheme.onSecondary
 
     Card(
         onClick = onClick,
@@ -334,13 +338,24 @@ private fun CueRow(
             .onFocusChanged { isFocused = it.isFocused },
         colors = CardDefaults.colors(
             containerColor = if (isFocused) {
-                Color.White.copy(alpha = 0.18f)
+                focusedContainer
             } else {
                 Color.White.copy(alpha = 0.07f)
             },
-            focusedContainerColor = Color.White.copy(alpha = 0.18f)
+            focusedContainerColor = focusedContainer
         ),
-        shape = CardDefaults.shape(RoundedCornerShape(12.dp))
+        shape = CardDefaults.shape(RoundedCornerShape(12.dp)),
+        border = CardDefaults.border(
+            border = Border(
+                border = BorderStroke(1.dp, Color.Transparent),
+                shape = RoundedCornerShape(12.dp)
+            ),
+            focusedBorder = Border(
+                border = BorderStroke(1.dp, Color.Transparent),
+                shape = RoundedCornerShape(12.dp)
+            )
+        ),
+        scale = CardDefaults.scale(focusedScale = 1.015f, pressedScale = 1f)
     ) {
         Row(
             modifier = Modifier
@@ -353,13 +368,13 @@ private fun CueRow(
             Text(
                 text = formatAutoSyncTimestamp(cue.startTimeMs),
                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                color = Color.White.copy(alpha = 0.78f),
+                color = if (isFocused) focusedTextColor.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.78f),
                 modifier = Modifier.width(72.dp)
             )
             Text(
                 text = sanitizeCuePreviewText(cue.text),
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color.White,
+                color = if (isFocused) focusedTextColor else Color.White,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
