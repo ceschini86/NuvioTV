@@ -271,12 +271,13 @@ private fun PlayerRuntimeController.applySelectedStreamState(
     url: String,
     headers: Map<String, String>
 ) {
-    currentStreamUrl = url
-    currentHeaders = headers
+    val (cleanUrl, mergedHeaders) = PlayerMediaSourceFactory.extractUserInfoAuth(url, headers)
+    currentStreamUrl = cleanUrl
+    currentHeaders = mergedHeaders
     currentFilename = stream.behaviorHints?.filename ?: navigationArgs.filename
     currentStreamResponseHeaders = stream.behaviorHints?.proxyHeaders?.response.orEmpty()
     currentStreamMimeType = PlayerMediaSourceFactory.inferMimeType(
-        url = url,
+        url = cleanUrl,
         filename = currentFilename,
         responseHeaders = currentStreamResponseHeaders
     )
