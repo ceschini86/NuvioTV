@@ -775,6 +775,7 @@ private fun ModernCarouselCard(
     }
     val imageUrl = when {
         payload == null -> baseImageUrl
+        !payload.focusGifEnabled -> baseImageUrl
         isFocused -> payload.focusGifUrl ?: baseImageUrl
         else -> baseImageUrl ?: payload.focusGifUrl
     }

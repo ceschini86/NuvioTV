@@ -798,6 +798,38 @@ private fun FolderEditorContent(
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = "Animated GIF URL (plays only while focused)"
                 )
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Card(
+                    onClick = { viewModel.updateFolderFocusGifEnabled(!folder.focusGifEnabled) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.colors(
+                        containerColor = NuvioColors.BackgroundCard,
+                        focusedContainerColor = NuvioColors.FocusBackground
+                    ),
+                    border = CardDefaults.border(
+                        focusedBorder = Border(
+                            border = BorderStroke(2.dp, NuvioColors.FocusRing),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    ),
+                    scale = CardDefaults.scale(focusedScale = 1f),
+                    shape = CardDefaults.shape(RoundedCornerShape(12.dp))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Play GIF on Focus", style = MaterialTheme.typography.bodyLarge, color = NuvioColors.TextPrimary)
+                        Switch(
+                            checked = folder.focusGifEnabled,
+                            onCheckedChange = { viewModel.updateFolderFocusGifEnabled(it) }
+                        )
+                    }
+                }
             }
 
             item {

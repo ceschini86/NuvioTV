@@ -633,6 +633,11 @@ function updateFolderFocusGifUrl(ci, fi, val) {
   collections[ci].folders[fi].focusGifUrl = val || null;
 }
 
+function updateFolderFocusGifEnabled(ci, fi, checked) {
+  collections[ci].folders[fi].focusGifEnabled = checked;
+}
+  collections[ci].folders.push({ id: generateId(), title: 'New Folder', coverImageUrl: null, focusGifUrl: null, focusGifEnabled: true, coverEmoji: null, tileShape: 'SQUARE', hideTitle: false, catalogSources: [] });
+
 function updateFolderTileShape(ci, fi, val) {
   collections[ci].folders[fi].tileShape = val;
 }
@@ -906,6 +911,14 @@ function renderCollections() {
               '</div>' : '') +
               '<div class="folder-setting-item">' +
                 '<input type="url" placeholder="Focused GIF URL (optional)" value="' + escapeAttr(folder.focusGifUrl || '') + '" oninput="updateFolderFocusGifUrl(' + ci + ',' + fi + ',this.value)">' +
+              '</div>' +
+              '<div class="folder-setting-item">' +
+                '<span class="toggle-label">Play GIF on focus</span>' +
+                '<label class="toggle-switch">' +
+                  '<input type="checkbox"' + (folder.focusGifEnabled !== false ? ' checked' : '') + ' onchange="updateFolderFocusGifEnabled(' + ci + ',' + fi + ',this.checked)">' +
+                  '<span class="toggle-track"></span>' +
+                  '<span class="toggle-thumb"></span>' +
+                '</label>' +
               '</div>' +
             '</div>' +
             '<div class="folder-settings-group">' +
