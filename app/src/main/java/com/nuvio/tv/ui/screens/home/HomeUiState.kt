@@ -144,6 +144,8 @@ sealed class GridItem {
     @Immutable
     data class CollectionFolder(
         val collectionId: String,
+        val collectionTitle: String,
+        val focusGlowEnabled: Boolean,
         val folder: com.nuvio.tv.domain.model.CollectionFolder
     ) : GridItem()
 }

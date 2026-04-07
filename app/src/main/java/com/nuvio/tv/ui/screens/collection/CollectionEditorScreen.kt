@@ -317,6 +317,59 @@ fun CollectionEditorScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
+        item(key = "focus_glow") {
+            Card(
+                onClick = { viewModel.setFocusGlowEnabled(!uiState.focusGlowEnabled) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.colors(
+                    containerColor = NuvioColors.BackgroundCard,
+                    focusedContainerColor = NuvioColors.FocusBackground
+                ),
+                border = CardDefaults.border(
+                    focusedBorder = Border(
+                        border = BorderStroke(2.dp, NuvioColors.FocusRing),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                ),
+                shape = CardDefaults.shape(RoundedCornerShape(12.dp)),
+                scale = CardDefaults.scale(focusedScale = 1.02f)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Focus Glow",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = NuvioColors.TextPrimary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Use the native TV glow on this collection's home-screen custom catalog cards",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NuvioColors.TextSecondary
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = uiState.focusGlowEnabled,
+                        onCheckedChange = { viewModel.setFocusGlowEnabled(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = NuvioColors.Secondary,
+                            checkedTrackColor = NuvioColors.Secondary.copy(alpha = 0.3f),
+                            uncheckedThumbColor = NuvioColors.TextSecondary,
+                            uncheckedTrackColor = NuvioColors.BackgroundCard
+                        )
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
         item(key = "view_mode") {
             Text(
                 text = "View Mode",

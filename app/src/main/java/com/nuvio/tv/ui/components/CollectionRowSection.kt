@@ -97,6 +97,7 @@ fun CollectionRowSection(
             ) { index, folder ->
                 FolderCard(
                     folder = folder,
+                    collection = collection,
                     onClick = { onFolderClick(collection.id, folder.id) },
                     onFocused = {
                         if (lastFocusedItemIndex != index) {
@@ -115,6 +116,7 @@ fun CollectionRowSection(
 @Composable
 private fun FolderCard(
     folder: CollectionFolder,
+    collection: Collection,
     onClick: () -> Unit,
     onFocused: () -> Unit,
     modifier: Modifier = Modifier
@@ -128,6 +130,11 @@ private fun FolderCard(
     }
 
     val shape = RoundedCornerShape(12.dp)
+    val cardGlow = rememberArtworkBackedCardGlow(
+        imageUrl = folder.coverImageUrl,
+        fallbackSeed = "${collection.title}:${folder.title}:${folder.coverEmoji.orEmpty()}",
+        enabled = collection.focusGlowEnabled
+    )
 
     Card(
         onClick = onClick,
@@ -146,7 +153,8 @@ private fun FolderCard(
                 shape = shape
             )
         ),
-        scale = CardDefaults.scale(focusedScale = 1.05f)
+        scale = CardDefaults.scale(focusedScale = 1.05f),
+        glow = cardGlow
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (!folder.coverImageUrl.isNullOrBlank()) {

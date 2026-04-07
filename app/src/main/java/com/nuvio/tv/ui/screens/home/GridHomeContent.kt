@@ -69,6 +69,7 @@ import com.nuvio.tv.ui.components.GridContinueWatchingSection
 import com.nuvio.tv.ui.components.HeroCarousel
 import com.nuvio.tv.ui.components.PosterCardDefaults
 import com.nuvio.tv.ui.components.PosterCardStyle
+import com.nuvio.tv.ui.components.rememberArtworkBackedCardGlow
 import com.nuvio.tv.ui.theme.NuvioColors
 
 /** Minimum interval between processed key repeat events to prevent HWUI overload. */
@@ -473,6 +474,8 @@ fun GridHomeContent(
                             val itemKey = "col_folder_${gridItem.collectionId}_${gridItem.folder.id}"
                             GridCollectionFolderCard(
                                 folder = gridItem.folder,
+                                collectionTitle = gridItem.collectionTitle,
+                                focusGlowEnabled = gridItem.focusGlowEnabled,
                                 posterCardStyle = posterCardStyle,
                                 focusRequester = focusRequesters.getOrPut(itemKey) { FocusRequester() },
                                 onFocused = { lastFocusedGridItemKey = itemKey },
@@ -662,6 +665,8 @@ private fun SeeAllGridCard(
 @Composable
 private fun GridCollectionFolderCard(
     folder: CollectionFolder,
+    collectionTitle: String,
+    focusGlowEnabled: Boolean,
     posterCardStyle: PosterCardStyle,
     onClick: () -> Unit,
     focusRequester: FocusRequester? = null,
@@ -669,6 +674,11 @@ private fun GridCollectionFolderCard(
     modifier: Modifier = Modifier
 ) {
     val cardShape = RoundedCornerShape(posterCardStyle.cornerRadius)
+    val cardGlow = rememberArtworkBackedCardGlow(
+        imageUrl = folder.coverImageUrl,
+        fallbackSeed = "$collectionTitle:${folder.title}:${folder.coverEmoji.orEmpty()}",
+        enabled = focusGlowEnabled
+    )
     Card(
         onClick = onClick,
         modifier = modifier
@@ -687,7 +697,8 @@ private fun GridCollectionFolderCard(
                 shape = cardShape
             )
         ),
-        scale = CardDefaults.scale(focusedScale = posterCardStyle.focusedScale)
+        scale = CardDefaults.scale(focusedScale = posterCardStyle.focusedScale),
+        glow = cardGlow
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (!folder.coverImageUrl.isNullOrBlank()) {
