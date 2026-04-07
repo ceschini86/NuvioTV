@@ -17,7 +17,14 @@ import kotlinx.coroutines.withContext
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URLDecoder
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
 import java.util.Locale
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
+import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 
 internal class PlayerMediaSourceFactory {
     private var customExtractorsFactory: ExtractorsFactory? = null
