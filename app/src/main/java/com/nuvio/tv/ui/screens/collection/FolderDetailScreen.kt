@@ -59,6 +59,7 @@ import com.nuvio.tv.ui.screens.home.ClassicHomeContent
 import com.nuvio.tv.ui.screens.home.ContinueWatchingItem
 import com.nuvio.tv.ui.screens.home.GridHomeContent
 import com.nuvio.tv.ui.screens.home.HomeScreenFocusState
+import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.ui.screens.home.ModernHomeContent
 import com.nuvio.tv.ui.theme.NuvioColors
 
@@ -89,6 +90,10 @@ fun FolderDetailScreen(
         return
     }
 
+    val isItemWatched: (MetaPreview) -> Boolean = remember(uiState.movieWatchedStatus) {
+        { item -> uiState.movieWatchedStatus[com.nuvio.tv.ui.screens.home.homeItemStatusKey(item.id, item.apiType)] == true }
+    }
+
     if (uiState.viewMode == FolderViewMode.FOLLOW_LAYOUT) {
         FollowLayoutContent(
             uiState = uiState,
@@ -110,6 +115,7 @@ fun FolderDetailScreen(
                     tabFocusState = tabFocusStates[uiState.selectedTabIndex] ?: FolderDetailGridFocusState(),
                     onSelectTab = viewModel::selectTab,
                     onNavigateToDetail = onNavigateToDetail,
+                    isItemWatched = isItemWatched,
                     onSaveFocusState = { verticalIndex, verticalOffset, focusedItemKey ->
                         viewModel.saveTabFocusState(
                             tabIndex = uiState.selectedTabIndex,
@@ -125,6 +131,7 @@ fun FolderDetailScreen(
                         uiState = uiState,
                         focusState = rowsFocusState,
                         onNavigateToDetail = onNavigateToDetail,
+                        isItemWatched = isItemWatched,
                         onSaveFocusState = viewModel::saveRowsFocusState
                     )
                 }
@@ -184,7 +191,8 @@ private fun TabbedGridContent(
     tabFocusState: FolderDetailGridFocusState,
     onSelectTab: (Int) -> Unit,
     onNavigateToDetail: (String, String, String) -> Unit,
-    onSaveFocusState: (Int, Int, String?) -> Unit
+    onSaveFocusState: (Int, Int, String?) -> Unit,
+    isItemWatched: (MetaPreview) -> Boolean = { false }
 ) {
     val tabFocusRequesters = remember(uiState.tabs.size) { uiState.tabs.indices.map { FocusRequester() } }
 
@@ -358,6 +366,7 @@ private fun TabbedGridContent(
                         item = item,
                         posterCardStyle = posterCardStyle,
                         focusRequester = focusReq,
+                        isWatched = isItemWatched(item),
                         onFocus = { _ -> lastFocusedItemKey = itemKey },
                         onClick = {
                             onNavigateToDetail(
@@ -379,7 +388,8 @@ private fun RowsContent(
     uiState: FolderDetailUiState,
     focusState: HomeScreenFocusState,
     onNavigateToDetail: (String, String, String) -> Unit,
-    onSaveFocusState: (Int, Int, Int, Int, Map<String, Int>) -> Unit
+    onSaveFocusState: (Int, Int, Int, Int, Map<String, Int>) -> Unit,
+    isItemWatched: (MetaPreview) -> Boolean = { false }
 ) {
     val sourceTabs = uiState.tabs.filter { !it.isAllTab }
     val columnListState = rememberLazyListState(
@@ -474,6 +484,7 @@ private fun RowsContent(
                             showPosterLabels = true,
                             showAddonName = false,
                             showCatalogTypeSuffix = false,
+                            isItemWatched = isItemWatched,
                             listState = listState,
                             focusedItemIndex = if (
                                 focusState.hasSavedFocus &&
@@ -523,6 +534,9 @@ private fun FollowLayoutContent(
     val noOpRemoveCw: (String, Int?, Int?, Boolean) -> Unit = remember { { _, _, _, _ -> } }
     val noOpSeeAll: (String, String, String) -> Unit = remember { { _, _, _ -> } }
     val noOpFolderDetail: (String, String) -> Unit = remember { { _, _ -> } }
+    val isItemWatched: (MetaPreview) -> Boolean = remember(homeState.movieWatchedStatus) {
+        { item -> homeState.movieWatchedStatus[com.nuvio.tv.ui.screens.home.homeItemStatusKey(item.id, item.apiType)] == true }
+    }
 
     when (uiState.homeLayout) {
         HomeLayout.CLASSIC -> ClassicHomeContent(
@@ -536,6 +550,7 @@ private fun FollowLayoutContent(
             onNavigateToCatalogSeeAll = noOpSeeAll,
             onNavigateToFolderDetail = noOpFolderDetail,
             onRemoveContinueWatching = noOpRemoveCw,
+            isCatalogItemWatched = isItemWatched,
             onRequestTrailerPreview = { },
             onSaveFocusState = onSaveFocusState
         )
@@ -547,6 +562,7 @@ private fun FollowLayoutContent(
             onNavigateToCatalogSeeAll = noOpSeeAll,
             onNavigateToFolderDetail = noOpFolderDetail,
             onRemoveContinueWatching = noOpRemoveCw,
+            isCatalogItemWatched = isItemWatched,
             posterCardStyle = posterCardStyle,
             onSaveGridFocusState = onSaveGridFocusState
         )
@@ -560,6 +576,7 @@ private fun FollowLayoutContent(
             onRequestTrailerPreview = { _, _, _, _ -> },
             onLoadMoreCatalog = noOpSeeAll,
             onRemoveContinueWatching = noOpRemoveCw,
+            isCatalogItemWatched = isItemWatched,
             onNavigateToFolderDetail = noOpFolderDetail,
             onSaveFocusState = onSaveFocusState
         )
