@@ -53,6 +53,8 @@ import com.nuvio.tv.domain.model.HomeLayout
 import com.nuvio.tv.ui.components.CatalogRowSection
 import com.nuvio.tv.ui.components.ContentCard
 import com.nuvio.tv.ui.components.LoadingIndicator
+import com.nuvio.tv.R
+import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.ui.components.PosterCardDefaults
 import com.nuvio.tv.ui.components.PosterCardStyle
 import com.nuvio.tv.ui.screens.home.ClassicHomeContent
@@ -94,13 +96,17 @@ fun FolderDetailScreen(
         { item -> uiState.movieWatchedStatus[com.nuvio.tv.ui.screens.home.homeItemStatusKey(item.id, item.apiType)] == true }
     }
 
+    val enrichingItemId by viewModel.enrichingItemId.collectAsStateWithLifecycle()
+
     if (uiState.viewMode == FolderViewMode.FOLLOW_LAYOUT) {
         FollowLayoutContent(
             uiState = uiState,
             focusState = followLayoutFocusState,
+            enrichingItemId = enrichingItemId,
             onNavigateToDetail = onNavigateToDetail,
             onSaveFocusState = viewModel::saveFollowLayoutFocusState,
-            onSaveGridFocusState = viewModel::saveFollowLayoutGridFocusState
+            onSaveGridFocusState = viewModel::saveFollowLayoutGridFocusState,
+            onItemFocus = viewModel::onItemFocused
         )
     } else {
         Column(
@@ -257,12 +263,18 @@ private fun TabbedGridContent(
                             horizontalAlignment = Alignment.Start
                         ) {
                             Text(
-                                text = tab.label,
+                                text = if (tab.isAllTab) stringResource(R.string.collections_tab_all) else tab.label,
                                 style = MaterialTheme.typography.labelLarge
                             )
                             if (tab.typeLabel.isNotBlank()) {
+                                val localizedType = when {
+                                    tab.isAllTab -> stringResource(R.string.collections_tab_combined)
+                                    tab.rawType.lowercase() == "movie" -> stringResource(R.string.type_movie)
+                                    tab.rawType.lowercase() == "series" -> stringResource(R.string.type_series)
+                                    else -> tab.typeLabel
+                                }
                                 Text(
-                                    text = tab.typeLabel,
+                                    text = localizedType,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = NuvioColors.TextTertiary
                                 )
@@ -425,6 +437,9 @@ private fun RowsContent(
         }
     }
 
+    val strTypeMovie = stringResource(R.string.type_movie)
+    val strTypeSeries = stringResource(R.string.type_series)
+
     LazyColumn(
         state = columnListState,
         modifier = Modifier.fillMaxSize(),
@@ -433,11 +448,25 @@ private fun RowsContent(
     ) {
         sourceTabs.forEachIndexed { index, tab ->
             item(key = "row_${index}_${tab.label}") {
+                val localizedTypeLabel = remember(tab.rawType, strTypeMovie, strTypeSeries) {
+                    when (tab.rawType.lowercase()) {
+                        "movie" -> strTypeMovie
+                        "series" -> strTypeSeries
+                        else -> tab.rawType.replaceFirstChar { it.uppercase() }
+                    }
+                }
+                val rowTitle = remember(tab.label, localizedTypeLabel) {
+                    if (tab.label != tab.typeLabel && localizedTypeLabel.isNotEmpty()) {
+                        "${tab.label} - $localizedTypeLabel"
+                    } else {
+                        tab.label
+                    }
+                }
                 when {
                     tab.isLoading -> {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Text(
-                                text = tab.label,
+                                text = rowTitle,
                                 style = MaterialTheme.typography.headlineSmall,
                                 color = NuvioColors.TextPrimary,
                                 modifier = Modifier.padding(start = 48.dp, end = 48.dp, bottom = 12.dp)
@@ -455,7 +484,7 @@ private fun RowsContent(
                     tab.error != null -> {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Text(
-                                text = tab.label,
+                                text = rowTitle,
                                 style = MaterialTheme.typography.headlineSmall,
                                 color = NuvioColors.TextPrimary,
                                 modifier = Modifier.padding(start = 48.dp, end = 48.dp, bottom = 12.dp)
@@ -483,7 +512,7 @@ private fun RowsContent(
                             onItemClick = onNavigateToDetail,
                             showPosterLabels = true,
                             showAddonName = false,
-                            showCatalogTypeSuffix = false,
+                            showCatalogTypeSuffix = true,
                             isItemWatched = isItemWatched,
                             listState = listState,
                             focusedItemIndex = if (
@@ -510,9 +539,11 @@ private fun RowsContent(
 private fun FollowLayoutContent(
     uiState: FolderDetailUiState,
     focusState: HomeScreenFocusState,
+    enrichingItemId: String? = null,
     onNavigateToDetail: (String, String, String) -> Unit,
     onSaveFocusState: (Int, Int, Int, Int, Map<String, Int>) -> Unit,
-    onSaveGridFocusState: (Int, Int, String?) -> Unit
+    onSaveGridFocusState: (Int, Int, String?) -> Unit,
+    onItemFocus: (MetaPreview) -> Unit = {}
 ) {
     val homeState = uiState.followLayoutHomeState
 
@@ -569,6 +600,7 @@ private fun FollowLayoutContent(
         HomeLayout.MODERN -> ModernHomeContent(
             uiState = homeState,
             focusState = focusState,
+            enrichingItemId = enrichingItemId,
             trailerPreviewUrls = emptyMap(),
             trailerPreviewAudioUrls = emptyMap(),
             onNavigateToDetail = onNavigateToDetail,
@@ -578,6 +610,7 @@ private fun FollowLayoutContent(
             onRemoveContinueWatching = noOpRemoveCw,
             isCatalogItemWatched = isItemWatched,
             onNavigateToFolderDetail = noOpFolderDetail,
+            onItemFocus = onItemFocus,
             onSaveFocusState = onSaveFocusState
         )
     }
