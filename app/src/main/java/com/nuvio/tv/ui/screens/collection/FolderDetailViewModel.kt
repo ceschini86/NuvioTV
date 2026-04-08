@@ -47,6 +47,7 @@ data class FolderDetailUiState(
 data class FolderTab(
     val label: String,
     val typeLabel: String = "",
+    val rawType: String = "",
     val catalogRow: CatalogRow? = null,
     val isLoading: Boolean = true,
     val error: String? = null,
@@ -127,8 +128,10 @@ class FolderDetailViewModel @Inject constructor(
             val sourceTabs = folder.catalogSources.map { source ->
                 val addon = addons.find { it.id == source.addonId }
                 val catalog = addon?.catalogs?.find { it.id == source.catalogId && it.apiType == source.type }
+                    ?: addon?.catalogs?.find { it.id == source.catalogId.substringBefore(",") && it.apiType == source.type }
+                    ?: addons.firstNotNullOfOrNull { a -> a.catalogs.find { it.id == source.catalogId && it.apiType == source.type } }
                 val (name, typeLabel) = buildTabLabels(source, catalog?.name)
-                FolderTab(label = name, typeLabel = typeLabel, isLoading = true)
+                FolderTab(label = name, typeLabel = typeLabel, rawType = source.type, isLoading = true)
             }
 
             val tabs = if (showAll) {
@@ -266,13 +269,27 @@ class FolderDetailViewModel @Inject constructor(
                 return@launch
             }
 
-            val catalog = addon.catalogs.find { it.id == source.catalogId && it.apiType == source.type }
-            val catalogName = catalog?.name ?: source.catalogId
+            var catalog = addon.catalogs.find { it.id == source.catalogId && it.apiType == source.type }
+                ?: addon.catalogs.find { it.id == source.catalogId.substringBefore(",") && it.apiType == source.type }
+            // If the catalog wasn't found in the declared addon, search all installed addons.
+            var effectiveAddon: com.nuvio.tv.domain.model.Addon = addon
+            if (catalog == null) {
+                for (a in addons) {
+                    val match = a.catalogs.find { it.id == source.catalogId && it.apiType == source.type }
+                    if (match != null) {
+                        effectiveAddon = a
+                        catalog = match
+                        break
+                    }
+                }
+            }
+            val tab = _uiState.value.tabs.getOrNull(tabIndex)
+            val catalogName = catalog?.name ?: tab?.label?.takeIf { it != tab?.typeLabel } ?: source.catalogId
 
             catalogRepository.getCatalog(
-                addonBaseUrl = addon.baseUrl,
-                addonId = addon.id,
-                addonName = addon.displayName,
+                addonBaseUrl = effectiveAddon.baseUrl,
+                addonId = effectiveAddon.id,
+                addonName = effectiveAddon.displayName,
                 catalogId = source.catalogId,
                 catalogName = catalogName,
                 type = source.type,

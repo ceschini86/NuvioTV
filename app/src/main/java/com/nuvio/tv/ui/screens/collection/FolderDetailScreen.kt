@@ -53,6 +53,8 @@ import com.nuvio.tv.domain.model.HomeLayout
 import com.nuvio.tv.ui.components.CatalogRowSection
 import com.nuvio.tv.ui.components.ContentCard
 import com.nuvio.tv.ui.components.LoadingIndicator
+import com.nuvio.tv.R
+import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.ui.components.PosterCardDefaults
 import com.nuvio.tv.ui.components.PosterCardStyle
 import com.nuvio.tv.ui.screens.home.ClassicHomeContent
@@ -261,8 +263,13 @@ private fun TabbedGridContent(
                                 style = MaterialTheme.typography.labelLarge
                             )
                             if (tab.typeLabel.isNotBlank()) {
+                                val localizedType = when (tab.rawType.lowercase()) {
+                                    "movie" -> stringResource(R.string.type_movie)
+                                    "series" -> stringResource(R.string.type_series)
+                                    else -> tab.typeLabel
+                                }
                                 Text(
-                                    text = tab.typeLabel,
+                                    text = localizedType,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = NuvioColors.TextTertiary
                                 )
@@ -425,6 +432,9 @@ private fun RowsContent(
         }
     }
 
+    val strTypeMovie = stringResource(R.string.type_movie)
+    val strTypeSeries = stringResource(R.string.type_series)
+
     LazyColumn(
         state = columnListState,
         modifier = Modifier.fillMaxSize(),
@@ -433,11 +443,25 @@ private fun RowsContent(
     ) {
         sourceTabs.forEachIndexed { index, tab ->
             item(key = "row_${index}_${tab.label}") {
+                val localizedTypeLabel = remember(tab.rawType, strTypeMovie, strTypeSeries) {
+                    when (tab.rawType.lowercase()) {
+                        "movie" -> strTypeMovie
+                        "series" -> strTypeSeries
+                        else -> tab.rawType.replaceFirstChar { it.uppercase() }
+                    }
+                }
+                val rowTitle = remember(tab.label, localizedTypeLabel) {
+                    if (tab.label != tab.typeLabel && localizedTypeLabel.isNotEmpty()) {
+                        "${tab.label} - $localizedTypeLabel"
+                    } else {
+                        tab.label
+                    }
+                }
                 when {
                     tab.isLoading -> {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Text(
-                                text = tab.label,
+                                text = rowTitle,
                                 style = MaterialTheme.typography.headlineSmall,
                                 color = NuvioColors.TextPrimary,
                                 modifier = Modifier.padding(start = 48.dp, end = 48.dp, bottom = 12.dp)
@@ -455,7 +479,7 @@ private fun RowsContent(
                     tab.error != null -> {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Text(
-                                text = tab.label,
+                                text = rowTitle,
                                 style = MaterialTheme.typography.headlineSmall,
                                 color = NuvioColors.TextPrimary,
                                 modifier = Modifier.padding(start = 48.dp, end = 48.dp, bottom = 12.dp)
@@ -483,7 +507,7 @@ private fun RowsContent(
                             onItemClick = onNavigateToDetail,
                             showPosterLabels = true,
                             showAddonName = false,
-                            showCatalogTypeSuffix = false,
+                            showCatalogTypeSuffix = true,
                             isItemWatched = isItemWatched,
                             listState = listState,
                             focusedItemIndex = if (
