@@ -13,14 +13,18 @@ import com.nuvio.tv.domain.model.FolderViewMode
 import com.nuvio.tv.domain.model.HomeLayout
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.repository.AddonRepository
+import com.nuvio.tv.domain.repository.WatchProgressRepository
 import com.nuvio.tv.ui.screens.home.GridItem
 import com.nuvio.tv.ui.screens.home.HomeRow
 import com.nuvio.tv.ui.screens.home.HomeUiState
+import com.nuvio.tv.ui.screens.home.homeItemStatusKey
 import com.nuvio.tv.domain.repository.CatalogRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -36,7 +40,8 @@ data class FolderDetailUiState(
     val tabs: List<FolderTab> = emptyList(),
     val selectedTabIndex: Int = 0,
     val isLoading: Boolean = true,
-    val followLayoutHomeState: HomeUiState? = null
+    val followLayoutHomeState: HomeUiState? = null,
+    val movieWatchedStatus: Map<String, Boolean> = emptyMap()
 )
 
 data class FolderTab(
@@ -61,7 +66,9 @@ class FolderDetailViewModel @Inject constructor(
     private val collectionsDataStore: CollectionsDataStore,
     private val addonRepository: AddonRepository,
     private val catalogRepository: CatalogRepository,
-    private val layoutPreferenceDataStore: LayoutPreferenceDataStore
+    private val layoutPreferenceDataStore: LayoutPreferenceDataStore,
+    private val watchProgressRepository: WatchProgressRepository,
+    private val watchedSeriesStateHolder: com.nuvio.tv.data.local.WatchedSeriesStateHolder
 ) : ViewModel() {
 
     private val collectionId: String = savedStateHandle["collectionId"] ?: ""
@@ -69,6 +76,9 @@ class FolderDetailViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(FolderDetailUiState())
     val uiState: StateFlow<FolderDetailUiState> = _uiState.asStateFlow()
+
+    private var movieWatchedJob: Job? = null
+    private var seriesWatchedJob: Job? = null
 
     private val _rowsFocusState = MutableStateFlow(com.nuvio.tv.ui.screens.home.HomeScreenFocusState())
     val rowsFocusState: StateFlow<com.nuvio.tv.ui.screens.home.HomeScreenFocusState> = _rowsFocusState.asStateFlow()
@@ -219,7 +229,8 @@ class FolderDetailViewModel @Inject constructor(
                 modernHeroFullScreenBackdropEnabled = s.modernHeroFullScreenBackdropEnabled,
                 catalogAddonNameEnabled = false,
                 catalogTypeSuffixEnabled = true,
-                posterLabelsEnabled = true
+                posterLabelsEnabled = true,
+                movieWatchedStatus = s.movieWatchedStatus
             ))
         }
     }
@@ -281,6 +292,7 @@ class FolderDetailViewModel @Inject constructor(
                         }
                         rebuildAllTab()
                         rebuildFollowLayoutState()
+                        observeWatchedStatus()
                     }
                     is NetworkResult.Error -> {
                         _uiState.update { state ->
@@ -373,6 +385,52 @@ class FolderDetailViewModel @Inject constructor(
         )
         if (_followLayoutFocusState.value != nextState) {
             _followLayoutFocusState.value = nextState
+        }
+    }
+
+    private fun observeWatchedStatus() {
+        val allItems = _uiState.value.tabs
+            .mapNotNull { it.catalogRow }
+            .flatMap { it.items }
+
+        val movieIds = mutableMapOf<String, String>()
+        val seriesIds = mutableMapOf<String, String>()
+        allItems.forEach { item ->
+            val key = homeItemStatusKey(item.id, item.apiType)
+            if (item.apiType.equals("movie", ignoreCase = true)) {
+                movieIds[key] = item.id
+            } else if (item.apiType.equals("series", ignoreCase = true) || item.apiType.equals("tv", ignoreCase = true)) {
+                seriesIds[key] = item.id
+            }
+        }
+
+        movieWatchedJob?.cancel()
+        if (movieIds.isNotEmpty()) {
+            movieWatchedJob = viewModelScope.launch {
+                watchProgressRepository.observeWatchedMovieIds()
+                    .collectLatest { watchedIds ->
+                        val status = movieIds.mapValues { (_, contentId) -> contentId in watchedIds }
+                        _uiState.update { s ->
+                            val merged = s.movieWatchedStatus.filterKeys { it !in movieIds } + status
+                            if (s.movieWatchedStatus == merged) s else s.copy(movieWatchedStatus = merged)
+                        }
+                        rebuildFollowLayoutState()
+                    }
+            }
+        }
+
+        seriesWatchedJob?.cancel()
+        if (seriesIds.isNotEmpty()) {
+            seriesWatchedJob = viewModelScope.launch {
+                watchedSeriesStateHolder.fullyWatchedSeriesIds.collectLatest { fullyWatched ->
+                    val status = seriesIds.mapValues { (_, contentId) -> contentId in fullyWatched }
+                    _uiState.update { s ->
+                        val merged = s.movieWatchedStatus.filterKeys { it !in seriesIds } + status
+                        if (s.movieWatchedStatus == merged) s else s.copy(movieWatchedStatus = merged)
+                    }
+                    rebuildFollowLayoutState()
+                }
+            }
         }
     }
 

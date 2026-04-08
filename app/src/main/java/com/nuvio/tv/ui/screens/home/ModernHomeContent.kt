@@ -101,6 +101,8 @@ import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.domain.model.FocusedPosterTrailerPlaybackTarget
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.ui.components.ContinueWatchingCard
+import com.nuvio.tv.ui.components.HeroCarousel
+import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.components.ContinueWatchingOptionsDialog
 import com.nuvio.tv.ui.components.MonochromePosterPlaceholder
 import com.nuvio.tv.ui.components.TrailerPlayer
@@ -343,7 +345,34 @@ fun ModernHomeContent(
         }
     }
 
-    if (carouselRows.isEmpty()) return
+    // Show spinner when collections are ready but catalogs haven't arrived
+    // yet — prevents collections from grabbing focus before catalogs
+    // appear above them.  Only waits when addons are installed (meaning
+    // catalogs are expected to load).
+    val hasCollections = visibleHomeRows.any { it is HomeRow.CollectionRow }
+    val hasCatalogs = uiState.catalogRows.isNotEmpty()
+    if (hasCollections && !hasCatalogs && uiState.installedAddonsCount > 0) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            LoadingIndicator()
+        }
+        return
+    }
+
+    if (carouselRows.isEmpty()) {
+        // No carousel rows but hero items may exist — show standalone hero
+        if (uiState.heroSectionEnabled && uiState.heroItems.isNotEmpty()) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                HeroCarousel(
+                    items = uiState.heroItems,
+                    onItemClick = { item ->
+                        onNavigateToDetail(item.id, item.apiType, "")
+                    },
+                    onItemFocus = onItemFocus
+                )
+            }
+        }
+        return
+    }
     val carouselLookups = remember(carouselRows) {
         val rowIndexByKey = LinkedHashMap<String, Int>(carouselRows.size)
         val rowByKey = LinkedHashMap<String, HeroCarouselRow>(carouselRows.size)
@@ -426,6 +455,9 @@ fun ModernHomeContent(
     }
     var activeRowKey by remember { mutableStateOf<String?>(null) }
     var activeItemIndex by remember { mutableIntStateOf(0) }
+    // Tracks the row key that was auto-selected on initial load.
+    // Used to detect if the user has manually navigated away.
+    var initialAutoSelectedKey by remember { mutableStateOf<String?>(null) }
     var pendingRowFocusKey by remember { mutableStateOf<String?>(null) }
     var pendingRowFocusIndex by remember { mutableStateOf<Int?>(null) }
     var pendingRowFocusNonce by remember { mutableIntStateOf(0) }
@@ -544,7 +576,26 @@ fun ModernHomeContent(
 
         val hadActiveRow = focusHolder.activeRowKey != null
         val existingActive = focusHolder.activeRowKey?.let(rowByKey::get)
-        val resolvedActive = existingActive ?: carouselRows.first()
+        val firstRow = carouselRows.first()
+        // When new rows appear before the auto-selected row (e.g., catalogs
+        // load after collections), move focus to the new first row — but only
+        // if the user hasn't manually navigated away from the initial position.
+        // Detect if the auto-selected row is stale: new rows appeared
+        // above it (e.g., catalogs loaded after collections) and the user
+        // hasn't manually navigated away from the initial selection.
+        val userStillOnAutoSelected = initialAutoSelectedKey != null &&
+            focusHolder.activeRowKey == initialAutoSelectedKey
+        val autoSelectedStale = hadActiveRow && existingActive != null &&
+            existingActive.key != firstRow.key &&
+            rowIndexByKey.getOrDefault(existingActive.key, 0) > 0 &&
+            !restoredFromSavedState &&
+            !focusState.hasSavedFocus &&
+            userStillOnAutoSelected
+        val resolvedActive = when {
+            autoSelectedStale -> firstRow
+            existingActive != null -> existingActive
+            else -> firstRow
+        }
         val resolvedIndex = focusedItemByRow[resolvedActive.key]
             ?.coerceIn(0, (resolvedActive.items.size - 1).coerceAtLeast(0))
             ?: 0
@@ -555,7 +606,8 @@ fun ModernHomeContent(
         focusedItemByRow[resolvedActive.key] = resolvedIndex
         heroItem = resolvedActive.items.getOrNull(resolvedIndex)?.heroPreview
             ?: resolvedActive.items.firstOrNull()?.heroPreview
-        if (!focusState.hasSavedFocus && (!hadActiveRow || existingActive == null)) {
+        if (!focusState.hasSavedFocus && (!hadActiveRow || existingActive == null || autoSelectedStale)) {
+            initialAutoSelectedKey = resolvedActive.key
             pendingRowFocusKey = resolvedActive.key
             pendingRowFocusIndex = resolvedIndex
             pendingRowFocusNonce++
@@ -974,6 +1026,11 @@ fun ModernHomeContent(
                                         if (lastFocusedContinueWatchingIndexRef.get() != index) {
                                             lastFocusedContinueWatchingIndexRef.set(index)
                                         }
+                                    }
+                                    // Clear catalog selection when focusing any
+                                    // non-catalog row (CW, collection) so stale
+                                    // trailer requests don't fire in the hero.
+                                    if (isContinueWatchingRow || row.items.getOrNull(index)?.payload is ModernPayload.CollectionFolder) {
                                         if (focusedCatalogSelection != null) {
                                             focusedCatalogSelection = null
                                         }
