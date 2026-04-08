@@ -102,6 +102,7 @@ import com.nuvio.tv.domain.model.FocusedPosterTrailerPlaybackTarget
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.ui.components.ContinueWatchingCard
 import com.nuvio.tv.ui.components.HeroCarousel
+import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.components.ContinueWatchingOptionsDialog
 import com.nuvio.tv.ui.components.MonochromePosterPlaceholder
 import com.nuvio.tv.ui.components.TrailerPlayer
@@ -344,6 +345,19 @@ fun ModernHomeContent(
         }
     }
 
+    // Show spinner when collections are ready but catalogs haven't arrived
+    // yet — prevents collections from grabbing focus before catalogs
+    // appear above them.  Only waits when addons are installed (meaning
+    // catalogs are expected to load).
+    val hasCollections = visibleHomeRows.any { it is HomeRow.CollectionRow }
+    val hasCatalogs = uiState.catalogRows.isNotEmpty()
+    if (hasCollections && !hasCatalogs && uiState.installedAddonsCount > 0) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            LoadingIndicator()
+        }
+        return
+    }
+
     if (carouselRows.isEmpty()) {
         // No carousel rows but hero items may exist — show standalone hero
         if (uiState.heroSectionEnabled && uiState.heroItems.isNotEmpty()) {
@@ -441,6 +455,9 @@ fun ModernHomeContent(
     }
     var activeRowKey by remember { mutableStateOf<String?>(null) }
     var activeItemIndex by remember { mutableIntStateOf(0) }
+    // Tracks the row key that was auto-selected on initial load.
+    // Used to detect if the user has manually navigated away.
+    var initialAutoSelectedKey by remember { mutableStateOf<String?>(null) }
     var pendingRowFocusKey by remember { mutableStateOf<String?>(null) }
     var pendingRowFocusIndex by remember { mutableStateOf<Int?>(null) }
     var pendingRowFocusNonce by remember { mutableIntStateOf(0) }
@@ -563,11 +580,17 @@ fun ModernHomeContent(
         // When new rows appear before the auto-selected row (e.g., catalogs
         // load after collections), move focus to the new first row — but only
         // if the user hasn't manually navigated away from the initial position.
+        // Detect if the auto-selected row is stale: new rows appeared
+        // above it (e.g., catalogs loaded after collections) and the user
+        // hasn't manually navigated away from the initial selection.
+        val userStillOnAutoSelected = initialAutoSelectedKey != null &&
+            focusHolder.activeRowKey == initialAutoSelectedKey
         val autoSelectedStale = hadActiveRow && existingActive != null &&
             existingActive.key != firstRow.key &&
             rowIndexByKey.getOrDefault(existingActive.key, 0) > 0 &&
             !restoredFromSavedState &&
-            pendingRowFocusKey == existingActive.key
+            !focusState.hasSavedFocus &&
+            userStillOnAutoSelected
         val resolvedActive = when {
             autoSelectedStale -> firstRow
             existingActive != null -> existingActive
@@ -584,6 +607,7 @@ fun ModernHomeContent(
         heroItem = resolvedActive.items.getOrNull(resolvedIndex)?.heroPreview
             ?: resolvedActive.items.firstOrNull()?.heroPreview
         if (!focusState.hasSavedFocus && (!hadActiveRow || existingActive == null || autoSelectedStale)) {
+            initialAutoSelectedKey = resolvedActive.key
             pendingRowFocusKey = resolvedActive.key
             pendingRowFocusIndex = resolvedIndex
             pendingRowFocusNonce++
