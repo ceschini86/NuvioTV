@@ -1274,7 +1274,7 @@ private suspend fun HomeViewModel.enrichNextUpItem(
     } else {
         null
     }
-    val released = tmdbData?.airDate
+    val released = (if (currentTmdbSettings.useReleaseDates) tmdbData?.airDate else null)
         ?: video?.released?.trim()?.takeIf { it.isNotEmpty() }
         ?: item.info.released
     val releaseDate = parseEpisodeReleaseDate(released)
