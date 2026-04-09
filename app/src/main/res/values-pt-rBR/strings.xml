@@ -493,7 +493,7 @@
     <string name="autoplay_scope_all_desc">Use tanto addons quanto plugins.</string>
     <string name="autoplay_scope_addons_desc">Considere apenas fontes de addons instalados.</string>
     <string name="autoplay_scope_plugins_desc">Considere apenas fontes de plugins ativos.</string>
-    <string name="autoplay_threshold_pct_desc">Ative por % se não houver marcação de créditos.</string>
+    <string name="autoplay_threshold_pct_desc">Ative por %% se não houver marcação de créditos.</string>
     <string name="autoplay_threshold_min_desc">Ative por tempo se não houver marcação de créditos.</string>
     <string name="autoplay_regex_matches">Filtre nome, descrição ou URL. Ex: 4K|Remux</string>
     <string name="autoplay_regex_presets">Predefinições</string>
