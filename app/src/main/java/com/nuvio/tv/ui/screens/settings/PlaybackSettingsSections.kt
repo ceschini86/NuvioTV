@@ -140,7 +140,9 @@ internal fun PlaybackSettingsSections(
     onSetUseLibass: (Boolean) -> Unit,
     onSetLibassRenderType: (com.nuvio.tv.data.local.LibassRenderType) -> Unit,
     p2pEnabled: Boolean = false,
-    onSetP2pEnabled: (Boolean) -> Unit = {}
+    onSetP2pEnabled: (Boolean) -> Unit = {},
+    hideTorrentStats: Boolean = false,
+    onSetHideTorrentStats: (Boolean) -> Unit = {}
 ) {
     var generalExpanded by rememberSaveable { mutableStateOf(false) }
     var afrExpanded by rememberSaveable { mutableStateOf(false) }
@@ -172,6 +174,8 @@ internal fun PlaybackSettingsSections(
     val strSectionSubtitlesDesc = stringResource(R.string.playback_section_subtitles_desc)
     val strSectionP2p = stringResource(R.string.settings_p2p_title)
     val strSectionP2pDesc = stringResource(R.string.settings_p2p_subtitle)
+    val strHideTorrentStats = stringResource(R.string.settings_p2p_hide_stats_title)
+    val strHideTorrentStatsDesc = stringResource(R.string.settings_p2p_hide_stats_subtitle)
     val generalUi = PlaybackGeneralUi(
         isExternalPlayer = playerSettings.playerPreference == PlayerPreference.EXTERNAL,
         frameRateMatchingLabel = frameRateMatchingModeLabel(
@@ -449,6 +453,16 @@ internal fun PlaybackSettingsSections(
                     subtitle = strSectionP2pDesc,
                     isChecked = p2pEnabled,
                     onCheckedChange = onSetP2pEnabled,
+                    onFocused = { focusedSection = PlaybackSection.P2P }
+                )
+            }
+            item(key = "p2p_hide_stats") {
+                ToggleSettingsItem(
+                    icon = Icons.Default.Info,
+                    title = strHideTorrentStats,
+                    subtitle = strHideTorrentStatsDesc,
+                    isChecked = hideTorrentStats,
+                    onCheckedChange = onSetHideTorrentStats,
                     onFocused = { focusedSection = PlaybackSection.P2P }
                 )
             }

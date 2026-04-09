@@ -18,7 +18,8 @@ private val Context.torrentDataStore by preferencesDataStore(name = "torrent_set
 
 data class TorrentSettingsData(
     val p2pEnabled: Boolean = false,
-    val enableUpload: Boolean = true
+    val enableUpload: Boolean = true,
+    val hideTorrentStats: Boolean = true
 )
 
 @Singleton
@@ -30,12 +31,14 @@ class TorrentSettings @Inject constructor(
     private object Keys {
         val P2P_ENABLED = booleanPreferencesKey("p2p_enabled")
         val ENABLE_UPLOAD = booleanPreferencesKey("enable_upload")
+        val HIDE_TORRENT_STATS = booleanPreferencesKey("hide_torrent_stats")
     }
 
     val settings: Flow<TorrentSettingsData> = context.torrentDataStore.data.map { prefs ->
         TorrentSettingsData(
             p2pEnabled = prefs[Keys.P2P_ENABLED] ?: false,
-            enableUpload = prefs[Keys.ENABLE_UPLOAD] ?: true
+            enableUpload = prefs[Keys.ENABLE_UPLOAD] ?: true,
+            hideTorrentStats = prefs[Keys.HIDE_TORRENT_STATS] ?: true
         )
     }
 
@@ -48,6 +51,12 @@ class TorrentSettings @Inject constructor(
     fun setEnableUpload(enabled: Boolean) {
         scope.launch {
             context.torrentDataStore.edit { it[Keys.ENABLE_UPLOAD] = enabled }
+        }
+    }
+
+    fun setHideTorrentStats(enabled: Boolean) {
+        scope.launch {
+            context.torrentDataStore.edit { it[Keys.HIDE_TORRENT_STATS] = enabled }
         }
     }
 }

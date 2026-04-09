@@ -82,13 +82,14 @@ internal fun PlayerRuntimeController.observeTorrentState() {
                     val speed = formatSpeed(torrentState.downloadSpeed)
                     val peerInfo = "${torrentState.seeds} seeds \u00B7 ${torrentState.peers} peers"
                     val mbLoaded = formatMB(torrentState.preloadedBytes)
+                    val statsHidden = _uiState.value.hideTorrentStats
 
                     if (!hasRenderedFirstFrame) {
                         // Initial load: show preloaded MB with progress bar
                         // TorrServer preloads ~5MB before streaming starts
                         val preloadTarget = 5_242_880L // 5MB
                         val progress = (torrentState.preloadedBytes.toFloat() / preloadTarget).coerceIn(0f, 1f)
-                        val message = "$mbLoaded buffered \u00B7 $peerInfo \u00B7 $speed"
+                        val message = if (statsHidden) null else "$mbLoaded buffered \u00B7 $peerInfo \u00B7 $speed"
                         _uiState.update {
                             it.copy(
                                 showLoadingOverlay = true,
@@ -106,7 +107,7 @@ internal fun PlayerRuntimeController.observeTorrentState() {
                     } else {
                         // During playback: update stats, rebuffer message is
                         // handled by the progress loop in PlaybackEvents
-                        val message = "$peerInfo \u00B7 $speed"
+                        val message = if (statsHidden) null else "$peerInfo \u00B7 $speed"
                         _uiState.update {
                             it.copy(
                                 loadingProgress = null,

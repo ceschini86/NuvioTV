@@ -265,7 +265,9 @@ fun PlaybackSettingsContent(
                 onSetUseLibass = { enabled -> coroutineScope.launch { viewModel.setUseLibass(enabled) } },
                 onSetLibassRenderType = { renderType -> coroutineScope.launch { viewModel.setLibassRenderType(renderType) } },
                 p2pEnabled = torrentSettings.p2pEnabled,
-                onSetP2pEnabled = { enabled -> viewModel.setP2pEnabled(enabled) }
+                onSetP2pEnabled = { enabled -> viewModel.setP2pEnabled(enabled) },
+                hideTorrentStats = torrentSettings.hideTorrentStats,
+                onSetHideTorrentStats = { enabled -> viewModel.setHideTorrentStats(enabled) }
             )
         }
     }

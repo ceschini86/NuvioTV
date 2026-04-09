@@ -39,6 +39,7 @@ class PlaybackSettingsViewModel @Inject constructor(
     val torrentSettingsFlow: Flow<TorrentSettingsData> = torrentSettings.settings
 
     fun setP2pEnabled(enabled: Boolean) = torrentSettings.setP2pEnabled(enabled)
+    fun setHideTorrentStats(enabled: Boolean) = torrentSettings.setHideTorrentStats(enabled)
     val installedAddonNames: Flow<List<String>> = addonRepository.getInstalledAddons().map { addons ->
         addons
             .filter { addon ->

@@ -157,7 +157,10 @@ data class PlayerUiState(
     val showTorrentStats: Boolean = false,
     // Torrent mid-playback rebuffering (shown on the buffering spinner, not loading overlay)
     val torrentBufferingMessage: String? = null,
-    val torrentBufferingProgress: Float = 0f
+    val torrentBufferingProgress: Float = 0f,
+    // When true, suppress all torrent stats text (buffer, seeds, peers, speed)
+    // from loading overlay, rebuffering indicator, and corner overlay.
+    val hideTorrentStats: Boolean = true
 )
 
 data class TrackInfo(
