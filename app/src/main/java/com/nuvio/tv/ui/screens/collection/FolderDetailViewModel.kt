@@ -102,6 +102,45 @@ class FolderDetailViewModel @Inject constructor(
 
     init {
         loadFolder()
+        // Observe watched status immediately so badges are ready before catalogs load.
+        observeWatchedMovieIdsGlobal()
+        observeWatchedSeriesIdsGlobal()
+    }
+
+    private fun observeWatchedMovieIdsGlobal() {
+        movieWatchedJob = viewModelScope.launch {
+            watchProgressRepository.observeWatchedMovieIds().collectLatest { watchedIds ->
+                _uiState.update { s ->
+                    val newStatus = s.movieWatchedStatus.toMutableMap()
+                    s.tabs.flatMap { it.catalogRow?.items.orEmpty() }
+                        .filter { it.apiType == "movie" }
+                        .forEach { item ->
+                            val key = com.nuvio.tv.ui.screens.home.homeItemStatusKey(item.id, item.apiType)
+                            newStatus[key] = item.id in watchedIds
+                        }
+                    if (newStatus == s.movieWatchedStatus) s else s.copy(movieWatchedStatus = newStatus)
+                }
+                rebuildFollowLayoutState()
+            }
+        }
+    }
+
+    private fun observeWatchedSeriesIdsGlobal() {
+        seriesWatchedJob = viewModelScope.launch {
+            watchedSeriesStateHolder.fullyWatchedSeriesIds.collectLatest { fullyWatched ->
+                _uiState.update { s ->
+                    val newStatus = s.movieWatchedStatus.toMutableMap()
+                    s.tabs.flatMap { it.catalogRow?.items.orEmpty() }
+                        .filter { it.apiType in listOf("series", "tv") }
+                        .forEach { item ->
+                            val key = com.nuvio.tv.ui.screens.home.homeItemStatusKey(item.id, item.apiType)
+                            newStatus[key] = item.id in fullyWatched
+                        }
+                    if (newStatus == s.movieWatchedStatus) s else s.copy(movieWatchedStatus = newStatus)
+                }
+                rebuildFollowLayoutState()
+            }
+        }
     }
 
     private val hasAllTab: Boolean
@@ -319,7 +358,6 @@ class FolderDetailViewModel @Inject constructor(
                         }
                         rebuildAllTab()
                         rebuildFollowLayoutState()
-                        observeWatchedStatus()
                     }
                     is NetworkResult.Error -> {
                         _uiState.update { state ->
