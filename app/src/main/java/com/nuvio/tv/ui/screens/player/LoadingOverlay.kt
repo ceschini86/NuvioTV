@@ -29,8 +29,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
@@ -134,20 +136,56 @@ fun LoadingOverlay(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     if (showLogo) {
-                        AsyncImage(
-                            model = logoRequest,
-                            contentDescription = stringResource(R.string.cd_loading_logo),
-                            onError = { logoLoadFailed = true },
+                        val isLogoFillActive = progress != null
+                        val animatedFill by animateFloatAsState(
+                            targetValue = (progress ?: 0f).coerceIn(0f, 1f),
+                            animationSpec = tween(durationMillis = 400),
+                            label = "loadingLogoFill"
+                        )
+                        Box(
                             modifier = Modifier
                                 .width(320.dp)
                                 .height(180.dp)
-                                .graphicsLayer {
-                                    alpha = logoAlpha
-                                    scaleX = logoScale
-                                    scaleY = logoScale
-                                },
-                            contentScale = ContentScale.Fit
-                        )
+                        ) {
+                            // Base layer: semi-transparent logo (always visible).
+                            // When the fill effect is active we hold a steady low
+                            // alpha; otherwise fall back to the original fade+pulse.
+                            AsyncImage(
+                                model = logoRequest,
+                                contentDescription = stringResource(R.string.cd_loading_logo),
+                                onError = { logoLoadFailed = true },
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        alpha = if (isLogoFillActive) 0.25f else logoAlpha
+                                        if (!isLogoFillActive) {
+                                            scaleX = logoScale
+                                            scaleY = logoScale
+                                        }
+                                    },
+                                contentScale = ContentScale.Fit
+                            )
+                            // Foreground layer: full-alpha logo clipped from left
+                            // to right by progress, giving the illusion that the
+                            // base logo is filling up as buffering proceeds.
+                            if (isLogoFillActive) {
+                                AsyncImage(
+                                    model = logoRequest,
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .drawWithContent {
+                                            val clipWidth = size.width * animatedFill
+                                            if (clipWidth > 0f) {
+                                                clipRect(right = clipWidth) {
+                                                    this@drawWithContent.drawContent()
+                                                }
+                                            }
+                                        },
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
+                        }
                     } else if (!title.isNullOrBlank()) {
                         Text(
                             text = title,
@@ -174,7 +212,10 @@ fun LoadingOverlay(
 
                 }
 
-                if (!message.isNullOrBlank() || progress != null) {
+                // The horizontal progress bar is suppressed when the show logo
+                // is acting as the fill indicator. The text message stays visible.
+                val showHorizontalBar = progress != null && !showLogo
+                if (!message.isNullOrBlank() || showHorizontalBar) {
                     val messageOffset = if (showLogo || !title.isNullOrBlank()) 94.dp else 86.dp
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -191,7 +232,7 @@ fun LoadingOverlay(
                                 textAlign = TextAlign.Center
                             )
                         }
-                        if (progress != null) {
+                        if (showHorizontalBar) {
                             Spacer(modifier = Modifier.height(10.dp))
                             val animatedProgress by animateFloatAsState(
                                 targetValue = progress.coerceIn(0f, 1f),
