@@ -241,12 +241,7 @@ class FolderDetailViewModel @Inject constructor(
         val loadedRows = sourceTabs.mapNotNull { it.catalogRow }
         if (loadedRows.isEmpty()) return
 
-        // Strip descriptions from catalog items so the Modern hero area
-        // doesn't redundantly show the collection/catalog description.
-        val strippedRows = loadedRows.map { row ->
-            row.copy(items = row.items.map { it.copy(description = null) })
-        }
-        val homeRows = strippedRows.map { HomeRow.Catalog(it) }
+        val homeRows = loadedRows.map { HomeRow.Catalog(it) }
         val gridItems = buildList<GridItem> {
             loadedRows.forEach { row ->
                 add(GridItem.SectionDivider(
@@ -456,7 +451,6 @@ class FolderDetailViewModel @Inject constructor(
                         }
                         rebuildAllTab()
                         rebuildFollowLayoutState()
-                        observeWatchedStatus()
                     }
                     is NetworkResult.Error -> {
                         _uiState.update { s ->
