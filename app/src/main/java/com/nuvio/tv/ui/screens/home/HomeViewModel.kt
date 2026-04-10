@@ -205,6 +205,16 @@ class HomeViewModel @Inject constructor(
             profileManager.activeProfileId.collect { newId ->
                 if (newId != previousProfileId) {
                     previousProfileId = newId
+                    // Clear all in-memory CW caches so data from the previous
+                    // profile doesn't leak into the new one.
+                    cwMetaCache.clear()
+                    cwMetaNegativeCacheTimestamps.clear()
+                    cwBadgeEpisodeCache.clear()
+                    cwTmdbIdCache.clear()
+                    cwNextUpResolutionCache.clear()
+                    cwNextUpNegativeCacheTimestamps.clear()
+                    discoveredOlderNextUpItems.clear()
+                    cwLastProcessedNextUpContentIds.clear()
                     _uiState.update { it.copy(continueWatchingItems = emptyList()) }
                 }
             }
