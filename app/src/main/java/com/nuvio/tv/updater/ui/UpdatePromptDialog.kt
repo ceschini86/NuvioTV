@@ -170,7 +170,7 @@ fun UpdatePromptDialog(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.Top,
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -178,50 +178,14 @@ fun UpdatePromptDialog(
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Text(
-                                text = stringResource(R.string.update_title),
-                                style = MaterialTheme.typography.headlineMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = (-0.5).sp
-                                ),
-                                color = NuvioColors.TextPrimary
-                            )
-
-                            if (state.update != null && state.isUpdateAvailable && !showDownloadMode && state.downloadedApkPath == null) {
-                                Box(
-                                    modifier = Modifier
-                                        .background(
-                                            brush = Brush.horizontalGradient(
-                                                colors = listOf(
-                                                    NuvioColors.Primary.copy(alpha = 0.25f),
-                                                    NuvioColors.Primary.copy(alpha = 0.05f)
-                                                )
-                                            ),
-                                            shape = RoundedCornerShape(percent = 50)
-                                        )
-                                        .border(
-                                            width = 1.dp,
-                                            color = NuvioColors.Primary.copy(alpha = 0.35f),
-                                            shape = RoundedCornerShape(percent = 50)
-                                        )
-                                        .padding(horizontal = 14.dp, vertical = 6.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = state.update.tag,
-                                        style = MaterialTheme.typography.labelMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            letterSpacing = 0.5.sp
-                                        ),
-                                        color = NuvioColors.Primary
-                                    )
-                                }
-                            }
-                        }
+                        Text(
+                            text = stringResource(R.string.update_title),
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = (-0.5).sp
+                            ),
+                            color = NuvioColors.TextPrimary
+                        )
 
                         val subtitle = when {
                             state.errorMessage != null -> state.errorMessage
@@ -238,6 +202,26 @@ fun UpdatePromptDialog(
                                 color = NuvioColors.TextSecondary,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    if (state.update != null && state.isUpdateAvailable && !showDownloadMode && state.downloadedApkPath == null) {
+                        Box(
+                            modifier = Modifier.padding(top = 8.dp)
+                        ) {
+                            val displayTag = if (state.update.tag.startsWith("v", ignoreCase = true)) {
+                                state.update.tag
+                            } else {
+                                "v${state.update.tag}"
+                            }
+                            Text(
+                                text = displayTag,
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    letterSpacing = 1.sp
+                                ),
+                                color = NuvioColors.TextSecondary.copy(alpha = 0.75f)
                             )
                         }
                     }
