@@ -1951,21 +1951,6 @@ private fun HomeViewModel.applyContinueWatchingEnrichmentOverlay(
     }
 }
 
-    val summary = items.take(8).joinToString { item ->
-        when (item) {
-            is ContinueWatchingItem.InProgress -> {
-                val p = item.progress
-                "IP(${p.contentId.takeLast(6)} S${p.season}E${p.episode} ${p.progressPercentage.times(100).toInt()}%)"
-            }
-            is ContinueWatchingItem.NextUp -> {
-                val i = item.info
-                val tag = if (i.isReleaseAlert) "RA" else "NU"
-                "$tag(${i.contentId.takeLast(6)} S${i.season}E${i.episode} \"${i.episodeTitle?.take(20) ?: "?"}\")"
-            }
-        }
-    }
-}
-
 private fun HomeViewModel.publishBadgeUpdate(
     allWatchedEpisodes: Map<String, Set<Pair<Int, Int>>>
 ) {

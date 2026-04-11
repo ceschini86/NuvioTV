@@ -542,7 +542,6 @@
     <string name="layout_section_detail">Página de Detalles</string>
     <string name="layout_section_detail_desc">Ajustes para las pantallas de detalles y episodios.</string>
     <string name="layout_blur_unwatched">Desenfocar Episodios No Vistos</string>
-    <string name="layout_blur_unwatched_sub">Difumina las miniaturas de los episodios hasta que se vean para evitar spoilers.</string>
     <string name="layout_blur_unwatched_sub">Desenfocar miniaturas de episodios hasta que sean vistos para evitar spoilers.</string>
     <string name="layout_blur_cw_next_up_sub">Difumina las miniaturas del siguiente episodio en “Continuar viendo” para evitar spoilers.</string>
     <string name="layout_trailer_button">Mostrar Botón de Tráiler</string>
