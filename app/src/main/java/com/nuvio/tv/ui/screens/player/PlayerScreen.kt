@@ -60,6 +60,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -106,6 +107,7 @@ import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
 import com.nuvio.tv.core.player.ExternalPlayerLauncher
 import com.nuvio.tv.data.local.InternalPlayerEngine
+import com.nuvio.tv.data.local.SubtitleStyleSettings
 import com.nuvio.tv.data.local.StreamAutoPlayMode
 import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.theme.NuvioColors
@@ -138,7 +140,6 @@ fun PlayerScreen(
     val nextEpisodeFocusRequester = remember { FocusRequester() }
     var subtitleDelayAutoSyncFocused by remember { mutableStateOf(false) }
     var subtitleTimingConsumeNextConfirmKeyUp by remember { mutableStateOf(false) }
-    var exoPlayerView by remember { mutableStateOf<PlayerView?>(null) }
     val exitPlayer: () -> Unit = {
         viewModel.stopAndRelease()
         onBackPress(uiState.currentVideoId, uiState.currentSeason, uiState.currentEpisode, uiState.streamAutoPlayMode != StreamAutoPlayMode.MANUAL)
@@ -565,90 +566,66 @@ fun PlayerScreen(
             viewModel.exoPlayer?.let { player ->
                 val subtitleStyle = uiState.subtitleStyle
                 val aspectMode = uiState.aspectMode
+                val context = LocalContext.current
+                val latestAspectMode by rememberUpdatedState(aspectMode)
+                val rememberedPlayerView = remember(context, player) {
+                    PlayerView(context).apply {
+                        useController = false
+                        keepScreenOn = false
+                        setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+                        enableComposeSurfaceSyncWorkaroundIfAvailable()
+                        this.player = player
+                    }
+                }
 
-                DisposableEffect(player, exoPlayerView, aspectMode) {
-                    val boundView = exoPlayerView
-                    if (boundView == null) {
-                        onDispose { }
-                    } else {
-                        val listener = object : androidx.media3.common.Player.Listener {
-                            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
-                                boundView.post { applyExoAspectMode(boundView, aspectMode) }
-                            }
-
-                            override fun onRenderedFirstFrame() {
-                                boundView.post { applyExoAspectMode(boundView, aspectMode) }
-                            }
-                        }
-                        player.addListener(listener)
-                        boundView.post { applyExoAspectMode(boundView, aspectMode) }
-                        onDispose {
-                            player.removeListener(listener)
+                DisposableEffect(rememberedPlayerView, player) {
+                    rememberedPlayerView.player = player
+                    onDispose {
+                        if (rememberedPlayerView.player === player) {
+                            rememberedPlayerView.player = null
                         }
                     }
                 }
 
+                DisposableEffect(player, rememberedPlayerView) {
+                    val listener = object : androidx.media3.common.Player.Listener {
+                        override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                            rememberedPlayerView.post {
+                                rememberedPlayerView.applyExoAspectModeIfNeeded(latestAspectMode)
+                            }
+                        }
+
+                        override fun onRenderedFirstFrame() {
+                            rememberedPlayerView.post {
+                                rememberedPlayerView.applyExoAspectModeIfNeeded(latestAspectMode)
+                            }
+                        }
+                    }
+                    player.addListener(listener)
+                    rememberedPlayerView.post {
+                        rememberedPlayerView.applyExoAspectModeIfNeeded(latestAspectMode)
+                    }
+                    onDispose {
+                        player.removeListener(listener)
+                    }
+                }
+
                 AndroidView(
-                    factory = { context ->
-                        PlayerView(context).apply {
-                            this.player = player
-                            useController = false
-                            keepScreenOn = false
-                            setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
-                            exoPlayerView = this
-                        }
-                    },
+                    factory = { rememberedPlayerView },
                     update = { playerView ->
-                        exoPlayerView = playerView
-                        // Keep device awake only while playback is active (or buffering), not when paused.
-                        playerView.keepScreenOn = uiState.isPlaying || uiState.isBuffering
-                        playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                        applyExoAspectMode(playerView, aspectMode)
-                        playerView.subtitleView?.apply {
-                            // Calculate font size based on percentage (100% = 24sp base)
-                            val baseFontSize = 24f
-                            val scaledFontSize = baseFontSize * (subtitleStyle.size / 100f)
-                            setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, scaledFontSize)
-                            setApplyEmbeddedFontSizes(false)
-
-                            // Apply bold style via typeface
-                            val typeface = if (subtitleStyle.bold) {
-                                android.graphics.Typeface.DEFAULT_BOLD
-                            } else {
-                                android.graphics.Typeface.DEFAULT
-                            }
-
-                            // Calculate edge type based on outline setting
-                            val edgeType = if (subtitleStyle.outlineEnabled) {
-                                androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE
-                            } else {
-                                androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_NONE
-                            }
-
-                            setStyle(
-                                androidx.media3.ui.CaptionStyleCompat(
-                                    subtitleStyle.textColor,
-                                    subtitleStyle.backgroundColor,
-                                    android.graphics.Color.TRANSPARENT, // Window color
-                                    edgeType,
-                                    subtitleStyle.outlineColor,
-                                    typeface
-                                )
-                            )
-
-                            setApplyEmbeddedStyles(false)
-
-                            // Apply vertical offset (-20 = very bottom, 0 = default, 50 = middle)
-                            // Convert percentage to fraction for bottom padding
-                            val bottomPaddingFraction = (0.06f + (subtitleStyle.verticalOffset / 250f)).coerceIn(0f, 0.4f)
-                            setBottomPaddingFraction(bottomPaddingFraction)
-
-                            // Also apply explicit bottom padding based on view height for stronger offset effect
-                            post {
-                                val extraPadding = (height * (subtitleStyle.verticalOffset / 400f)).toInt().coerceAtLeast(0)
-                                setPadding(paddingLeft, paddingTop, paddingRight, extraPadding)
-                            }
+                        if (playerView.player !== player) {
+                            playerView.player = player
                         }
+                        playerView.enableComposeSurfaceSyncWorkaroundIfAvailable()
+                        val shouldKeepScreenOn = uiState.isPlaying || uiState.isBuffering
+                        if (playerView.keepScreenOn != shouldKeepScreenOn) {
+                            playerView.keepScreenOn = shouldKeepScreenOn
+                        }
+                        if (playerView.resizeMode != AspectRatioFrameLayout.RESIZE_MODE_FIT) {
+                            playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        }
+                        playerView.applyExoAspectModeIfNeeded(aspectMode)
+                        playerView.applySubtitleStyleIfNeeded(subtitleStyle)
                     },
                     modifier = Modifier.fillMaxSize()
                 )
@@ -1221,6 +1198,69 @@ fun PlayerScreen(
             )
         }
 
+    }
+}
+
+private fun PlayerView.enableComposeSurfaceSyncWorkaroundIfAvailable() {
+    runCatching {
+        javaClass
+            .getMethod("setEnableComposeSurfaceSyncWorkaround", java.lang.Boolean.TYPE)
+            .invoke(this, true)
+    }
+}
+
+private fun PlayerView.applyExoAspectModeIfNeeded(mode: AspectMode) {
+    if (getTag(R.id.player_view_aspect_mode_tag) == mode) {
+        return
+    }
+    setTag(R.id.player_view_aspect_mode_tag, mode)
+    applyExoAspectMode(this, mode)
+}
+
+private fun PlayerView.applySubtitleStyleIfNeeded(subtitleStyle: SubtitleStyleSettings) {
+    if (getTag(R.id.player_view_subtitle_style_tag) == subtitleStyle) {
+        return
+    }
+    setTag(R.id.player_view_subtitle_style_tag, subtitleStyle)
+    subtitleView?.apply {
+        val baseFontSize = 24f
+        val scaledFontSize = baseFontSize * (subtitleStyle.size / 100f)
+        setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, scaledFontSize)
+        setApplyEmbeddedFontSizes(false)
+
+        val typeface = if (subtitleStyle.bold) {
+            android.graphics.Typeface.DEFAULT_BOLD
+        } else {
+            android.graphics.Typeface.DEFAULT
+        }
+
+        val edgeType = if (subtitleStyle.outlineEnabled) {
+            androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE
+        } else {
+            androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_NONE
+        }
+
+        setStyle(
+            androidx.media3.ui.CaptionStyleCompat(
+                subtitleStyle.textColor,
+                subtitleStyle.backgroundColor,
+                android.graphics.Color.TRANSPARENT,
+                edgeType,
+                subtitleStyle.outlineColor,
+                typeface
+            )
+        )
+
+        setApplyEmbeddedStyles(false)
+
+        val bottomPaddingFraction =
+            (0.06f + (subtitleStyle.verticalOffset / 250f)).coerceIn(0f, 0.4f)
+        setBottomPaddingFraction(bottomPaddingFraction)
+
+        post {
+            val extraPadding = (height * (subtitleStyle.verticalOffset / 400f)).toInt().coerceAtLeast(0)
+            setPadding(paddingLeft, paddingTop, paddingRight, extraPadding)
+        }
     }
 }
 
