@@ -111,7 +111,9 @@ class HomeViewModel @Inject constructor(
     val enrichingItemId: StateFlow<String?> = _enrichingItemId.asStateFlow()
     internal fun setEnrichingItemId(id: String?) { _enrichingItemId.value = id }
 
+    internal val catalogStateLock = Any()
     internal val catalogsMap = linkedMapOf<String, CatalogRow>()
+    internal val catalogItemKeyIndex = mutableMapOf<String, MutableSet<String>>()
     internal val catalogOrder = mutableListOf<String>()
     internal var addonsCache: List<Addon> = emptyList()
     internal var collectionsCache: List<Collection> = emptyList()
@@ -456,7 +458,7 @@ class HomeViewModel @Inject constructor(
             val debounceMs = when {
                 // First render: use minimal debounce to show content ASAP while still
                 // batching near-simultaneous arrivals.
-                !hasRenderedFirstCatalog && catalogsMap.isNotEmpty() -> {
+                !hasRenderedFirstCatalog && hasAnyCatalogRows() -> {
                     hasRenderedFirstCatalog = true
                     50L
                 }
