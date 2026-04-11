@@ -423,6 +423,7 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                             val partialCount = partialNextUpItems.size
                             if (partialCount > publishedPartialNextUpCount.get()) {
                                 publishedPartialNextUpCount.set(partialCount)
+                                val freshIds = partialNextUpItems.map { it.info.contentId }.toSet()
                                 val cachedPartialNextUp = partialNextUpItems.map { nextUp ->
                                     val cached = cachedEnrichmentFromNextUp[nextUp.info.contentId]
                                     if (cached != null) {
@@ -436,9 +437,14 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                                         ))
                                     } else nextUp
                                 }
+                                // Keep cached next-up items for series not yet processed
+                                // by the fresh pipeline so they don't disappear mid-build.
+                                val retainedCached = cachedNextUpItems.filter {
+                                    it.info.contentId !in freshIds
+                                }
                                 val partialItems = mergeContinueWatchingItems(
                                     inProgressItems = inProgressOnly,
-                                    nextUpItems = cachedPartialNextUp
+                                    nextUpItems = cachedPartialNextUp + retainedCached
                                 )
                                 _uiState.update { state ->
                                     if (state.continueWatchingItems == partialItems) {
