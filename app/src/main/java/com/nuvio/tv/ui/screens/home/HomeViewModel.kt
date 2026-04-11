@@ -159,6 +159,9 @@ class HomeViewModel @Inject constructor(
     internal val cwNextUpNegativeCacheTimestamps = Collections.synchronizedMap(mutableMapOf<String, Long>())
     internal val discoveredOlderNextUpItems = Collections.synchronizedList(mutableListOf<ContinueWatchingItem.NextUp>())
     internal val cwLastProcessedNextUpContentIds = Collections.synchronizedSet(mutableSetOf<String>())
+    internal val cwEnrichedNextUpOverlay = Collections.synchronizedMap(mutableMapOf<String, NextUpInfo>())
+    /** In-memory cache of enriched InProgress items per contentId+episode key. */
+    internal val cwEnrichedInProgressOverlay = Collections.synchronizedMap(mutableMapOf<String, ContinueWatchingItem.InProgress>())
     internal val fullyWatchedSeriesIds get() = watchedSeriesStateHolder
     internal var tmdbEnrichFocusJob: Job? = null
     internal var pendingTmdbEnrichItemId: String? = null
@@ -215,6 +218,8 @@ class HomeViewModel @Inject constructor(
                     cwNextUpNegativeCacheTimestamps.clear()
                     discoveredOlderNextUpItems.clear()
                     cwLastProcessedNextUpContentIds.clear()
+                    cwEnrichedNextUpOverlay.clear()
+                    cwEnrichedInProgressOverlay.clear()
                     _uiState.update { it.copy(continueWatchingItems = emptyList()) }
                 }
             }
