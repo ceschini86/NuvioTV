@@ -112,7 +112,7 @@ internal suspend fun HomeViewModel.loadAllCatalogsPipeline(
     val signature = buildHomeCatalogLoadSignature(addons)
     if (!forceReload &&
         signature == activeCatalogLoadSignature &&
-        (catalogsLoadInProgress || catalogsMap.isNotEmpty())
+        (catalogsLoadInProgress || hasAnyCatalogRows())
     ) {
         return
     }
@@ -124,12 +124,13 @@ internal suspend fun HomeViewModel.loadAllCatalogsPipeline(
     cancelInFlightCatalogLoads()
 
     _uiState.update { it.copy(isLoading = true, error = null, installedAddonsCount = addons.size) }
-    catalogOrder.clear()
-    catalogsMap.clear()
+    synchronized(catalogStateLock) {
+        catalogOrder.clear()
+    }
+    clearCatalogData()
     posterStatusReconcileJob?.cancel()
     reconcilePosterStatusObserversPipeline(emptyList())
     _fullCatalogRows.value = emptyList()
-    truncatedRowCache.clear()
     hasRenderedFirstCatalog = false
     trailerPreviewLoadingIds.clear()
     trailerPreviewNegativeCache.clear()
@@ -166,7 +167,7 @@ internal suspend fun HomeViewModel.loadAllCatalogsPipeline(
         val heroCatalogSet = currentHeroCatalogKeys.toSet()
         val hasHeroSelections = heroCatalogSet.isNotEmpty()
 
-        if (catalogOrder.isEmpty() && !hasHeroSelections) {
+        if (isCatalogOrderEmpty() && !hasHeroSelections) {
             catalogsLoadInProgress = false
             _uiState.update { it.copy(isLoading = false, error = appContext.getString(R.string.home_error_no_catalog_addons)) }
             return
@@ -210,7 +211,7 @@ internal suspend fun HomeViewModel.loadAllCatalogsPipeline(
             // No home catalogs and no hero catalogs to load —
             // but collections may still exist to render.
             catalogsLoadInProgress = false
-            if (catalogOrder.isNotEmpty()) {
+            if (hasCatalogOrderEntries()) {
                 scheduleUpdateCatalogRows()
             } else {
                 _uiState.update { it.copy(isLoading = false, error = appContext.getString(R.string.home_error_no_catalog_addons)) }
@@ -239,7 +240,7 @@ internal fun HomeViewModel.loadHeroCatalogsPipeline() {
     if (heroCatalogKeys.isEmpty() || addonsCache.isEmpty()) return
 
     val heroCatalogSet = heroCatalogKeys.toSet()
-    val alreadyLoadedKeys = catalogsMap.keys.toSet()
+    val alreadyLoadedKeys = snapshotCatalogKeys()
     val missingHeroKeys = heroCatalogSet - alreadyLoadedKeys
     if (missingHeroKeys.isEmpty()) {
         // All hero catalogs already loaded — just refresh presentation
@@ -302,7 +303,7 @@ internal fun HomeViewModel.loadCatalogPipeline(
                             type = catalog.apiType,
                             catalogId = catalog.id
                         )
-                        catalogsMap[key] = result.data
+                        replaceCatalogRow(key, result.data)
                         if (!hasCountedCompletion) {
                             pendingCatalogLoads = (pendingCatalogLoads - 1).coerceAtLeast(0)
                             hasCountedCompletion = true
@@ -342,12 +343,12 @@ internal fun HomeViewModel.loadCatalogPipeline(
 
 internal fun HomeViewModel.loadMoreCatalogItemsPipeline(catalogId: String, addonId: String, type: String) {
     val key = catalogKey(addonId = addonId, type = type, catalogId = catalogId)
-    val currentRow = catalogsMap[key] ?: return
+    val currentRow = readCatalogRow(key) ?: return
 
     if (currentRow.isLoading || !currentRow.hasMore) return
     if (key in _loadingCatalogs.value) return
 
-    catalogsMap[key] = currentRow.copy(isLoading = true)
+    updateCatalogRow(key) { it.copy(isLoading = true) }
     _loadingCatalogs.update { it + key }
 
     viewModelScope.launch {
@@ -367,20 +368,22 @@ internal fun HomeViewModel.loadMoreCatalogItemsPipeline(catalogId: String, addon
         ).collect { result ->
             when (result) {
                 is NetworkResult.Success -> {
-                    val existingIds = currentRow.items.asSequence()
-                        .map { "${it.apiType}:${it.id}" }
-                        .toHashSet()
-                    val newUniqueItems = result.data.items.filter { item ->
-                        "${item.apiType}:${item.id}" !in existingIds
+                    updateCatalogRow(key) { latestRow ->
+                        val existingIds = latestRow.items.asSequence()
+                            .map { "${it.apiType}:${it.id}" }
+                            .toHashSet()
+                        val newUniqueItems = result.data.items.filter { item ->
+                            "${item.apiType}:${item.id}" !in existingIds
+                        }
+                        val mergedItems = latestRow.items + newUniqueItems
+                        val hasMore = if (newUniqueItems.isEmpty()) false else result.data.hasMore
+                        result.data.copy(items = mergedItems, hasMore = hasMore)
                     }
-                    val mergedItems = currentRow.items + newUniqueItems
-                    val hasMore = if (newUniqueItems.isEmpty()) false else result.data.hasMore
-                    catalogsMap[key] = result.data.copy(items = mergedItems, hasMore = hasMore)
                     _loadingCatalogs.update { it - key }
                     scheduleUpdateCatalogRows()
                 }
                 is NetworkResult.Error -> {
-                    catalogsMap[key] = currentRow.copy(isLoading = false)
+                    updateCatalogRow(key) { it.copy(isLoading = false) }
                     _loadingCatalogs.update { it - key }
                     scheduleUpdateCatalogRows()
                 }
@@ -391,8 +394,7 @@ internal fun HomeViewModel.loadMoreCatalogItemsPipeline(catalogId: String, addon
 }
 
 internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
-    val orderedKeys = catalogOrder.toList()
-    val catalogSnapshot = catalogsMap.toMap()
+    val (orderedKeys, catalogSnapshot) = snapshotCatalogState()
     val collectionsSnapshot = collectionsCache.associateBy { "collection_${it.id}" }
     val heroCatalogKeys = currentHeroCatalogKeys
     val currentLayout = _uiState.value.homeLayout
@@ -502,20 +504,23 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
             val shouldKeepFullRowInModern = currentLayout == HomeLayout.MODERN && row.supportsSkip
             if (row.items.size > 25 && !shouldKeepFullRowInModern) {
                 val key = "${row.addonId}_${row.apiType}_${row.catalogId}"
-                val cachedEntry = truncatedRowCache[key]
+                val cachedEntry = getTruncatedRowCacheEntry(key)
                 if (cachedEntry != null && cachedEntry.sourceRow === row) {
                     cachedEntry.truncatedRow
                 } else {
                     val truncatedRow = row.copy(items = row.items.take(25))
-                    truncatedRowCache[key] = HomeViewModel.TruncatedRowCacheEntry(
-                        sourceRow = row,
-                        truncatedRow = truncatedRow
+                    putTruncatedRowCacheEntry(
+                        key,
+                        HomeViewModel.TruncatedRowCacheEntry(
+                            sourceRow = row,
+                            truncatedRow = truncatedRow
+                        )
                     )
                     truncatedRow
                 }
             } else {
                 val key = "${row.addonId}_${row.apiType}_${row.catalogId}"
-                truncatedRowCache.remove(key)
+                removeTruncatedRowCacheEntry(key)
                 row
             }
         }
