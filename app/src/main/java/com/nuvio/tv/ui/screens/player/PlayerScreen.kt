@@ -544,90 +544,22 @@ fun PlayerScreen(
     ) {
         // Video Player
         if (uiState.internalPlayerEngine == InternalPlayerEngine.MVP_PLAYER) {
-            AndroidView(
-                factory = { context ->
-                    NuvioMpvSurfaceView(context).also { view ->
-                        viewModel.attachMpvView(view)
-                    }
-                },
-                update = { view ->
-                    viewModel.attachMpvView(view)
-                    view.keepScreenOn = uiState.isPlaying || uiState.isBuffering
-                    view.applyAspectMode(uiState.aspectMode)
-                    view.applySubtitleStyle(uiState.subtitleStyle)
-                },
+            MpvPlayerSurface(
+                viewModel = viewModel,
+                isPlaying = uiState.isPlaying,
+                isBuffering = uiState.isBuffering,
+                aspectMode = uiState.aspectMode,
+                subtitleStyle = uiState.subtitleStyle,
                 modifier = Modifier.fillMaxSize()
             )
-            DisposableEffect(Unit) {
-                onDispose {
-                    viewModel.attachMpvView(null)
-                }
-            }
         } else {
             viewModel.exoPlayer?.let { player ->
-                val subtitleStyle = uiState.subtitleStyle
-                val aspectMode = uiState.aspectMode
-                val context = LocalContext.current
-                val latestAspectMode by rememberUpdatedState(aspectMode)
-                val rememberedPlayerView = remember(context, player) {
-                    PlayerView(context).apply {
-                        useController = false
-                        keepScreenOn = false
-                        setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
-                        enableComposeSurfaceSyncWorkaroundIfAvailable()
-                        this.player = player
-                    }
-                }
-
-                DisposableEffect(rememberedPlayerView, player) {
-                    rememberedPlayerView.player = player
-                    onDispose {
-                        if (rememberedPlayerView.player === player) {
-                            rememberedPlayerView.player = null
-                        }
-                    }
-                }
-
-                DisposableEffect(player, rememberedPlayerView) {
-                    val listener = object : androidx.media3.common.Player.Listener {
-                        override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
-                            rememberedPlayerView.post {
-                                rememberedPlayerView.applyExoAspectModeIfNeeded(latestAspectMode)
-                            }
-                        }
-
-                        override fun onRenderedFirstFrame() {
-                            rememberedPlayerView.post {
-                                rememberedPlayerView.applyExoAspectModeIfNeeded(latestAspectMode)
-                            }
-                        }
-                    }
-                    player.addListener(listener)
-                    rememberedPlayerView.post {
-                        rememberedPlayerView.applyExoAspectModeIfNeeded(latestAspectMode)
-                    }
-                    onDispose {
-                        player.removeListener(listener)
-                    }
-                }
-
-                AndroidView(
-                    factory = { rememberedPlayerView },
-                    update = { playerView ->
-                        if (playerView.player !== player) {
-                            playerView.player = player
-                        }
-                        playerView.enableComposeSurfaceSyncWorkaroundIfAvailable()
-                        val shouldKeepScreenOn = uiState.isPlaying || uiState.isBuffering
-                        if (playerView.keepScreenOn != shouldKeepScreenOn) {
-                            playerView.keepScreenOn = shouldKeepScreenOn
-                        }
-                        if (playerView.resizeMode != AspectRatioFrameLayout.RESIZE_MODE_FIT) {
-                            playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                        }
-                        playerView.applyExoAspectModeIfNeeded(aspectMode)
-                        playerView.applySubtitleStyleIfNeeded(subtitleStyle)
-                    },
+                ExoPlayerSurface(
+                    player = player,
+                    isPlaying = uiState.isPlaying,
+                    isBuffering = uiState.isBuffering,
+                    aspectMode = uiState.aspectMode,
+                    subtitleStyle = uiState.subtitleStyle,
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -1196,6 +1128,125 @@ fun PlayerScreen(
             )
         }
 
+    }
+}
+
+@Composable
+private fun MpvPlayerSurface(
+    viewModel: PlayerViewModel,
+    isPlaying: Boolean,
+    isBuffering: Boolean,
+    aspectMode: AspectMode,
+    subtitleStyle: SubtitleStyleSettings,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val mpvView = remember(context) {
+        NuvioMpvSurfaceView(context)
+    }
+
+    AndroidView(
+        factory = { mpvView },
+        modifier = modifier
+    )
+
+    DisposableEffect(viewModel, mpvView) {
+        viewModel.attachMpvView(mpvView)
+        onDispose {
+            viewModel.attachMpvView(null)
+        }
+    }
+
+    LaunchedEffect(mpvView, isPlaying, isBuffering) {
+        val shouldKeepScreenOn = isPlaying || isBuffering
+        if (mpvView.keepScreenOn != shouldKeepScreenOn) {
+            mpvView.keepScreenOn = shouldKeepScreenOn
+        }
+    }
+
+    LaunchedEffect(mpvView, aspectMode) {
+        mpvView.applyAspectMode(aspectMode)
+    }
+
+    LaunchedEffect(mpvView, subtitleStyle) {
+        mpvView.applySubtitleStyle(subtitleStyle)
+    }
+}
+
+@Composable
+private fun ExoPlayerSurface(
+    player: androidx.media3.common.Player,
+    isPlaying: Boolean,
+    isBuffering: Boolean,
+    aspectMode: AspectMode,
+    subtitleStyle: SubtitleStyleSettings,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val latestAspectMode by rememberUpdatedState(aspectMode)
+    val playerView = remember(context, player) {
+        PlayerView(context).apply {
+            useController = false
+            keepScreenOn = false
+            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+            setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+            enableComposeSurfaceSyncWorkaroundIfAvailable()
+            this.player = player
+        }
+    }
+
+    AndroidView(
+        factory = { playerView },
+        modifier = modifier
+    )
+
+    DisposableEffect(playerView, player) {
+        if (playerView.player !== player) {
+            playerView.player = player
+        }
+        onDispose {
+            if (playerView.player === player) {
+                playerView.player = null
+            }
+        }
+    }
+
+    DisposableEffect(player, playerView) {
+        val listener = object : androidx.media3.common.Player.Listener {
+            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                playerView.post {
+                    playerView.applyExoAspectModeIfNeeded(latestAspectMode)
+                }
+            }
+
+            override fun onRenderedFirstFrame() {
+                playerView.post {
+                    playerView.applyExoAspectModeIfNeeded(latestAspectMode)
+                }
+            }
+        }
+        player.addListener(listener)
+        playerView.post {
+            playerView.applyExoAspectModeIfNeeded(latestAspectMode)
+        }
+        onDispose {
+            player.removeListener(listener)
+        }
+    }
+
+    LaunchedEffect(playerView, isPlaying, isBuffering) {
+        val shouldKeepScreenOn = isPlaying || isBuffering
+        if (playerView.keepScreenOn != shouldKeepScreenOn) {
+            playerView.keepScreenOn = shouldKeepScreenOn
+        }
+    }
+
+    LaunchedEffect(playerView, aspectMode) {
+        playerView.applyExoAspectModeIfNeeded(aspectMode)
+    }
+
+    LaunchedEffect(playerView, subtitleStyle) {
+        playerView.applySubtitleStyleIfNeeded(subtitleStyle)
     }
 }
 
