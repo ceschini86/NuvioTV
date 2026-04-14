@@ -34,6 +34,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Collections
@@ -2030,7 +2031,7 @@ private fun HomeViewModel.publishBadgeUpdate(
 private fun parseEpisodeReleaseDate(raw: String?): LocalDate? {
     if (raw.isNullOrBlank()) return null
     val value = raw.trim()
-    val zone = ZoneId.systemDefault()
+    val zone = ZoneOffset.UTC
 
     return runCatching {
         Instant.parse(value).atZone(zone).toLocalDate()
@@ -2050,7 +2051,7 @@ private fun parseEpisodeReleaseDate(raw: String?): LocalDate? {
 private fun parseEpisodeReleaseInstant(raw: String?): Instant? {
     if (raw.isNullOrBlank()) return null
     val value = raw.trim()
-    val zone = ZoneId.systemDefault()
+    val zone = ZoneOffset.UTC
 
     return runCatching {
         Instant.parse(value)
