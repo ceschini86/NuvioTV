@@ -387,6 +387,8 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                     if (inProgressOnly.any { it.progress.contentId == cached.contentId }) return@mapNotNull null
                     // Skip dismissed items
                     if (nextUpDismissKey(cached.contentId, cached.seedSeason, cached.seedEpisode) in dismissedNextUp) return@mapNotNull null
+                    // Respect "show unaired" setting
+                    if (!cached.hasAired && !showUnairedNextUp) return@mapNotNull null
                     ContinueWatchingItem.NextUp(
                         info = NextUpInfo(
                             contentId = cached.contentId,
@@ -741,6 +743,8 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                             // Only apply rejection filter to non-cached items.
                             // Cached items survive until fresh pipeline replaces them.
                             (isCachedFromDisk || it.info.contentId !in rejectedByFreshPipeline) &&
+                            // Respect "show unaired" setting for all items including cached.
+                            (it.info.hasAired || showUnairedNextUp) &&
                             nextUpDismissKey(it.info.contentId, it.info.seedSeason, it.info.seedEpisode) !in dismissedNextUp &&
                             !watchProgressRepository.isDroppedShow(it.info.contentId)
                         pass
