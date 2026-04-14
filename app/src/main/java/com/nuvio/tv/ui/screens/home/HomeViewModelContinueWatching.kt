@@ -2255,9 +2255,7 @@ private fun formatEpisodeAirDateLabel(releaseDate: LocalDate): String {
     val locale = Locale.getDefault()
     val skeleton = if (releaseDate.year == todayLocal.year) "dMMM" else "dMMMy"
     val pattern = android.text.format.DateFormat.getBestDateTimePattern(locale, skeleton)
-    return java.text.SimpleDateFormat(pattern, locale).format(
-        java.util.Date(releaseDate.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli())
-    )
+    return DateTimeFormatter.ofPattern(pattern, locale).format(releaseDate)
 }
 
 private fun resolveNextUpReleaseState(
