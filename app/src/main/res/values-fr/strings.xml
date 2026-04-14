@@ -12,8 +12,8 @@
     <string name="web_btn_add">Ajouter</string>
     <string name="web_installed_addons">Addons installés</string>
     <string name="web_no_addons">Aucun addon installé</string>
-    <string name="web_home_catalogs">Catalogues et collections d'accueil</string>
-    <string name="web_no_catalogs">Aucun catalogue d'accueil disponible</string>
+    <string name="web_home_catalogs">Catalogues et collections d\'accueil</string>
+    <string name="web_no_catalogs">Aucun catalogue d\'accueil disponible</string>
     <string name="web_btn_save">Enregistrer les modifications</string>
     <string name="web_connection_lost">Connexion à la TV perdue</string>
     <string name="web_btn_remove">Supprimer</string>
@@ -30,11 +30,11 @@
     <string name="web_status_changes_rejected">Modifications refusées</string>
     <string name="web_status_msg_changes_rejected">Les modifications ont été refusées sur la TV. Ta liste a été restaurée.</string>
     <string name="web_status_error">Un problème est survenu</string>
-    <string name="web_error_failed_save">Échec de l'enregistrement. Vérifie ta connexion à la TV.</string>
+    <string name="web_error_failed_save">Échec de l\'enregistrement. Vérifie ta connexion à la TV.</string>
     <string name="web_btn_dismiss">Fermer</string>
     <string name="web_status_timeout">Délai dépassé</string>
     <string name="web_status_msg_timeout">Aucune réponse de la TV. Réessaie.</string>
-    <string name="web_status_msg_connection_lost">Le serveur TV n'est plus joignable. Les modifications ont peut-être été appliquées.</string>
+    <string name="web_status_msg_connection_lost">Le serveur TV n\'est plus joignable. Les modifications ont peut-être été appliquées.</string>
     <string name="web_manage_repos_title">Gérer les dépôts</string>
     <string name="web_manage_repos_subtitle">Gérer tes dépôts</string>
     <string name="web_add_repo_url">Ajouter un dépôt par URL</string>
@@ -45,7 +45,7 @@
     <string name="web_manage_collections_subtitle">Créer et gérer tes collections personnalisées</string>
     <string name="web_status_msg_collections_updated">Tes collections ont été mises à jour sur la TV.</string>
     <string name="web_tab_addons">Addons</string>
-    <string name="web_tab_home_layout">Disposition de l'accueil</string>
+    <string name="web_tab_home_layout">Disposition de l\'accueil</string>
     <string name="web_tab_collections">Collections</string>
     <string name="web_btn_enable_all">Tout activer</string>
     <string name="web_btn_disable_all">Tout désactiver</string>
@@ -351,7 +351,7 @@
     <string name="playback_internal_player_engine">Moteur interne</string>
     <string name="playback_engine_exoplayer">ExoPlayer</string>
     <string name="playback_engine_mvplayer">Libmpv (Bêta)</string>
-    <string name="playback_auto_switch_internal_player_on_error">Changement auto du moteur en cas d'erreur au démarrage</string>
+    <string name="playback_auto_switch_internal_player_on_error">Changement auto du moteur en cas d\'erreur au démarrage</string>
     <string name="playback_auto_switch_internal_player_on_error_sub">Si le démarrage du flux échoue, bascule automatiquement entre ExoPlayer et libmpv.</string>
     <string name="playback_section_audio">Audio et bande-annonce</string>
     <string name="playback_section_audio_desc">Comportement des bandes-annonces et contrôles audio.</string>
@@ -381,7 +381,7 @@
     <string name="audio_lang_default">Par défaut (fichier média)</string>
     <string name="audio_lang_device">Langue de l\'appareil</string>
     <string name="audio_lang_original">Langue originale</string>
-    <string name="audio_lang_original_hint">Nécessite que l'enrichissement TMDB soit activé</string>
+    <string name="audio_lang_original_hint">Nécessite que l\'enrichissement TMDB soit activé</string>
     <string name="audio_preferred_lang">Langue audio préférée</string>
     <string name="audio_skip_silence">Passer les silences</string>
     <string name="audio_skip_silence_sub">Passer les passages silencieux de l\'audio pendant la lecture</string>
@@ -397,7 +397,7 @@
     <string name="audio_mpv_hwdec_title">Décodage matériel (MPV uniquement)</string>
     <string name="audio_mpv_hwdec_dialog_subtitle">Choisis comment libmpv doit utiliser les décodeurs matériels.</string>
     <string name="audio_mpv_hwdec_legacy_direct_copy">Hérité (direct -&gt; copy)</string>
-    <string name="audio_mpv_hwdec_legacy_direct_copy_desc">Comportement précédent par défaut : essaie d'abord le matériel direct, puis le copy-back.</string>
+    <string name="audio_mpv_hwdec_legacy_direct_copy_desc">Comportement précédent par défaut : essaie d\'abord le matériel direct, puis le copy-back.</string>
     <string name="audio_mpv_hwdec_auto_safe">Auto (auto-safe)</string>
     <string name="audio_mpv_hwdec_auto_safe_desc">Mode automatique plus sûr avec repli quand certains décodeurs matériels échouent.</string>
     <string name="audio_mpv_hwdec_hardware_copy">Matériel (copy) (mediacodec-copy)</string>
@@ -871,7 +871,7 @@
     <string name="stream_type_torrent">Torrent</string>
     <string name="stream_type_youtube">YouTube</string>
     <string name="p2p_consent_title">Streaming P2P</string>
-    <string name="p2p_consent_body">Ce flux utilise la technologie pair-à-pair (P2P). En activant le P2P, tu reconnais et acceptes que:\n\n\u2022 Ton adresse IP sera visible par les autres pairs du réseau\n\u2022 Tu es seul responsable du contenu auquel tu accèdes\n\u2022 Tu confirmes avoir le droit légal de visionner ce contenu dans ta juridiction\n\u2022 Nuvio n'héberge, ne distribue ni ne contrôle aucun contenu P2P\n\u2022 Nuvio ne peut être tenu responsable des conséquences légales liées à ton utilisation du streaming P2P\n\nTu utilises cette fonctionnalité entièrement à tes risques. Le P2P peut être désactivé à tout moment dans les paramètres.</string>
+    <string name="p2p_consent_body">Ce flux utilise la technologie pair-à-pair (P2P). En activant le P2P, tu reconnais et acceptes que:\n\n\u2022 Ton adresse IP sera visible par les autres pairs du réseau\n\u2022 Tu es seul responsable du contenu auquel tu accèdes\n\u2022 Tu confirmes avoir le droit légal de visionner ce contenu dans ta juridiction\n\u2022 Nuvio n\'héberge, ne distribue ni ne contrôle aucun contenu P2P\n\u2022 Nuvio ne peut être tenu responsable des conséquences légales liées à ton utilisation du streaming P2P\n\nTu utilises cette fonctionnalité entièrement à tes risques. Le P2P peut être désactivé à tout moment dans les paramètres.</string>
     <string name="p2p_consent_enable">Activer le P2P</string>
     <string name="p2p_consent_cancel">Annuler</string>
     <string name="settings_p2p_title">Streaming P2P</string>
@@ -879,7 +879,7 @@
     <string name="settings_p2p_hide_stats_title">Masquer les stats torrent</string>
     <string name="settings_p2p_hide_stats_subtitle">Masquer le buffer, les seeders, les pairs et la vitesse de téléchargement pendant le chargement et la lecture</string>
     <string name="p2p_download_title">Téléchargement du moteur P2P</string>
-    <string name="p2p_download_subtitle">Il s'agit d'un téléchargement unique requis pour le streaming P2P.</string>
+    <string name="p2p_download_subtitle">Il s\'agit d\'un téléchargement unique requis pour le streaming P2P.</string>
     <string name="stream_type_external">Externe</string>
     <string name="stream_player_picker_title">Quel lecteur utiliser ?</string>
     <string name="stream_player_internal">Interne</string>
@@ -896,13 +896,13 @@
     <string name="player_loading_building">Initialisation du lecteur…</string>
     <string name="player_loading_starting">Démarrage du flux…</string>
     <string name="player_loading_buffering">Mise en mémoire tampon…</string>
-    <string name="player_loading_fallback_pcm_audio">Échec de l'initialisation de la piste audio - passage en audio PCM…</string>
-    <string name="player_loading_fallback_hevc_decoder">Échec de l'initialisation du décodeur - passage au décodeur HEVC…</string>
+    <string name="player_loading_fallback_pcm_audio">Échec de l\'initialisation de la piste audio - passage en audio PCM…</string>
+    <string name="player_loading_fallback_hevc_decoder">Échec de l\'initialisation du décodeur - passage au décodeur HEVC…</string>
     <string name="player_engine_switching_title">Changement du moteur de lecture</string>
     <string name="player_engine_switching_message">Échec au démarrage. Bascule vers %1$s…</string>
     <string name="player_engine_switching_manual_message">Bascule vers %1$s…</string>
-    <string name="playback_show_loading_status">Afficher l'état de chargement</string>
-    <string name="playback_show_loading_status_sub">Afficher la progression étape par étape pendant l'initialisation du lecteur.</string>
+    <string name="playback_show_loading_status">Afficher l\'état de chargement</string>
+    <string name="playback_show_loading_status_sub">Afficher la progression étape par étape pendant l\'initialisation du lecteur.</string>
 
     <!-- ParentalGuideOverlay -->
     <string name="parental_nudity">Nudité</string>
@@ -1048,7 +1048,7 @@
     <string name="search_start_subtitle">Saisis au moins 2 caractères</string>
     <string name="search_start_subtitle_no_discover">Découvrir est désactivé. Saisis au moins 2 caractères</string>
     <string name="search_recent_title">Recherches récentes</string>
-    <string name="search_recent_clear">Effacer l'historique</string>
+    <string name="search_recent_clear">Effacer l\'historique</string>
     <string name="search_voice_no_speech">Aucune voix détectée. Réessaie.</string>
     <string name="search_voice_mic_permission">L\'autorisation d\'utiliser le micro est requise pour la recherche vocale.</string>
     <string name="search_voice_failed">Échec de la reconnaissance vocale. Réessaie.</string>
@@ -1197,7 +1197,7 @@
     <string name="plugin_confirm_reject">Rejeter</string>
     <string name="plugin_confirm_confirm">Confirmer</string>
     <string name="plugin_risky_enable_title">Activer le fournisseur ?</string>
-    <string name="plugin_risky_enable_message">%1$s est connu pour provoquer des crashs sur certains contenus. L'activer quand même ?</string>
+    <string name="plugin_risky_enable_message">%1$s est connu pour provoquer des crashs sur certains contenus. L\'activer quand même ?</string>
     <string name="plugin_risky_enable_cancel">Annuler</string>
     <string name="plugin_risky_enable_confirm">Activer</string>
     <string name="plugin_updated_format">Mis à jour : %1$s</string>
@@ -1440,9 +1440,9 @@
     <string name="collections_import">Importer</string>
     <string name="collections_export_file">Exporter le fichier</string>
     <string name="collections_saved_downloads">Enregistré dans Téléchargements</string>
-    <string name="collections_export_failed">Échec de l'export</string>
+    <string name="collections_export_failed">Échec de l\'export</string>
     <string name="collections_import_header">Importer des collections</string>
-    <string name="collections_import_description">Importe des collections depuis du JSON. Les catalogues provenant d'addons non installés afficheront un avertissement.</string>
+    <string name="collections_import_description">Importe des collections depuis du JSON. Les catalogues provenant d\'addons non installés afficheront un avertissement.</string>
     <string name="collections_cancel">Annuler</string>
     <string name="collections_mode_paste">Coller le JSON</string>
     <string name="collections_mode_file">Depuis un fichier</string>
@@ -1453,23 +1453,23 @@
     <string name="collections_file_description">Lit nuvio-collections.json depuis le dossier Téléchargements.</string>
     <string name="collections_load_file">Charger le fichier</string>
     <string name="collections_file_loaded">Fichier chargé (%1$d caractères)</string>
-    <string name="collections_fetch_url">Récupérer l'URL</string>
+    <string name="collections_fetch_url">Récupérer l\'URL</string>
     <string name="collections_fetching">Récupération…</string>
     <string name="collections_valid_json">JSON valide</string>
     <string name="collections_valid_summary">%1$d collection(s), %2$d dossier(s)</string>
-    <string name="collections_confirm_import">Confirmer l'import</string>
+    <string name="collections_confirm_import">Confirmer l\'import</string>
     <string name="collections_folder_count">%1$d dossier(s)</string>
 
     <!-- Collection Editor -->
     <string name="collections_editor_row_title">Titre de la rangée</string>
     <string name="collections_editor_save">Enregistrer</string>
-    <string name="collections_editor_backdrop">Image d'arrière-plan</string>
+    <string name="collections_editor_backdrop">Image d\'arrière-plan</string>
     <string name="collections_editor_pin_above">Épingler au-dessus des catalogues</string>
-    <string name="collections_editor_pin_above_desc">Afficher cette collection au-dessus de tous les catalogues classiques de l'accueil. Plusieurs collections épinglées suivent l'ordre de création des collections.</string>
+    <string name="collections_editor_pin_above_desc">Afficher cette collection au-dessus de tous les catalogues classiques de l\'accueil. Plusieurs collections épinglées suivent l\'ordre de création des collections.</string>
     <string name="collections_editor_focus_glow">Halo de focus</string>
-    <string name="collections_editor_focus_glow_desc">Utiliser le halo TV natif sur les cartes de catalogue personnalisées de cette collection sur l'accueil</string>
-    <string name="collections_editor_view_mode">Mode d'affichage</string>
-    <string name="collections_editor_show_all_tab">Afficher l'onglet "Tout"</string>
+    <string name="collections_editor_focus_glow_desc">Utiliser le halo TV natif sur les cartes de catalogue personnalisées de cette collection sur l\'accueil</string>
+    <string name="collections_editor_view_mode">Mode d\'affichage</string>
+    <string name="collections_editor_show_all_tab">Afficher l\'onglet "Tout"</string>
     <string name="collections_editor_show_all_tab_desc">Regrouper tous les catalogues dans un seul onglet</string>
     <string name="collections_editor_folders">Dossiers</string>
     <string name="collections_editor_add_folder">Ajouter un dossier</string>
@@ -1478,12 +1478,12 @@
     <string name="collections_editor_cover">Couverture</string>
     <string name="collections_editor_cover_none">Aucune</string>
     <string name="collections_editor_cover_emoji">Emoji</string>
-    <string name="collections_editor_cover_image_url">URL de l'image</string>
+    <string name="collections_editor_cover_image_url">URL de l\'image</string>
     <string name="collections_editor_focus_gif">GIF au focus</string>
     <string name="collections_editor_play_gif">Lire le GIF au focus</string>
     <string name="collections_editor_tile_shape">Forme de tuile</string>
     <string name="collections_editor_hide_title">Masquer le titre</string>
-    <string name="collections_editor_hide_title_desc">Afficher uniquement l'image de couverture</string>
+    <string name="collections_editor_hide_title_desc">Afficher uniquement l\'image de couverture</string>
     <string name="collections_editor_display">Affichage</string>
     <string name="collections_editor_catalogs">Catalogues</string>
     <string name="collections_editor_add_catalog">Ajouter un catalogue</string>
@@ -1495,17 +1495,17 @@
     <string name="collections_editor_catalog_count">%1$d catalogue(s)</string>
     <string name="collections_editor_view_mode_tabs">Onglets</string>
     <string name="collections_editor_view_mode_rows">Rangées</string>
-    <string name="collections_editor_view_mode_follow">Suivre la disposition de l'accueil</string>
+    <string name="collections_editor_view_mode_follow">Suivre la disposition de l\'accueil</string>
     <string name="collections_editor_shape_poster">Affiche</string>
     <string name="collections_editor_shape_wide">Large</string>
     <string name="collections_editor_shape_square">Carré</string>
     <string name="collections_editor_addon_missing">Addon non installé : %1$s</string>
     <string name="collections_editor_placeholder_name">Nom de la collection</string>
-    <string name="collections_editor_placeholder_backdrop">URL de l'image d'arrière-plan (optionnel)</string>
+    <string name="collections_editor_placeholder_backdrop">URL de l\'image d\'arrière-plan (optionnel)</string>
     <string name="collections_editor_placeholder_folder">Nom du dossier</string>
     <string name="collections_editor_placeholder_gif">URL du GIF animé (lecture uniquement au focus)</string>
     <string name="collections_card_title">Collections</string>
-    <string name="collections_card_subtitle">Regroupe les catalogues dans des dossiers sur ton écran d'accueil</string>
+    <string name="collections_card_subtitle">Regroupe les catalogues dans des dossiers sur ton écran d\'accueil</string>
     <string name="collections_tab_all">Tout</string>
     <string name="collections_tab_combined">Combiné</string>
 
