@@ -431,6 +431,7 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                             state.copy(continueWatchingItems = initialItems)
                         }
                     }
+                    _initialCwResolved.value = true
                     debug.recordInitialRendered(
                         count = initialItems.size,
                         elapsedMs = SystemClock.elapsedRealtime() - cycleStartMs
@@ -643,7 +644,37 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                                                 nextUpDismissKey(it.info.contentId, it.info.seedSeason, it.info.seedEpisode) !in dismissedNextUp
                                         }
                                         if (newItems.isEmpty()) return@update state
-                                        state.copy(continueWatchingItems = state.continueWatchingItems + newItems)
+                                        val merged = (state.continueWatchingItems + newItems)
+                                            .sortedByDescending { item ->
+                                                when (item) {
+                                                    is ContinueWatchingItem.InProgress -> item.progress.lastWatched
+                                                    is ContinueWatchingItem.NextUp -> item.info.sortTimestamp
+                                                }
+                                            }
+                                        state.copy(continueWatchingItems = merged)
+                                    }
+                                    // Persist updated CW snapshot
+                                    viewModelScope.launch(Dispatchers.IO) {
+                                        val currentItems = _uiState.value.continueWatchingItems
+                                        val brokenUrls = com.nuvio.tv.ui.components.brokenImageUrls
+                                        val nextUpSnap = currentItems.mapNotNull { item ->
+                                            val nu = item as? ContinueWatchingItem.NextUp ?: return@mapNotNull null
+                                            val info = nu.info
+                                            com.nuvio.tv.data.local.CachedNextUpItem(
+                                                contentId = info.contentId, contentType = info.contentType, name = info.name,
+                                                poster = info.poster, backdrop = info.backdrop, logo = info.logo,
+                                                videoId = info.videoId, season = info.season, episode = info.episode,
+                                                episodeTitle = info.episodeTitle, episodeDescription = info.episodeDescription,
+                                                thumbnail = info.thumbnail?.takeIf { it !in brokenUrls },
+                                                released = info.released, hasAired = info.hasAired, airDateLabel = info.airDateLabel,
+                                                lastWatched = info.lastWatched, imdbRating = info.imdbRating, genres = info.genres,
+                                                releaseInfo = info.releaseInfo, sortTimestamp = info.sortTimestamp,
+                                                releaseTimestamp = info.releaseTimestamp, isReleaseAlert = info.isReleaseAlert,
+                                                isNewSeasonRelease = info.isNewSeasonRelease, seedSeason = info.seedSeason,
+                                                seedEpisode = info.seedEpisode, contentLanguage = info.contentLanguage
+                                            )
+                                        }
+                                        runCatching { cwEnrichmentCache.saveNextUpSnapshot(nextUpSnap) }
                                     }
                                 }
                             }
@@ -657,9 +688,7 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                     discoveredOlderNextUpItems.toList()
                 }
                 // Preserve cached next-up items from disk until async inject re-verifies them.
-                // For Trakt: only release alerts. For Nuvio Sync: all items.
                 val cachedOlderNextUp = cachedNextUp
-                    .filter { if (useTraktProgress) it.isReleaseAlert else true }
                     .map { cached ->
                         ContinueWatchingItem.NextUp(
                             info = NextUpInfo(
@@ -704,13 +733,17 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                 val olderToInclude = (persistedOlderItems + cachedOlderNextUp)
                     .distinctBy { it.info.contentId }
                     .filter {
-                        (if (useTraktProgress) it.info.isReleaseAlert else true) &&
-                            it.info.contentId in allSeedContentIds &&
+                        val isCachedFromDisk = cachedOlderNextUp.any { c -> c.info.contentId == it.info.contentId }
+                        val pass =
+                            (it.info.contentId in allSeedContentIds || isCachedFromDisk) &&
                             it.info.contentId !in recentIds &&
                             it.info.contentId !in inProgressIds &&
-                            it.info.contentId !in rejectedByFreshPipeline &&
+                            // Only apply rejection filter to non-cached items.
+                            // Cached items survive until fresh pipeline replaces them.
+                            (isCachedFromDisk || it.info.contentId !in rejectedByFreshPipeline) &&
                             nextUpDismissKey(it.info.contentId, it.info.seedSeason, it.info.seedEpisode) !in dismissedNextUp &&
                             !watchProgressRepository.isDroppedShow(it.info.contentId)
+                        pass
                     }
                 val allNextUpItems = nextUpItems + olderToInclude
                 val normalItems = applyContinueWatchingEnrichmentOverlay(
@@ -747,6 +780,13 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                     count = normalItems.size,
                     elapsedMs = SystemClock.elapsedRealtime() - cycleStartMs
                 )
+                // Signal that the first CW cycle completed (items or confirmed empty).
+                if (!_initialCwResolved.value) {
+                    val hasRealData = normalItems.isNotEmpty() || !useTraktProgress || items.isNotEmpty()
+                    if (hasRealData) {
+                        _initialCwResolved.value = true
+                    }
+                }
 
                 // Save lightweight CW snapshot to disk immediately so cache stays fresh
                 // even if enrichment is cancelled by collectLatest.

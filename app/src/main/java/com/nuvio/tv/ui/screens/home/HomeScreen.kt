@@ -2,10 +2,10 @@ package com.nuvio.tv.ui.screens.home
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
+import android.util.Log
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
-import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -60,7 +60,7 @@ private data class HomePosterOptionsTarget(
     val addonBaseUrl: String
 )
 
-private const val HOME_STABLE_GATE_TIMEOUT_MS = 3_000L
+private const val HOME_STABLE_GATE_TIMEOUT_MS = 4_000L
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -86,6 +86,7 @@ fun HomeScreen(
     onNavigateToFolderDetail: (String, String) -> Unit = { _, _ -> }
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val initialCwResolved by viewModel.initialCwResolved.collectAsStateWithLifecycle()
     val effectiveAutoplayEnabled by viewModel.effectiveAutoplayEnabled.collectAsStateWithLifecycle(
         initialValue = false
     )
@@ -111,40 +112,34 @@ fun HomeScreen(
         { item, addonBaseUrl -> posterOptionsTarget = HomePosterOptionsTarget(item, addonBaseUrl) }
     }
 
-    LaunchedEffect(uiState.isLoading, hasCatalogContent, hasCollectionContent, hasHeroContent) {
-        Log.d("HomeGate", "isLoading=${uiState.isLoading} hasCatalog=$hasCatalogContent hasCollection=$hasCollectionContent hasHero=$hasHeroContent gateReleased=$homeStableGateReleased catalogLoadStarted=$catalogLoadingStarted addons=${uiState.installedAddonsCount} catalogRows=${uiState.catalogRows.size} homeRows=${uiState.homeRows.size} cwItems=${uiState.continueWatchingItems.size}")
-        // Track that catalog loading pipeline has started.
-        if (uiState.isLoading && uiState.installedAddonsCount > 0) {
+    LaunchedEffect(uiState.isLoading, hasCatalogContent, hasCollectionContent, hasHeroContent, initialCwResolved) {
+        // Track that addons are known (even if isLoading flipped too fast to catch).
+        if (uiState.installedAddonsCount > 0) {
             catalogLoadingStarted = true
         }
-        // Wait until catalog loading has completed (started AND finished) with content.
+        // Wait until catalog loading has completed with content AND the CW
+        // pipeline has completed its first emission.
         if (!homeStableGateReleased &&
             catalogLoadingStarted &&
             !uiState.isLoading &&
-            (hasCatalogContent || hasCollectionContent || hasHeroContent)
+            initialCwResolved &&
+            // When addons are installed, require at least one catalog row.
+            (hasCatalogContent || uiState.installedAddonsCount == 0)
         ) {
-            Log.d("HomeGate", "Gate releasing: settle delay 200ms")
-            delay(200)
+            Log.d("HomeGate", "RELEASE: catalogs=$hasCatalogContent cwResolved=$initialCwResolved cwItems=${uiState.continueWatchingItems.size} addons=${uiState.installedAddonsCount}")
             homeStableGateReleased = true
-            Log.d("HomeGate", "Gate RELEASED via content+loading done")
         }
     }
 
     LaunchedEffect(Unit) {
-        // Give the addon pipeline time to start (local DataStore read + emission).
-        // If after that window the pipeline still hasn't started and no addons
-        // are known, the user genuinely has no addons — release the gate.
-        delay(300)
-        if (!homeStableGateReleased && !catalogLoadingStarted && uiState.installedAddonsCount == 0) {
-            homeStableGateReleased = true
-            Log.d("HomeGate", "Gate RELEASED: no addons after 300ms")
-        }
-        // Safety timeout for everything else.
-        delay(HOME_STABLE_GATE_TIMEOUT_MS - 300)
-        Log.d("HomeGate", "Timeout reached (${HOME_STABLE_GATE_TIMEOUT_MS}ms)")
+        // Safety timeout — if catalogs and CW haven't loaded within this
+        // window, show whatever is available.  Covers edge cases like
+        // clean cache (addons loading from remote sync) and users with
+        // no addons at all.
+        delay(HOME_STABLE_GATE_TIMEOUT_MS)
         if (!homeStableGateReleased) {
+            Log.d("HomeGate", "RELEASE timeout: isLoading=${uiState.isLoading} cwResolved=$initialCwResolved catalogs=$hasCatalogContent cwItems=${uiState.continueWatchingItems.size}")
             homeStableGateReleased = true
-            Log.d("HomeGate", "Gate RELEASED via timeout")
         }
     }
 
@@ -172,7 +167,6 @@ fun HomeScreen(
 
         when {
             uiState.isLoading && !hasAnyContent -> {
-                Log.d("HomeGate", "BRANCH: loading+noContent")
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -182,28 +176,40 @@ fun HomeScreen(
             }
 
             uiState.error == "No addons installed" && uiState.catalogRows.isEmpty() -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = stringResource(R.string.home_no_addons),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = NuvioColors.TextSecondary
-                    )
+                if (!homeStableGateReleased) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        LoadingIndicator()
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.home_no_addons),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = NuvioColors.TextSecondary
+                        )
+                    }
                 }
             }
 
             uiState.error == "No catalog addons installed" && uiState.catalogRows.isEmpty() && !hasCollectionContent && !hasHeroContent -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = stringResource(R.string.home_no_catalog_addons),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = NuvioColors.TextSecondary
-                    )
+                if (!homeStableGateReleased) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        LoadingIndicator()
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.home_no_catalog_addons),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = NuvioColors.TextSecondary
+                        )
+                    }
                 }
             }
 
@@ -215,20 +221,30 @@ fun HomeScreen(
             }
 
             !uiState.isLoading && !hasAnyContent -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = stringResource(R.string.web_no_catalogs),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = NuvioColors.TextSecondary
-                    )
+                // Don't show "no catalogs" until the stable gate has released —
+                // addons may still be loading from remote after a cache clear.
+                if (!homeStableGateReleased) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        LoadingIndicator()
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.web_no_catalogs),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = NuvioColors.TextSecondary
+                        )
+                    }
                 }
             }
 
             else -> {
-                Log.d("HomeGate", "BRANCH: else — gateReleased=$homeStableGateReleased showAnim=$showHomeContentWithAnimation hasShown=$hasShownInitialHomeContent")
                 // On first launch, wait for stable content before revealing home.
                 // Once released, never go back to loading (homeStableGateReleased is rememberSaveable).
                 if (!homeStableGateReleased) {
