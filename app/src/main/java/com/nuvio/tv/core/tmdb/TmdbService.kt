@@ -261,5 +261,8 @@ class TmdbService @Inject constructor(
         tmdbToImdbCache[tmdbId] = imdbId
     }
 
+    /** Returns the cached TMDB ID for an IMDB ID without making any network call. */
+    fun cachedTmdbId(imdbId: String): Int? = imdbToTmdbCache[imdbId]
+
     fun apiKey(): String = TMDB_API_KEY
 }
