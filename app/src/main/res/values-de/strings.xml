@@ -199,7 +199,7 @@
     <string name="settings_layout">Layout</string>
     <string name="settings_layout_subtitle">Startseite-Struktur und Poster-Stile.</string>
     <string name="settings_plugins">Plugins</string>
-    <string name="settings_plugins_subtitle">Repositorys und Anbieter.</string>
+    <string name="settings_plugins_subtitle">Repositorys und Anbieter</string>
     <string name="settings_integration">Integration</string>
     <string name="settings_playback">Wiedergabe</string>
     <string name="settings_playback_subtitle">Player, Untertitel und automatische Wiedergabe.</string>
@@ -669,7 +669,7 @@
 
     <!-- ProfileSettingsContent -->
     <string name="profile_title">Profile</string>
-    <string name="profile_subtitle">Benutzerprofile für dieses Konto verwalten.</string>
+    <string name="profile_subtitle">Benutzerprofile für dieses Konto verwalten</string>
     <string name="profile_manage_button">Profile verwalten</string>
     <string name="profile_manage_title">Profile verwalten</string>
     <string name="profile_manage_subtitle">Wählen Sie ein Profil aus, um es zu bearbeiten, zu wechseln oder ein neues zu erstellen</string>

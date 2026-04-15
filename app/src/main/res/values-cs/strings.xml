@@ -186,7 +186,7 @@
     <string name="settings_layout">Rozložení</string>
     <string name="settings_layout_subtitle">Domovská obrazovka a styly posterů.</string>
     <string name="settings_plugins">Pluginy</string>
-    <string name="settings_plugins_subtitle">Repozitáře a poskytovatelé.</string>
+    <string name="settings_plugins_subtitle">Repozitáře a poskytovatelé</string>
     <string name="settings_integration">Integrace</string>
     <string name="settings_playback">Přehrávání</string>
     <string name="settings_playback_subtitle">Přehrávač, titulky a automatické přehrávání.</string>
@@ -643,7 +643,7 @@
     <string name="debug_generating_library">Generuje se…</string>
 
     <string name="profile_title">Profily</string>
-    <string name="profile_subtitle">Spravujte uživatelské profily pro tento účet.</string>
+    <string name="profile_subtitle">Spravujte uživatelské profily pro tento účet</string>
     <string name="profile_manage_button">Spravovat profily</string>
     <string name="profile_manage_title">Spravovat profily</string>
     <string name="profile_manage_subtitle">Vyberte profil k úpravě, přepnutí nebo vytvořte nový</string>

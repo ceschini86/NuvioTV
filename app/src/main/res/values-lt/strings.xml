@@ -170,7 +170,7 @@
     <string name="settings_layout">Išdėstymas</string>
     <string name="settings_layout_subtitle">Pradinio ekrano struktūra ir plakatų stiliai.</string>
     <string name="settings_plugins">Įskiepiai</string>
-    <string name="settings_plugins_subtitle">Repozitorijos ir teikėjai.</string>
+    <string name="settings_plugins_subtitle">Repozitorijos ir teikėjai</string>
     <string name="settings_integration">Integracija</string>
     <string name="settings_playback">Atkūrimas</string>
     <string name="settings_playback_subtitle">Grotuvas, subtitrai ir automatinis paleidimas.</string>
@@ -601,7 +601,7 @@ Klaida: Bandomoji simuliuojama klaida — tai nėra tikras gedimas. Šaltinis gr
 
     <!-- ProfileSettingsContent -->
     <string name="profile_title">Profiliai</string>
-    <string name="profile_subtitle">Valdyti šios paskyros naudotojų profilius.</string>
+    <string name="profile_subtitle">Valdyti šios paskyros naudotojų profilius</string>
     <string name="profile_manage_button">Valdyti profilius</string>
     <string name="profile_manage_title">Valdyti profilius</string>
     <string name="profile_manage_subtitle">Pasirinkite profilį, kurį norite redaguoti, perjungti arba sukurti naują</string>

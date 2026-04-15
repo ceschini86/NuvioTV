@@ -257,7 +257,7 @@
     <string name="settings_layout">Disposition</string>
     <string name="settings_layout_subtitle">Structure de l\'accueil et styles d\'affiches.</string>
     <string name="settings_plugins">Plugins</string>
-    <string name="settings_plugins_subtitle">Dépôts et fournisseurs.</string>
+    <string name="settings_plugins_subtitle">Dépôts et fournisseurs</string>
     <string name="settings_integration">Intégration</string>
     <string name="settings_playback">Lecture</string>
     <string name="settings_playback_subtitle">Lecteur, sous-titres et lecture automatique.</string>
@@ -755,7 +755,7 @@
 
     <!-- ProfileSettingsContent -->
     <string name="profile_title">Profils</string>
-    <string name="profile_subtitle">Gérer les profils utilisateurs pour ce compte.</string>
+    <string name="profile_subtitle">Gérer les profils utilisateurs pour ce compte</string>
     <string name="profile_manage_button">Gérer les profils</string>
     <string name="profile_manage_title">Gérer les profils</string>
     <string name="profile_manage_subtitle">Choisir, modifier ou créer un profil</string>

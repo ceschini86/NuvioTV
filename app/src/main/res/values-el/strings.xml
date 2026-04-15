@@ -199,7 +199,7 @@
     <string name="settings_layout">Διάταξη</string>
     <string name="settings_layout_subtitle">Δομή αρχικής οθόνης και στυλ αφισών.</string>
     <string name="settings_plugins">Πρόσθετα</string>
-    <string name="settings_plugins_subtitle">Αποθετήρια και πάροχοι.</string>
+    <string name="settings_plugins_subtitle">Αποθετήρια και πάροχοι</string>
     <string name="settings_integration">Ενσωμάτωση</string>
     <string name="settings_playback">Αναπαραγωγή</string>
     <string name="settings_playback_subtitle">Πρόγραμμα αναπαραγωγής, υπότιτλοι και αυτόματη αναπαραγωγή.</string>
@@ -669,7 +669,7 @@
 
     <!-- ProfileSettingsContent -->
     <string name="profile_title">Προφίλ</string>
-    <string name="profile_subtitle">Διαχείριση προφίλ χρηστών για αυτόν τον λογαριασμό.</string>
+    <string name="profile_subtitle">Διαχείριση προφίλ χρηστών για αυτόν τον λογαριασμό</string>
     <string name="profile_manage_button">Διαχείριση προφίλ</string>
     <string name="profile_manage_title">Διαχείριση προφίλ</string>
     <string name="profile_manage_subtitle">Επιλέξτε προφίλ για επεξεργασία, εναλλαγή ή δημιουργία νέου</string>

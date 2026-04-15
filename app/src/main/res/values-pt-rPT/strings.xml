@@ -176,7 +176,7 @@
     <string name="settings_layout">Layout</string>
     <string name="settings_layout_subtitle">Estrutura do ecrã inicial e estilos de póster.</string>
     <string name="settings_plugins">Plugins</string>
-    <string name="settings_plugins_subtitle">Repositórios e fornecedores.</string>
+    <string name="settings_plugins_subtitle">Repositórios e fornecedores</string>
     <string name="settings_integration">Integração</string>
     <string name="settings_playback">Reprodução</string>
     <string name="settings_playback_subtitle">Reprodutor, legendas e reprodução automática.</string>
@@ -632,7 +632,7 @@
 
     <!-- ProfileSettingsContent -->
     <string name="profile_title">Perfis</string>
-    <string name="profile_subtitle">Gere os perfis de utilizador para esta conta.</string>
+    <string name="profile_subtitle">Gere os perfis de utilizador para esta conta</string>
     <string name="profile_manage_button">Gerir Perfis</string>
     <string name="profile_manage_title">Gerir Perfis</string>
     <string name="profile_manage_subtitle">Seleciona um perfil para editar, mudar ou criar um novo</string>

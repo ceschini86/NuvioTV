@@ -256,7 +256,7 @@
     <string name="settings_layout">Интерфейс</string>
     <string name="settings_layout_subtitle">Структура главного экрана и стиль постеров.</string>
     <string name="settings_plugins">Плагины</string>
-    <string name="settings_plugins_subtitle">Репозитории и провайдеры.</string>
+    <string name="settings_plugins_subtitle">Репозитории и провайдеры</string>
     <string name="settings_integration">Интеграции</string>
     <string name="settings_playback">Воспроизведение</string>
     <string name="settings_playback_subtitle">Плеер, субтитры и автовоспроизведение.</string>
@@ -748,7 +748,7 @@
 
     <!-- ProfileSettingsContent -->
     <string name="profile_title">Профили</string>
-    <string name="profile_subtitle">Управление профилями пользователей для этого аккаунта.</string>
+    <string name="profile_subtitle">Управление профилями пользователей для этого аккаунта</string>
     <string name="profile_manage_button">Управление профилями</string>
     <string name="profile_manage_title">Управление профилями</string>
     <string name="profile_manage_subtitle">Выберите профиль для редактирования, переключения или создайте новый</string>

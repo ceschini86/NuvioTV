@@ -173,7 +173,7 @@
     <string name="settings_layout">פריסה</string>
     <string name="settings_layout_subtitle">מבנה בית וסגנונות פוסטרים.</string>
     <string name="settings_plugins">תוספים</string>
-    <string name="settings_plugins_subtitle">מאגרים וספקים.</string>
+    <string name="settings_plugins_subtitle">מאגרים וספקים</string>
     <string name="settings_integration">שילוב</string>
     <string name="settings_playback">הפעלה</string>
     <string name="settings_playback_subtitle">נגן, כתוביות והפעלה אוטומטית.</string>
@@ -477,7 +477,7 @@
 
     <!-- ProfileSettingsContent -->
     <string name="profile_title">פרופילים</string>
-    <string name="profile_subtitle">ניהול פרופילי משתמש עבור חשבון זה.</string>
+    <string name="profile_subtitle">ניהול פרופילי משתמש עבור חשבון זה</string>
     <string name="profile_manage_button">נהל פרופילים</string>
     <string name="profile_manage_title">נהל פרופילים</string>
     <string name="profile_manage_subtitle">בחר פרופיל לעריכה, החלפה, או צור חדש</string>

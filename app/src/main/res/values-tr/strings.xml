@@ -236,7 +236,7 @@
     <string name="settings_layout">Düzen</string>
     <string name="settings_layout_subtitle">Ana sayfa düzeni ve poster stilleri.</string>
     <string name="settings_plugins">Uzantılar</string>
-    <string name="settings_plugins_subtitle">Depolar ve sağlayıcılar.</string>
+    <string name="settings_plugins_subtitle">Depolar ve sağlayıcılar</string>
     <string name="settings_integration">Entegrasyon</string>
     <string name="settings_playback">Oynatma</string>
     <string name="settings_playback_subtitle">Oynatıcı, altyazılar ve otomatik oynatma.</string>
@@ -727,7 +727,7 @@
 
     <!-- ProfileSettingsContent -->
     <string name="profile_title">Profiller</string>
-    <string name="profile_subtitle">Bu hesaptaki kullanıcı profillerini yönetin.</string>
+    <string name="profile_subtitle">Bu hesaptaki kullanıcı profillerini yönetin</string>
     <string name="profile_manage_button">Profilleri Yönet</string>
     <string name="profile_manage_title">Profil Yönetimi</string>
     <string name="profile_manage_subtitle">Düzenlemek, değiştirmek veya yeni bir hesap oluşturmak için profillerden birini seçin</string>

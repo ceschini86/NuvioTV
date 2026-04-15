@@ -257,7 +257,7 @@
     <string name="settings_layout">Diseño</string>
     <string name="settings_layout_subtitle">Estructura de inicio y estilos de pósteres.</string>
     <string name="settings_plugins">Plugins</string>
-    <string name="settings_plugins_subtitle">Repositorios y proveedores.</string>
+    <string name="settings_plugins_subtitle">Repositorios y proveedores</string>
     <string name="settings_integration">Integración</string>
     <string name="settings_playback">Reproducción</string>
     <string name="settings_playback_subtitle">Reproductor, subtítulos y auto-reproducción.</string>
@@ -754,7 +754,7 @@
 
     <!-- ProfileSettingsContent -->
     <string name="profile_title">Perfiles</string>
-    <string name="profile_subtitle">Administra los perfiles de usuario para esta cuenta.</string>
+    <string name="profile_subtitle">Administra los perfiles de usuario para esta cuenta</string>
     <string name="profile_manage_button">Administrar perfiles</string>
     <string name="profile_manage_title">Administrar perfiles</string>
     <string name="profile_manage_subtitle">Selecciona un perfil para editarlo, cambiarlo o crear uno nuevo</string>

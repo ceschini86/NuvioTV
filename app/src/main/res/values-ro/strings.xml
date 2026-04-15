@@ -122,7 +122,7 @@
     <string name="settings_layout">Aranjament</string>
     <string name="settings_layout_subtitle">Structura paginii principale și stilurile afișajului.</string>
     <string name="settings_plugins">Plugin-uri</string>
-    <string name="settings_plugins_subtitle">Depozite și furnizori.</string>
+    <string name="settings_plugins_subtitle">Depozite și furnizori</string>
     <string name="settings_integration">Integrare</string>
     <string name="settings_playback">Redare</string>
     <string name="settings_playback_subtitle">Player, subtitrări și redare automată.</string>
@@ -482,7 +482,7 @@
 
     <!-- ProfileSettingsContent -->
     <string name="profile_title">Profiluri</string>
-    <string name="profile_subtitle">Gestionează profilurile utilizatorului pentru acest cont.</string>
+    <string name="profile_subtitle">Gestionează profilurile utilizatorului pentru acest cont</string>
     <string name="profile_primary_label">Principal</string>
     <string name="profile_shares_primary">Împărtășește %1$s al profilului principal</string>
     <string name="profile_edit_label">Editează</string>

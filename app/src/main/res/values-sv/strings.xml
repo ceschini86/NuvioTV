@@ -173,7 +173,7 @@
     <string name="settings_layout">Layout</string>
     <string name="settings_layout_subtitle">Hemstruktur och affischstilar.</string>
     <string name="settings_plugins">Plugins</string>
-    <string name="settings_plugins_subtitle">Arkiv och leverantörer.</string>
+    <string name="settings_plugins_subtitle">Arkiv och leverantörer</string>
     <string name="settings_integration">Integrationer</string>
     <string name="settings_playback">Uppspelning</string>
     <string name="settings_playback_subtitle">Spelare, undertexter, och automatisk uppspelning.</string>
@@ -602,7 +602,7 @@
 
     <!-- ProfileSettingsContent -->
     <string name="profile_title">Profiler</string>
-    <string name="profile_subtitle">Hantera användarprofiler för detta konto.</string>
+    <string name="profile_subtitle">Hantera användarprofiler för detta konto</string>
     <string name="profile_manage_button">Hantera profiler</string>
     <string name="profile_manage_title">Hantera profiler</string>
     <string name="profile_manage_subtitle">Välj en profil att redigera, byta till, eller skapa en ny</string>

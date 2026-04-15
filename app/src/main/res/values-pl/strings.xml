@@ -129,7 +129,7 @@
     <string name="settings_layout">Układ</string>
     <string name="settings_layout_subtitle">Struktura strony głównej i style kart.</string>
     <string name="settings_plugins">Wtyczki</string>
-    <string name="settings_plugins_subtitle">Repozytoria i dostawcy.</string>
+    <string name="settings_plugins_subtitle">Repozytoria i dostawcy</string>
     <string name="settings_integration">Integracje</string>
     <string name="settings_playback">Odtwarzanie</string>
     <string name="settings_playback_subtitle">Odtwarzacz, napisy i automatyczne odtwarzanie.</string>
@@ -548,7 +548,7 @@
 
     <!-- ProfileSettingsContent -->
     <string name="profile_title">Profile</string>
-    <string name="profile_subtitle">Zarządzaj profilami użytkowników dla tego konta.</string>
+    <string name="profile_subtitle">Zarządzaj profilami użytkowników dla tego konta</string>
     <string name="profile_primary_label">Główny</string>
     <string name="profile_shares_primary">Współdzieli %1$s profilu głównego</string>
     <string name="profile_edit_label">Edytuj</string>

@@ -197,7 +197,7 @@
     <string name="settings_layout">Oppsett</string>
     <string name="settings_layout_subtitle">Hjemmestruktur og plakatstiler.</string>
     <string name="settings_plugins">Programtillegg</string>
-    <string name="settings_plugins_subtitle">Arkiver og leverandører.</string>
+    <string name="settings_plugins_subtitle">Arkiver og leverandører</string>
     <string name="settings_integration">Integrasjon</string>
     <string name="settings_playback">Avspilling</string>
     <string name="settings_playback_subtitle">Spiller, undertekster og autoavspilling.</string>
@@ -665,7 +665,7 @@
 
     <!-- ProfileSettingsContent -->
     <string name="profile_title">Profiler</string>
-    <string name="profile_subtitle">Administrer brukerprofiler for denne kontoen.</string>
+    <string name="profile_subtitle">Administrer brukerprofiler for denne kontoen</string>
     <string name="profile_manage_button">Administrer profiler</string>
     <string name="profile_manage_title">Administrer profiler</string>
     <string name="profile_manage_subtitle">Velg en profil for å redigere, bytte eller opprette en ny</string>

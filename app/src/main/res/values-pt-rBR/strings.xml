@@ -257,7 +257,7 @@
     <string name="settings_layout">Layout</string>
     <string name="settings_layout_subtitle">Estrutura da home e estilo dos pôsteres.</string>
     <string name="settings_plugins">Plugins</string>
-    <string name="settings_plugins_subtitle">Repositórios e provedores.</string>
+    <string name="settings_plugins_subtitle">Repositórios e provedores</string>
     <string name="settings_integration">Integrações</string>
     <string name="settings_playback">Reprodução</string>
     <string name="settings_playback_subtitle">Player, legendas e Autorreprodução.</string>
@@ -755,7 +755,7 @@
     
     <!-- ProfileSettingsContent -->
     <string name="profile_title">Perfis</string>
-    <string name="profile_subtitle">Gerencie os perfis desta conta.</string>
+    <string name="profile_subtitle">Gerencie os perfis desta conta</string>
     <string name="profile_manage_button">Gerenciar Perfis</string>
     <string name="profile_manage_title">Gerenciar Perfis</string>
     <string name="profile_manage_subtitle">Selecione um perfil para editar, alternar ou criar um novo.</string>

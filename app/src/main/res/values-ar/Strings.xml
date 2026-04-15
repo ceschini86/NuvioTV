@@ -257,7 +257,7 @@
     <string name="settings_layout">واجهة العرض</string>
     <string name="settings_layout_subtitle">تنظيم الواجهة الرئيسية وشكل البطاقات.</string>
     <string name="settings_plugins">الملحقات</string>
-    <string name="settings_plugins_subtitle">المستودعات والمصادر.</string>
+    <string name="settings_plugins_subtitle">المستودعات والمصادر</string>
     <string name="settings_integration">الخدمات المرتبطة</string>
     <string name="settings_playback">وسائط التشغيل</string>
     <string name="settings_playback_subtitle">المشغل، الترجمة، والتشغيل التلقائي.</string>
@@ -755,7 +755,7 @@
 
     <!-- ProfileSettingsContent -->
     <string name="profile_title">الملفات الشخصية</string>
-    <string name="profile_subtitle">إدارة ملفات المستخدمين لهذا الحساب.</string>
+    <string name="profile_subtitle">إدارة ملفات المستخدمين لهذا الحساب</string>
     <string name="profile_manage_button">إدارة الملفات الشخصية</string>
     <string name="profile_manage_title">إدارة الملفات الشخصية</string>
     <string name="profile_manage_subtitle">حدد ملفاً شخصياً لتعديله أو التبديل إليه أو إنشاء ملف جديد</string>

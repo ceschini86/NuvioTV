@@ -199,7 +199,7 @@
     <string name="settings_layout">Elrendezés</string>
     <string name="settings_layout_subtitle">Kezdőlap szerkezete és poszter stílusok.</string>
     <string name="settings_plugins">Beépülő modulok</string>
-    <string name="settings_plugins_subtitle">Tárhelyek és szolgáltatók.</string>
+    <string name="settings_plugins_subtitle">Tárhelyek és szolgáltatók</string>
     <string name="settings_integration">Integráció</string>
     <string name="settings_playback">Lejátszás</string>
     <string name="settings_playback_subtitle">Lejátszó, feliratok és automatikus lejátszás.</string>
@@ -669,7 +669,7 @@
 
     <!-- ProfileSettingsContent -->
     <string name="profile_title">Profilok</string>
-    <string name="profile_subtitle">Fiókhoz tartozó felhasználói profilok kezelése.</string>
+    <string name="profile_subtitle">Fiókhoz tartozó felhasználói profilok kezelése</string>
     <string name="profile_manage_button">Profilok kezelése</string>
     <string name="profile_manage_title">Profilok kezelése</string>
     <string name="profile_manage_subtitle">Válassz ki egy profilt szerkesztéshez, váltáshoz vagy új létrehozásához</string>
