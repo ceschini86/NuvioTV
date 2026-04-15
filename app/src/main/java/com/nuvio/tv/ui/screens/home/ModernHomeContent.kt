@@ -953,7 +953,10 @@ fun ModernHomeContent(
                 .fillMaxWidth(MODERN_HERO_TEXT_WIDTH_FRACTION)
         )
 
-        CompositionLocalProvider(LocalBringIntoViewSpec provides verticalRowBringIntoViewSpec) {
+        CompositionLocalProvider(
+            LocalBringIntoViewSpec provides verticalRowBringIntoViewSpec,
+            LocalVerticalRowsScrolling provides (uiState.memoryOnlyVerticalScroll && isVerticalRowsScrolling)
+        ) {
             LazyColumn(
                 state = verticalRowListState,
                 modifier = Modifier
