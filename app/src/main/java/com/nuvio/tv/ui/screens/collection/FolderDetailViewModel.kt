@@ -339,6 +339,7 @@ class FolderDetailViewModel @Inject constructor(
 
             val supportsSkip = catalog?.supportsExtra("skip") ?: false
             val skipStep = catalog?.skipStep() ?: 100
+            val extraArgs = buildCatalogExtraArgs(source)
 
             catalogRepository.getCatalog(
                 addonBaseUrl = effectiveAddon.baseUrl,
@@ -349,6 +350,7 @@ class FolderDetailViewModel @Inject constructor(
                 type = source.type,
                 skip = 0,
                 skipStep = skipStep,
+                extraArgs = extraArgs,
                 supportsSkip = supportsSkip
             ).collect { result ->
                 when (result) {
@@ -427,6 +429,7 @@ class FolderDetailViewModel @Inject constructor(
                 type = row.apiType,
                 skip = nextSkip,
                 skipStep = row.skipStep,
+                extraArgs = row.extraArgs,
                 supportsSkip = row.supportsSkip
             ).collect { result ->
                 when (result) {
@@ -560,12 +563,18 @@ class FolderDetailViewModel @Inject constructor(
             "series" -> "Series"
             else -> source.type.replaceFirstChar { it.uppercase() }
         }
-        val name = if (!catalogName.isNullOrBlank()) {
+        val baseName = if (!catalogName.isNullOrBlank()) {
             catalogName.replaceFirstChar { it.uppercase() }
         } else {
             typeLabel
         }
+        val name = source.genre?.takeIf { it.isNotBlank() }?.let { "$baseName · $it" } ?: baseName
         return name to typeLabel
+    }
+
+    private fun buildCatalogExtraArgs(source: CollectionCatalogSource): Map<String, String> {
+        val genre = source.genre?.takeIf { it.isNotBlank() } ?: return emptyMap()
+        return mapOf("genre" to genre)
     }
 
     fun onItemFocused(item: MetaPreview) {
