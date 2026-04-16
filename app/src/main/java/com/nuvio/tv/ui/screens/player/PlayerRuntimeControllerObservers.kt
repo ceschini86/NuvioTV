@@ -202,6 +202,13 @@ internal fun PlayerRuntimeController.observeSubtitleSettings() {
                 else -> currentState.audioAmplificationDb
             }
 
+            if (currentState.aspectMode != settings.aspectMode) {
+                Log.d(
+                    PlayerRuntimeController.TAG,
+                    "Aspect mode restored from settings: ${currentState.aspectMode} -> ${settings.aspectMode}"
+                )
+            }
+
             _uiState.update { state ->
                 val shouldShowOverlay = if (settings.loadingOverlayEnabled && !hasRenderedFirstFrame) {
                     true
@@ -219,6 +226,7 @@ internal fun PlayerRuntimeController.observeSubtitleSettings() {
                     osdClockEnabled = settings.osdClockEnabled,
                     internalPlayerEngine = resolvedInternalPlayerEngine,
                     frameRateMatchingMode = settings.frameRateMatchingMode,
+                    aspectMode = settings.aspectMode,
                     tunnelingEnabled = settings.tunnelingEnabled,
                     persistAudioAmplification = settings.persistAudioAmplification,
                     audioAmplificationDb = resolvedAudioAmplificationDb

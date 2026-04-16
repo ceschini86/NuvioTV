@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.ui.screens.player.AspectMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -199,7 +200,8 @@ data class PlayerSettings(
     val streamReuseLastLinkCacheHours: Int = 24,
     val subtitleOrganizationMode: SubtitleOrganizationMode = SubtitleOrganizationMode.NONE,
     val addonSubtitleStartupMode: AddonSubtitleStartupMode = AddonSubtitleStartupMode.ALL_SUBTITLES,
-    val resizeMode: Int = 0
+    val resizeMode: Int = 0,
+    val aspectMode: AspectMode = AspectMode.ORIGINAL
 )
 
 enum class StreamAutoPlayMode {
@@ -330,6 +332,7 @@ class PlayerSettingsDataStore @Inject constructor(
     private val subtitleOrganizationModeKey = stringPreferencesKey("subtitle_organization_mode")
     private val addonSubtitleStartupModeKey = stringPreferencesKey("addon_subtitle_startup_mode")
     private val resizeModeKey = intPreferencesKey("resize_mode")
+    private val aspectModeKey = stringPreferencesKey("aspect_mode")
 
     // Subtitle style settings keys
     private val subtitlePreferredLanguageKey = stringPreferencesKey("subtitle_preferred_language")
@@ -502,6 +505,9 @@ class PlayerSettingsDataStore @Inject constructor(
                 subtitleOrganizationMode = parseSubtitleOrganizationMode(prefs[subtitleOrganizationModeKey]),
                 addonSubtitleStartupMode = parseAddonSubtitleStartupMode(prefs[addonSubtitleStartupModeKey]),
                 resizeMode = (prefs[resizeModeKey] ?: 0).coerceIn(0, 4),
+                aspectMode = prefs[aspectModeKey]?.let {
+                    runCatching { AspectMode.valueOf(it) }.getOrDefault(AspectMode.ORIGINAL)
+                } ?: AspectMode.ORIGINAL,
                 subtitleStyle = SubtitleStyleSettings(
                     preferredLanguage = normalizeSelectableLanguageCode(
                         prefs[subtitlePreferredLanguageKey] ?: "en"
@@ -787,6 +793,12 @@ class PlayerSettingsDataStore @Inject constructor(
     suspend fun setResizeMode(mode: Int) {
         store().edit { prefs ->
             prefs[resizeModeKey] = mode.coerceIn(0, 4)
+        }
+    }
+
+    suspend fun setAspectMode(mode: AspectMode) {
+        store().edit { prefs ->
+            prefs[aspectModeKey] = mode.name
         }
     }
 
