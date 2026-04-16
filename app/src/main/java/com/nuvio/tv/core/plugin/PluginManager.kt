@@ -44,7 +44,10 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "PluginManager"
-private const val MAX_CONCURRENT_SCRAPERS = 5
+// Scrapers are network-bound, not CPU-bound. Running more concurrently lets slow
+// providers overlap with fast ones instead of batching in groups of 5. OkHttp's
+// dispatcher + the providers' own internal parallelism stay the real bottleneck.
+private const val MAX_CONCURRENT_SCRAPERS = 10
 private const val MAX_RESULT_ITEMS = 150
 private const val MAX_RESPONSE_SIZE = 5 * 1024 * 1024L
 // Outer safety-net timeout for scrapers. The runner now internally caps loadLinks

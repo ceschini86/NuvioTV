@@ -27,6 +27,9 @@ import com.nuvio.tv.core.tmdb.TmdbService
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.LocalScraperResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
@@ -523,16 +526,23 @@ class ExternalExtensionRunner @Inject constructor(
         }
 
         // Multi-title fallback: if primary found nothing AND host is reachable AND
-        // provider supports search, try alts.
+        // provider supports search, try alts in parallel. Parallel because sequential
+        // 7x retries × ~500ms each = ~3.5s wasted per miss; running concurrently cuts
+        // this to ~500ms. Picks the first non-empty result in candidate order.
         if (searchResults.isNullOrEmpty() && !hostDead && !unsupported) {
-            for (alt in candidateTitles.drop(1)) {
-                Log.d(TAG, "SearchBased ${api.name}: retrying with alt title \"$alt\"")
-                outcome = trySearch(api, alt)
-                if (outcome.hostUnreachable) { hostDead = true; break }
-                if (outcome.unsupported) { unsupported = true; break }
-                if (!outcome.items.isNullOrEmpty()) {
-                    searchResults = outcome.items
-                    break
+            val alts = candidateTitles.drop(1)
+            if (alts.isNotEmpty()) {
+                Log.d(TAG, "SearchBased ${api.name}: trying ${alts.size} alt titles in parallel")
+                val altOutcomes = coroutineScope {
+                    alts.map { alt -> async { alt to trySearch(api, alt) } }.awaitAll()
+                }
+                altOutcomes.firstOrNull { it.second.hostUnreachable }?.let { hostDead = true }
+                altOutcomes.firstOrNull { it.second.unsupported }?.let { unsupported = true }
+                if (!hostDead && !unsupported) {
+                    altOutcomes.firstOrNull { !it.second.items.isNullOrEmpty() }?.let { (alt, o) ->
+                        Log.d(TAG, "SearchBased ${api.name}: alt title \"$alt\" returned ${o.items?.size ?: 0} results")
+                        searchResults = o.items
+                    }
                 }
             }
         }
