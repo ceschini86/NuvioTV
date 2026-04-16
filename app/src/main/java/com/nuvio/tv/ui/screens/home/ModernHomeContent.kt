@@ -93,6 +93,7 @@ import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import coil.decode.SvgDecoder
 import coil.imageLoader
+import coil.memory.MemoryCache
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -733,6 +734,44 @@ fun ModernHomeContent(
                 )
                 .fillMaxWidth(MODERN_HERO_TEXT_WIDTH_FRACTION)
         )
+
+        val verticalPrefetchContext = LocalContext.current
+        val verticalPrefetchImageLoader = verticalPrefetchContext.imageLoader
+        val verticalPrefetchDensity = LocalDensity.current
+        LaunchedEffect(verticalPrefetchImageLoader, verticalPrefetchDensity) {
+            val prefetchAheadRows = 2
+            val prefetchItemsPerRow = 8
+            snapshotFlow {
+                verticalRowListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            }.distinctUntilChanged().collect { lastVisibleRowIndex ->
+                val rows = carouselRows
+                for (rowOffset in 1..prefetchAheadRows) {
+                    val row = rows.getOrNull(lastVisibleRowIndex + rowOffset) ?: continue
+                    for (i in 0 until minOf(prefetchItemsPerRow, row.items.size)) {
+                        val item = row.items[i]
+                        val url = item.imageUrl ?: continue
+                        val metrics = item.catalogCardMetrics(
+                            useLandscapePosters = useLandscapePosters,
+                            portraitCardWidth = portraitCatalogCardWidth,
+                            portraitCardHeight = portraitCatalogCardHeight,
+                            landscapeCardWidth = landscapeCatalogCardWidth,
+                            landscapeCardHeight = landscapeCatalogCardHeight
+                        )
+                        val wPx = with(verticalPrefetchDensity) { metrics.width.roundToPx() }
+                        val hPx = with(verticalPrefetchDensity) { metrics.height.roundToPx() }
+                        val cacheKey = "${url}_${wPx}x${hPx}"
+                        if (verticalPrefetchImageLoader.memoryCache?.get(MemoryCache.Key(cacheKey)) != null) continue
+                        verticalPrefetchImageLoader.enqueue(
+                            ImageRequest.Builder(verticalPrefetchContext)
+                                .data(url)
+                                .memoryCacheKey(cacheKey)
+                                .size(width = wPx, height = hPx)
+                                .build()
+                        )
+                    }
+                }
+            }
+        }
 
         CompositionLocalProvider(
             LocalBringIntoViewSpec provides verticalRowBringIntoViewSpec,
