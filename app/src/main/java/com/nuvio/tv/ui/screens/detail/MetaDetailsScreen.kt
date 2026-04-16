@@ -810,6 +810,7 @@ private fun MetaDetailsContent(
     var pendingRestoreCollectionItemId by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingRestoreCompanyId by rememberSaveable { mutableStateOf<Int?>(null) }
     var restoreFocusToken by rememberSaveable { mutableIntStateOf(0) }
+    var commentsEntryFocusToken by rememberSaveable { mutableIntStateOf(0) }
     var initialHeroFocusRequested by rememberSaveable(meta.id) { mutableStateOf(false) }
     var showHeroPlayOptionsDialog by rememberSaveable(meta.id) { mutableStateOf(false) }
     var initialDetailReturnFocusHandled by remember(
@@ -1070,6 +1071,22 @@ private fun MetaDetailsContent(
     val availablePeopleTabs = remember(peopleTabItems) { peopleTabItems.map { it.tab } }
     val hasPeopleSection = availablePeopleTabs.isNotEmpty()
     val hasPeopleTabs = availablePeopleTabs.size > 1
+    val commentsItemIndex = remember(
+        isSeries,
+        seasons,
+        hasPeopleSection,
+        hasPeopleTabs
+    ) {
+        var index = 1
+        if (isSeries && seasons.isNotEmpty()) {
+            index += 2
+        }
+        if (hasPeopleSection) {
+            if (hasPeopleTabs) index += 1
+            index += 1
+        }
+        index
+    }
     val initialPeopleTab = when {
         availablePeopleTabs.contains(PeopleSectionTab.CAST) -> PeopleSectionTab.CAST
         availablePeopleTabs.isNotEmpty() -> availablePeopleTabs.first()
@@ -1175,6 +1192,24 @@ private fun MetaDetailsContent(
             markEpisodeRestore(video.id)
             onEpisodeManualPlayClick(video)
         }
+    }
+    val episodeCommentsClick = remember(
+        onCommentsEpisodeSelected,
+        shouldShowCommentsSection
+    ) {
+        { video: Video ->
+            if (shouldShowCommentsSection) {
+                onCommentsEpisodeSelected(video)
+                commentsEntryFocusToken += 1
+            }
+            Unit
+        }
+    }
+
+    LaunchedEffect(commentsEntryFocusToken, shouldShowCommentsSection, commentsItemIndex) {
+        if (commentsEntryFocusToken <= 0 || !shouldShowCommentsSection) return@LaunchedEffect
+        listState.animateScrollToItem(commentsItemIndex)
+        commentsEntryFocusToken = 0
     }
 
     LaunchedEffect(
@@ -1436,6 +1471,8 @@ private fun MetaDetailsContent(
                             onMarkSeasonUnwatched = onMarkSeasonUnwatched,
                             isSeasonFullyWatched = isSeasonFullyWatched(selectedSeason),
                             selectedSeason = selectedSeason,
+                            onOpenEpisodeComments = episodeCommentsClick,
+                            showOpenEpisodeComments = shouldShowCommentsSection,
                             onMarkPreviousEpisodesWatched = onMarkPreviousEpisodesWatched,
                             upFocusRequester = selectedSeasonFocusRequester,
                             downFocusRequester = episodesDownFocusRequester,
@@ -1593,17 +1630,21 @@ private fun MetaDetailsContent(
                         commentsMode = commentsMode,
                         canToggleEpisodeComments = isSeries && episodesForSeason.isNotEmpty(),
                         selectedEpisode = commentsEpisodeTarget,
-                        seasonEpisodes = episodesForSeason,
+                        allEpisodes = meta.videos.filter { it.season != null && it.episode != null },
+                        selectedSeason = selectedSeason,
+                        availableSeasons = seasons,
                         isLoading = isCommentsLoading,
                         isLoadingMore = isCommentsLoadingMore,
                         canLoadMore = canLoadMoreComments,
                         error = commentsError,
                         upFocusRequester = commentsUpFocusRequester,
+                        entryFocusToken = commentsEntryFocusToken,
                         onRetry = onRetryComments,
                         onLoadMore = onLoadMoreComments,
                         onCommentsModeSelected = onCommentsModeSelected,
                         onEpisodeSelected = onCommentsEpisodeSelected,
-                        onCommentClick = onCommentClick
+                        onCommentClick = onCommentClick,
+                        modifier = Modifier
                     )
                 }
             }

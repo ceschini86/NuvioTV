@@ -237,6 +237,8 @@ fun EpisodesRow(
     onMarkSeasonUnwatched: (Int) -> Unit = {},
     isSeasonFullyWatched: Boolean = false,
     selectedSeason: Int = 1,
+    onOpenEpisodeComments: (Video) -> Unit = {},
+    showOpenEpisodeComments: Boolean = false,
     onMarkPreviousEpisodesWatched: (Video) -> Unit = {},
     upFocusRequester: FocusRequester,
     downFocusRequester: FocusRequester? = null,
@@ -376,6 +378,11 @@ fun EpisodesRow(
                 onEpisodeClick(selectedEpisode)
                 optionsEpisode = null
             },
+            onOpenEpisodeComments = {
+                onOpenEpisodeComments(selectedEpisode)
+                optionsEpisode = null
+            },
+            showOpenEpisodeComments = showOpenEpisodeComments,
             onPlayManually = {
                 onEpisodeManualPlayClick(selectedEpisode)
                 optionsEpisode = null
@@ -855,6 +862,8 @@ private fun EpisodeOptionsDialog(
     hasPreviousEpisodes: Boolean = false,
     onDismiss: () -> Unit,
     onPlay: () -> Unit,
+    onOpenEpisodeComments: () -> Unit = {},
+    showOpenEpisodeComments: Boolean = false,
     onPlayManually: () -> Unit = {},
     showPlayManually: Boolean = false,
     onToggleWatched: () -> Unit,
@@ -921,6 +930,19 @@ private fun EpisodeOptionsDialog(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(stringResource(R.string.episodes_play))
+        }
+
+        if (showOpenEpisodeComments) {
+            Button(
+                onClick = onOpenEpisodeComments,
+                colors = ButtonDefaults.colors(
+                    containerColor = NuvioColors.BackgroundCard,
+                    contentColor = NuvioColors.TextPrimary
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.episodes_open_comments))
+            }
         }
 
         if (showPlayManually) {

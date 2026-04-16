@@ -595,11 +595,7 @@ class MetaDetailsViewModel @Inject constructor(
                 selectedSeason = selectedSeason,
                 episodesForSeason = episodesForSeason,
                 error = null,
-                commentsEpisodeTarget = resolveCommentsEpisodeTarget(
-                    meta = meta,
-                    preferredSeason = selectedSeason,
-                    existingTarget = it.commentsEpisodeTarget
-                ),
+                commentsEpisodeTarget = null,
                 shouldShowCommentsSection = traktCommentsEnabled && traktAuthenticated && supportsComments(meta)
             )
         }
@@ -1203,20 +1199,11 @@ class MetaDetailsViewModel @Inject constructor(
     private fun selectSeason(season: Int) {
         val meta = _uiState.value.meta ?: return
         val episodes = getEpisodesForSeason(meta.videos, season)
-        val nextCommentsEpisode = resolveCommentsEpisodeTarget(
-            meta = meta,
-            preferredSeason = season,
-            existingTarget = _uiState.value.commentsEpisodeTarget
-        )
         _uiState.update {
             it.copy(
                 selectedSeason = season,
-                episodesForSeason = episodes,
-                commentsEpisodeTarget = nextCommentsEpisode
+                episodesForSeason = episodes
             )
-        }
-        if (traktCommentsEnabled && traktAuthenticated && supportsComments(meta) && _uiState.value.commentsMode == CommentsMode.EPISODE) {
-            loadComments(meta, forceRefresh = true)
         }
     }
 
@@ -1285,6 +1272,22 @@ class MetaDetailsViewModel @Inject constructor(
             ?.takeIf { target ->
                 allEpisodes.any { episode ->
                     episode.season == target.season && episode.episode == target.episode
+                }
+            }
+            ?.let { return it }
+
+        val nextToWatch = _uiState.value.nextToWatch
+        nextToWatch?.nextVideoId
+            ?.let { nextVideoId ->
+                allEpisodes.firstOrNull { episode -> episode.id == nextVideoId }
+            }
+            ?.let { return it }
+
+        nextToWatch
+            ?.takeIf { it.nextSeason != null && it.nextEpisode != null }
+            ?.let { target ->
+                allEpisodes.firstOrNull { episode ->
+                    episode.season == target.nextSeason && episode.episode == target.nextEpisode
                 }
             }
             ?.let { return it }
