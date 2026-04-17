@@ -111,12 +111,15 @@ internal fun PlayerRuntimeController.initializePlayer(
             mpvHardwareDecodeModeSetting = playerSettings.mpvHardwareDecodeMode
             var effectiveInternalPlayerEngine = overrideInternalPlayerEngine ?: playerSettings.internalPlayerEngine
             if (effectiveInternalPlayerEngine == InternalPlayerEngine.AUTO) {
-                // Determine if anime
-                val effectiveId = (contentId ?: currentVideoId ?: "").lowercase()
-                val isAnime = effectiveId.startsWith("kitsu:") ||
-                              effectiveId.startsWith("mal:") ||
-                              effectiveId.startsWith("anilist:") ||
-                              (currentStreamUrl.contains("/anime/"))
+                val isAnime = if (metaGenres.isNotEmpty()) {
+                    metaGenres.any { it.equals("anime", ignoreCase = true) }
+                } else {
+                    val effectiveId = (contentId ?: currentVideoId ?: "").lowercase()
+                    effectiveId.startsWith("kitsu:") ||
+                        effectiveId.startsWith("mal:") ||
+                        effectiveId.startsWith("anilist:") ||
+                        (currentStreamUrl.contains("/anime/"))
+                }
 
                 effectiveInternalPlayerEngine = if (isAnime) InternalPlayerEngine.MVP_PLAYER else InternalPlayerEngine.EXOPLAYER
             }
