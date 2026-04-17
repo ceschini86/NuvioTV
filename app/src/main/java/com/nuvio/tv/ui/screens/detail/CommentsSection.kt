@@ -80,8 +80,8 @@ import com.nuvio.tv.domain.model.Video
 import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.theme.NuvioColors
 import com.nuvio.tv.ui.util.localizeEpisodeTitle
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 import kotlin.math.max
 
 @OptIn(ExperimentalComposeUiApi::class, ExperimentalTvMaterial3Api::class)
@@ -114,11 +114,9 @@ fun CommentsSection(
     val episodeModeFocusRequester = remember { FocusRequester() }
     val commentFocusRequesters = remember(comments) { mutableMapOf<Long, FocusRequester>() }
     val listState = rememberLazyListState()
-    val coroutineScope = rememberCoroutineScope()
     var showEpisodePicker by remember { mutableStateOf(false) }
     var pickerSeason by rememberSaveable { mutableStateOf<Int?>(null) }
     var lastFocusedCommentId by rememberSaveable { mutableStateOf<Long?>(null) }
-    var modeRowHasFocus by remember { mutableStateOf(false) }
     val controlsFocusRequester = if (commentsMode == CommentsMode.EPISODE) {
         episodeModeFocusRequester
     } else {
@@ -193,6 +191,13 @@ fun CommentsSection(
         }
     }
 
+    LaunchedEffect(commentsMode, selectedEpisode?.id) {
+        lastFocusedCommentId = null
+        if (listState.firstVisibleItemIndex != 0 || listState.firstVisibleItemScrollOffset != 0) {
+            listState.scrollToItem(0)
+        }
+    }
+
     LaunchedEffect(entryFocusToken) {
         if (entryFocusToken > 0) {
             controlsFocusRequester.requestFocusAfterFrames()
@@ -244,17 +249,7 @@ fun CommentsSection(
             Row(
                 modifier = Modifier
                     .padding(horizontal = 48.dp)
-                    .focusRestorer(controlsFocusRequester)
-                    .onFocusChanged { focusState ->
-                        if (focusState.hasFocus && !modeRowHasFocus) {
-                            modeRowHasFocus = true
-                            coroutineScope.launch {
-                                controlsFocusRequester.requestFocusAfterFrames()
-                            }
-                        } else if (!focusState.hasFocus) {
-                            modeRowHasFocus = false
-                        }
-                    },
+                    .focusRestorer(controlsFocusRequester),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
