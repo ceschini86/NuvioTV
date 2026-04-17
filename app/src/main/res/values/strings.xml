@@ -266,14 +266,14 @@
     <string name="settings_profiles">Profiles</string>
     <string name="settings_profiles_subtitle">Manage user profiles</string>
     <string name="settings_layout">Layout</string>
-    <string name="settings_layout_subtitle">Home structure and poster styles.</string>
+    <string name="settings_layout_subtitle">Home structure and poster styles</string>
     <string name="settings_plugins">Plugins</string>
-    <string name="settings_plugins_subtitle">Repositories and providers.</string>
+    <string name="settings_plugins_subtitle">Repositories and providers</string>
     <string name="settings_integration">Integration</string>
     <string name="settings_playback">Playback</string>
-    <string name="settings_playback_subtitle">Player, subtitles, and auto-play.</string>
-    <string name="settings_trakt_subtitle">Open Trakt connection screen.</string>
-    <string name="settings_about_subtitle">Version and policies.</string>
+    <string name="settings_playback_subtitle">Player, subtitles, and auto-play</string>
+    <string name="settings_trakt_subtitle">Open Trakt connection screen</string>
+    <string name="settings_about_subtitle">Version and policies</string>
     <string name="settings_network">Network speed</string>
     <string name="settings_network_subtitle">Latency and download diagnostics</string>
     <string name="settings_advanced">Advanced</string>
@@ -292,7 +292,7 @@
     <string name="network_connection_ethernet">Ethernet</string>
     <string name="network_connection_offline">Offline</string>
     <string name="settings_debug">Debug</string>
-    <string name="settings_debug_subtitle">Developer tools and feature flags.</string>
+    <string name="settings_debug_subtitle">Developer tools and feature flags</string>
     <string name="settings_plugins_section_subtitle">Manage repositories, providers, and plugin states</string>
     <string name="settings_account_section_subtitle">Account and sync status</string>
     <string name="account_stat_addons">addons</string>
@@ -768,7 +768,7 @@
 
     <!-- ProfileSettingsContent -->
     <string name="profile_title">Profiles</string>
-    <string name="profile_subtitle">Manage user profiles for this account.</string>
+    <string name="profile_subtitle">Manage user profiles for this account</string>
     <string name="profile_manage_button">Manage Profiles</string>
     <string name="profile_manage_title">Manage Profiles</string>
     <string name="profile_manage_subtitle">Select a profile to edit, switch, or create a new one</string>
