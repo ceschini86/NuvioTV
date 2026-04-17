@@ -1065,7 +1065,7 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             }
             scope.launch {
                 Log.d(PlayerRuntimeController.TAG, "Persisting aspect mode: $newMode")
-                playerSettingsDataStore.setAspectMode(newMode)
+                deviceLocalPlayerPreferences.setAspectMode(newMode)
             }
             hideAspectRatioIndicatorJob?.cancel()
             hideAspectRatioIndicatorJob = scope.launch {

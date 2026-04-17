@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 internal data class SubtitleFetchRequest(
     val type: String,
@@ -202,12 +203,6 @@ internal fun PlayerRuntimeController.observeSubtitleSettings() {
                 else -> currentState.audioAmplificationDb
             }
 
-            if (currentState.aspectMode != settings.aspectMode) {
-                Log.d(
-                    PlayerRuntimeController.TAG,
-                    "Aspect mode restored from settings: ${currentState.aspectMode} -> ${settings.aspectMode}"
-                )
-            }
 
             _uiState.update { state ->
                 val shouldShowOverlay = if (settings.loadingOverlayEnabled && !hasRenderedFirstFrame) {
@@ -226,7 +221,6 @@ internal fun PlayerRuntimeController.observeSubtitleSettings() {
                     osdClockEnabled = settings.osdClockEnabled,
                     internalPlayerEngine = resolvedInternalPlayerEngine,
                     frameRateMatchingMode = settings.frameRateMatchingMode,
-                    aspectMode = settings.aspectMode,
                     tunnelingEnabled = settings.tunnelingEnabled,
                     persistAudioAmplification = settings.persistAudioAmplification,
                     audioAmplificationDb = resolvedAudioAmplificationDb
@@ -455,5 +449,22 @@ internal fun PlayerRuntimeController.retryCurrentStreamFromStartAfter416() {
                 )
             }
         }
+    }
+}
+
+internal fun PlayerRuntimeController.observeDeviceLocalAspectMode() {
+    scope.launch {
+        deviceLocalPlayerPreferences.aspectMode
+            .distinctUntilChanged()
+            .collect { mode ->
+                val currentState = _uiState.value
+                if (currentState.aspectMode != mode) {
+                    Log.d(
+                        PlayerRuntimeController.TAG,
+                        "Aspect mode restored from device-local prefs: ${currentState.aspectMode} -> $mode"
+                    )
+                    _uiState.update { it.copy(aspectMode = mode) }
+                }
+            }
     }
 }
