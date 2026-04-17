@@ -925,65 +925,17 @@ fun ModernHomeContent(
                                 onLoadMoreCatalog = onLoadMoreCatalog,
                                 onBackdropInteraction = remember(Unit) { { expansionInteractionNonce++ } },
                                 onExpandedCatalogFocusKeyChange = remember(Unit) { { expandedCatalogFocusKey = it } },
-                                onGetVerticalFocusRequester = { sourceIndex, isDown ->
-                                    val currentRows = latestCarouselRows
-                                    val currentRowIndex = currentRows.indexOfFirst { it.key == row.key }
-                                    if (currentRowIndex == -1) return@ModernRowSection FocusRequester.Default
-
+                                onGetVerticalFocusRequester = { _, isDown ->
+                                    val currentRowIndex = rowIndexByKey[row.key] ?: return@ModernRowSection FocusRequester.Default
                                     val targetRowIndex = if (isDown) currentRowIndex + 1 else currentRowIndex - 1
-                                    val targetRow = currentRows.getOrNull(targetRowIndex) ?: return@ModernRowSection FocusRequester.Default
+                                    val targetRow = latestCarouselRows.getOrNull(targetRowIndex) ?: return@ModernRowSection FocusRequester.Default
 
-                                    if (row.key == "continue_watching") {
-                                        val targetSavedIndex = (focusedItemByRow[targetRow.key] ?: 0)
-                                            .coerceIn(0, (targetRow.items.size - 1).coerceAtLeast(0))
-                                        val targetItemKey = targetRow.items.getOrNull(targetSavedIndex)?.key
-
-                                        return@ModernRowSection if (targetItemKey != null) {
-                                            uiCaches.requesterFor(targetRow.key, targetItemKey)
-                                        } else FocusRequester.Default
-                                    }
-
-                                    val currentRowListState = uiCaches.rowListStates[row.key] ?: return@ModernRowSection FocusRequester.Default
-                                    val targetRowListState = uiCaches.rowListStates[targetRow.key] ?: return@ModernRowSection FocusRequester.Default
-
-                                    val sourceItemInfo = currentRowListState.layoutInfo.visibleItemsInfo.find { it.index == sourceIndex }
-                                    val sourceCenter = if (sourceItemInfo != null) {
-                                        val unexpandedWidth = when {
-                                            row.key == "continue_watching" -> continueWatchingCardWidth
-                                            else -> if (useLandscapePosters) landscapeCatalogCardWidth else portraitCatalogCardWidth
-                                        }
-                                        val unexpandedWidthPx = with(localDensity) { unexpandedWidth.roundToPx() }
-                                        sourceItemInfo.offset + (unexpandedWidthPx / 2f)
-                                    } else {
-                                        0f
-                                    }
-
-                                    val targetItems = targetRowListState.layoutInfo.visibleItemsInfo
-                                    if (targetItems.isEmpty()) {
-                                        val targetSavedIndex = (focusedItemByRow[targetRow.key] ?: 0)
-                                            .coerceIn(0, (targetRow.items.size - 1).coerceAtLeast(0))
-                                        val targetItemKey = targetRow.items.getOrNull(targetSavedIndex)?.key
-                                        return@ModernRowSection if (targetItemKey != null) {
-                                            uiCaches.requesterFor(targetRow.key, targetItemKey)
-                                        } else FocusRequester.Default
-                                    }
-
-                                    val closestItem = targetItems.minByOrNull { item: androidx.compose.foundation.lazy.LazyListItemInfo ->
-                                        val targetUnexpandedWidth = when {
-                                            targetRow.key == "continue_watching" -> continueWatchingCardWidth
-                                            else -> if (useLandscapePosters) landscapeCatalogCardWidth else portraitCatalogCardWidth
-                                        }
-                                        val targetUnexpandedWidthPx = with(localDensity) { targetUnexpandedWidth.roundToPx() }
-                                        val targetCenter = item.offset + (targetUnexpandedWidthPx / 2f)
-                                        abs(targetCenter - sourceCenter)
-                                    }
-
-                                    val targetItemKey = closestItem?.let { targetRow.items.getOrNull(it.index)?.key }
+                                    val targetSavedIndex = (focusedItemByRow[targetRow.key] ?: 0)
+                                        .coerceIn(0, (targetRow.items.size - 1).coerceAtLeast(0))
+                                    val targetItemKey = targetRow.items.getOrNull(targetSavedIndex)?.key
                                     if (targetItemKey != null) {
                                         uiCaches.requesterFor(targetRow.key, targetItemKey)
-                                    } else {
-                                        FocusRequester.Default
-                                    }
+                                    } else FocusRequester.Default
                                 }
                             )
                 }
