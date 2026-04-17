@@ -82,6 +82,7 @@ import com.nuvio.tv.ui.theme.NuvioColors
 import com.nuvio.tv.ui.util.localizeEpisodeTitle
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlin.math.max
 
 @OptIn(ExperimentalComposeUiApi::class, ExperimentalTvMaterial3Api::class)
 @Composable
@@ -99,6 +100,7 @@ fun CommentsSection(
     error: String?,
     upFocusRequester: FocusRequester? = null,
     entryFocusToken: Int = 0,
+    onEntryFocusHandled: () -> Unit = {},
     onRetry: () -> Unit,
     onLoadMore: () -> Unit,
     onCommentsModeSelected: (CommentsMode) -> Unit,
@@ -112,21 +114,36 @@ fun CommentsSection(
     val episodeModeFocusRequester = remember { FocusRequester() }
     val commentFocusRequesters = remember(comments) { mutableMapOf<Long, FocusRequester>() }
     val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
     var showEpisodePicker by remember { mutableStateOf(false) }
     var pickerSeason by rememberSaveable { mutableStateOf<Int?>(null) }
     var lastFocusedCommentId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var modeRowHasFocus by remember { mutableStateOf(false) }
     val controlsFocusRequester = if (commentsMode == CommentsMode.EPISODE) {
         episodeModeFocusRequester
     } else {
         titleModeFocusRequester
     }
+    val visibleFirstCommentId = remember(comments, listState.firstVisibleItemIndex) {
+        comments.getOrNull(max(listState.firstVisibleItemIndex, 0))?.id
+    }
+    val visibleWindowCommentIds = remember(comments, listState.layoutInfo.visibleItemsInfo) {
+        listState.layoutInfo.visibleItemsInfo
+            .mapNotNull { info -> comments.getOrNull(info.index)?.id }
+            .toSet()
+    }
     val commentsTargetFocusRequester = remember(
         comments,
         lastFocusedCommentId,
-        controlsFocusRequester
+        controlsFocusRequester,
+        visibleFirstCommentId,
+        visibleWindowCommentIds
     ) {
-        val targetId = lastFocusedCommentId?.takeIf { focusedId -> comments.any { it.id == focusedId } }
-            ?: comments.firstOrNull()?.id
+        val targetId = when {
+            lastFocusedCommentId != null && lastFocusedCommentId in visibleWindowCommentIds -> lastFocusedCommentId
+            visibleFirstCommentId != null -> visibleFirstCommentId
+            else -> comments.firstOrNull()?.id
+        }
         targetId?.let { commentFocusRequesters.getOrPut(it) { FocusRequester() } } ?: firstItemFocusRequester
     }
     val pickerDefaultSeason = selectedEpisode?.season
@@ -179,6 +196,7 @@ fun CommentsSection(
     LaunchedEffect(entryFocusToken) {
         if (entryFocusToken > 0) {
             controlsFocusRequester.requestFocusAfterFrames()
+            onEntryFocusHandled()
         }
     }
 
@@ -226,7 +244,17 @@ fun CommentsSection(
             Row(
                 modifier = Modifier
                     .padding(horizontal = 48.dp)
-                    .focusRestorer(controlsFocusRequester),
+                    .focusRestorer(controlsFocusRequester)
+                    .onFocusChanged { focusState ->
+                        if (focusState.hasFocus && !modeRowHasFocus) {
+                            modeRowHasFocus = true
+                            coroutineScope.launch {
+                                controlsFocusRequester.requestFocusAfterFrames()
+                            }
+                        } else if (!focusState.hasFocus) {
+                            modeRowHasFocus = false
+                        }
+                    },
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -236,6 +264,7 @@ fun CommentsSection(
                     focusRequester = titleModeFocusRequester,
                     upFocusRequester = upFocusRequester,
                     downFocusRequester = commentsTargetFocusRequester,
+                    rightFocusRequester = episodeModeFocusRequester,
                     onClick = { onCommentsModeSelected(CommentsMode.TITLE) }
                 )
                 CommentModeButton(
@@ -251,6 +280,8 @@ fun CommentsSection(
                     focusRequester = episodeModeFocusRequester,
                     upFocusRequester = upFocusRequester,
                     downFocusRequester = commentsTargetFocusRequester,
+                    leftFocusRequester = titleModeFocusRequester,
+                    rightFocusRequester = FocusRequester.Cancel,
                     onClick = {
                         if (commentsMode == CommentsMode.EPISODE && allEpisodes.isNotEmpty()) {
                             showEpisodePicker = true
@@ -349,7 +380,6 @@ fun CommentsSection(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(comments, key = { it.id }) { review ->
-                        val isFirst = comments.firstOrNull()?.id == review.id
                         val commentFocusRequester = commentFocusRequesters.getOrPut(review.id) { FocusRequester() }
                         CommentCard(
                             review = review,
@@ -358,7 +388,6 @@ fun CommentsSection(
                                 .then(
                                     when {
                                         lastFocusedCommentId == review.id -> Modifier.focusRequester(commentFocusRequester)
-                                        isFirst -> Modifier.focusRequester(firstItemFocusRequester)
                                         else -> Modifier.focusRequester(commentFocusRequester)
                                     }
                                 )
@@ -413,6 +442,8 @@ private fun CommentModeButton(
     focusRequester: FocusRequester,
     upFocusRequester: FocusRequester? = null,
     downFocusRequester: FocusRequester? = null,
+    leftFocusRequester: FocusRequester? = null,
+    rightFocusRequester: FocusRequester? = null,
     onClick: () -> Unit
 ) {
     Button(
@@ -425,6 +456,12 @@ private fun CommentModeButton(
                 }
                 if (downFocusRequester != null) {
                     down = downFocusRequester
+                }
+                if (leftFocusRequester != null) {
+                    left = leftFocusRequester
+                }
+                if (rightFocusRequester != null) {
+                    right = rightFocusRequester
                 }
             },
         colors = ButtonDefaults.colors(

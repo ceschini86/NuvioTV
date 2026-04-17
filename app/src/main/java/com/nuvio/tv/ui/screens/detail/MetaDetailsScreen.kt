@@ -1209,7 +1209,6 @@ private fun MetaDetailsContent(
     LaunchedEffect(commentsEntryFocusToken, shouldShowCommentsSection, commentsItemIndex) {
         if (commentsEntryFocusToken <= 0 || !shouldShowCommentsSection) return@LaunchedEffect
         listState.animateScrollToItem(commentsItemIndex)
-        commentsEntryFocusToken = 0
     }
 
     LaunchedEffect(
@@ -1639,6 +1638,9 @@ private fun MetaDetailsContent(
                         error = commentsError,
                         upFocusRequester = commentsUpFocusRequester,
                         entryFocusToken = commentsEntryFocusToken,
+                        onEntryFocusHandled = {
+                            commentsEntryFocusToken = 0
+                        },
                         onRetry = onRetryComments,
                         onLoadMore = onLoadMoreComments,
                         onCommentsModeSelected = onCommentsModeSelected,
