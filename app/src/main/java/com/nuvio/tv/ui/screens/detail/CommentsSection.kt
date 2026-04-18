@@ -486,7 +486,7 @@ private fun CommentOverlayContent(
         if (review.review) add(stringResource(R.string.detail_comments_badge_review))
         if (review.hasSpoilerContent) add(stringResource(R.string.detail_comments_badge_spoiler))
         review.rating?.let { add(stringResource(R.string.detail_comments_badge_rating, it)) }
-        formattedCommentDate?.let { add(stringResource(R.string.detail_comments_posted_on, it)) }
+        formattedCommentDate?.let { add(it) }
     }
 
     LaunchedEffect(review.id) {

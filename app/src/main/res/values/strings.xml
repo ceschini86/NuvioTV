@@ -197,7 +197,6 @@
     <string name="detail_comments_badge_review">Review</string>
     <string name="detail_comments_badge_spoiler">Spoiler</string>
     <string name="detail_comments_badge_rating">%1$d/10</string>
-    <string name="detail_comments_posted_on">Posted %1$s</string>
     <string name="detail_comments_likes">%1$d likes</string>
     <string name="tmdb_entity_kind_company">Production Company</string>
     <string name="tmdb_entity_kind_network">Network</string>
