@@ -111,6 +111,10 @@ internal fun PlayerRuntimeController.initializePlayer(
             mpvHardwareDecodeModeSetting = playerSettings.mpvHardwareDecodeMode
             var effectiveInternalPlayerEngine = overrideInternalPlayerEngine ?: playerSettings.internalPlayerEngine
             if (effectiveInternalPlayerEngine == InternalPlayerEngine.AUTO) {
+                Log.d("PlayerRuntimeController", "metaGenres: $metaGenres")
+                Log.d("PlayerRuntimeController", "contentId: $contentId")
+                Log.d("PlayerRuntimeController", "currentVideoId: $currentVideoId")
+
                 val isAnime = if (metaGenres.isNotEmpty()) {
                     metaGenres.any { it.equals("anime", ignoreCase = true) }
                 } else {
@@ -123,6 +127,11 @@ internal fun PlayerRuntimeController.initializePlayer(
                 effectiveInternalPlayerEngine = if (isAnime) InternalPlayerEngine.MVP_PLAYER else InternalPlayerEngine.EXOPLAYER
             }
             runtimeInternalPlayerEngineOverride = overrideInternalPlayerEngine
+            if (overrideInternalPlayerEngine == null && playerSettings.internalPlayerEngine == InternalPlayerEngine.AUTO) {
+                resolvedAutoPlayerEngine = effectiveInternalPlayerEngine
+            } else if (overrideInternalPlayerEngine != null) {
+                resolvedAutoPlayerEngine = null
+            }
             currentInternalPlayerEngine = effectiveInternalPlayerEngine
             val showLoadingStatus = playerSettings.showPlayerLoadingStatus
             _uiState.update {
