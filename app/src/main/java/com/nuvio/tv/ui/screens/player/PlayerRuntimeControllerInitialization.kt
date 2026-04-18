@@ -111,16 +111,15 @@ internal fun PlayerRuntimeController.initializePlayer(
             mpvHardwareDecodeModeSetting = playerSettings.mpvHardwareDecodeMode
             var effectiveInternalPlayerEngine = overrideInternalPlayerEngine ?: playerSettings.internalPlayerEngine
             if (effectiveInternalPlayerEngine == InternalPlayerEngine.AUTO) {
-                val isAnime = if (metaGenres.isNotEmpty()) {
-                    metaGenres.any { it.equals("anime", ignoreCase = true) } ||
-                            (metaGenres.any { it.equals("animation", ignoreCase = true) } &&
-                                    metaCountry?.contains("Japan", ignoreCase = true) == true)
-                } else {
-                    val effectiveId = (contentId ?: currentVideoId ?: "").lowercase()
-                    effectiveId.startsWith("kitsu:") ||
-                        effectiveId.startsWith("mal:") ||
-                        effectiveId.startsWith("anilist:")
-                }
+                val hasAnimeGenre = metaGenres.any { it.equals("anime", ignoreCase = true) }
+                val isAnimationFromJapan = (metaGenres.any { it.equals("animation", ignoreCase = true) } &&
+                        metaCountry?.contains("Japan", ignoreCase = true) == true)
+                val hasAnimeId = currentVideoId?.startsWith("kitsu:") == true ||
+                        currentVideoId?.startsWith("mal:") == true ||
+                        currentVideoId?.startsWith("anilist:") == true
+
+                // AIOMetadata usually matches hasAnimeGenre or hasAnimeId, Cinemeta usually matches isAnimationFromJapan
+                val isAnime = hasAnimeGenre || hasAnimeId || isAnimationFromJapan
 
                 effectiveInternalPlayerEngine = if (isAnime) InternalPlayerEngine.MVP_PLAYER else InternalPlayerEngine.EXOPLAYER
             }
