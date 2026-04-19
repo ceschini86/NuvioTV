@@ -299,7 +299,7 @@
     <string name="account_stat_progress">napredak</string>
     <string name="account_stat_watched">odgledano</string>
     <string name="settings_integrations_section">Integracije</string>
-    <string name="settings_integrations_section_subtitle">Upravljanje dostupnim integracijama</string>
+    <string name="settings_integrations_section_subtitle">Upravljajte dostupnim integracijama</string>
     <string name="settings_tmdb_subtitle">Kontrole za obogaćivanje metapodataka</string>
     <string name="settings_mdblist_subtitle">Vanjski provajderi ocjena</string>
     <string name="settings_animeskip_subtitle">Vremenske oznake za preskakanje anime uvoda/odjave</string>
