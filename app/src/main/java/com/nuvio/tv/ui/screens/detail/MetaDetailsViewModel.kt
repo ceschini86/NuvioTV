@@ -574,6 +574,11 @@ class MetaDetailsViewModel @Inject constructor(
             .mapNotNull { it.season }
             .distinct()
             .sorted()
+            .ifEmpty {
+                // For "other" type content videos lack season/episode numbers.  
+                // Treat them as a single virtual season so the episodes UI can display them.
+                if (meta.videos.isNotEmpty()) listOf(1) else emptyList()
+            }
 
         val defaultEpisodeSeason = findPreferredDefaultEpisode(meta)?.season
         // Prefer addon-specified default episode season, otherwise first regular season (> 0), fallback to season 0 (specials)
@@ -1203,9 +1208,14 @@ class MetaDetailsViewModel @Inject constructor(
     }
 
     private fun getEpisodesForSeason(videos: List<Video>, season: Int): List<Video> {
-        return videos
-            .filter { it.season == season }
-            .sortedBy { it.episode }
+        val filtered = videos.filter { it.season == season }
+        if (filtered.isNotEmpty()) return filtered.sortedBy { it.episode }
+        // Fallback: if no videos match the season (e.g. "other" type with
+        // null seasons), return all videos assigned to the virtual season.
+        if (videos.isNotEmpty() && videos.all { it.season == null }) {
+            return videos
+        }
+        return emptyList()
     }
 
     private fun reevaluateSeriesWatchedBadge() {
