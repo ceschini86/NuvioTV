@@ -269,7 +269,7 @@
     <string name="settings_layout_subtitle">Home structure and poster styles</string>
     <string name="settings_plugins">Plugins</string>
     <string name="settings_plugins_subtitle">Repositories and providers</string>
-    <string name="settings_integration">Integration</string>
+    <string name="settings_integration">Integrations</string>
     <string name="settings_playback">Playback</string>
     <string name="settings_playback_subtitle">Player, subtitles, and auto-play</string>
     <string name="settings_trakt_subtitle">Open Trakt connection screen</string>
@@ -380,6 +380,8 @@
     <string name="playback_resolution_matching_sub">Allow display mode changes to match video resolution.</string>
     <string name="playback_player_external_desc">Always open streams in an external app</string>
     <string name="playback_player_ask_desc">Choose the player each time</string>
+    <string name="playback_player_auto">Auto (Best for Content)</string>
+    <string name="playback_player_auto_desc">ExoPlayer for Movies &amp; TV Shows · MPV for Anime</string>
     <string name="playback_engine_exoplayer_desc">Best compatibility with current Nuvio features.</string>
     <string name="playback_engine_mvplayer_desc">Uses libmpv with Nuvio OSD controls. Experimental.</string>
 
@@ -958,6 +960,7 @@
     <string name="stream_info_source">Source</string>
     <string name="stream_info_subtitle_source_addon">Addon</string>
     <string name="stream_info_subtitle_source_embedded">Embedded</string>
+    <string name="stream_info_player_engine">Player Engine</string>
 
     <!-- StreamSourcesSidePanel -->
     <string name="sources_title">Sources</string>
