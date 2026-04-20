@@ -361,7 +361,29 @@ class MetaDetailsViewModel @Inject constructor(
         if (itemType.lowercase() == "movie") return
         viewModelScope.launch {
             _effectiveContentId.flatMapLatest { cid ->
-                watchProgressRepository.getAllEpisodeProgress(cid)
+                if (itemType.equals("other", ignoreCase = true)) {
+                    // For "other" type, videos lack season/episode.
+                    // Build progress map by matching video IDs to their
+                    // position in the meta video list.
+                    watchProgressRepository.allProgress.map { allProgress ->
+                        val meta = _uiState.value.meta
+                        val videos = meta?.videos ?: emptyList()
+                        val progressByVideoId = allProgress
+                            .filter { it.contentId == cid }
+                            .associateBy { it.videoId }
+                        val result = mutableMapOf<Pair<Int, Int>, WatchProgress>()
+                        videos.forEachIndexed { index, video ->
+                            val progress = progressByVideoId[video.id]
+                            if (progress != null) {
+                                // Use synthetic season=1, episode=index+1 as key
+                                result[1 to (index + 1)] = progress
+                            }
+                        }
+                        result as Map<Pair<Int, Int>, WatchProgress>
+                    }
+                } else {
+                    watchProgressRepository.getAllEpisodeProgress(cid)
+                }
             }
                 .distinctUntilChanged()
                 .collectLatest { progressMap ->
@@ -1211,9 +1233,12 @@ class MetaDetailsViewModel @Inject constructor(
         val filtered = videos.filter { it.season == season }
         if (filtered.isNotEmpty()) return filtered.sortedBy { it.episode }
         // Fallback: if no videos match the season (e.g. "other" type with
-        // null seasons), return all videos assigned to the virtual season.
+        // null seasons), return all videos with synthetic season/episode
+        // numbers so the episode UI can track watched state.
         if (videos.isNotEmpty() && videos.all { it.season == null }) {
-            return videos
+            return videos.mapIndexed { index, video ->
+                video.copy(season = 1, episode = index + 1)
+            }
         }
         return emptyList()
     }
@@ -1602,8 +1627,11 @@ class MetaDetailsViewModel @Inject constructor(
 
     private fun toggleEpisodeWatched(video: Video) {
         val meta = _uiState.value.meta ?: return
-        val season = video.season ?: return
-        val episode = video.episode ?: return
+        val season = video.season
+        val episode = video.episode
+        // For "other" type content, videos may lack season/episode.
+        // Use video ID as the key instead.
+        val isOtherType = season == null || episode == null
         val pendingKey = episodePendingKey(video)
         if (_uiState.value.episodeWatchedPendingKeys.contains(pendingKey)) return
 
@@ -1612,11 +1640,18 @@ class MetaDetailsViewModel @Inject constructor(
                 it.copy(episodeWatchedPendingKeys = it.episodeWatchedPendingKeys + pendingKey)
             }
 
-            val isWatched = _uiState.value.episodeProgressMap[season to episode]?.isCompleted() == true
-                || _uiState.value.watchedEpisodes.contains(season to episode)
+            val isWatched = if (!isOtherType) {
+                _uiState.value.episodeProgressMap[season!! to episode!!]?.isCompleted() == true
+                    || _uiState.value.watchedEpisodes.contains(season to episode)
+            } else {
+                // For "other" type, check by video ID in progress map values
+                _uiState.value.episodeProgressMap.values.any {
+                    it.videoId == video.id && it.isCompleted()
+                }
+            }
             runCatching {
                 if (isWatched) {
-                    watchProgressRepository.removeFromHistory(_effectiveContentId.value, videoId = resolveFallbackVideoId(), season = season, episode = episode)
+                    watchProgressRepository.removeFromHistory(_effectiveContentId.value, videoId = video.id, season = season, episode = episode)
                     showMessage(context.getString(R.string.detail_episode_marked_unwatched))
                 } else {
                     watchProgressRepository.markAsCompleted(buildCompletedEpisodeProgress(meta, video))
