@@ -1,6 +1,7 @@
 package com.nuvio.tv.data.local
 
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.nuvio.tv.core.profile.ProfileManager
 import kotlinx.coroutines.flow.first
@@ -24,12 +25,16 @@ class TrackPreferenceDataStore @Inject constructor(
         private const val AUDIO_LANG = "audio_lang"
         private const val AUDIO_NAME = "audio_name"
         private const val AUDIO_TRACK_ID = "audio_track_id"
+        private const val SUB_DELAY_MS = "sub_delay_ms"
     }
 
     private fun store() = factory.get(profileManager.activeProfileId.value, FEATURE)
 
     private fun key(field: String, contentId: String) =
         stringPreferencesKey("$field|$contentId")
+
+    private fun intKey(field: String, contentId: String) =
+        intPreferencesKey("$field|$contentId")
 
     suspend fun save(contentId: String, pref: PersistedTrackPreference) {
         store().edit { prefs ->
@@ -47,6 +52,9 @@ class TrackPreferenceDataStore @Inject constructor(
             set(AUDIO_LANG, pref.audioLanguage)
             set(AUDIO_NAME, pref.audioName)
             set(AUDIO_TRACK_ID, pref.audioTrackId)
+            val delayKey = intKey(SUB_DELAY_MS, contentId)
+            val delay = pref.subtitleDelayMs
+            if (delay != null && delay != 0) prefs[delayKey] = delay else prefs.remove(delayKey)
         }
     }
 
@@ -56,7 +64,14 @@ class TrackPreferenceDataStore @Inject constructor(
         val audioLang = prefs[key(AUDIO_LANG, contentId)]
         val audioName = prefs[key(AUDIO_NAME, contentId)]
         val audioTrackId = prefs[key(AUDIO_TRACK_ID, contentId)]
-        if (subType == null && audioLang == null && audioName == null && audioTrackId == null) return null
+        val subtitleDelayMs = prefs[intKey(SUB_DELAY_MS, contentId)]
+        if (
+            subType == null &&
+            audioLang == null &&
+            audioName == null &&
+            audioTrackId == null &&
+            subtitleDelayMs == null
+        ) return null
         return PersistedTrackPreference(
             subtitleType = subType,
             subtitleLanguage = prefs[key(SUB_LANG, contentId)],
@@ -67,7 +82,8 @@ class TrackPreferenceDataStore @Inject constructor(
             addonSubtitleAddonName = prefs[key(SUB_ADDON_NAME, contentId)],
             audioLanguage = audioLang,
             audioName = audioName,
-            audioTrackId = audioTrackId
+            audioTrackId = audioTrackId,
+            subtitleDelayMs = subtitleDelayMs
         )
     }
 }
@@ -82,7 +98,8 @@ data class PersistedTrackPreference(
     val addonSubtitleAddonName: String?,
     val audioLanguage: String?,
     val audioName: String?,
-    val audioTrackId: String?
+    val audioTrackId: String?,
+    val subtitleDelayMs: Int? = null
 )
 
 internal fun PersistedTrackPreference.toTrackPreference(): com.nuvio.tv.ui.screens.player.PlayerRuntimeController.TrackPreference? {

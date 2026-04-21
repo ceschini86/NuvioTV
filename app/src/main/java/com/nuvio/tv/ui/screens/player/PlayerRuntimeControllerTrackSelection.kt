@@ -579,9 +579,13 @@ private fun PlayerRuntimeController.currentTrackPreferenceForPersistence(): Play
 
 internal fun PlayerRuntimeController.persistTrackPreference() {
     val id = contentId ?: return
-    val pref = rememberedTrackPreference ?: return
+    // Use an empty preference when only the subtitle delay has changed (no track
+    // has been explicitly selected yet). Without this we'd early-return and the
+    // delay would never be persisted — see issue #1063.
+    val pref = rememberedTrackPreference ?: PlayerRuntimeController.TrackPreference()
     val audio = pref.audio
     val subtitle = pref.subtitle
+    val currentDelayMs = _uiState.value.subtitleDelayMs
     val persisted = com.nuvio.tv.data.local.PersistedTrackPreference(
         subtitleType = when (subtitle) {
             is PlayerRuntimeController.RememberedSubtitleSelection.Internal -> "INTERNAL"
@@ -601,7 +605,8 @@ internal fun PlayerRuntimeController.persistTrackPreference() {
         addonSubtitleAddonName = (subtitle as? PlayerRuntimeController.RememberedSubtitleSelection.Addon)?.addonName,
         audioLanguage = audio?.language,
         audioName = audio?.name,
-        audioTrackId = audio?.trackId
+        audioTrackId = audio?.trackId,
+        subtitleDelayMs = currentDelayMs.takeIf { it != 0 }
     )
     scope.launch { trackPreferenceDataStore.save(id, persisted) }
 }

@@ -165,6 +165,10 @@ class TraktViewModel @Inject constructor(
             return
         }
 
+        // Guard against rapid re-entry — each double-tap would otherwise fire a
+        // fresh /oauth/device/code request and can trip Trakt's rate limiter (#1197).
+        if (_uiState.value.isLoading) return
+
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null, statusMessage = null) }
             val result = traktAuthService.startDeviceAuth()

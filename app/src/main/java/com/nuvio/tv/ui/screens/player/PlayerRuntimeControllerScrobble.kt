@@ -1,6 +1,7 @@
 package com.nuvio.tv.ui.screens.player
 
 import android.util.Log
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.nuvio.tv.data.local.toTrackPreference
 
@@ -21,18 +22,26 @@ internal fun PlayerRuntimeController.preparePlaybackBeforeStart(
         refreshScrobbleItem()
         if (persistedTrackPreference == null) {
             contentId?.let { id ->
-                val loaded = trackPreferenceDataStore.load(id)?.toTrackPreference()
+                val loadedRaw = trackPreferenceDataStore.load(id)
+                val loaded = loadedRaw?.toTrackPreference()
                 logSwitchTrace(
                     stage = "track-pref-load",
                     message = "contentId=$id loadedAudio=${loaded?.audio?.language}/${loaded?.audio?.name} " +
-                        "loadedSubtitle=${loaded?.subtitle?.javaClass?.simpleName ?: "none"}"
+                        "loadedSubtitle=${loaded?.subtitle?.javaClass?.simpleName ?: "none"} " +
+                        "loadedSubtitleDelayMs=${loadedRaw?.subtitleDelayMs}"
                 )
                 Log.d(
                     PlayerRuntimeController.TAG,
                     "TRACK_PREF load: contentId=$id S${currentSeason}E${currentEpisode} " +
-                        "result=${if (loaded == null) "null (no saved preference)" else "audio=${loaded.audio?.language}/${loaded.audio?.name} subtitle=${loaded.subtitle?.javaClass?.simpleName}"}"
+                        "result=${if (loadedRaw == null) "null (no saved preference)" else "audio=${loaded?.audio?.language}/${loaded?.audio?.name} subtitle=${loaded?.subtitle?.javaClass?.simpleName} subtitleDelayMs=${loadedRaw.subtitleDelayMs}"}"
                 )
                 persistedTrackPreference = loaded
+                // Apply persisted subtitle delay BEFORE initializePlayer — the
+                // renderers factory snapshots subtitleDelayUs from this value.
+                loadedRaw?.subtitleDelayMs?.takeIf { it != 0 }?.let { delayMs ->
+                    subtitleDelayUs.set(delayMs.toLong() * 1000L)
+                    _uiState.update { it.copy(subtitleDelayMs = delayMs) }
+                }
             } ?: Log.d(PlayerRuntimeController.TAG, "TRACK_PREF load: skipped (contentId is null)")
         } else {
             Log.d(
