@@ -1627,11 +1627,8 @@ class MetaDetailsViewModel @Inject constructor(
 
     private fun toggleEpisodeWatched(video: Video) {
         val meta = _uiState.value.meta ?: return
-        val season = video.season
-        val episode = video.episode
-        // For "other" type content, videos may lack season/episode.
-        // Use video ID as the key instead.
-        val isOtherType = season == null || episode == null
+        val season = video.season ?: return
+        val episode = video.episode ?: return
         val pendingKey = episodePendingKey(video)
         if (_uiState.value.episodeWatchedPendingKeys.contains(pendingKey)) return
 
@@ -1640,15 +1637,8 @@ class MetaDetailsViewModel @Inject constructor(
                 it.copy(episodeWatchedPendingKeys = it.episodeWatchedPendingKeys + pendingKey)
             }
 
-            val isWatched = if (!isOtherType) {
-                _uiState.value.episodeProgressMap[season!! to episode!!]?.isCompleted() == true
-                    || _uiState.value.watchedEpisodes.contains(season to episode)
-            } else {
-                // For "other" type, check by video ID in progress map values
-                _uiState.value.episodeProgressMap.values.any {
-                    it.videoId == video.id && it.isCompleted()
-                }
-            }
+            val isWatched = _uiState.value.episodeProgressMap[season to episode]?.isCompleted() == true
+                || _uiState.value.watchedEpisodes.contains(season to episode)
             runCatching {
                 if (isWatched) {
                     watchProgressRepository.removeFromHistory(_effectiveContentId.value, videoId = video.id, season = season, episode = episode)
@@ -1673,7 +1663,13 @@ class MetaDetailsViewModel @Inject constructor(
     fun isSeasonFullyWatched(season: Int): Boolean {
         val state = _uiState.value
         val meta = state.meta ?: return false
-        val episodes = meta.videos.filter { it.season == season && it.episode != null }
+        // For "other" type, use episodesForSeason which has synthetic season/episode.
+        // For regular series, use meta.videos to support checking any season.
+        val episodes = if (meta.apiType.equals("other", ignoreCase = true)) {
+            state.episodesForSeason.filter { it.season == season && it.episode != null }
+        } else {
+            meta.videos.filter { it.season == season && it.episode != null }
+        }
         if (episodes.isEmpty()) return false
         return episodes.all { video ->
             val s = video.season ?: return@all false
@@ -1687,7 +1683,11 @@ class MetaDetailsViewModel @Inject constructor(
         val meta = _uiState.value.meta ?: return
         suppressSeasonAutoSwitch = true
         viewModelScope.launch {
-            val episodes = meta.videos.filter { it.season == season && it.episode != null }
+            val episodes = if (meta.apiType.equals("other", ignoreCase = true)) {
+                _uiState.value.episodesForSeason.filter { it.season == season && it.episode != null }
+            } else {
+                meta.videos.filter { it.season == season && it.episode != null }
+            }
             val unwatched = episodes.filter { video ->
                 val s = video.season!!
                 val e = video.episode!!
@@ -1723,7 +1723,11 @@ class MetaDetailsViewModel @Inject constructor(
         val meta = _uiState.value.meta ?: return
         suppressSeasonAutoSwitch = true
         viewModelScope.launch {
-            val episodes = meta.videos.filter { it.season == season && it.episode != null }
+            val episodes = if (meta.apiType.equals("other", ignoreCase = true)) {
+                _uiState.value.episodesForSeason.filter { it.season == season && it.episode != null }
+            } else {
+                meta.videos.filter { it.season == season && it.episode != null }
+            }
             val watched = episodes.filter { video ->
                 val s = video.season!!
                 val e = video.episode!!
@@ -1764,8 +1768,14 @@ class MetaDetailsViewModel @Inject constructor(
         val targetEpisode = video.episode ?: return
 
         viewModelScope.launch {
-            val previous = meta.videos.filter { v ->
-                v.season == targetSeason && v.episode != null && v.episode < targetEpisode
+            val previous = if (meta.apiType.equals("other", ignoreCase = true)) {
+                _uiState.value.episodesForSeason.filter { v ->
+                    v.season == targetSeason && v.episode != null && v.episode < targetEpisode
+                }
+            } else {
+                meta.videos.filter { v ->
+                    v.season == targetSeason && v.episode != null && v.episode < targetEpisode
+                }
             }
             val unwatched = previous.filter { v ->
                 val s = v.season!!
