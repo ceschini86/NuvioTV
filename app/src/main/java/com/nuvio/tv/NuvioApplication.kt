@@ -104,6 +104,18 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
                 } else {
                     add(GifDecoder.Factory())
                 }
+                // Use a lean OkHttpClient for image fetching — no HTTP cache (Coil's own
+                // DiskCache handles caching), no cookie jar, no logging interceptors.
+                add(
+                    coil3.network.okhttp.OkHttpNetworkFetcherFactory(
+                        callFactory = {
+                            OkHttpClient.Builder()
+                                .followRedirects(true)
+                                .followSslRedirects(true)
+                                .build()
+                        }
+                    )
+                )
             }
             .memoryCache {
                 MemoryCache.Builder()

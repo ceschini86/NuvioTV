@@ -212,7 +212,7 @@ fun ContentCard(
         val imageModel = remember(imageUrl, requestWidthPx, requestHeightPx) {
             ImageRequest.Builder(context)
                 .data(imageUrl)
-                .crossfade(false)
+                .crossfade(true)
                 .memoryCacheKey("${imageUrl}_${requestWidthPx}x${requestHeightPx}")
                 .size(width = requestWidthPx, height = requestHeightPx)
                 .build()
