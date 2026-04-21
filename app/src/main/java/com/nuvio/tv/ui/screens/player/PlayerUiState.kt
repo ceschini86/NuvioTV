@@ -190,7 +190,8 @@ data class NextEpisodeInfo(
     val overview: String?,
     val released: String?,
     val hasAired: Boolean,
-    val unairedMessage: String?
+    val unairedMessage: String?,
+    val isOtherType: Boolean = false
 )
 
 data class SubtitleSyncCue(
@@ -310,5 +311,6 @@ data class StreamInfoData(
     val subtitleName: String? = null,
     val subtitleCodec: String? = null,
     val subtitleLanguage: String? = null,
-    val subtitleSource: String? = null
+    val subtitleSource: String? = null,
+    val playerEngine: String? = null
 )
