@@ -579,10 +579,12 @@ private fun PlayerRuntimeController.currentTrackPreferenceForPersistence(): Play
 
 internal fun PlayerRuntimeController.persistTrackPreference() {
     val id = contentId ?: return
-    // Use an empty preference when only the subtitle delay has changed (no track
-    // has been explicitly selected yet). Without this we'd early-return and the
-    // delay would never be persisted — see issue #1063.
-    val pref = rememberedTrackPreference ?: PlayerRuntimeController.TrackPreference()
+    // Use the currently-effective preference (remembered OR previously persisted)
+    // so that a delay-only change doesn't wipe a previously-saved track selection.
+    // For the resume-from-CW case, rememberedTrackPreference is null for the fresh
+    // session — falling through to persistedTrackPreference preserves the user's
+    // earlier audio/subtitle choices. See issue #1063 (and thanks Copilot).
+    val pref = currentTrackPreferenceForPersistence()
     val audio = pref.audio
     val subtitle = pref.subtitle
     val currentDelayMs = _uiState.value.subtitleDelayMs
