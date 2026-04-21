@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.animation.core.animateDpAsState
@@ -57,8 +58,10 @@ import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.ui.theme.NuvioColors
 import com.nuvio.tv.ui.theme.NuvioTheme
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.CachePolicy
+import coil3.request.crossfade
 import kotlinx.coroutines.delay
 
 /**
@@ -214,19 +217,21 @@ fun ContentCard(
                 .size(width = requestWidthPx, height = requestHeightPx)
                 .build()
         }
+        // Coil 3's skippable AsyncImage makes the memory-only-during-scroll hack incompatible.
         val isSuppressingImages = LocalVerticalScrollSuppressImages.current
         val scrollAwareImageModel = if (!isSuppressingImages || imageModel == null) {
             imageModel
         } else {
             remember(imageModel) {
                 (imageModel as? ImageRequest)?.newBuilder()
-                    ?.memoryCachePolicy(coil.request.CachePolicy.ENABLED)
-                    ?.diskCachePolicy(coil.request.CachePolicy.DISABLED)
-                    ?.networkCachePolicy(coil.request.CachePolicy.DISABLED)
+                    ?.memoryCachePolicy(CachePolicy.ENABLED)
+                    ?.diskCachePolicy(CachePolicy.DISABLED)
+                    ?.networkCachePolicy(CachePolicy.DISABLED)
                     ?.build()
                     ?: imageModel
             }
         }
+        val scrollPhaseKey = isSuppressingImages
         val logoRequestHeightPx = remember(density) {
             with(density) { 48.dp.roundToPx() }
         }
@@ -327,15 +332,17 @@ fun ContentCard(
                     .clip(cardShape)
             ) {
                 if (!imageUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = scrollAwareImageModel,
-                        contentDescription = item.name,
-                        modifier = Modifier.fillMaxSize(),
-                        placeholder = backgroundPainter,
-                        error = backgroundPainter,
-                        fallback = backgroundPainter,
-                        contentScale = ContentScale.Crop
-                    )
+                    key(scrollPhaseKey) {
+                        AsyncImage(
+                            model = scrollAwareImageModel,
+                            contentDescription = item.name,
+                            modifier = Modifier.fillMaxSize(),
+                            placeholder = backgroundPainter,
+                            error = backgroundPainter,
+                            fallback = backgroundPainter,
+                            contentScale = ContentScale.Crop
+                        )
+                    }
                 } else {
                     MonochromePosterPlaceholder()
                 }
