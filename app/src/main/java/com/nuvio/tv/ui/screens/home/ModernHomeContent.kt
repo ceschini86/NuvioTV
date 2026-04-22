@@ -950,6 +950,32 @@ fun ModernHomeContent(
                                 return@onPreviewKeyEvent false
                             }
 
+                            // Don't kick off a fresh fast-scroll cycle if nothing can actually
+                            // move in this direction right now. Without this guard, a user who
+                            // keeps holding DPAD_DOWN after the list has landed on the last row
+                            // would see the coroutine immediately break, invoke endFastScroll,
+                            // flip isFastScrolling on-then-off every repeat, and the card focus
+                            // chrome would flicker at the system key-repeat rate.
+                            val atScrollEdge = (sign > 0 && !targetState.canScrollForward) ||
+                                (sign < 0 && !targetState.canScrollBackward)
+                            val vertAtLastRow = desiredMode == FastScrollMode.Vertical && sign > 0 && run {
+                                val info = targetState.layoutInfo
+                                val lastIdx = carouselRows.size - 1
+                                val lastVisible = info.visibleItemsInfo.lastOrNull { it.index == lastIdx }
+                                lastIdx >= 0 && lastVisible != null &&
+                                    lastVisible.offset + lastVisible.size <= info.viewportEndOffset
+                            }
+                            if (atScrollEdge || vertAtLastRow) {
+                                // Clean up any lingering fast-scroll state from a previous
+                                // axis/direction so isFastScrolling goes back to false, then
+                                // consume the event so default focus navigation doesn't try
+                                // to step into a row/card that isn't there.
+                                if (fastScrollModeRef.get() != FastScrollMode.None) {
+                                    endFastScroll()
+                                }
+                                return@onPreviewKeyEvent true
+                            }
+
                             fastScrollModeRef.set(desiredMode)
                             fastScrollDirectionRef.set(sign)
                             if (!isFastScrolling) isFastScrolling = true
