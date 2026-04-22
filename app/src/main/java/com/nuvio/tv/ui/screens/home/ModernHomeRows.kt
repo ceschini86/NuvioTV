@@ -362,6 +362,19 @@ internal fun ModernRowSection(
                 prefetchStrategy = LazyListPrefetchStrategy(nestedPrefetchItemCount = 4)
             )
         }
+
+        // When fresh data prepends new items to a row the user hasn't
+        // scrolled, snap back to position 0 so the newest content is visible.
+        val firstItemKey = row.items.firstOrNull()?.key
+        LaunchedEffect(row.key, firstItemKey) {
+            if (firstItemKey == null) return@LaunchedEffect
+            val state = rowListState
+            // Only reset if the user hasn't scrolled at all.
+            if (state.firstVisibleItemIndex == 0 && state.firstVisibleItemScrollOffset == 0) {
+                state.scrollToItem(0)
+            }
+        }
+
         val isRowScrollingState = remember(rowListState) {
             derivedStateOf { rowListState.isScrollInProgress }
         }
