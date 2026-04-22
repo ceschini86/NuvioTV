@@ -638,7 +638,7 @@ internal fun ModernRowSection(
                     }
                 ) { index, item ->
                     val requester = uiCaches.requesterFor(row.key, item.key)
-                    val isContinueWatchingRow = row.key == "continue_watching"
+                    val isContinueWatchingRow = row.key == MODERN_CONTINUE_WATCHING_ROW_KEY
                     val onFocused = remember(row.key, index, isContinueWatchingRow) {
                         { onRowItemFocused(row.key, index, isContinueWatchingRow) }
                     }

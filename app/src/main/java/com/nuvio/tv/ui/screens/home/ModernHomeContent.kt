@@ -925,6 +925,23 @@ fun ModernHomeContent(
                         // holding the key past the system repeat threshold.
                         if (native.repeatCount == 0) return@onPreviewKeyEvent false
 
+                        // Continue Watching horizontal: skip the fast-scroll takeover so
+                        // Compose's default focus navigation moves focus card-by-card at
+                        // the system key-repeat rate, with focus chrome visible the whole
+                        // time. Each CW card shows progress / next-episode info the user
+                        // needs to see while skimming — the normal fast-scroll model of
+                        // "drag the list silently while focus stays frozen" hides exactly
+                        // that information.
+                        if (isHoriz && focusHolder.activeRowKey == MODERN_CONTINUE_WATCHING_ROW_KEY) {
+                            // Tear down any lingering fast-scroll state from a previous
+                            // row / axis so isFastScrolling doesn't stay stuck on and CW
+                            // cards render their full focus chrome.
+                            if (fastScrollModeRef.get() != FastScrollMode.None) {
+                                endFastScroll()
+                            }
+                            return@onPreviewKeyEvent false
+                        }
+
                         // Key repeat: enter / extend fast-scroll drag mode.
                         val desiredMode = if (isHoriz) FastScrollMode.Horizontal else FastScrollMode.Vertical
                         val sign = when (kc) {
