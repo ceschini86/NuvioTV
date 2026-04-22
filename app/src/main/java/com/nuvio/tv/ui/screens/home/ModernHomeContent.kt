@@ -860,15 +860,32 @@ fun ModernHomeContent(
                                     val rowState = rowListStates[rowKey] ?: return
                                     val row = carouselRows.firstOrNull { it.key == rowKey } ?: return
                                     val layoutInfo = rowState.layoutInfo
-                                    // Prefer the first FULLY visible item (offset past the start
-                                    // padding) so bringIntoView doesn't have to yank the list
-                                    // backwards to finish aligning a partially-clipped card.
-                                    // Falls back to the leftmost visible / first-visible index
-                                    // if the row is too narrow to contain a fully visible item.
                                     val visibleItems = layoutInfo.visibleItemsInfo
-                                    val targetIndex = visibleItems.firstOrNull { it.offset >= 0 }?.index
-                                        ?: visibleItems.firstOrNull()?.index
-                                        ?: rowState.firstVisibleItemIndex
+                                    // If the last card has fully entered the viewport from the
+                                    // right edge, land on it directly. This is the "hit the end
+                                    // of a fast horizontal scroll" case — the user wants focus
+                                    // on the final card they reached, not on whichever card
+                                    // happens to be leftmost-visible. Mirrors the last-row
+                                    // landing for vertical fast-scroll.
+                                    val lastIdx = row.items.size - 1
+                                    val viewportEnd = layoutInfo.viewportEndOffset
+                                    val lastItemAtRight = lastIdx >= 0 &&
+                                        visibleItems.lastOrNull { it.index == lastIdx }?.let {
+                                            it.offset + it.size <= viewportEnd
+                                        } == true
+                                    // Otherwise prefer the first FULLY visible item (offset past
+                                    // the start padding) so bringIntoView doesn't have to yank
+                                    // the list backwards to finish aligning a partially-clipped
+                                    // card. Falls back to the leftmost visible / first-visible
+                                    // index if the row is too narrow to contain a fully visible
+                                    // item.
+                                    val targetIndex = when {
+                                        lastItemAtRight -> lastIdx
+                                        else ->
+                                            visibleItems.firstOrNull { it.offset >= 0 }?.index
+                                                ?: visibleItems.firstOrNull()?.index
+                                                ?: rowState.firstVisibleItemIndex
+                                    }
                                     val targetItemKey = row.items.getOrNull(targetIndex)?.key ?: return
                                     runCatching {
                                         uiCaches.requesterFor(rowKey, targetItemKey).requestFocus()
@@ -1044,13 +1061,18 @@ fun ModernHomeContent(
                                                 if (consumed == 0f && delta != 0f) break
                                             }
                                         }
-                                        // Downward vertical drag ended — either because the
-                                        // last row just entered the viewport or because we hit
-                                        // the forward edge. Either way land focus on the last
-                                        // row right now instead of waiting for ACTION_UP.
-                                        if (desiredMode == FastScrollMode.Vertical && sign > 0) {
-                                            endFastScroll()
-                                        }
+                                        // The coroutine exited because the target list couldn't
+                                        // move any further (or, for downward vertical, because
+                                        // the last row just fully entered the viewport). Land
+                                        // focus immediately rather than waiting for ACTION_UP
+                                        // or the 160 ms safety timeout — the user gets instant
+                                        // feedback that the scroll hit the end, and if they're
+                                        // still holding the key the next repeat will either
+                                        // resume the fast-scroll (e.g. pagination appended new
+                                        // items so canScrollForward flipped back to true) or
+                                        // be absorbed by the edge-guard above, keeping the
+                                        // focus chrome steady on the landed card / row.
+                                        endFastScroll()
                                     } catch (_: CancellationException) {
                                         // expected on release / axis change
                                     }
