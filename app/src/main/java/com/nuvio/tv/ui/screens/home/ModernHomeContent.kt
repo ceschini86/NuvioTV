@@ -876,12 +876,28 @@ fun ModernHomeContent(
                                 }
                                 FastScrollMode.Vertical -> {
                                     val layoutInfo = verticalRowListState.layoutInfo
-                                    // Same fully-visible-first heuristic for rows, so focus lands
-                                    // on the first row the user can actually see in full.
                                     val visibleRows = layoutInfo.visibleItemsInfo
-                                    val targetRowIndex = visibleRows.firstOrNull { it.offset >= 0 }?.index
-                                        ?: visibleRows.firstOrNull()?.index
-                                        ?: verticalRowListState.firstVisibleItemIndex
+                                    // If the last row has fully entered the viewport from the
+                                    // bottom, land on it directly. Without this, the "first
+                                    // fully visible" heuristic picks a row near the top — and
+                                    // because the LazyColumn has a viewport-sized bottom
+                                    // contentPadding, scrolling "to the end" actually pushes
+                                    // the last row above the viewport, so a subsequent
+                                    // bringIntoView-triggered backwards yank is what the user
+                                    // sees as "the list got thrown back up and stayed there."
+                                    val lastIdx = carouselRows.size - 1
+                                    val viewportEnd = layoutInfo.viewportEndOffset
+                                    val lastRowAtBottom = lastIdx >= 0 &&
+                                        visibleRows.lastOrNull { it.index == lastIdx }?.let {
+                                            it.offset + it.size <= viewportEnd
+                                        } == true
+                                    val targetRowIndex = when {
+                                        lastRowAtBottom -> lastIdx
+                                        else ->
+                                            visibleRows.firstOrNull { it.offset >= 0 }?.index
+                                                ?: visibleRows.firstOrNull()?.index
+                                                ?: verticalRowListState.firstVisibleItemIndex
+                                    }
                                     val targetRow = carouselRows.getOrNull(targetRowIndex) ?: return
                                     val savedIdx = (focusedItemByRow[targetRow.key] ?: 0)
                                         .coerceIn(0, (targetRow.items.size - 1).coerceAtLeast(0))
@@ -957,6 +973,26 @@ fun ModernHomeContent(
                                                 val dtSec = ((now - lastFrame) / 1_000_000_000f)
                                                     .coerceAtMost(FAST_SCROLL_MAX_FRAME_DT_SEC)
                                                 lastFrame = now
+                                                // Downward vertical: stop as soon as the last
+                                                // row is fully in view at the bottom of the
+                                                // viewport. The LazyColumn has a viewport-sized
+                                                // bottom contentPadding, so scrolling past the
+                                                // last row pushes it above the viewport into
+                                                // the empty padding; the landing bringIntoView
+                                                // would then have to yank the list backwards to
+                                                // re-align the last row at topInsetPx, which is
+                                                // what the user sees as "thrown back up."
+                                                if (desiredMode == FastScrollMode.Vertical && sign > 0) {
+                                                    val info = targetState.layoutInfo
+                                                    val lastIdx = carouselRows.size - 1
+                                                    val lastVisible = info.visibleItemsInfo
+                                                        .lastOrNull { it.index == lastIdx }
+                                                    if (lastVisible != null &&
+                                                        lastVisible.offset + lastVisible.size <= info.viewportEndOffset
+                                                    ) {
+                                                        break
+                                                    }
+                                                }
                                                 val delta = sign * velocityPxPerSec * dtSec
                                                 val consumed = scrollBy(delta)
                                                 // Hit the edge? Idle but keep the coroutine
@@ -964,6 +1000,13 @@ fun ModernHomeContent(
                                                 // cleanly; exit if we truly can't move.
                                                 if (consumed == 0f && delta != 0f) break
                                             }
+                                        }
+                                        // Downward vertical drag ended — either because the
+                                        // last row just entered the viewport or because we hit
+                                        // the forward edge. Either way land focus on the last
+                                        // row right now instead of waiting for ACTION_UP.
+                                        if (desiredMode == FastScrollMode.Vertical && sign > 0) {
+                                            endFastScroll()
                                         }
                                     } catch (_: CancellationException) {
                                         // expected on release / axis change
