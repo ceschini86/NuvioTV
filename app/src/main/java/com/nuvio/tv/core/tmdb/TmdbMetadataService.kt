@@ -17,6 +17,11 @@ import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.MetaTrailer
 import com.nuvio.tv.domain.model.PersonDetail
 import com.nuvio.tv.domain.model.PosterShape
+import java.time.LocalDate
+import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -24,11 +29,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
-import java.time.LocalDate
-import java.util.concurrent.ConcurrentHashMap
-import java.util.Locale
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val TAG = "TmdbMetadataService"
 private val TMDB_API_KEY = BuildConfig.TMDB_API_KEY
@@ -172,7 +172,7 @@ class TmdbMetadataService @Inject constructor(
                     }
                 val poster = buildImageUrl(details?.posterPath, size = "w500")
                 val backdrop = buildImageUrl(details?.backdropPath, size = "w1280")
-                
+
                 val collectionId = details?.belongsToCollection?.id
                 val collectionName = details?.belongsToCollection?.name
 
@@ -339,6 +339,9 @@ class TmdbMetadataService @Inject constructor(
                 requestDeferred.complete(null)
                 null
             } finally {
+                if (!requestDeferred.isCompleted) {
+                    requestDeferred.complete(null)
+                }
                 enrichmentInFlight.remove(cacheKey, requestDeferred)
             }
         }
@@ -468,6 +471,9 @@ class TmdbMetadataService @Inject constructor(
             requestDeferred.cancel(e)
             throw e
         } finally {
+            if (!requestDeferred.isCompleted) {
+                requestDeferred.complete(emptyMap())
+            }
             episodeInFlight.remove(cacheKey, requestDeferred)
         }
     }
@@ -607,10 +613,10 @@ class TmdbMetadataService @Inject constructor(
         try {
             val collectionResponse = tmdbApi.getCollectionDetails(collectionId, TMDB_API_KEY, normalizedLanguage).body()
             val rawParts = collectionResponse?.parts.orEmpty()
-            
+
             // Show in release order
             val sortedParts = rawParts.sortedBy { it.releaseDate ?: "9999" }
-            
+
             val includeImageLanguage = buildString {
                 append(normalizedLanguage.substringBefore("-"))
                 append(",")
