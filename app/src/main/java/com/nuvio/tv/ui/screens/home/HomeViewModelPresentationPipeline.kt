@@ -20,8 +20,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private data class CoreLayoutPrefs(
     val layout: HomeLayout,
@@ -30,7 +32,8 @@ private data class CoreLayoutPrefs(
     val posterLabelsEnabled: Boolean,
     val catalogAddonNameEnabled: Boolean,
     val catalogTypeSuffixEnabled: Boolean,
-    val hideUnreleasedContent: Boolean
+    val hideUnreleasedContent: Boolean,
+    val showFullReleaseDate: Boolean
 )
 
 private data class FocusedBackdropPrefs(
@@ -49,7 +52,9 @@ private data class LayoutUiPrefs(
     val catalogAddonNameEnabled: Boolean,
     val catalogTypeSuffixEnabled: Boolean,
     val hideUnreleasedContent: Boolean,
+    val showFullReleaseDate: Boolean,
     val modernLandscapePostersEnabled: Boolean,
+    val modernHeroFullScreenBackdropEnabled: Boolean,
     val focusedBackdropExpandEnabled: Boolean,
     val focusedBackdropExpandDelaySeconds: Int,
     val focusedBackdropTrailerEnabled: Boolean,
@@ -77,15 +82,18 @@ internal fun HomeViewModel.observeLayoutPreferencesPipeline() {
                 posterLabelsEnabled = posterLabelsEnabled,
                 catalogAddonNameEnabled = catalogAddonNameEnabled,
                 catalogTypeSuffixEnabled = true,
-                hideUnreleasedContent = false
+                hideUnreleasedContent = false,
+                showFullReleaseDate = true
             )
         },
         layoutPreferenceDataStore.catalogTypeSuffixEnabled,
-        layoutPreferenceDataStore.hideUnreleasedContent
-    ) { corePrefs, catalogTypeSuffixEnabled, hideUnreleasedContent ->
+        layoutPreferenceDataStore.hideUnreleasedContent,
+        layoutPreferenceDataStore.showFullReleaseDate
+    ) { corePrefs, catalogTypeSuffixEnabled, hideUnreleasedContent, showFullReleaseDate ->
         corePrefs.copy(
             catalogTypeSuffixEnabled = catalogTypeSuffixEnabled,
-            hideUnreleasedContent = hideUnreleasedContent
+            hideUnreleasedContent = hideUnreleasedContent,
+            showFullReleaseDate = showFullReleaseDate
         )
     }
 
@@ -105,7 +113,12 @@ internal fun HomeViewModel.observeLayoutPreferencesPipeline() {
         )
     }
 
-    val modernLayoutPrefsFlow = layoutPreferenceDataStore.modernLandscapePostersEnabled
+    val modernLayoutPrefsFlow = combine(
+        layoutPreferenceDataStore.modernLandscapePostersEnabled,
+        layoutPreferenceDataStore.modernHeroFullScreenBackdropEnabled
+    ) { landscapePosters, fullScreenBackdrop ->
+        landscapePosters to fullScreenBackdrop
+    }
 
     val baseLayoutUiPrefsFlow = combine(
         coreLayoutPrefsFlow,
@@ -122,7 +135,9 @@ internal fun HomeViewModel.observeLayoutPreferencesPipeline() {
             catalogAddonNameEnabled = corePrefs.catalogAddonNameEnabled,
             catalogTypeSuffixEnabled = corePrefs.catalogTypeSuffixEnabled,
             hideUnreleasedContent = corePrefs.hideUnreleasedContent,
+            showFullReleaseDate = corePrefs.showFullReleaseDate,
             modernLandscapePostersEnabled = false,
+            modernHeroFullScreenBackdropEnabled = false,
             focusedBackdropExpandEnabled = focusedBackdropPrefs.expandEnabled,
             focusedBackdropExpandDelaySeconds = focusedBackdropPrefs.expandDelaySeconds,
             focusedBackdropTrailerEnabled = focusedBackdropPrefs.trailerEnabled,
@@ -140,7 +155,8 @@ internal fun HomeViewModel.observeLayoutPreferencesPipeline() {
             modernLayoutPrefsFlow
         ) { basePrefs, modernPrefs ->
             basePrefs.copy(
-                modernLandscapePostersEnabled = modernPrefs
+                modernLandscapePostersEnabled = modernPrefs.first,
+                modernHeroFullScreenBackdropEnabled = modernPrefs.second
             )
         }
             .distinctUntilChanged()
@@ -152,15 +168,27 @@ internal fun HomeViewModel.observeLayoutPreferencesPipeline() {
                     prefs.posterLabelsEnabled
                 }
                 val previousState = _uiState.value
+                val heroKeysChanged = currentHeroCatalogKeys != prefs.heroCatalogKeys
                 val shouldRefreshCatalogPresentation =
-                    currentHeroCatalogKeys != prefs.heroCatalogKeys ||
+                    heroKeysChanged ||
                         previousState.heroSectionEnabled != prefs.heroSectionEnabled ||
                         previousState.homeLayout != prefs.layout ||
                         previousState.hideUnreleasedContent != prefs.hideUnreleasedContent ||
                         previousState.posterCardWidthDp != prefs.posterCardWidthDp
                 currentHeroCatalogKeys = prefs.heroCatalogKeys
+                // Reset focus state when layout changes so the outgoing
+                // layout's onDispose doesn't poison the incoming layout
+                // (e.g., Modern dispose saves hasSavedFocus=true right
+                // before Classic composes, preventing hero initial focus).
+                if (previousState.homeLayout != prefs.layout) {
+                    // Suppress the outgoing layout's onDispose from saving
+                    // stale focus state before the incoming layout composes.
+                    suppressFocusSave = true
+                    clearFocusState()
+                }
                 _uiState.update {
                     it.copy(
+                        layoutPreferencesReady = true,
                         homeLayout = prefs.layout,
                         heroCatalogKeys = prefs.heroCatalogKeys,
                         heroSectionEnabled = prefs.heroSectionEnabled,
@@ -168,7 +196,9 @@ internal fun HomeViewModel.observeLayoutPreferencesPipeline() {
                         catalogAddonNameEnabled = prefs.catalogAddonNameEnabled,
                         catalogTypeSuffixEnabled = prefs.catalogTypeSuffixEnabled,
                         hideUnreleasedContent = prefs.hideUnreleasedContent,
+                        showFullReleaseDate = prefs.showFullReleaseDate,
                         modernLandscapePostersEnabled = prefs.modernLandscapePostersEnabled,
+                        modernHeroFullScreenBackdropEnabled = prefs.modernHeroFullScreenBackdropEnabled,
                         focusedPosterBackdropExpandEnabled = prefs.focusedBackdropExpandEnabled,
                         focusedPosterBackdropExpandDelaySeconds = prefs.focusedBackdropExpandDelaySeconds,
                         focusedPosterBackdropTrailerEnabled = prefs.focusedBackdropTrailerEnabled,
@@ -180,7 +210,71 @@ internal fun HomeViewModel.observeLayoutPreferencesPipeline() {
                     )
                 }
                 if (shouldRefreshCatalogPresentation) {
-                    scheduleUpdateCatalogRows()
+                    // When hero catalog keys change, load any hero catalogs
+                    // not yet in catalogsMap (e.g., after startup race or
+                    // when user changes hero selection in settings).
+                    if (heroKeysChanged && prefs.heroCatalogKeys.isNotEmpty()) {
+                        loadHeroCatalogsPipeline()
+                    } else {
+                        scheduleUpdateCatalogRows()
+                    }
+                }
+            }
+    }
+}
+
+@OptIn(FlowPreview::class)
+internal fun HomeViewModel.observeModernHomePresentationPipeline() {
+    viewModelScope.launch {
+        uiState
+            .map { state ->
+                ModernHomePresentationInput(
+                    homeRows = state.homeRows,
+                    catalogRows = state.catalogRows,
+                    continueWatchingItems = state.continueWatchingItems,
+                    useLandscapePosters = state.modernLandscapePostersEnabled,
+                    showCatalogTypeSuffix = state.catalogTypeSuffixEnabled,
+                    showFullReleaseDate = state.showFullReleaseDate
+                )
+            }
+            .distinctUntilChanged()
+            .debounce(80)
+            .collectLatest { input ->
+                val shouldWarmStart = uiState.value.modernHomePresentation.rows.isEmpty()
+                val visibleCatalogRowCount = input.catalogRows.count { it.items.isNotEmpty() }
+                val warmStartCatalogRowCount = if (input.continueWatchingItems.isNotEmpty()) 2 else 3
+
+                if (shouldWarmStart && visibleCatalogRowCount > warmStartCatalogRowCount) {
+                    val warmStartPresentation = withContext(Dispatchers.Default) {
+                        buildModernHomePresentation(
+                            input = input,
+                            cache = modernCarouselRowBuildCache,
+                            context = appContext,
+                            maxCatalogRows = warmStartCatalogRowCount
+                        )
+                    }
+                    _uiState.update { state ->
+                        if (state.modernHomePresentation == warmStartPresentation) {
+                            state
+                        } else {
+                            state.copy(modernHomePresentation = warmStartPresentation)
+                        }
+                    }
+                }
+
+                val presentation = withContext(Dispatchers.Default) {
+                    buildModernHomePresentation(
+                        input = input,
+                        cache = modernCarouselRowBuildCache,
+                        context = appContext
+                    )
+                }
+                _uiState.update { state ->
+                    if (state.modernHomePresentation == presentation) {
+                        state
+                    } else {
+                        state.copy(modernHomePresentation = presentation)
+                    }
                 }
             }
     }
@@ -301,7 +395,9 @@ internal fun HomeViewModel.onItemFocusPipeline(item: MetaPreview) {
         setEnrichingItemId(null)
     }
 
-    val willEnrich = currentTmdbSettings.enabled || externalMetaPrefetchEnabled
+    val tmdbEnabledForCurrentLayout = currentTmdbSettings.enabled &&
+        (_uiState.value.homeLayout != HomeLayout.MODERN || currentTmdbSettings.modernHomeEnabled)
+    val willEnrich = tmdbEnabledForCurrentLayout || externalMetaPrefetchEnabled
 
     if (willEnrich) setEnrichingItemId(item.id)
 
@@ -320,15 +416,22 @@ internal fun HomeViewModel.onItemFocusPipeline(item: MetaPreview) {
 
         try {
             var tmdbEnriched = false
-            if (currentTmdbSettings.enabled) {
+
+            if (tmdbEnabledForCurrentLayout) {
                 val tmdbId = runCatching { tmdbService.ensureTmdbId(item.id, item.apiType) }.getOrNull()
-                val enrichment = if (tmdbId != null) runCatching {
-                    tmdbMetadataService.fetchEnrichment(
-                        tmdbId = tmdbId,
-                        contentType = item.type,
-                        language = currentTmdbSettings.language
-                    )
-                }.getOrNull() else null
+
+                val enrichmentDeferred = if (tmdbId != null) async {
+                    runCatching {
+                        tmdbMetadataService.fetchEnrichment(
+                            tmdbId = tmdbId,
+                            contentType = item.type,
+                            language = currentTmdbSettings.language
+                        )
+                    }.getOrNull()
+                } else null
+
+                val enrichment = enrichmentDeferred?.await()
+
                 if (enrichment != null) {
                     prefetchedTmdbIds.add(item.id)
                     prefetchedExternalMetaIds.add(item.id)
@@ -352,7 +455,13 @@ internal fun HomeViewModel.onItemFocusPipeline(item: MetaPreview) {
                 }
             }
         } finally {
-            if (_enrichingItemId.value == item.id) setEnrichingItemId(null)
+            if (_enrichingItemId.value == item.id) {
+                scheduleUpdateCatalogRows()
+                withContext(Dispatchers.Main) {
+                    delay(150)
+                }
+                setEnrichingItemId(null)
+            }
         }
     }
 }
@@ -365,13 +474,16 @@ internal fun HomeViewModel.preloadAdjacentItemPipeline(item: MetaPreview) {
     pendingAdjacentPrefetchItemId = item.id
     adjacentItemPrefetchJob?.cancel()
     adjacentItemPrefetchJob = viewModelScope.launch(Dispatchers.IO) {
+        val tmdbEnabledForCurrentLayout = currentTmdbSettings.enabled &&
+            (_uiState.value.homeLayout != HomeLayout.MODERN || currentTmdbSettings.modernHomeEnabled)
         delay(HomeViewModel.EXTERNAL_META_PREFETCH_ADJACENT_DEBOUNCE_MS)
         if (pendingAdjacentPrefetchItemId != item.id) return@launch
+
         if (item.id in prefetchedTmdbIds || item.id in prefetchedExternalMetaIds) return@launch
 
         try {
             var tmdbEnriched = false
-            if (currentTmdbSettings.enabled) {
+            if (tmdbEnabledForCurrentLayout) {
                 val tmdbId = runCatching { tmdbService.ensureTmdbId(item.id, item.apiType) }.getOrNull()
                 val enrichment = if (tmdbId != null) runCatching {
                     tmdbMetadataService.fetchEnrichment(
@@ -423,30 +535,26 @@ private fun HomeViewModel.updateCatalogItemWithTmdb(itemId: String, enrichment: 
         }
         if (currentTmdbSettings.useArtwork) {
             merged = merged.copy(
+                background = enrichment.backdrop ?: merged.background,
                 logo = enrichment.logo ?: merged.logo
             )
         }
         if (currentTmdbSettings.useDetails) {
             merged = merged.copy(
+                runtime = enrichment.runtimeMinutes?.toString() ?: merged.runtime,
                 ageRating = enrichment.ageRating ?: merged.ageRating,
                 status = enrichment.status ?: merged.status
+            )
+        }
+        if (currentTmdbSettings.useReleaseDates) {
+            merged = merged.copy(
+                releaseInfo = enrichment.releaseInfo ?: merged.releaseInfo
             )
         }
         return merged
     }
 
-    catalogsMap.forEach { (key, row) ->
-        val idx = row.items.indexOfFirst { it.id == itemId }
-        if (idx >= 0) {
-            val merged = mergeItem(row.items[idx])
-            if (merged != row.items[idx]) {
-                val mutableItems = row.items.toMutableList()
-                mutableItems[idx] = merged
-                catalogsMap[key] = row.copy(items = mutableItems)
-                truncatedRowCache.remove(key)
-            }
-        }
-    }
+    updateIndexedCatalogItem(itemId, ::mergeItem)
 
     _uiState.update { state ->
         var changed = false
@@ -460,6 +568,30 @@ private fun HomeViewModel.updateCatalogItemWithTmdb(itemId: String, enrichment: 
                     changed = true
                     val mutableItems = row.items.toMutableList()
                     mutableItems[idx] = mergedItem
+                    row.copy(items = mutableItems)
+                }
+            }
+        }
+        if (changed) state.copy(catalogRows = updatedRows) else state
+    }
+}
+
+internal fun HomeViewModel.updateCatalogItemImdbRating(itemId: String, rating: Float) {
+    updateIndexedCatalogItem(itemId) { currentItem ->
+        currentItem.copy(imdbRating = rating)
+    }
+    _uiState.update { state ->
+        var changed = false
+        val updatedRows = state.catalogRows.map { row ->
+            val idx = row.items.indexOfFirst { it.id == itemId }
+            if (idx < 0) row
+            else {
+                val updated = row.items[idx].copy(imdbRating = rating)
+                if (updated == row.items[idx]) row
+                else {
+                    changed = true
+                    val mutableItems = row.items.toMutableList()
+                    mutableItems[idx] = updated
                     row.copy(items = mutableItems)
                 }
             }
@@ -485,18 +617,7 @@ private fun HomeViewModel.updateCatalogItemWithMeta(itemId: String, meta: Meta) 
         trailerYtIds = if (incomingTrailerYtIds.isNotEmpty()) incomingTrailerYtIds else currentItem.trailerYtIds
     )
 
-    catalogsMap.forEach { (key, row) ->
-        val itemIndex = row.items.indexOfFirst { it.id == itemId }
-        if (itemIndex >= 0) {
-            val merged = mergeItem(row.items[itemIndex])
-            if (merged != row.items[itemIndex]) {
-                val mutableItems = row.items.toMutableList()
-                mutableItems[itemIndex] = merged
-                catalogsMap[key] = row.copy(items = mutableItems)
-                truncatedRowCache.remove(key)
-            }
-        }
-    }
+    updateIndexedCatalogItem(itemId, ::mergeItem)
 
     _uiState.update { state ->
         var changed = false
@@ -528,9 +649,7 @@ private fun HomeViewModel.updateCatalogItemWithMeta(itemId: String, meta: Meta) 
         // Bump version so any in-flight pipeline for this item treats itself as stale
         // and won't overwrite the retry result with a negative cache entry.
         if (activeTrailerPreviewItemId == itemId) trailerPreviewRequestVersion++
-        val currentItem = catalogsMap.values.firstNotNullOfOrNull { row ->
-            row.items.firstOrNull { it.id == itemId }
-        } ?: return
+        val currentItem = findCatalogItemById(itemId) ?: return
         requestTrailerPreviewPipeline(currentItem)
     }
 }
@@ -540,17 +659,30 @@ internal suspend fun HomeViewModel.enrichHeroItemsPipeline(
     settings: TmdbSettings
 ): List<MetaPreview> {
     if (items.isEmpty()) return items
+    val mdbSettings = currentMdbListSettings
+    val mdbEnabled = mdbSettings.enabled && mdbSettings.apiKey.isNotBlank()
 
     return coroutineScope {
         items.map { item ->
             async(Dispatchers.IO) {
                 try {
-                    val tmdbId = tmdbService.ensureTmdbId(item.id, item.apiType) ?: return@async item
-                    val enrichment = tmdbMetadataService.fetchEnrichment(
-                        tmdbId = tmdbId,
-                        contentType = item.type,
-                        language = settings.language
-                    ) ?: return@async item
+                    val tmdbDeferred = async {
+                        val tmdbId = tmdbService.ensureTmdbId(item.id, item.apiType) ?: return@async null
+                        tmdbId.toIntOrNull()?.let { numericId ->
+                            runCatching { tmdbService.tmdbToImdb(numericId, item.apiType) }
+                        }
+                        tmdbMetadataService.fetchEnrichment(
+                            tmdbId = tmdbId,
+                            contentType = item.type,
+                            language = settings.language
+                        )
+                    }
+                    val mdbDeferred = if (mdbEnabled) async {
+                        runCatching { mdbListRepository.getImdbRatingForItem(item.id, item.apiType) }.getOrNull()
+                    } else null
+
+                    val enrichment = tmdbDeferred.await() ?: return@async item
+                    val mdbImdbRating = mdbDeferred?.await()
 
                     var enriched = item
 
@@ -567,18 +699,23 @@ internal suspend fun HomeViewModel.enrichHeroItemsPipeline(
                             name = enrichment.localizedTitle ?: enriched.name,
                             description = enrichment.description ?: enriched.description,
                             genres = if (enrichment.genres.isNotEmpty()) enrichment.genres else enriched.genres,
-                            imdbRating = enrichment.rating?.toFloat() ?: enriched.imdbRating
+                            imdbRating = mdbImdbRating?.toFloat() ?: enriched.imdbRating
                         )
                     }
 
                     if (settings.useDetails) {
                         enriched = enriched.copy(
                             runtime = enrichment.runtimeMinutes?.toString() ?: enriched.runtime,
-                            releaseInfo = enrichment.releaseInfo ?: enriched.releaseInfo,
                             status = enrichment.status ?: enriched.status,
                             ageRating = enrichment.ageRating ?: enriched.ageRating,
                             country = enrichment.countries?.joinToString(", ") ?: enriched.country,
                             language = enrichment.language ?: enriched.language
+                        )
+                    }
+
+                    if (settings.useReleaseDates) {
+                        enriched = enriched.copy(
+                            releaseInfo = enrichment.releaseInfo ?: enriched.releaseInfo
                         )
                     }
 

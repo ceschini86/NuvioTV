@@ -97,6 +97,8 @@ fun HeroContentSection(
     hideLogoDuringTrailer: Boolean = false,
     mdbListRatings: MDBListRatings? = null,
     hideMetaInfoImdb: Boolean = false,
+    tmdbRating: Float? = null,
+    showFullReleaseDate: Boolean = true,
     isTrailerPlaying: Boolean = false,
     playButtonFocusRequester: FocusRequester? = null,
     restorePlayFocusToken: Int = 0,
@@ -230,7 +232,9 @@ fun HeroContentSection(
                     ) {
                         PlayButton(
                             text = nextToWatch?.displayText ?: when {
-                                nextEpisode != null -> stringResource(R.string.hero_play_episode, nextEpisode.season ?: 0, nextEpisode.episode ?: 0)
+                                nextEpisode != null && nextEpisode.season != null && nextEpisode.episode != null ->
+                                    stringResource(R.string.hero_play_episode, nextEpisode.season, nextEpisode.episode)
+                                nextEpisode != null -> stringResource(R.string.hero_play)
                                 else -> stringResource(R.string.hero_play)
                             },
                             onClick = onPlayClick,
@@ -320,7 +324,12 @@ fun HeroContentSection(
                         )
                     }
 
-                    MetaInfoRow(meta = meta, hideImdbRating = hideMetaInfoImdb)
+                    MetaInfoRow(
+                        meta = meta,
+                        hideImdbRating = hideMetaInfoImdb,
+                        showFullReleaseDate = showFullReleaseDate,
+                        tmdbRating = tmdbRating
+                    )
                 }
             }
         }
@@ -570,16 +579,18 @@ private fun ActionIconButton(
 @Composable
 private fun MetaInfoRow(
     meta: Meta,
-    hideImdbRating: Boolean
+    hideImdbRating: Boolean,
+    showFullReleaseDate: Boolean = true,
+    tmdbRating: Float? = null
 ) {
     val context = LocalContext.current
     val genresText = remember(meta.genres) { meta.genres.joinToString(" • ") }
     val runtimeText = remember(meta.runtime) { meta.runtime?.let { formatRuntime(it) } }
-    val yearText = remember(meta.releaseInfo, meta.released, meta.type) {
-        if (meta.type == ContentType.MOVIE) {
+    val yearText = remember(meta.releaseInfo, meta.released, meta.type, showFullReleaseDate) {
+        if (showFullReleaseDate && meta.type == ContentType.MOVIE) {
             meta.released
                 ?.let { runCatching { java.time.OffsetDateTime.parse(it).toLocalDate() }.getOrNull() }
-                ?.let { java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.getDefault()).format(it) }
+                ?.let { val locale = java.util.Locale.getDefault(); java.text.SimpleDateFormat(android.text.format.DateFormat.getBestDateTimePattern(locale, "dMMMMy"), locale).format(java.util.Date(it.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli())) }
                 ?: meta.releaseInfo?.split("-")?.firstOrNull() ?: meta.releaseInfo
         } else {
             meta.releaseInfo?.split("-")?.firstOrNull() ?: meta.releaseInfo
@@ -593,19 +604,27 @@ private fun MetaInfoRow(
             .decoderFactory(SvgDecoder.Factory())
             .build()
     }
+    val shouldShowTmdbRating = tmdbRating != null
+    val tmdbModel = remember(context) {
+        ImageRequest.Builder(context)
+            .data(com.nuvio.tv.R.raw.mdblist_tmdb)
+            .decoderFactory(SvgDecoder.Factory())
+            .build()
+    }
     val ageRatingBadge = remember(meta.ageRating) {
         meta.ageRating?.trim()?.takeIf { it.isNotBlank() }
     }
-    val strStatusEnded = stringResource(R.string.series_status_ended)
-    val strStatusContinuing = stringResource(R.string.series_status_continuing)
-    val strStatusCurrent = stringResource(R.string.series_status_current)
-    val strStatusCancelled = stringResource(R.string.series_status_cancelled)
-    val strStatusReleased = stringResource(R.string.series_status_released)
-    val strStatusPlanned = stringResource(R.string.series_status_planned)
-    val strStatusRumored = stringResource(R.string.series_status_rumored)
-    val strStatusInProduction = stringResource(R.string.series_status_in_production)
-    val strStatusPostProduction = stringResource(R.string.series_status_post_production)
-    val statusBadge = remember(meta.status) {
+    val isSeries = meta.type == ContentType.SERIES || meta.type == ContentType.TV
+    val strStatusEnded = stringResource(if (isSeries) R.string.series_status_ended else R.string.movie_status_ended)
+    val strStatusContinuing = stringResource(if (isSeries) R.string.series_status_continuing else R.string.movie_status_continuing)
+    val strStatusCurrent = stringResource(if (isSeries) R.string.series_status_current else R.string.movie_status_current)
+    val strStatusCancelled = stringResource(if (isSeries) R.string.series_status_cancelled else R.string.movie_status_cancelled)
+    val strStatusReleased = stringResource(if (isSeries) R.string.series_status_released else R.string.movie_status_released)
+    val strStatusPlanned = stringResource(if (isSeries) R.string.series_status_planned else R.string.movie_status_planned)
+    val strStatusRumored = stringResource(if (isSeries) R.string.series_status_rumored else R.string.movie_status_rumored)
+    val strStatusInProduction = stringResource(if (isSeries) R.string.series_status_in_production else R.string.movie_status_in_production)
+    val strStatusPostProduction = stringResource(if (isSeries) R.string.series_status_post_production else R.string.movie_status_post_production)
+    val statusBadge = remember(meta.status, isSeries) {
         when (meta.status?.trim()?.lowercase()) {
             "ended" -> strStatusEnded.uppercase()
             "continuing", "returning series" -> strStatusContinuing.uppercase()
@@ -641,7 +660,7 @@ private fun MetaInfoRow(
                     style = MaterialTheme.typography.labelLarge,
                     color = NuvioTheme.extendedColors.textSecondary
                 )
-                if (yearText != null || shouldShowImdbRating) {
+                if (yearText != null || shouldShowImdbRating || shouldShowTmdbRating) {
                     MetaInfoDivider()
                 }
             }
@@ -652,7 +671,7 @@ private fun MetaInfoRow(
                     style = MaterialTheme.typography.labelLarge,
                     color = NuvioTheme.extendedColors.textSecondary
                 )
-                if (shouldShowImdbRating) {
+                if (shouldShowImdbRating || shouldShowTmdbRating) {
                     MetaInfoDivider()
                 }
             }
@@ -669,6 +688,26 @@ private fun MetaInfoRow(
                         contentScale = ContentScale.Fit
                     )
                     val ratingText = remember(rating) { String.format("%.1f", rating) }
+                    Text(
+                        text = ratingText,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = NuvioTheme.extendedColors.textSecondary
+                    )
+                }
+            }
+
+            tmdbRating?.let { rating ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    AsyncImage(
+                        model = tmdbModel,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                        contentScale = ContentScale.Fit
+                    )
+                    val ratingText = remember(rating) { (rating * 10).toInt().toString() }
                     Text(
                         text = ratingText,
                         style = MaterialTheme.typography.labelLarge,

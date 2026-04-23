@@ -196,12 +196,12 @@ fun SettingsScreen(
                 SettingsCategory.DEBUG -> BuildConfig.IS_DEBUG_BUILD
                 SettingsCategory.PROFILES -> isPrimaryProfileActive
                 SettingsCategory.ACCOUNT -> isPrimaryProfileActive
-                SettingsCategory.TRAKT -> isPrimaryProfileActive
                 else -> true
             }
         }
     }
 
+    val isRtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
     var selectedCategory by remember(visibleSections) {
         mutableStateOf(
             visibleSections.firstOrNull()?.category ?: SettingsCategory.APPEARANCE
@@ -260,7 +260,6 @@ fun SettingsScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(NuvioColors.Background)
             .padding(
                 start = 32.dp,
                 end = 32.dp,
@@ -299,7 +298,8 @@ fun SettingsScreen(
                             }
                         }
                         .onPreviewKeyEvent { event ->
-                            if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight) {
+                            val toDetailKey = if (isRtl) Key.DirectionLeft else Key.DirectionRight
+                            if (event.type == KeyEventType.KeyDown && event.key == toDetailKey) {
                                 allowDetailAutofocus = true
                                 false
                             } else {
@@ -344,8 +344,9 @@ fun SettingsScreen(
                         .weight(1f)
                         .fillMaxHeight()
                         .onKeyEvent { event ->
-                            if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
-                                val movedLeft = focusManager.moveFocus(FocusDirection.Left)
+                            val toRailKey = if (isRtl) Key.DirectionRight else Key.DirectionLeft
+                            if (event.type == KeyEventType.KeyDown && event.key == toRailKey) {
+                                val movedLeft = focusManager.moveFocus(if (isRtl) FocusDirection.Right else FocusDirection.Left)
                                 if (!movedLeft) {
                                     allowDetailAutofocus = false
                                     val requested = railFocusRequesters[selectedCategory]?.let { requester ->

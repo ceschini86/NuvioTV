@@ -2,13 +2,16 @@ package com.nuvio.tv.ui.screens.player
 
 import android.content.Intent
 import android.media.audiofx.AudioEffect
+import kotlinx.coroutines.flow.update
 
 internal fun PlayerRuntimeController.releasePlayer() {
     releasePlayer(flushPlaybackState = true)
 }
 
 internal fun PlayerRuntimeController.releasePlayer(flushPlaybackState: Boolean) {
+    isReleasingPlayer = true
     if (flushPlaybackState) {
+        stopTorrentStream()
         flushPlaybackSnapshotForSwitchOrExit()
     }
 
@@ -26,13 +29,30 @@ internal fun PlayerRuntimeController.releasePlayer(flushPlaybackState: Boolean) 
     seekProgressSyncJob?.cancel()
     frameRateProbeJob?.cancel()
     hideStreamSourceIndicatorJob?.cancel()
+    hideStreamSourceIndicatorJob = null
+    _uiState.update { it.copy(showStreamSourceIndicator = false) }
+    hidePlayerEngineSwitchInfoJob?.cancel()
     hideSubtitleDelayOverlayJob?.cancel()
+    subtitleAutoSyncLoadJob?.cancel()
     playbackPreparationJob?.cancel()
     playbackPreparationJob = null
+    delayMpvResumeSeekUntilVideoTrack = false
     nextEpisodeAutoPlayJob?.cancel()
     nextEpisodeAutoPlayJob = null
-    _exoPlayer?.release()
+    errorRetryJob?.cancel()
+    errorRetryJob = null
+    releaseMpvPlayer()
+    _exoPlayer?.let { player ->
+        runCatching { player.playWhenReady = false }
+        runCatching { player.pause() }
+        runCatching { player.clearVideoSurface() }
+        runCatching { player.stop() }
+        runCatching { player.release() }
+    }
     _exoPlayer = null
+    playbackSpeedAwareAudioSink = null
+    resetPlaybackTimeline()
+    isReleasingPlayer = false
 }
 
 internal fun PlayerRuntimeController.notifyAudioSessionUpdate(active: Boolean) {

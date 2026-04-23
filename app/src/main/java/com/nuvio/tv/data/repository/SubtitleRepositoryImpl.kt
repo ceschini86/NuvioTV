@@ -15,13 +15,12 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
-import com.nuvio.tv.core.player.SubtitleFormatUtils
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 
 class SubtitleRepositoryImpl @Inject constructor(
     private val api: AddonApi,
-    private val addonRepository: AddonRepositoryImpl,
-    private val subtitleFormatUtils: SubtitleFormatUtils
+    private val addonRepository: AddonRepositoryImpl
 ) : SubtitleRepository {
 
     companion object {
@@ -35,7 +34,8 @@ class SubtitleRepositoryImpl @Inject constructor(
         videoId: String?,
         videoHash: String?,
         videoSize: Long?,
-        filename: String?
+        filename: String?,
+        onProgress: ((completed: Int, total: Int, addonName: String?) -> Unit)?
     ): List<Subtitle> = withContext(Dispatchers.IO) {
         val requestType = canonicalSubtitleType(type)
         val startedAtMs = System.currentTimeMillis()
@@ -59,11 +59,15 @@ class SubtitleRepositoryImpl @Inject constructor(
         }
         
         Log.d(TAG, "Found ${subtitleAddons.size} subtitle addons: ${subtitleAddons.map { it.name }}")
-        
+
         if (subtitleAddons.isEmpty()) {
             return@withContext emptyList()
         }
-        
+
+        val total = subtitleAddons.size
+        val completedCount = AtomicInteger(0)
+        onProgress?.invoke(0, total, null)
+
         // Fetch subtitles from all addons in parallel
         val result = coroutineScope {
             subtitleAddons.map { addon ->
@@ -72,6 +76,7 @@ class SubtitleRepositoryImpl @Inject constructor(
                     val subtitles = withTimeoutOrNull(PER_ADDON_TIMEOUT_MS) {
                         fetchSubtitlesFromAddon(addon, type, id, videoId, videoHash, videoSize, filename)
                     }
+                    onProgress?.invoke(completedCount.incrementAndGet(), total, addon.displayName)
                     if (subtitles == null) {
                         Log.w(
                             TAG,
@@ -137,12 +142,15 @@ class SubtitleRepositoryImpl @Inject constructor(
         }
         
         // Build the subtitle URL with optional extra parameters
-        val baseUrl = addon.baseUrl.trimEnd('/')
+        val rawBaseUrl = addon.baseUrl.trimEnd('/')
+        val queryStart = rawBaseUrl.indexOf('?')
+        val basePath = if (queryStart >= 0) rawBaseUrl.substring(0, queryStart).trimEnd('/') else rawBaseUrl
+        val baseQuery = if (queryStart >= 0) rawBaseUrl.substring(queryStart) else ""
         val extraParams = buildExtraParams(videoHash, videoSize, filename)
         val subtitleUrl = if (extraParams.isNotEmpty()) {
-            "$baseUrl/subtitles/$normalizedType/$actualId/$extraParams.json"
+            "$basePath/subtitles/$normalizedType/$actualId/$extraParams.json$baseQuery"
         } else {
-            "$baseUrl/subtitles/$normalizedType/$actualId.json"
+            "$basePath/subtitles/$normalizedType/$actualId.json$baseQuery"
         }
         
         Log.d(TAG, "Fetching subtitles from ${addon.name}: $subtitleUrl")
@@ -151,14 +159,12 @@ class SubtitleRepositoryImpl @Inject constructor(
             when (val result = safeApiCall { api.getSubtitles(subtitleUrl) }) {
                 is NetworkResult.Success -> {
                     val subtitles = result.data.subtitles?.mapNotNull { dto ->
-                        val resolvedFormat = subtitleFormatUtils.resolveFormat(dto.url, dto.format)
                         Subtitle(
                             id = dto.id ?: "${dto.lang}-${dto.url.hashCode()}",
                             url = dto.url,
                             lang = dto.lang,
                             addonName = addon.displayName,
-                            addonLogo = addon.logo,
-                            format = resolvedFormat
+                            addonLogo = addon.logo
                         )
                     } ?: emptyList()
                     

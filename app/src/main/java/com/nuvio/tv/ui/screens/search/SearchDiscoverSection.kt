@@ -33,7 +33,9 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -63,16 +65,20 @@ import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.components.PosterCardStyle
 import com.nuvio.tv.ui.theme.NuvioColors
 import com.nuvio.tv.ui.util.formatAddonTypeLabel
+import com.nuvio.tv.ui.util.localizedGenreLabel
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 internal fun DiscoverSection(
     uiState: SearchUiState,
     posterCardStyle: PosterCardStyle,
+    watchedMovieIds: Set<String> = emptySet(),
+    watchedSeriesIds: Set<String> = emptySet(),
     focusResults: Boolean,
     firstItemFocusRequester: FocusRequester,
     focusedItemIndex: Int,
     shouldRestoreFocusedItem: Boolean,
+    blockFilterFocus: Boolean = false,
     onRestoreFocusedItemHandled: () -> Unit,
     onNavigateToDetail: (String, String, String) -> Unit,
     onDiscoverItemFocused: (Int) -> Unit,
@@ -86,6 +92,12 @@ internal fun DiscoverSection(
     val filteredCatalogs = uiState.discoverCatalogs.filter { it.type == uiState.selectedDiscoverType }
     val genres = selectedCatalog?.genres.orEmpty()
     var expandedPicker by remember { mutableStateOf<String?>(null) }
+    val filterFocusRequester = remember { FocusRequester() }
+    var gridHasFocus by remember { mutableStateOf(false) }
+
+    androidx.activity.compose.BackHandler(enabled = gridHasFocus) {
+        try { filterFocusRequester.requestFocus() } catch (_: Exception) {}
+    }
 
     val strTypeMovie = stringResource(R.string.type_movie)
     val strTypeSeries = stringResource(R.string.type_series)
@@ -100,7 +112,7 @@ internal fun DiscoverSection(
     }
     val selectedTypeLabel = localizedTypeLabel(uiState.selectedDiscoverType)
     val selectedCatalogLabel = selectedCatalog?.catalogName ?: stringResource(R.string.discover_select_catalog)
-    val selectedGenreLabel = uiState.selectedDiscoverGenre ?: stringResource(R.string.discover_genre_default)
+    val selectedGenreLabel = uiState.selectedDiscoverGenre?.let { localizedGenreLabel(it) } ?: stringResource(R.string.discover_genre_default)
 
     Column(
         modifier = modifier
@@ -119,7 +131,8 @@ internal fun DiscoverSection(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             DiscoverDropdownPicker(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f)
+                    .focusRequester(filterFocusRequester),
                 title = stringResource(R.string.discover_filter_type),
                 value = selectedTypeLabel,
                 selectedValue = uiState.selectedDiscoverType,
@@ -134,7 +147,8 @@ internal fun DiscoverSection(
                 onSelect = { option ->
                     onSelectType(option.value)
                     expandedPicker = null
-                }
+                },
+                blockFocus = blockFilterFocus
             )
 
             DiscoverDropdownPicker(
@@ -150,7 +164,8 @@ internal fun DiscoverSection(
                 onSelect = { option ->
                     onSelectCatalog(option.value)
                     expandedPicker = null
-                }
+                },
+                blockFocus = blockFilterFocus
             )
 
             DiscoverDropdownPicker(
@@ -161,7 +176,7 @@ internal fun DiscoverSection(
                 expanded = expandedPicker == "genre",
                 options = buildList {
                     add(DiscoverOption(stringResource(R.string.discover_genre_default), "__default__"))
-                    addAll(genres.map { DiscoverOption(it, it) })
+                    addAll(genres.map { DiscoverOption(localizedGenreLabel(it), it) })
                 },
                 onExpandedChange = { shouldExpand ->
                     expandedPicker = if (shouldExpand) "genre" else null
@@ -169,7 +184,8 @@ internal fun DiscoverSection(
                 onSelect = { option ->
                     onSelectGenre(option.value.takeUnless { it == "__default__" })
                     expandedPicker = null
-                }
+                },
+                blockFocus = blockFilterFocus
             )
         }
 
@@ -181,7 +197,7 @@ internal fun DiscoverSection(
                         .takeIf { it.isNotEmpty() }
                         ?.let(::add)
                 }
-                uiState.selectedDiscoverGenre?.let(::add)
+                uiState.selectedDiscoverGenre?.let { add(localizedGenreLabel(it)) }
             }
             Text(
                 text = metadataSegments.joinToString(" • "),
@@ -203,9 +219,12 @@ internal fun DiscoverSection(
             }
 
             uiState.discoverResults.isNotEmpty() -> {
+                Box(modifier = Modifier.onFocusChanged { gridHasFocus = it.hasFocus }) {
                 DiscoverGrid(
                     items = uiState.discoverResults,
                     posterCardStyle = posterCardStyle,
+                    watchedMovieIds = watchedMovieIds,
+                    watchedSeriesIds = watchedSeriesIds,
                     focusResults = focusResults,
                     firstItemFocusRequester = firstItemFocusRequester,
                     focusedItemIndex = focusedItemIndex,
@@ -222,9 +241,10 @@ internal fun DiscoverSection(
                             item.apiType,
                             selectedCatalog?.addonBaseUrl ?: ""
                         )
-                    }
+                    },
+                    filterKey = "${uiState.selectedDiscoverType}|${uiState.selectedDiscoverCatalogKey}|${uiState.selectedDiscoverGenre}"
                 )
-
+                }
             }
 
             uiState.discoverInitialized && selectedCatalog == null -> {
@@ -256,7 +276,8 @@ private fun DiscoverDropdownPicker(
     expanded: Boolean,
     options: List<DiscoverOption>,
     onExpandedChange: (Boolean) -> Unit,
-    onSelect: (DiscoverOption) -> Unit
+    onSelect: (DiscoverOption) -> Unit,
+    blockFocus: Boolean = false
 ) {
     var isFocused by remember { mutableStateOf(false) }
     var anchorSize by remember { mutableStateOf(IntSize.Zero) }
@@ -270,7 +291,11 @@ private fun DiscoverDropdownPicker(
                 .onSizeChanged { anchorSize = it }
                 .onFocusChanged { state ->
                     isFocused = state.isFocused
-                },
+                }
+                .then(
+                    if (blockFocus) Modifier.focusProperties { canFocus = false }
+                    else Modifier
+                ),
             shape = CardDefaults.shape(shape = RoundedCornerShape(14.dp)),
             colors = CardDefaults.colors(
                 containerColor = NuvioColors.BackgroundCard,
@@ -316,7 +341,7 @@ private fun DiscoverDropdownPicker(
                     )
                     Icon(
                         imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                        contentDescription = if (expanded) "Collapse $title" else "Expand $title",
+                        contentDescription = if (expanded) stringResource(R.string.cd_collapse, title) else stringResource(R.string.cd_expand, title),
                         modifier = Modifier.size(20.dp),
                         tint = if (isFocused) NuvioColors.FocusRing else NuvioColors.TextSecondary
                     )
@@ -392,10 +417,13 @@ private data class DiscoverOption(
     val value: String
 )
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 internal fun DiscoverGrid(
     items: List<MetaPreview>,
     posterCardStyle: PosterCardStyle,
+    watchedMovieIds: Set<String> = emptySet(),
+    watchedSeriesIds: Set<String> = emptySet(),
     focusResults: Boolean,
     firstItemFocusRequester: FocusRequester,
     focusedItemIndex: Int,
@@ -406,11 +434,21 @@ internal fun DiscoverGrid(
     canLoadMore: Boolean,
     isLoadingMore: Boolean,
     onLoadMore: () -> Unit,
-    onItemClick: (Int, MetaPreview) -> Unit
+    onItemClick: (Int, MetaPreview) -> Unit,
+    filterKey: String = ""
 ) {
     val restoreFocusRequester = remember { FocusRequester() }
     val gridState = rememberLazyGridState()
     var pendingFocusOnNewItemIndex by remember { mutableStateOf<Int?>(null) }
+
+    // Scroll to top only when the filter combination actually changes (not on initial composition / back navigation).
+    var previousFilterKey by remember { mutableStateOf(filterKey) }
+    LaunchedEffect(filterKey) {
+        if (filterKey != previousFilterKey) {
+            gridState.scrollToItem(0, 0)
+            previousFilterKey = filterKey
+        }
+    }
     var localRestoreFocusedItemIndex by remember { mutableStateOf(-1) }
     var localShouldRestoreFocusedItem by remember { mutableStateOf(false) }
     val effectiveFocusedItemIndex = if (localShouldRestoreFocusedItem) {
@@ -472,10 +510,29 @@ internal fun DiscoverGrid(
         localShouldRestoreFocusedItem = true
     }
 
+    // Infinite scroll: auto-load more when the user scrolls near the end.
+    val shouldAutoLoad = canLoadMore && !isLoadingMore && items.isNotEmpty()
+    LaunchedEffect(gridState.firstVisibleItemIndex, items.size, shouldAutoLoad) {
+        if (!shouldAutoLoad) return@LaunchedEffect
+        val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@LaunchedEffect
+        if (lastVisible >= items.size - 6) {
+            onLoadMore()
+        }
+    }
+
+    // Per-item FocusRequesters for focusRestorer on the grid.
+    // Pre-create the requester for the focused item so focusRestorer can use it
+    // even before the grid items are composed (first return from navigation).
+    val itemFocusRequesters = remember { mutableMapOf<Int, FocusRequester>() }
+    val focusedItemRequester = remember(focusedItemIndex) {
+        itemFocusRequesters.getOrPut(focusedItemIndex) { FocusRequester() }
+    }
+
     LazyVerticalGrid(
         state = gridState,
         columns = GridCells.Adaptive(minSize = adaptiveStyle.width),
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize()
+            .focusRestorer { focusedItemRequester },
         contentPadding = PaddingValues(bottom = 32.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -485,18 +542,25 @@ internal fun DiscoverGrid(
             key = { index, item -> item.id.ifEmpty { "discover_$index" } },
             contentType = { _, _ -> "content_card" }
         ) { index, item ->
+            val itemFocusReq = remember(index) { itemFocusRequesters.getOrPut(index) { FocusRequester() } }
             val focusReq = when {
                 effectiveShouldRestoreFocusedItem && index == effectiveFocusedItemIndex -> restoreFocusRequester
                 focusResults && index == 0 -> firstItemFocusRequester
-                else -> null
+                else -> itemFocusReq
             }
             GridContentCard(
                 item = item,
                 onClick = { onItemClick(index, item) },
                 posterCardStyle = adaptiveStyle,
+                isWatched = run {
+                    val isSeries = item.apiType.equals("series", ignoreCase = true) || item.apiType.equals("tv", ignoreCase = true)
+                    if (isSeries) item.id in watchedSeriesIds else item.id in watchedMovieIds
+                },
                 modifier = Modifier.width(adaptiveStyle.width),
                 focusRequester = focusReq,
-                onFocused = { onItemFocused(index) }
+                onFocused = {
+                    onItemFocused(index)
+                }
             )
         }
 
@@ -566,6 +630,7 @@ private fun DiscoverActionCard(
         onClick = onClick,
         modifier = modifier
             .width(posterCardStyle.width)
+            .focusProperties { canFocus = actionType != DiscoverGridAction.Loading }
             .onPreviewKeyEvent { event ->
                 actionType != DiscoverGridAction.None &&
                     event.nativeKeyEvent.action == AndroidKeyEvent.ACTION_DOWN &&
@@ -601,12 +666,16 @@ private fun DiscoverActionCard(
                 .aspectRatio(posterCardStyle.aspectRatio),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = NuvioColors.TextPrimary,
-                textAlign = TextAlign.Center
-            )
+            if (actionType == DiscoverGridAction.Loading) {
+                LoadingIndicator()
+            } else {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = NuvioColors.TextPrimary,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
     }
 }

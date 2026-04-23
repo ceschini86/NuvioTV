@@ -129,11 +129,20 @@
     <string name="series_status_continuing">Em curso</string>
     <string name="series_status_current">Atual</string>
     <string name="series_status_cancelled">Cancelada</string>
-    <string name="series_status_released">Lançada</string>
-    <string name="series_status_planned">Planeada</string>
+    <string name="series_status_released">Exibido</string>
+    <string name="series_status_planned">Planeado</string>
     <string name="series_status_rumored">Rumores</string>
     <string name="series_status_in_production">Em Produção</string>
     <string name="series_status_post_production">Pós-Produção</string>
+    <string name="movie_status_ended">Terminado</string>
+    <string name="movie_status_continuing">Em curso</string>
+    <string name="movie_status_current">Atual</string>
+    <string name="movie_status_cancelled">Cancelado</string>
+    <string name="movie_status_released">Exibido</string>
+    <string name="movie_status_planned">Planeado</string>
+    <string name="movie_status_rumored">Rumores</string>
+    <string name="movie_status_in_production">Em Produção</string>
+    <string name="movie_status_post_production">Pós-Produção</string>
     <string name="detail_lists_fallback">Listas</string>
     <string name="detail_lists_subtitle">Seleciona quais as listas que devem incluir este título.</string>
     <string name="action_save">Guardar</string>
@@ -162,7 +171,7 @@
     <string name="about_made_with_love">Feito com ❤️ pela Tapframe e amigos</string>
     <string name="about_version">Versão %1$s</string>
     <string name="about_check_updates">Procurar atualizações</string>
-    <string name="about_check_updates_subtitle">Descarregar a versão mais recente</string>
+    <string name="about_check_updates_subtitle">Transferir a versão mais recente</string>
     <string name="about_privacy_policy">Política de Privacidade</string>
     <string name="about_privacy_policy_subtitle">Ver a nossa política de privacidade</string>
     <string name="about_supporters_contributors">Apoiantes e Colaboradores</string>
@@ -170,18 +179,18 @@
 
     <!-- SettingsScreen categories -->
     <string name="settings_account">Conta</string>
-    <string name="settings_account_subtitle">Estado da conta e sincronização.</string>
+    <string name="settings_account_subtitle">Estado da conta e sincronização</string>
     <string name="settings_profiles">Perfis</string>
-    <string name="settings_profiles_subtitle">Gerir perfis de utilizador.</string>
+    <string name="settings_profiles_subtitle">Gerir perfis de utilizador</string>
     <string name="settings_layout">Layout</string>
-    <string name="settings_layout_subtitle">Estrutura do ecrã inicial e estilos de póster.</string>
+    <string name="settings_layout_subtitle">Estrutura do ecrã inicial e estilos de póster</string>
     <string name="settings_plugins">Plugins</string>
-    <string name="settings_plugins_subtitle">Repositórios e fornecedores.</string>
-    <string name="settings_integration">Integração</string>
+    <string name="settings_plugins_subtitle">Repositórios e fornecedores</string>
+    <string name="settings_integration">Integrações</string>
     <string name="settings_playback">Reprodução</string>
-    <string name="settings_playback_subtitle">Reprodutor, legendas e reprodução automática.</string>
-    <string name="settings_trakt_subtitle">Abrir ecrã de ligação ao Trakt.</string>
-    <string name="settings_about_subtitle">Versão e políticas.</string>
+    <string name="settings_playback_subtitle">Reprodutor, legendas e reprodução automática</string>
+    <string name="settings_trakt_subtitle">Abrir ecrã de ligação ao Trakt</string>
+    <string name="settings_about_subtitle">Versão e políticas</string>
     <string name="settings_network">Velocidade da rede</string>
     <string name="settings_network_subtitle">Diagnósticos de latência e download</string>
     <string name="settings_advanced">Avançado</string>
@@ -200,16 +209,16 @@
     <string name="network_connection_ethernet">Ethernet</string>
     <string name="network_connection_offline">Offline</string>
     <string name="settings_debug">Debug</string>
-    <string name="settings_debug_subtitle">Ferramentas de programador e feature flags.</string>
-    <string name="settings_plugins_section_subtitle">Gerir repositórios, fornecedores e estado dos plugins.</string>
-    <string name="settings_account_section_subtitle">Estado da conta e sincronização.</string>
+    <string name="settings_debug_subtitle">Ferramentas de programador e feature flags</string>
+    <string name="settings_plugins_section_subtitle">Gerir repositórios, fornecedores e estado dos plugins</string>
+    <string name="settings_account_section_subtitle">Estado da conta e sincronização</string>
     <string name="account_stat_addons">addons</string>
     <string name="account_stat_plugins">plugins</string>
     <string name="account_stat_library">biblioteca</string>
     <string name="account_stat_progress">progresso</string>
     <string name="account_stat_watched">vistos</string>
     <string name="settings_integrations_section">Integrações</string>
-    <string name="settings_integrations_section_subtitle">Escolher TMDB ou MDBList</string>
+    <string name="settings_integrations_section_subtitle">Gerenciar integrações disponíveis</string>
     <string name="settings_tmdb_subtitle">Controlos de enriquecimento de metadados</string>
     <string name="settings_mdblist_subtitle">Fornecedores externos de classificações</string>
     <string name="settings_animeskip_subtitle">Tempos de salto para intros/outros de Anime</string>
@@ -443,6 +452,8 @@
     <string name="layout_trailer_button_sub">Mostrar botão de trailer na página de detalhes (apenas quando disponível).</string>
     <string name="layout_prefer_external_meta">Preferir metadados de addon externo</string>
     <string name="layout_prefer_external_meta_sub">Usar metadados de addon externo em vez do addon do catálogo.</string>
+    <string name="layout_show_full_release_date">Mostrar data de exibição completa</string>
+    <string name="layout_show_full_release_date_sub">Nos filmes, mostra a data de exibição completa e não apenas o ano.</string>
     <string name="layout_section_focused">Poster Focado</string>
     <string name="layout_section_focused_desc">Comportamento avançado para cartões de posters focados.</string>
     <string name="layout_expand_poster">Expandir Poster Focado para Fundo</string>
@@ -526,6 +537,8 @@
     <string name="tmdb_subtitle">Escolhe quais campos de metadados devem vir do TMDB</string>
     <string name="tmdb_enable_title">Ativar Enriquecimento TMDB</string>
     <string name="tmdb_enable_subtitle">Usar o TMDB como fonte de metadados para melhorar os dados dos addons</string>
+    <string name="tmdb_modern_home_title">Ativar na Vista Moderna</string>
+    <string name="tmdb_modern_home_subtitle">Também aplica o Enriquecimento TMDB na Vista Moderna</string>
     <string name="tmdb_language_title">Idioma</string>
     <string name="tmdb_language_subtitle">Idioma dos metadados TMDB para título, logótipo e campos ativos</string>
     <string name="tmdb_artwork_title">Arte Visual</string>
@@ -628,7 +641,7 @@
 
     <!-- ProfileSettingsContent -->
     <string name="profile_title">Perfis</string>
-    <string name="profile_subtitle">Gere os perfis de utilizador para esta conta.</string>
+    <string name="profile_subtitle">Gere os perfis de utilizador para esta conta</string>
     <string name="profile_manage_button">Gerir Perfis</string>
     <string name="profile_manage_title">Gerir Perfis</string>
     <string name="profile_manage_subtitle">Seleciona um perfil para editar, mudar ou criar um novo</string>
@@ -842,7 +855,7 @@
     <string name="search_voice_unavailable">Pesquisa por voz indisponível neste dispositivo.</string>
     
     <!-- LibraryScreen -->
-    <string name="library_syncing">A sincronizar biblioteca Trakt\u2026</string>
+    <string name="library_syncing">A sincronizar a biblioteca Trakt\u2026</string>
     <string name="library_title">Biblioteca</string>
     <string name="library_filter_list">Lista</string>
     <string name="library_filter_type">Tipo</string>
@@ -982,9 +995,9 @@
 
     <!-- UpdatePromptDialog -->
     <string name="update_title">Atualização da App</string>
-    <string name="update_downloading">A descarregar atualização</string>
-    <string name="update_download">Descarregar</string>
-    <string name="update_downloading_ellipsis">A descarregar…</string>
+    <string name="update_downloading">A transferir atualização</string>
+    <string name="update_download">Transferir</string>
+    <string name="update_downloading_ellipsis">A transferir…</string>
     <string name="update_unknown_sources">Permite a instalação de fontes desconhecidas para continuar.</string>
     
     <!-- AccountScreen -->
@@ -1054,4 +1067,6 @@
     <string name="update_ignore">Ignorar</string>
     <string name="watchlist_added">Adicionado à lista de interesses</string>
     <string name="watchlist_removed">Removido da lista de interesses</string>
+    <string name="playback_player_auto">Automático (Melhor para o conteúdo)</string>
+    <string name="playback_player_auto_desc">ExoPlayer para Filmes e Séries · MPV para Animes</string>
 </resources>

@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -28,7 +29,9 @@ import com.nuvio.tv.ui.theme.NuvioColors
 @Composable
 fun CollectionSection(
     items: List<MetaPreview>,
+    title: String? = null,
     upFocusRequester: FocusRequester? = null,
+    sectionFocusRequester: FocusRequester? = null,
     restoreItemId: String? = null,
     restoreFocusToken: Int = 0,
     onRestoreFocusHandled: () -> Unit = {},
@@ -65,11 +68,21 @@ fun CollectionSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp, bottom = 8.dp)
+            .padding(top = if (title.isNullOrBlank()) 8.dp else 20.dp, bottom = 8.dp)
     ) {
+        if (!title.isNullOrBlank()) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                color = NuvioColors.TextPrimary,
+                modifier = Modifier
+                    .padding(start = 48.dp, end = 48.dp, bottom = 8.dp)
+            )
+        }
         LazyRow(
             modifier = Modifier
                 .fillMaxWidth()
+                .then(if (sectionFocusRequester != null) Modifier.focusRequester(sectionFocusRequester) else Modifier)
                 .focusRestorer { firstItemFocusRequester },
             contentPadding = PaddingValues(horizontal = 48.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)

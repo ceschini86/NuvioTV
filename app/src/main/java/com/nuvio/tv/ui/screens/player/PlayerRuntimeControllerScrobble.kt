@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.player
 
+import android.util.Log
 import kotlinx.coroutines.launch
 import com.nuvio.tv.data.local.toTrackPreference
 
@@ -8,15 +9,44 @@ internal fun PlayerRuntimeController.preparePlaybackBeforeStart(
     headers: Map<String, String>,
     loadSavedProgress: Boolean
 ) {
+    logSwitchTrace(
+        stage = "prepare-playback-before-start",
+        message = "urlHash=${url.hashCode().toUInt().toString(16)} loadSavedProgress=$loadSavedProgress " +
+            "clearPendingSwitchPref=true"
+    )
+    clearPendingEngineSwitchTrackPreference()
     playbackPreparationJob?.cancel()
     playbackPreparationJob = scope.launch {
         warmTraktEpisodeMappingForCurrentPlayback()
         refreshScrobbleItem()
-        if (pendingTrackPreferenceRestore == null) {
+        if (persistedTrackPreference == null) {
             contentId?.let { id ->
-                pendingTrackPreferenceRestore =
-                    trackPreferenceDataStore.load(id)?.toTrackPreference()
-            }
+                val loaded = trackPreferenceDataStore.load(id)?.toTrackPreference()
+                logSwitchTrace(
+                    stage = "track-pref-load",
+                    message = "contentId=$id loadedAudio=${loaded?.audio?.language}/${loaded?.audio?.name} " +
+                        "loadedSubtitle=${loaded?.subtitle?.javaClass?.simpleName ?: "none"}"
+                )
+                Log.d(
+                    PlayerRuntimeController.TAG,
+                    "TRACK_PREF load: contentId=$id S${currentSeason}E${currentEpisode} " +
+                        "result=${if (loaded == null) "null (no saved preference)" else "audio=${loaded.audio?.language}/${loaded.audio?.name} subtitle=${loaded.subtitle?.javaClass?.simpleName}"}"
+                )
+                persistedTrackPreference = loaded
+            } ?: Log.d(PlayerRuntimeController.TAG, "TRACK_PREF load: skipped (contentId is null)")
+        } else {
+            Log.d(
+                PlayerRuntimeController.TAG,
+                "TRACK_PREF load: skipped (persistedTrackPreference already set: " +
+                    "audio=${persistedTrackPreference?.audio?.language}/${persistedTrackPreference?.audio?.name} " +
+                    "subtitle=${persistedTrackPreference?.subtitle?.javaClass?.simpleName})"
+            )
+            logSwitchTrace(
+                stage = "track-pref-load",
+                message = "skipped=true reason=persisted-already-set " +
+                    "audio=${persistedTrackPreference?.audio?.language}/${persistedTrackPreference?.audio?.name} " +
+                    "subtitle=${persistedTrackPreference?.subtitle?.javaClass?.simpleName ?: "none"}"
+            )
         }
         initializePlayer(url, headers)
         if (loadSavedProgress) {

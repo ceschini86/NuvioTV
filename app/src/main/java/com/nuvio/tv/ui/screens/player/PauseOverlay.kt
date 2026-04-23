@@ -195,7 +195,7 @@ private fun PauseMetadataView(
 
             if (!year.isNullOrBlank()) {
                 val episodeLabel = if (type in listOf("series", "tv") && season != null && episode != null) {
-                    " • S${season}E${episode}"
+                    " • " + stringResource(R.string.season_episode_format, season, episode)
                 } else {
                     ""
                 }
@@ -295,7 +295,7 @@ private fun CastDetailView(
         ) {
             Icon(
                 imageVector = Icons.Default.ArrowBack,
-                contentDescription = "Back",
+                contentDescription = stringResource(R.string.cd_back),
                 tint = NuvioColors.TextSecondary,
                 modifier = Modifier.size(24.dp)
             )

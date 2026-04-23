@@ -16,6 +16,7 @@ import com.nuvio.tv.core.sync.LibrarySyncService
 import com.nuvio.tv.core.sync.PluginSyncService
 import com.nuvio.tv.core.sync.WatchProgressSyncService
 import com.nuvio.tv.core.sync.WatchedItemsSyncService
+import com.nuvio.tv.core.sync.ProfileSettingsSyncService
 import com.nuvio.tv.data.local.LibraryPreferences
 import com.nuvio.tv.data.local.WatchedItemsPreferences
 import com.nuvio.tv.data.local.TraktAuthDataStore
@@ -52,6 +53,7 @@ class AccountViewModel @Inject constructor(
     private val watchProgressSyncService: WatchProgressSyncService,
     private val librarySyncService: LibrarySyncService,
     private val watchedItemsSyncService: WatchedItemsSyncService,
+    private val profileSettingsSyncService: ProfileSettingsSyncService,
     private val pluginManager: PluginManager,
     private val addonRepository: AddonRepositoryImpl,
     private val watchProgressRepository: WatchProgressRepositoryImpl,
@@ -148,7 +150,7 @@ class AccountViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             if (!authManager.isAuthenticated) {
-                _uiState.update { it.copy(isLoading = false, error = "Sign in with an account first.") }
+                _uiState.update { it.copy(isLoading = false, error = context.getString(R.string.account_error_signin_required)) }
                 return@launch
             }
             pushLocalDataToRemote()
@@ -181,7 +183,7 @@ class AccountViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             if (!authManager.isAuthenticated) {
-                _uiState.update { it.copy(isLoading = false, error = "Sign in with an account first.") }
+                _uiState.update { it.copy(isLoading = false, error = context.getString(R.string.account_error_signin_required)) }
                 return@launch
             }
             syncRepository.claimSyncCode(code, pin, Build.MODEL).fold(
@@ -283,7 +285,7 @@ class AccountViewModel @Inject constructor(
                             qrLoginCode = result.code,
                             qrLoginUrl = result.webUrl,
                             qrLoginBitmap = qrBitmap,
-                            qrLoginStatus = "Scan QR and sign in on your phone",
+                            qrLoginStatus = context.getString(R.string.qr_login_scan_prompt),
                             qrLoginExpiresAtMillis = expiresAtMillis,
                             qrLoginPollIntervalSeconds = result.pollIntervalSeconds.coerceAtLeast(2)
                         )
@@ -295,7 +297,7 @@ class AccountViewModel @Inject constructor(
                         it.copy(
                             isLoading = false,
                             error = userFriendlyError(e),
-                            qrLoginStatus = "Failed to start QR login"
+                            qrLoginStatus = context.getString(R.string.qr_login_start_failed)
                         )
                     }
                 }
@@ -314,21 +316,21 @@ class AccountViewModel @Inject constructor(
             val current = _uiState.value
             val code = current.qrLoginCode ?: return@launch
             val nonce = current.qrLoginNonce ?: return@launch
-            _uiState.update { it.copy(isLoading = true, error = null, qrLoginStatus = "Signing you in...") }
+            _uiState.update { it.copy(isLoading = true, error = null, qrLoginStatus = context.getString(R.string.qr_login_signing_in)) }
             authManager.exchangeTvLoginSession(code = code, deviceNonce = nonce).fold(
                 onSuccess = {
                     pullRemoteData().onFailure { e ->
                         Log.e("AccountViewModel", "exchangeQrLogin: pullRemoteData failed, continuing", e)
                     }
                     loadConnectedStats()
-                    _uiState.update { it.copy(isLoading = false, qrLoginStatus = "Signed in successfully") }
+                    _uiState.update { it.copy(isLoading = false, qrLoginStatus = context.getString(R.string.qr_login_success)) }
                 },
                 onFailure = { e ->
                     _uiState.update {
                         it.copy(
                             isLoading = false,
                             error = userFriendlyError(e),
-                            qrLoginStatus = "Could not complete QR sign in"
+                            qrLoginStatus = context.getString(R.string.qr_login_exchange_failed)
                         )
                     }
                 }
@@ -567,6 +569,7 @@ class AccountViewModel @Inject constructor(
     }
 
     private suspend fun pushLocalDataToRemote() {
+        profileSettingsSyncService.pushCurrentProfileToRemote()
         pluginSyncService.pushToRemote()
         addonSyncService.pushToRemote()
         watchProgressSyncService.pushToRemote()
@@ -576,13 +579,15 @@ class AccountViewModel @Inject constructor(
 
     private suspend fun pullRemoteData(): Result<Unit> {
         try {
+            profileSettingsSyncService.pullCurrentProfileFromRemote()
             pluginManager.isSyncingFromRemote = true
-            val remotePluginUrls = pluginSyncService.getRemoteRepoUrls().getOrElse { throw it }
+            val remotePlugins = pluginSyncService.getRemoteRepoUrls().getOrElse { throw it }
             pluginManager.reconcileWithRemoteRepoUrls(
-                remoteUrls = remotePluginUrls,
+                remotePlugins = remotePlugins,
                 removeMissingLocal = true
             )
             pluginManager.isSyncingFromRemote = false
+            pluginManager.flushPendingSync()
 
             addonRepository.isSyncingFromRemote = true
             val remoteAddonUrls = addonSyncService.getRemoteAddonUrls().getOrElse { throw it }
@@ -592,12 +597,11 @@ class AccountViewModel @Inject constructor(
             )
             addonRepository.isSyncingFromRemote = false
 
-            val isPrimaryProfile = profileManager.activeProfileId.value == 1
-            val isTraktConnected = isPrimaryProfile && traktAuthDataStore.isAuthenticated.first()
+            val isTraktConnected = traktAuthDataStore.isEffectivelyAuthenticated.first()
             val shouldUseSupabaseWatchProgressSync = watchProgressSyncService.shouldUseSupabaseWatchProgressSync()
             Log.d(
                 "AccountViewModel",
-                "pullRemoteData: isTraktConnected=$isTraktConnected isPrimaryProfile=$isPrimaryProfile shouldUseSupabaseWatchProgressSync=$shouldUseSupabaseWatchProgressSync"
+                "pullRemoteData: isTraktConnected=$isTraktConnected shouldUseSupabaseWatchProgressSync=$shouldUseSupabaseWatchProgressSync"
             )
             if (!isTraktConnected) {
                 watchProgressRepository.isSyncingFromRemote = true

@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.server
 
+import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import fi.iki.elonen.NanoHTTPD
@@ -8,11 +9,27 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 class AddonConfigServer(
+    private val context: Context,
+    private val webConfigMode: WebConfigMode,
     private val currentPageStateProvider: () -> PageState,
     private val onChangeProposed: (PendingAddonChange) -> Unit,
     private val logoProvider: (() -> ByteArray?)? = null,
     port: Int = 8080
 ) : NanoHTTPD(port) {
+
+    enum class WebConfigMode(
+        val allowAddonManagement: Boolean,
+        val allowCatalogManagement: Boolean
+    ) {
+        FULL(
+            allowAddonManagement = true,
+            allowCatalogManagement = true
+        ),
+        COLLECTIONS_ONLY(
+            allowAddonManagement = false,
+            allowCatalogManagement = false
+        )
+    }
 
     data class AddonInfo(
         val url: String,
@@ -29,9 +46,41 @@ class AddonConfigServer(
         val isDisabled: Boolean
     )
 
+    data class CollectionInfo(
+        val id: String,
+        val title: String,
+        val backdropImageUrl: String? = null,
+        val pinToTop: Boolean = false,
+        val focusGlowEnabled: Boolean = true,
+        val viewMode: String = "TABBED_GRID",
+        val showAllTab: Boolean = true,
+        val folders: List<FolderInfo>
+    )
+
+    data class FolderInfo(
+        val id: String,
+        val title: String,
+        val coverImageUrl: String?,
+        val focusGifUrl: String?,
+        val focusGifEnabled: Boolean = true,
+        val coverEmoji: String?,
+        val tileShape: String,
+        val hideTitle: Boolean,
+        val catalogSources: List<CatalogSourceInfo>
+    )
+
+    data class CatalogSourceInfo(
+        val addonId: String,
+        val type: String,
+        val catalogId: String,
+        val genre: String? = null
+    )
+
     data class PageState(
         val addons: List<AddonInfo>,
-        val catalogs: List<CatalogInfo>
+        val catalogs: List<CatalogInfo>,
+        val collections: List<CollectionInfo> = emptyList(),
+        val disabledCollectionKeys: List<String> = emptyList()
     )
 
     data class PendingAddonChange(
@@ -39,6 +88,8 @@ class AddonConfigServer(
         val proposedUrls: List<String>,
         val proposedCatalogOrderKeys: List<String> = emptyList(),
         val proposedDisabledCatalogKeys: List<String> = emptyList(),
+        val proposedCollectionsJson: String? = null,
+        val proposedDisabledCollectionKeys: List<String> = emptyList(),
         var status: ChangeStatus = ChangeStatus.PENDING
     )
 
@@ -65,13 +116,18 @@ class AddonConfigServer(
             method == Method.GET && uri == "/api/state" -> servePageState()
             method == Method.GET && uri == "/api/addons" -> serveAddonList()
             method == Method.POST && uri == "/api/addons" -> handleAddonUpdate(session)
+            method == Method.GET && uri == "/api/collections" -> serveCollections()
             method == Method.GET && uri.startsWith("/api/status/") -> serveChangeStatus(uri)
             else -> newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not found")
         }
     }
 
     private fun serveWebPage(): Response {
-        return newFixedLengthResponse(Response.Status.OK, "text/html", AddonWebPage.getHtml())
+        return newFixedLengthResponse(
+            Response.Status.OK,
+            "text/html; charset=utf-8",
+            AddonWebPage.getHtml(context, webConfigMode)
+        )
     }
 
     private fun serveLogo(): Response {
@@ -88,16 +144,22 @@ class AddonConfigServer(
         }
     }
 
+    private fun serveCollections(): Response {
+        val collections = currentPageStateProvider().collections
+        val json = gson.toJson(collections)
+        return newFixedLengthResponse(Response.Status.OK, "application/json; charset=utf-8", json)
+    }
+
     private fun serveAddonList(): Response {
         val addons = currentPageStateProvider().addons
         val json = gson.toJson(addons)
-        return newFixedLengthResponse(Response.Status.OK, "application/json", json)
+        return newFixedLengthResponse(Response.Status.OK, "application/json; charset=utf-8", json)
     }
 
     private fun servePageState(): Response {
         val state = currentPageStateProvider()
         val json = gson.toJson(state)
-        return newFixedLengthResponse(Response.Status.OK, "application/json", json)
+        return newFixedLengthResponse(Response.Status.OK, "application/json; charset=utf-8", json)
     }
 
     private fun handleAddonUpdate(session: IHTTPSession): Response {
@@ -116,16 +178,25 @@ class AddonConfigServer(
             val urls = parseStringList(parsed["urls"])
             val catalogOrderKeys = parseStringList(parsed["catalogOrderKeys"])
             val disabledCatalogKeys = parseStringList(parsed["disabledCatalogKeys"])
-            PendingAddonChange(
-                proposedUrls = urls,
-                proposedCatalogOrderKeys = catalogOrderKeys,
-                proposedDisabledCatalogKeys = disabledCatalogKeys
+            val collectionsRaw = parsed["collections"]
+            val collectionsJson = if (collectionsRaw != null) gson.toJson(collectionsRaw) else null
+            val disabledCollectionKeys = parseStringList(parsed["disabledCollectionKeys"])
+            sanitizePendingAddonChange(
+                mode = webConfigMode,
+                proposedChange = PendingAddonChange(
+                    proposedUrls = urls,
+                    proposedCatalogOrderKeys = catalogOrderKeys,
+                    proposedDisabledCatalogKeys = disabledCatalogKeys,
+                    proposedCollectionsJson = collectionsJson,
+                    proposedDisabledCollectionKeys = disabledCollectionKeys
+                ),
+                currentState = currentPageStateProvider()
             )
         } catch (e: Exception) {
             val error = mapOf("error" to "Invalid request body")
             return newFixedLengthResponse(
                 Response.Status.BAD_REQUEST,
-                "application/json",
+                "application/json; charset=utf-8",
                 gson.toJson(error)
             )
         }
@@ -134,7 +205,7 @@ class AddonConfigServer(
         onChangeProposed(change)
 
         val response = mapOf("status" to "pending_confirmation", "id" to change.id)
-        return newFixedLengthResponse(Response.Status.OK, "application/json", gson.toJson(response))
+        return newFixedLengthResponse(Response.Status.OK, "application/json; charset=utf-8", gson.toJson(response))
     }
 
     private fun serveChangeStatus(uri: String): Response {
@@ -142,7 +213,7 @@ class AddonConfigServer(
         val change = pendingChanges[id]
         val status = change?.status?.name?.lowercase() ?: "not_found"
         val response = mapOf("status" to status)
-        return newFixedLengthResponse(Response.Status.OK, "application/json", gson.toJson(response))
+        return newFixedLengthResponse(Response.Status.OK, "application/json; charset=utf-8", gson.toJson(response))
     }
 
     private fun parseStringList(rawValue: Any?): List<String> {
@@ -156,6 +227,8 @@ class AddonConfigServer(
 
     companion object {
         fun startOnAvailablePort(
+            context: Context,
+            webConfigMode: WebConfigMode = WebConfigMode.FULL,
             currentPageStateProvider: () -> PageState,
             onChangeProposed: (PendingAddonChange) -> Unit,
             logoProvider: (() -> ByteArray?)? = null,
@@ -164,7 +237,14 @@ class AddonConfigServer(
         ): AddonConfigServer? {
             for (port in startPort until startPort + maxAttempts) {
                 try {
-                    val server = AddonConfigServer(currentPageStateProvider, onChangeProposed, logoProvider, port)
+                    val server = AddonConfigServer(
+                        context = context,
+                        webConfigMode = webConfigMode,
+                        currentPageStateProvider = currentPageStateProvider,
+                        onChangeProposed = onChangeProposed,
+                        logoProvider = logoProvider,
+                        port = port
+                    )
                     server.start(SOCKET_READ_TIMEOUT, false)
                     return server
                 } catch (e: Exception) {
@@ -174,4 +254,34 @@ class AddonConfigServer(
             return null
         }
     }
+}
+
+internal fun sanitizePendingAddonChange(
+    mode: AddonConfigServer.WebConfigMode,
+    proposedChange: AddonConfigServer.PendingAddonChange,
+    currentState: AddonConfigServer.PageState
+): AddonConfigServer.PendingAddonChange {
+    if (mode.allowAddonManagement && mode.allowCatalogManagement) {
+        return proposedChange
+    }
+
+    return proposedChange.copy(
+        proposedUrls = if (mode.allowAddonManagement) {
+            proposedChange.proposedUrls
+        } else {
+            currentState.addons.map { it.url }
+        },
+        proposedCatalogOrderKeys = if (mode.allowCatalogManagement) {
+            proposedChange.proposedCatalogOrderKeys
+        } else {
+            currentState.catalogs.map { it.key }
+        },
+        proposedDisabledCatalogKeys = if (mode.allowCatalogManagement) {
+            proposedChange.proposedDisabledCatalogKeys
+        } else {
+            currentState.catalogs
+                .filter { it.isDisabled }
+                .map { it.disableKey }
+        }
+    )
 }

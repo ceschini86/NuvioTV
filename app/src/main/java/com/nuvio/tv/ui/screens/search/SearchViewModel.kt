@@ -1,9 +1,12 @@
 package com.nuvio.tv.ui.screens.search
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nuvio.tv.R
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.data.local.LayoutPreferenceDataStore
+import com.nuvio.tv.data.local.SearchHistoryDataStore
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogDescriptor
 import com.nuvio.tv.domain.model.CatalogRow
@@ -15,6 +18,7 @@ import com.nuvio.tv.domain.repository.AddonRepository
 import java.time.LocalDate
 import com.nuvio.tv.domain.repository.CatalogRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,11 +35,19 @@ import javax.inject.Inject
 class SearchViewModel @Inject constructor(
     private val addonRepository: AddonRepository,
     private val catalogRepository: CatalogRepository,
-    private val layoutPreferenceDataStore: LayoutPreferenceDataStore
+    private val layoutPreferenceDataStore: LayoutPreferenceDataStore,
+    private val searchHistoryDataStore: SearchHistoryDataStore,
+    private val watchProgressRepository: com.nuvio.tv.domain.repository.WatchProgressRepository,
+    private val watchedSeriesStateHolder: com.nuvio.tv.data.local.WatchedSeriesStateHolder,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
+
+    private val _watchedMovieIds = MutableStateFlow<Set<String>>(emptySet())
+    val watchedMovieIds: StateFlow<Set<String>> = _watchedMovieIds.asStateFlow()
+    val watchedSeriesIds: StateFlow<Set<String>> = watchedSeriesStateHolder.fullyWatchedSeriesIds
 
     private val catalogsMap = linkedMapOf<String, CatalogRow>()
     private val catalogOrder = mutableListOf<String>()
@@ -54,9 +66,14 @@ class SearchViewModel @Inject constructor(
         const val DISCOVER_SHOW_MORE_BATCH = 50
         const val SUGGESTION_DEBOUNCE_MS = 150L
         const val MAX_SUGGESTIONS = 8
+        const val MAX_RECENT_SEARCHES = 8
     }
 
     init {
+        viewModelScope.launch {
+            watchProgressRepository.observeWatchedMovieIds()
+                .collect { ids -> _watchedMovieIds.value = ids }
+        }
         viewModelScope.launch {
             layoutPreferenceDataStore.searchDiscoverEnabled.collectLatest { enabled ->
                 _uiState.update { it.copy(discoverEnabled = enabled) }
@@ -108,6 +125,11 @@ class SearchViewModel @Inject constructor(
                 scheduleCatalogRowsUpdate()
             }
         }
+        viewModelScope.launch {
+            searchHistoryDataStore.recentSearches.collectLatest { recent ->
+                _uiState.update { it.copy(recentSearches = recent.take(MAX_RECENT_SEARCHES)) }
+            }
+        }
     }
 
     private data class LayoutPrefs(
@@ -122,6 +144,7 @@ class SearchViewModel @Inject constructor(
         when (event) {
             is SearchEvent.QueryChanged -> onQueryChanged(event.query)
             SearchEvent.SubmitSearch -> submitSearch()
+            SearchEvent.ClearRecentSearches -> clearRecentSearches()
             is SearchEvent.LoadMoreCatalog -> loadMoreCatalogItems(
                 catalogId = event.catalogId,
                 addonId = event.addonId,
@@ -233,6 +256,12 @@ class SearchViewModel @Inject constructor(
         performSearch(_uiState.value.query)
     }
 
+    private fun clearRecentSearches() {
+        viewModelScope.launch {
+            searchHistoryDataStore.clearRecentSearches()
+        }
+    }
+
     private fun performSearch(rawQuery: String) {
         val query = rawQuery.trim()
         suggestionJob?.cancel()
@@ -242,6 +271,12 @@ class SearchViewModel @Inject constructor(
                 query = rawQuery,
                 suggestions = emptyList()
             )
+        }
+
+        if (query.length >= 2) {
+            viewModelScope.launch {
+                searchHistoryDataStore.saveRecentSearch(query, MAX_RECENT_SEARCHES)
+            }
         }
 
         // Cancel any in-flight work from the previous query.
@@ -288,7 +323,7 @@ class SearchViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isSearching = false,
-                        error = "No searchable catalogs found in installed addons",
+                        error = context.getString(R.string.search_error_no_catalogs),
                         catalogRows = emptyList()
                     )
                 }

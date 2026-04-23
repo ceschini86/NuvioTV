@@ -142,7 +142,7 @@ fun NextEpisodeCardOverlay(
                 ) {
                     AsyncImage(
                         model = nextEpisode.thumbnail,
-                        contentDescription = "Next episode thumbnail",
+                        contentDescription = stringResource(R.string.cd_next_episode_thumbnail),
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
@@ -167,8 +167,18 @@ fun NextEpisodeCardOverlay(
                         fontWeight = FontWeight.Medium
                     )
                     Spacer(modifier = Modifier.height(2.dp))
+                    val nextEpisodeLabel = if (nextEpisode.isOtherType) {
+                        nextEpisode.title
+                    } else {
+                        val nextEpisodeCode = stringResource(
+                            R.string.season_episode_format,
+                            nextEpisode.season,
+                            nextEpisode.episode
+                        )
+                        "$nextEpisodeCode • ${nextEpisode.title}"
+                    }
                     Text(
-                        text = "S${nextEpisode.season}E${nextEpisode.episode} • ${nextEpisode.title}",
+                        text = nextEpisodeLabel,
                         color = Color.White,
                         fontSize = 14.sp,
                         maxLines = 1,

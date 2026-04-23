@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.detail
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.BorderStroke
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
@@ -73,6 +74,7 @@ import com.nuvio.tv.domain.model.Video
 import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.theme.NuvioColors
 import com.nuvio.tv.ui.theme.NuvioTheme
+import android.text.format.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -89,6 +91,7 @@ fun SeasonTabs(
     onSeasonSelected: (Int) -> Unit,
     onSeasonLongPress: (Int) -> Unit = {},
     selectedTabFocusRequester: FocusRequester,
+    upFocusRequester: FocusRequester? = null,
     downFocusRequester: FocusRequester? = null
 ) {
     // Move season 0 (specials) to the end
@@ -109,7 +112,19 @@ fun SeasonTabs(
     val typography = MaterialTheme.typography
     val tabTextStyle = remember(typography) { typography.titleMedium }
     val textSecondary = NuvioTheme.extendedColors.textSecondary
-    val lazyListState = rememberLazyListState()
+    val initialSeasonIndex = remember(sortedSeasons, selectedSeason) {
+        sortedSeasons.indexOf(selectedSeason).coerceAtLeast(0)
+    }
+    val lazyListState = rememberLazyListState(initialFirstVisibleItemIndex = initialSeasonIndex)
+
+    var suppressFocusSwitch by remember { mutableStateOf(false) }
+    var pendingSeason by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(pendingSeason) {
+        val target = pendingSeason ?: return@LaunchedEffect
+        delay(150)
+        onSeasonSelected(target)
+        pendingSeason = null
+    }
 
     LaunchedEffect(sortedSeasons, selectedSeason) {
         val selectedIndex = sortedSeasons.indexOf(selectedSeason)
@@ -118,7 +133,9 @@ fun SeasonTabs(
         val visibleIndices = lazyListState.layoutInfo.visibleItemsInfo.map { it.index }
         if (selectedIndex in visibleIndices) return@LaunchedEffect
 
+        suppressFocusSwitch = true
         lazyListState.scrollToItem(selectedIndex)
+        suppressFocusSwitch = false
     }
 
     LazyRow(
@@ -148,12 +165,15 @@ fun SeasonTabs(
                         if (isSelected && downFocusRequester != null) {
                             down = downFocusRequester
                         }
+                        if (upFocusRequester != null) {
+                            up = upFocusRequester
+                        }
                     }
                     .onFocusChanged {
                     val nowFocused = it.isFocused
                     isFocused = nowFocused
-                    if (nowFocused && !isSelected) {
-                        onSeasonSelected(season)
+                    if (nowFocused && !isSelected && !suppressFocusSwitch) {
+                        pendingSeason = season
                     }
                 }
                     .onPreviewKeyEvent { event ->
@@ -203,7 +223,7 @@ fun SeasonTabs(
     }
 }
 
-@OptIn(ExperimentalTvMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalTvMaterial3Api::class, ExperimentalFoundationApi::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun EpisodesRow(
     episodes: List<Video>,
@@ -228,7 +248,8 @@ fun EpisodesRow(
     restoreFocusToken: Int = 0,
     onRestoreFocusHandled: () -> Unit = {},
     onEpisodeFocused: (episodeId: String) -> Unit = {},
-    scrollToEpisodeId: String? = null
+    scrollToEpisodeId: String? = null,
+    onScrollToEpisodeHandled: () -> Unit = {}
 ) {
     val dedupedEpisodes = remember(episodes) { episodes.distinctBy { it.id } }
     val restoreTargetRequester = restoreEpisodeId?.let { episodeFocusRequesters[it] }
@@ -251,6 +272,9 @@ fun EpisodesRow(
         episodeFocusRequesters.keys.retainAll(episodeIds)
     }
 
+    // Track the last focused episode requester for focus restoration
+    var lastFocusedEpisodeRequester by remember { androidx.compose.runtime.mutableStateOf<FocusRequester?>(null) }
+
     LaunchedEffect(restoreFocusToken, restoreEpisodeId, restoreTargetRequester, dedupedEpisodes) {
         if (restoreFocusToken <= 0 || restoreEpisodeId.isNullOrBlank()) return@LaunchedEffect
         if (dedupedEpisodes.none { it.id == restoreEpisodeId }) return@LaunchedEffect
@@ -259,6 +283,7 @@ fun EpisodesRow(
             val offsetPx = with(density) { (cardMetrics.cardWidth * 2f / 3f - cardMetrics.itemSpacing).roundToPx() }
             lazyListState.scrollToItem(index, scrollOffset = -offsetPx)
         }
+        lastFocusedEpisodeRequester = restoreTargetRequester
         restoreTargetRequester?.requestFocusAfterFrames()
     }
 
@@ -268,11 +293,18 @@ fun EpisodesRow(
         if (index < 0) return@LaunchedEffect
         val offsetPx = with(density) { (cardMetrics.cardWidth * 2f / 3f - cardMetrics.itemSpacing).roundToPx() }
         lazyListState.scrollToItem(index, scrollOffset = -offsetPx)
+        // Reset the focus restorer target so it doesn't point at an off-screen episode
+        // after the list scrolled to a different position.
+        lastFocusedEpisodeRequester = episodeFocusRequesters[scrollToEpisodeId]
+        onScrollToEpisodeHandled()
     }
 
     LazyRow(
         modifier = Modifier
             .fillMaxWidth()
+            .focusRestorer {
+                lastFocusedEpisodeRequester ?: FocusRequester.Default
+            }
             .onPreviewKeyEvent { event ->
                 val native = event.nativeKeyEvent
                 val isHorizontalKey = native.keyCode == AndroidKeyEvent.KEYCODE_DPAD_LEFT ||
@@ -309,7 +341,10 @@ fun EpisodesRow(
             val episodeFocusRequester = remember(episode.id) { episodeFocusRequesters.getOrPut(episode.id) { FocusRequester() } }
             val episodeOnClick = remember(episode.id) { { onEpisodeClick(episode) } }
             val episodeOnLongPress = remember(episode.id) { { optionsEpisode = episode } }
-            val episodeOnFocused = remember(episode.id) { { onEpisodeFocused(episode.id) } }
+            val episodeOnFocused = remember(episode.id) { {
+                lastFocusedEpisodeRequester = episodeFocusRequester
+                onEpisodeFocused(episode.id)
+            } }
             val isRestoreTarget = episode.id == restoreEpisodeId
             val episodeOnFocusRestored = remember(isRestoreTarget, onRestoreFocusHandled) {
                 if (isRestoreTarget) onRestoreFocusHandled else null
@@ -436,11 +471,12 @@ private fun EpisodeCard(
     val overlayBrush = remember {
         Brush.verticalGradient(
             colorStops = arrayOf(
-                0.0f to Color.Black.copy(alpha = 0.06f),
-                0.22f to Color.Black.copy(alpha = 0.18f),
-                0.52f to Color.Black.copy(alpha = 0.62f),
-                0.82f to Color.Black.copy(alpha = 0.86f),
-                1.0f to Color.Black.copy(alpha = 0.95f)
+                0.0f to Color.Transparent,
+                0.15f to Color.Black.copy(alpha = 0.08f),
+                0.35f to Color.Black.copy(alpha = 0.28f),
+                0.60f to Color.Black.copy(alpha = 0.72f),
+                0.85f to Color.Black.copy(alpha = 0.90f),
+                1.0f to Color.Black.copy(alpha = 0.96f)
             )
         )
     }
@@ -481,7 +517,7 @@ private fun EpisodeCard(
     val thumbnailRequest = remember(context, episode.thumbnail, thumbnailWidthPx, thumbnailHeightPx, shouldBlur) {
         ImageRequest.Builder(context)
             .data(episode.thumbnail)
-            .crossfade(false)
+            .crossfade(true)
             .size(width = thumbnailWidthPx, height = thumbnailHeightPx)
             .apply {
                 if (shouldBlur) {
@@ -573,26 +609,42 @@ private fun EpisodeCard(
             modifier = Modifier
                 .width(cardMetrics.cardWidth)
                 .height(cardMetrics.cardHeight)
-                .drawWithCache {
-                    val cr = androidx.compose.ui.geometry.CornerRadius(cardCornerRadius)
-                    onDrawBehind {
-                        drawRoundRect(color = cardBgColor, cornerRadius = cr)
-                    }
-                }
         ) {
+            val bgPainter = remember(cardBgColor) { androidx.compose.ui.graphics.painter.ColorPainter(cardBgColor) }
             AsyncImage(
                 model = thumbnailRequest,
                 contentDescription = episode.title.localizeEpisodeTitle(context),
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Crop,
+                placeholder = bgPainter,
+                error = bgPainter,
+                fallback = bgPainter
             )
 
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .drawWithCache {
+                        val startY = size.height * 0.40f
+                        val localBrush = Brush.verticalGradient(
+                            colorStops = arrayOf(
+                                0.0f to Color.Transparent,
+                                0.15f to Color.Black.copy(alpha = 0.08f),
+                                0.35f to Color.Black.copy(alpha = 0.28f),
+                                0.60f to Color.Black.copy(alpha = 0.72f),
+                                0.85f to Color.Black.copy(alpha = 0.90f),
+                                1.0f to Color.Black.copy(alpha = 0.96f)
+                            ),
+                            startY = startY,
+                            endY = size.height
+                        )
                         onDrawBehind {
-                            drawRect(brush = overlayBrush, alpha = if (isFocusedState.value) 1f else 0.94f)
+                            drawRect(
+                                brush = localBrush,
+                                topLeft = androidx.compose.ui.geometry.Offset(0f, startY),
+                                size = androidx.compose.ui.geometry.Size(size.width, size.height - startY),
+                                alpha = if (isFocusedState.value) 1f else 0.94f
+                            )
                         }
                     }
             )
@@ -1083,18 +1135,19 @@ private fun formatEpisodeRuntime(runtimeMinutes: Int): String {
 
 private fun formatEpisodeCardDate(isoDate: String): String {
     val locale = Locale.getDefault()
-    val outputFormat = SimpleDateFormat("MMM d, yyyy", locale)
+    val bestPattern = android.text.format.DateFormat.getBestDateTimePattern(locale, "dMMMMy")
+    val formatter = java.time.format.DateTimeFormatter.ofPattern(bestPattern, locale)
+
     return try {
-        val inputFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
-        val date = inputFormat.parse(isoDate)
-        date?.let { outputFormat.format(it) }.orEmpty()
+        val localDate = java.time.Instant.parse(isoDate)
+            .atZone(java.time.ZoneOffset.UTC)
+            .toLocalDate()
+
+        formatter.format(localDate)
     } catch (_: Exception) {
         try {
-            val inputFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-            val date = inputFormat.parse(isoDate)
-            date?.let { outputFormat.format(it) }.orEmpty()
+            val localDate = java.time.LocalDate.parse(isoDate.substringBefore('T'))
+            formatter.format(localDate)
         } catch (_: Exception) {
             ""
         }

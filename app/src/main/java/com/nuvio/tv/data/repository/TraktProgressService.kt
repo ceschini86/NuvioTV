@@ -1,7 +1,9 @@
 package com.nuvio.tv.data.repository
 
+import android.os.SystemClock
 import android.util.Log
 import com.nuvio.tv.BuildConfig
+import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.data.local.TraktSettingsDataStore
 import com.nuvio.tv.data.remote.api.TraktApi
@@ -21,6 +23,7 @@ import com.nuvio.tv.data.remote.dto.trakt.TraktIdsDto
 import com.nuvio.tv.data.remote.dto.trakt.TraktPlaybackItemDto
 import com.nuvio.tv.data.remote.dto.trakt.TraktShowSeasonProgressDto
 import com.nuvio.tv.data.remote.dto.trakt.TraktUserEpisodeHistoryItemDto
+import com.nuvio.tv.data.remote.dto.trakt.TraktWatchedShowItemDto
 import com.nuvio.tv.domain.model.WatchProgress
 import com.nuvio.tv.domain.repository.MetaRepository
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -28,6 +31,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
@@ -48,6 +54,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
+import retrofit2.Response
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -64,8 +71,10 @@ class TraktProgressService @Inject constructor(
     private val traktApi: TraktApi,
     private val traktAuthService: TraktAuthService,
     private val metaRepository: MetaRepository,
+    private val tmdbService: com.nuvio.tv.core.tmdb.TmdbService,
     private val traktSettingsDataStore: TraktSettingsDataStore,
-    private val traktEpisodeMappingService: TraktEpisodeMappingService
+    private val traktEpisodeMappingService: TraktEpisodeMappingService,
+    private val profileManager: ProfileManager
 ) {
     companion object {
         private const val TAG = "TraktProgressSvc"
@@ -91,6 +100,7 @@ class TraktProgressService @Inject constructor(
 
     private data class EpisodeProgressCacheEntry(
         val progress: Map<Pair<Int, Int>, WatchProgress>,
+        val airedEpisodes: List<Pair<Int, Int>>,
         val updatedAtMs: Long,
         val activityVersion: Long,
         val hasCompletedSnapshot: Boolean
@@ -98,7 +108,20 @@ class TraktProgressService @Inject constructor(
 
     private data class EpisodeProgressFetchResult(
         val progress: Map<Pair<Int, Int>, WatchProgress>,
+        val airedEpisodes: List<Pair<Int, Int>>,
         val hasCompletedSnapshot: Boolean
+    )
+
+    private data class EpisodeHistoryAddAttempt(
+        val response: Response<TraktHistoryAddResponseDto>,
+        val remappedEpisode: EpisodeMappingEntry? = null
+    )
+
+    private data class WatchedShowSeedsSnapshot(
+        val seeds: List<WatchProgress>,
+        val updatedAtMs: Long,
+        val hasLoaded: Boolean,
+        val stale: Boolean
     )
 
     private data class OptimisticProgressEntry(
@@ -129,15 +152,28 @@ class TraktProgressService @Inject constructor(
     private val optimisticProgress = MutableStateFlow<Map<String, OptimisticProgressEntry>>(emptyMap())
     private val metadataState = MutableStateFlow<Map<String, ContentMetadata>>(emptyMap())
     private val watchedMoviesState = MutableStateFlow<Set<String>>(emptySet())
+    private val watchedShowSeedsState = MutableStateFlow<List<WatchProgress>>(emptyList())
+    /** Content IDs of shows dropped on Trakt (from users/hidden/progress_watched). */
+    private val hiddenProgressShowIds = MutableStateFlow<Set<String>>(emptySet())
+    private var hiddenProgressShowsLoadedAtMs: Long = 0L
+    private val hiddenProgressShowsMutex = Mutex()
+    /** Per-show set of watched (season, episode) pairs from /sync/watched/shows. */
+    @Volatile
+    private var watchedShowEpisodesMap: Map<String, Set<Pair<Int, Int>>> = emptyMap()
+    /** Maps any content key (tmdb:X, trakt:X, imdb) to a Trakt-accepted path ID (slug or trakt numeric). */
+    @Volatile
+    private var showIdToTraktPathId: Map<String, String> = emptyMap()
     private val episodeProgressState = MutableStateFlow<Map<String, EpisodeProgressCacheEntry>>(emptyMap())
     private val hasLoadedRemoteProgress = MutableStateFlow(false)
     private val cacheMutex = Mutex()
     private val metadataMutex = Mutex()
     private val watchedMoviesMutex = Mutex()
+    private val watchedShowSeedsMutex = Mutex()
     private val episodeProgressMutex = Mutex()
     private val inFlightMetadataKeys = mutableSetOf<String>()
     private val inFlightEpisodeProgressKeys = mutableSetOf<String>()
     private val episodeProgressLastAttemptAtMs = mutableMapOf<String, Long>()
+    private val serviceStartedAtMs = SystemClock.elapsedRealtime()
     private var cachedMoviesPlayback: TimedCache<List<TraktPlaybackItemDto>>? = null
     private var cachedEpisodesPlayback: TimedCache<List<TraktPlaybackItemDto>>? = null
     private var cachedUserStats: TimedCache<TraktCachedStats>? = null
@@ -146,6 +182,10 @@ class TraktProgressService @Inject constructor(
     private var watchedMoviesLastAttemptAtMs: Long = 0L
     private var hasLoadedWatchedMovies: Boolean = false
     private var watchedMoviesStale: Boolean = true
+    private var watchedShowSeedsUpdatedAtMs: Long = 0L
+    private var watchedShowSeedsLastAttemptAtMs: Long = 0L
+    private var hasLoadedWatchedShowSeeds: Boolean = false
+    private var watchedShowSeedsStale: Boolean = true
     @Volatile
     private var lastFastSyncRequestMs: Long = 0L
     @Volatile
@@ -156,6 +196,8 @@ class TraktProgressService @Inject constructor(
     private var lastKnownEpisodeActivityFingerprint: String? = null
     @Volatile
     private var lastManualRefreshSignalMs: Long = 0L
+    @Volatile
+    private var metadataWarmupScheduled: Boolean = false
     private val episodeProgressActivityVersion = AtomicLong(0L)
 
     private val playbackCacheTtlMs = 30_000L
@@ -165,6 +207,7 @@ class TraktProgressService @Inject constructor(
     private val episodeProgressCacheTtlMs = 5 * 60_000L
     private val episodeProgressFetchThrottleMs = 15_000L
     private val optimisticTtlMs = 3 * 60_000L
+    private val initialMetadataHydrationDelayMs = 3_000L
     private val maxRecentEpisodeHistoryEntries = 300
     private val metadataHydrationLimit = 110
     private val metadataFetchSemaphore = Semaphore(5)
@@ -180,6 +223,13 @@ class TraktProgressService @Inject constructor(
     private var continueWatchingWindowDays: Int = TraktSettingsDataStore.DEFAULT_CONTINUE_WATCHING_DAYS_CAP
 
     init {
+        scope.launch {
+            profileManager.activeProfileId
+                .collectLatest {
+                    resetProfileScopedState()
+                    refreshSignals.tryEmit(Unit)
+                }
+        }
         scope.launch {
             traktSettingsDataStore.continueWatchingDaysCap.collectLatest { days ->
                 continueWatchingWindowDays = days
@@ -201,6 +251,58 @@ class TraktProgressService @Inject constructor(
 
     private fun isAllHistoryWindow(): Boolean {
         return continueWatchingWindowDays == TraktSettingsDataStore.CONTINUE_WATCHING_DAYS_CAP_ALL
+    }
+
+    private suspend fun resetProfileScopedState() {
+        remoteProgress.value = emptyList()
+        optimisticProgress.value = emptyMap()
+        metadataState.value = emptyMap()
+        watchedMoviesState.value = emptySet()
+        watchedShowSeedsState.value = emptyList()
+        hiddenProgressShowIds.value = emptySet()
+        episodeProgressState.value = emptyMap()
+        hasLoadedRemoteProgress.value = false
+        watchedShowEpisodesMap = emptyMap()
+        showIdToTraktPathId = emptyMap()
+        hiddenProgressShowsLoadedAtMs = 0L
+        forceRefreshUntilMs = 0L
+        watchedMoviesUpdatedAtMs = 0L
+        watchedMoviesLastAttemptAtMs = 0L
+        hasLoadedWatchedMovies = false
+        watchedMoviesStale = true
+        watchedShowSeedsUpdatedAtMs = 0L
+        watchedShowSeedsLastAttemptAtMs = 0L
+        hasLoadedWatchedShowSeeds = false
+        watchedShowSeedsStale = true
+        lastFastSyncRequestMs = 0L
+        lastKnownActivityFingerprint = null
+        lastKnownMoviesWatchedAt = null
+        lastKnownEpisodeActivityFingerprint = null
+        lastManualRefreshSignalMs = 0L
+        metadataWarmupScheduled = false
+        refreshIntervalMs = baseRefreshIntervalMs
+        consecutiveRefreshFailures = 0
+        episodeProgressActivityVersion.set(0L)
+
+        cacheMutex.withLock {
+            episodeVideoIdCache.clear()
+            cachedMoviesPlayback = null
+            cachedEpisodesPlayback = null
+            cachedUserStats = null
+        }
+        metadataMutex.withLock {
+            inFlightMetadataKeys.clear()
+        }
+        watchedMoviesMutex.withLock {
+            // No-op lock boundary for watched-movie fetch state reset above.
+        }
+        watchedShowSeedsMutex.withLock {
+            // No-op lock boundary for watched-show fetch state reset above.
+        }
+        episodeProgressMutex.withLock {
+            inFlightEpisodeProgressKeys.clear()
+            episodeProgressLastAttemptAtMs.clear()
+        }
     }
 
     private fun recentWatchWindowMs(): Long? {
@@ -260,8 +362,7 @@ class TraktProgressService @Inject constructor(
 
         val optimistic = progress.copy(
             progressPercent = derivedPercent,
-            source = WatchProgress.SOURCE_TRAKT_PLAYBACK,
-            lastWatched = now
+            source = WatchProgress.SOURCE_TRAKT_PLAYBACK
         )
 
         optimisticProgress.update { current ->
@@ -298,8 +399,9 @@ class TraktProgressService @Inject constructor(
             remoteProgress,
             optimisticProgress,
             metadataState,
-            hasLoadedRemoteProgress
-        ) { remote, optimistic, metadata, loaded ->
+            hasLoadedRemoteProgress,
+            hiddenProgressShowIds
+        ) { remote, optimistic, metadata, loaded, hiddenIds ->
             val now = System.currentTimeMillis()
             val validOptimistic = optimistic
                 .filterValues { it.expiresAtMs > now }
@@ -313,9 +415,11 @@ class TraktProgressService @Inject constructor(
             val mergedByKey = linkedMapOf<String, WatchProgress>()
             remote.forEach { mergedByKey[progressKey(it)] = it }
             validOptimistic.forEach { (key, value) -> mergedByKey[key] = value }
-            mergedByKey.values
+            val result = mergedByKey.values
+                .filter { !isShowHiddenFromProgress(it.contentId) }
                 .map { enrichWithMetadata(it, metadata) }
                 .sortedByDescending { it.lastWatched }
+            result
         }
             .filterNotNull()
             .distinctUntilChanged()
@@ -324,6 +428,21 @@ class TraktProgressService @Inject constructor(
     fun observeRemoteProgressLoaded(): Flow<Boolean> {
         return hasLoadedRemoteProgress
     }
+
+    fun observeWatchedShowSeeds(): Flow<List<WatchProgress>> {
+        return combine(
+            watchedShowSeedsState,
+            hiddenProgressShowIds
+        ) { seeds, _ ->
+            seeds.filter { !isShowHiddenFromProgress(it.contentId) }
+        }.distinctUntilChanged()
+    }
+
+    /**
+     * Returns the per-show watched episodes from the last /sync/watched/shows fetch.
+     * Keys are content IDs, values are sets of (season, episode) pairs.
+     */
+    fun getWatchedShowEpisodes(): Map<String, Set<Pair<Int, Int>>> = watchedShowEpisodesMap
 
     fun observeEpisodeProgress(contentId: String): Flow<Map<Pair<Int, Int>, WatchProgress>> {
         val cacheKey = canonicalLookupKey(contentId)
@@ -346,6 +465,18 @@ class TraktProgressService @Inject constructor(
                 }
             merged as Map<Pair<Int, Int>, WatchProgress>
         }
+            .onStart {
+                scope.launch {
+                    ensureEpisodeProgressSnapshot(contentId = cacheKey, forceRefresh = false)
+                }
+            }
+            .distinctUntilChanged()
+    }
+
+    fun observeAiredEpisodes(contentId: String): Flow<List<Pair<Int, Int>>> {
+        val cacheKey = canonicalLookupKey(contentId)
+        return episodeProgressState
+            .map { state -> state[cacheKey]?.airedEpisodes.orEmpty() }
             .onStart {
                 scope.launch {
                     ensureEpisodeProgressSnapshot(contentId = cacheKey, forceRefresh = false)
@@ -402,7 +533,11 @@ class TraktProgressService @Inject constructor(
                 }
             }
             result as Set<String>
-        }.distinctUntilChanged()
+        }
+            .onStart {
+                scope.launch { getWatchedMoviesSnapshot(forceRefresh = false) }
+            }
+            .distinctUntilChanged()
     }
 
     suspend fun markAsWatched(
@@ -417,15 +552,30 @@ class TraktProgressService @Inject constructor(
         val body = buildHistoryAddRequest(progress, title, year)
             ?: throw IllegalStateException("Insufficient Trakt IDs to mark watched")
 
+        val isSeriesEpisode = isSeriesEpisodeProgress(progress)
+        val watchedShowSeedsSnapshot = if (isSeriesEpisode) {
+            snapshotWatchedShowSeeds()
+                .also { updateWatchedShowSeedOptimistically(progress) }
+        } else {
+            null
+        }
+
         Log.d(TAG, "markAsWatched REQUEST: shows=${body.shows?.map { show ->
             "ids=${show.ids} title=${show.title} year=${show.year} seasons=${show.seasons?.map { s ->
                 "number=${s.number} episodes=${s.episodes?.map { e -> "number=${e.number} watchedAt=${e.watchedAt}" }}"
             }}"
         }} movies=${body.movies?.map { m -> "ids=${m.ids} title=${m.title}" }}")
 
-        val response = traktAuthService.executeAuthorizedWriteRequest { authHeader ->
-            traktApi.addHistory(authHeader, body)
-        } ?: throw IllegalStateException("Trakt request failed")
+        val response = try {
+            traktAuthService.executeAuthorizedWriteRequest { authHeader ->
+                traktApi.addHistory(authHeader, body)
+            } ?: throw IllegalStateException("Trakt request failed")
+        } catch (error: Throwable) {
+            if (watchedShowSeedsSnapshot != null) {
+                restoreWatchedShowSeeds(watchedShowSeedsSnapshot)
+            }
+            throw error
+        }
 
         var responseBody = response.body()
         val initialFailure = !response.isSuccessful || hasHistoryAddNotFound(responseBody)
@@ -437,30 +587,40 @@ class TraktProgressService @Inject constructor(
             "shows=${responseBody?.notFound?.shows?.map { it.ids }} " +
             "episodes=${responseBody?.notFound?.episodes?.map { "s=${it.season} e=${it.number} ids=${it.ids}" }}]")
 
-        val isSeriesEpisode = isSeriesEpisodeProgress(progress)
         val shouldRetryRemap = isSeriesEpisode && (
             !response.isSuccessful ||
                 hasHistoryAddNotFound(responseBody) ||
                 !hasSuccessfulHistoryAdd(responseBody)
-            )
+        )
         var recoveredByRemap = false
+        var effectiveProgress = progress
         if (shouldRetryRemap) {
-            val remappedResponse = attemptEpisodeRemapHistoryAdd(
+            val remappedAttempt = attemptEpisodeRemapHistoryAdd(
                 progress = progress,
                 title = title,
                 year = year
             )
-            if (remappedResponse != null) {
-                responseBody = remappedResponse.body()
-                effectiveResponseCode = remappedResponse.code()
+            if (remappedAttempt != null) {
+                responseBody = remappedAttempt.response.body()
+                effectiveResponseCode = remappedAttempt.response.code()
                 recoveredByRemap =
-                    remappedResponse.isSuccessful &&
+                    remappedAttempt.response.isSuccessful &&
                     !hasHistoryAddNotFound(responseBody) &&
                     hasSuccessfulHistoryAdd(responseBody)
+                if (recoveredByRemap && remappedAttempt.remappedEpisode != null) {
+                    effectiveProgress = progress.copy(
+                        season = remappedAttempt.remappedEpisode.season,
+                        episode = remappedAttempt.remappedEpisode.episode,
+                        videoId = remappedAttempt.remappedEpisode.videoId ?: progress.videoId
+                    )
+                }
             }
         }
 
         if (initialFailure && !recoveredByRemap) {
+            if (watchedShowSeedsSnapshot != null) {
+                restoreWatchedShowSeeds(watchedShowSeedsSnapshot)
+            }
             throw IllegalStateException("Failed to mark watched on Trakt ($effectiveResponseCode)")
         }
         if (!hasSuccessfulHistoryAdd(responseBody)) {
@@ -473,7 +633,40 @@ class TraktProgressService @Inject constructor(
             progress.contentType.equals("series", ignoreCase = true) ||
             progress.contentType.equals("tv", ignoreCase = true)
         ) {
-            invalidateEpisodeProgressCache(progress.contentId)
+            // Optimistically add the episode to the cache instead of invalidating
+            // the entire series cache (which causes all episodes to briefly appear
+            // unwatched until the next Trakt fetch completes).
+            val cacheKey = canonicalLookupKey(effectiveProgress.contentId.trim())
+            val season = effectiveProgress.season
+            val episode = effectiveProgress.episode
+            if (season != null && episode != null) {
+                val completedEntry = effectiveProgress.copy(
+                    position = effectiveProgress.duration.coerceAtLeast(1L),
+                    duration = effectiveProgress.duration.coerceAtLeast(1L),
+                    progressPercent = 100f,
+                    lastWatched = System.currentTimeMillis()
+                )
+                episodeProgressState.update { current ->
+                    val entry = current[cacheKey]
+                    if (entry != null) {
+                        val updatedProgress = entry.progress.toMutableMap().apply {
+                            this[season to episode] = completedEntry
+                        }
+                        current + (cacheKey to entry.copy(progress = updatedProgress))
+                    } else {
+                        // No cache entry yet — force a full fetch instead.
+                        current
+                    }
+                }
+                // If there was no cache entry, fall back to invalidation so the
+                // next observer emission triggers a fresh fetch.
+                if (episodeProgressState.value[cacheKey] == null) {
+                    invalidateEpisodeProgressCache(effectiveProgress.contentId)
+                }
+            } else {
+                invalidateEpisodeProgressCache(effectiveProgress.contentId)
+            }
+            updateWatchedShowSeedOptimistically(effectiveProgress)
         }
         refreshNow()
     }
@@ -595,7 +788,21 @@ class TraktProgressService @Inject constructor(
                 watched = false
             )
         } else {
-            invalidateEpisodeProgressCache(contentId)
+            // Optimistically remove just this episode from the cache instead of
+            // invalidating the entire series cache (which causes all episodes to
+            // briefly appear unwatched until the next Trakt fetch completes).
+            val cacheKey = canonicalLookupKey(contentId.trim())
+            if (season != null && episode != null) {
+                episodeProgressState.update { current ->
+                    val entry = current[cacheKey] ?: return@update current
+                    val updatedProgress = entry.progress.toMutableMap().apply {
+                        remove(season to episode)
+                    }
+                    current + (cacheKey to entry.copy(progress = updatedProgress))
+                }
+            } else {
+                invalidateEpisodeProgressCache(contentId)
+            }
         }
         refreshNow()
     }
@@ -641,17 +848,35 @@ class TraktProgressService @Inject constructor(
 
         val force = System.currentTimeMillis() < forceRefreshUntilMs
 
-        if (!force && !hasActivityChanged()) return
-
-        if (watchedMoviesStale && hasLoadedWatchedMovies) {
-            getWatchedMoviesSnapshot(forceRefresh = true)
+        if (!force && !hasActivityChanged()) {
+            return
         }
 
-        val snapshot = fetchAllProgressSnapshot(force = force)
-        remoteProgress.value = snapshot
-        hasLoadedRemoteProgress.value = true
-        reconcileOptimistic(snapshot)
-        hydrateMetadata(snapshot)
+        coroutineScope {
+            val hiddenDeferred = async { ensureHiddenProgressShows(force = force) }
+
+            if ((force || watchedMoviesStale) && hasLoadedWatchedMovies) {
+                launch { getWatchedMoviesSnapshot(forceRefresh = true) }
+            }
+
+            val needSeedsRefresh = force ||
+                (watchedShowSeedsStale && hasLoadedWatchedShowSeeds)
+            val progressDeferred = async { fetchAllProgressSnapshot(force = force) }
+            val seedsDeferred = if (needSeedsRefresh) {
+                async { getWatchedShowSeedsSnapshot(forceRefresh = true) }
+            } else null
+
+            // Wait for hidden shows before emitting progress so filters apply.
+            hiddenDeferred.await()
+
+            val snapshot = progressDeferred.await()
+            seedsDeferred?.await()
+
+            remoteProgress.value = snapshot
+            hasLoadedRemoteProgress.value = true
+            reconcileOptimistic(snapshot)
+            hydrateMetadata(snapshot)
+        }
     }
 
     private suspend fun hasActivityChanged(): Boolean {
@@ -673,6 +898,7 @@ class TraktProgressService @Inject constructor(
         ).joinToString("|")
         if (episodeFingerprint != lastKnownEpisodeActivityFingerprint) {
             lastKnownEpisodeActivityFingerprint = episodeFingerprint
+            watchedShowSeedsStale = true
             val version = episodeProgressActivityVersion.incrementAndGet()
             trace("last_activities: episodes changed -> show-progress cache version=$version")
         }
@@ -758,6 +984,7 @@ class TraktProgressService @Inject constructor(
                 current + (
                     cacheKey to EpisodeProgressCacheEntry(
                         progress = result.progress,
+                        airedEpisodes = result.airedEpisodes,
                         updatedAtMs = fetchedAt,
                         activityVersion = activityVersion,
                         hasCompletedSnapshot = result.hasCompletedSnapshot
@@ -786,6 +1013,65 @@ class TraktProgressService @Inject constructor(
         if (!entry.hasCompletedSnapshot) return false
         if (entry.activityVersion != episodeProgressActivityVersion.get()) return false
         return now - entry.updatedAtMs <= episodeProgressCacheTtlMs
+    }
+
+    /**
+     * Returns true if the given content ID belongs to a show hidden from
+     * Trakt's "progress watched" section (i.e. dropped/abandoned shows).
+     */
+    fun isShowHiddenFromProgress(contentId: String): Boolean {
+        val ids = hiddenProgressShowIds.value
+        if (ids.isEmpty()) return false
+        val canonical = canonicalLookupKey(contentId)
+        return ids.contains(contentId) || ids.contains(canonical)
+    }
+
+    private suspend fun ensureHiddenProgressShows(force: Boolean) {
+        val now = System.currentTimeMillis()
+        val ttlMs = 30 * 60_000L // refresh every 30 minutes
+        hiddenProgressShowsMutex.withLock {
+            if (!force && hiddenProgressShowsLoadedAtMs > 0 && now - hiddenProgressShowsLoadedAtMs < ttlMs) {
+                return
+            }
+        }
+        val ids = fetchHiddenProgressShowIds()
+        hiddenProgressShowsMutex.withLock {
+            hiddenProgressShowIds.value = ids
+            hiddenProgressShowsLoadedAtMs = System.currentTimeMillis()
+        }
+        trace("hidden-progress-shows refreshed: ${ids.size} shows")
+    }
+
+    private suspend fun fetchHiddenProgressShowIds(): Set<String> {
+        val allIds = mutableSetOf<String>()
+        var page = 1
+        val limit = 100
+        while (true) {
+            val response = traktAuthService.executeAuthorizedRequest { authHeader ->
+                traktApi.getHiddenItems(
+                    authorization = authHeader,
+                    section = "dropped",
+                    type = "show",
+                    page = page,
+                    limit = limit
+                )
+            } ?: break
+            if (!response.isSuccessful) {
+                Log.w(TAG, "fetchDroppedShows: failed code=${response.code()}")
+                break
+            }
+            val items = response.body().orEmpty()
+            if (items.isEmpty()) break
+            for (item in items) {
+                val ids = item.show?.ids ?: continue
+                ids.imdb?.takeIf { it.isNotBlank() }?.let { allIds.add(it) }
+                ids.tmdb?.let { allIds.add("tmdb:$it") }
+                ids.trakt?.let { allIds.add("trakt:$it") }
+            }
+            if (items.size < limit) break
+            page++
+        }
+        return allIds
     }
 
     private suspend fun getWatchedMoviesSnapshot(forceRefresh: Boolean): Set<String> {
@@ -835,6 +1121,224 @@ class TraktProgressService @Inject constructor(
         }
     }
 
+    private suspend fun getWatchedShowSeedsSnapshot(forceRefresh: Boolean): List<WatchProgress> {
+        val now = System.currentTimeMillis()
+        return watchedShowSeedsMutex.withLock {
+            val hasFreshCache = hasLoadedWatchedShowSeeds &&
+                !watchedShowSeedsStale &&
+                now - watchedShowSeedsUpdatedAtMs <= watchedMoviesCacheTtlMs
+            if (!forceRefresh && hasFreshCache) {
+                trace("watched-shows cache hit: size=${watchedShowSeedsState.value.size}")
+                return@withLock watchedShowSeedsState.value
+            }
+            if (!forceRefresh && now - watchedShowSeedsLastAttemptAtMs < watchedMoviesFetchThrottleMs) {
+                trace("watched-shows fetch throttled: ${now - watchedShowSeedsLastAttemptAtMs}ms since last attempt")
+                return@withLock watchedShowSeedsState.value
+            }
+
+            watchedShowSeedsLastAttemptAtMs = now
+            trace("watched-shows fetch: requesting /sync/watched/shows")
+            val response = traktAuthService.executeAuthorizedRequest { authHeader ->
+                traktApi.getWatchedShows(
+                    authorization = authHeader
+                )
+            } ?: run {
+                trace("watched-shows fetch: request returned null (network/auth failure)")
+                return@withLock watchedShowSeedsState.value
+            }
+
+            if (!response.isSuccessful) {
+                trace("watched-shows fetch: non-success code=${response.code()}")
+                return@withLock watchedShowSeedsState.value
+            }
+
+            val items = response.body().orEmpty()
+            val watchedShowSeeds = items
+                .mapNotNull(::mapWatchedShowSeed)
+                .sortedByDescending { it.lastWatched }
+
+            // Build per-show watched episodes map from the same response.
+            // Store under ALL available IDs (IMDB, TMDB, Trakt) so badge evaluation
+            // matches regardless of which ID the catalog or addon uses.
+            val episodesMap = mutableMapOf<String, MutableSet<Pair<Int, Int>>>()
+            val idLookup = mutableMapOf<String, String>()
+            items.forEach { item ->
+                val show = item.show ?: return@forEach
+                val ids = show.ids ?: return@forEach
+                val keys = buildList {
+                    ids.imdb?.takeIf { it.isNotBlank() }?.let { add(it) }
+                    ids.tmdb?.let { add("tmdb:$it") }
+                    ids.trakt?.let { add("trakt:$it") }
+                }
+                if (keys.isEmpty()) return@forEach
+                // Resolve a Trakt-accepted path ID: prefer slug, then trakt numeric
+                val traktAccepted = ids.slug?.takeIf { it.isNotBlank() }
+                    ?: ids.trakt?.toString()
+                if (traktAccepted != null) {
+                    keys.forEach { key -> idLookup[key] = traktAccepted }
+                }
+                val episodes = mutableSetOf<Pair<Int, Int>>()
+                item.seasons.orEmpty()
+                    .filter { (it.number ?: 0) > 0 }
+                    .forEach { season ->
+                        val seasonNumber = season.number ?: return@forEach
+                        season.episodes.orEmpty()
+                            .filter { (it.number ?: 0) > 0 && (it.plays ?: 1) > 0 }
+                            .forEach { episode ->
+                                val episodeNumber = episode.number ?: return@forEach
+                                episodes.add(seasonNumber to episodeNumber)
+                            }
+                    }
+                if (episodes.isNotEmpty()) {
+                    keys.forEach { key ->
+                        episodesMap.getOrPut(key) { mutableSetOf() }.addAll(episodes)
+                    }
+                }
+            }
+            watchedShowEpisodesMap = episodesMap
+            showIdToTraktPathId = idLookup
+
+            watchedShowSeedsState.value = watchedShowSeeds
+            watchedShowSeedsUpdatedAtMs = System.currentTimeMillis()
+            hasLoadedWatchedShowSeeds = true
+            watchedShowSeedsStale = false
+            trace("watched-shows cache refreshed: size=${watchedShowSeeds.size}")
+            watchedShowSeeds
+        }
+    }
+
+    private fun mapWatchedShowSeed(item: TraktWatchedShowItemDto): WatchProgress? {
+        val show = item.show ?: return null
+        val contentId = normalizeContentId(show.ids)
+        if (contentId.isBlank()) return null
+
+        val furthestEpisode = item.seasons.orEmpty()
+            .asSequence()
+            .filter { season -> (season.number ?: 0) > 0 }
+            .flatMap { season ->
+                val seasonNumber = season.number ?: return@flatMap emptySequence()
+                season.episodes.orEmpty()
+                    .asSequence()
+                    .filter { episode -> (episode.number ?: 0) > 0 && (episode.plays ?: 1) > 0 }
+                    .mapNotNull { episode ->
+                        val episodeNumber = episode.number ?: return@mapNotNull null
+                        Triple(
+                            seasonNumber,
+                            episodeNumber,
+                            parseIsoToMillis(episode.lastWatchedAt)
+                        )
+                    }
+            }
+            .maxWithOrNull(
+                compareBy<Triple<Int, Int, Long>>(
+                    { it.first },
+                    { it.second },
+                    { it.third }
+                )
+            ) ?: return null
+
+        val season = furthestEpisode.first
+        val episode = furthestEpisode.second
+        val lastWatched = furthestEpisode.third.takeIf { it > 0L }
+            ?: parseIsoToMillis(item.lastWatchedAt)
+
+        return WatchProgress(
+            contentId = contentId,
+            contentType = "series",
+            name = show.title ?: contentId,
+            poster = null,
+            backdrop = null,
+            logo = null,
+            videoId = buildLightweightEpisodeVideoId(contentId, season, episode),
+            season = season,
+            episode = episode,
+            episodeTitle = null,
+            position = 1L,
+            duration = 1L,
+            lastWatched = lastWatched,
+            progressPercent = 100f,
+            source = WatchProgress.SOURCE_TRAKT_SHOW_PROGRESS,
+            traktShowId = show.ids?.trakt
+        )
+    }
+
+    private fun updateWatchedShowSeedOptimistically(progress: WatchProgress) {
+        if (!isSeriesEpisodeProgress(progress)) return
+        val season = progress.season ?: return
+        val episode = progress.episode ?: return
+        val contentId = canonicalLookupKey(progress.contentId)
+        if (contentId.isBlank()) return
+
+        val now = System.currentTimeMillis()
+        val candidate = WatchProgress(
+            contentId = contentId,
+            contentType = "series",
+            name = progress.name.takeIf { it.isNotBlank() } ?: contentId,
+            poster = progress.poster,
+            backdrop = progress.backdrop,
+            logo = progress.logo,
+            videoId = progress.videoId.takeIf { it.isNotBlank() }
+                ?: buildLightweightEpisodeVideoId(contentId, season, episode),
+            season = season,
+            episode = episode,
+            episodeTitle = progress.episodeTitle,
+            position = 1L,
+            duration = 1L,
+            lastWatched = progress.lastWatched.takeIf { it > 0L } ?: now,
+            progressPercent = 100f,
+            source = WatchProgress.SOURCE_TRAKT_SHOW_PROGRESS,
+            traktShowId = progress.traktShowId,
+            traktEpisodeId = progress.traktEpisodeId
+        )
+
+        watchedShowSeedsState.update { current ->
+            val updated = current.toMutableList()
+            val existingIndex = updated.indexOfFirst { canonicalLookupKey(it.contentId) == contentId }
+            if (existingIndex >= 0) {
+                val existing = updated[existingIndex]
+                val shouldReplace =
+                    (candidate.season ?: -1) > (existing.season ?: -1) ||
+                        (
+                            candidate.season == existing.season &&
+                                (
+                                    (candidate.episode ?: -1) > (existing.episode ?: -1) ||
+                                        (
+                                            candidate.episode == existing.episode &&
+                                                candidate.lastWatched >= existing.lastWatched
+                                            )
+                                    )
+                            )
+                if (!shouldReplace) {
+                    return@update current
+                }
+                updated[existingIndex] = candidate
+            } else {
+                updated.add(candidate)
+            }
+            updated.sortedByDescending { it.lastWatched }
+        }
+        watchedShowSeedsUpdatedAtMs = now
+        hasLoadedWatchedShowSeeds = true
+        watchedShowSeedsStale = true
+        trace("watched-shows optimistic update: contentId=$contentId s=$season e=$episode")
+    }
+
+    private fun snapshotWatchedShowSeeds(): WatchedShowSeedsSnapshot {
+        return WatchedShowSeedsSnapshot(
+            seeds = watchedShowSeedsState.value,
+            updatedAtMs = watchedShowSeedsUpdatedAtMs,
+            hasLoaded = hasLoadedWatchedShowSeeds,
+            stale = watchedShowSeedsStale
+        )
+    }
+
+    private fun restoreWatchedShowSeeds(snapshot: WatchedShowSeedsSnapshot) {
+        watchedShowSeedsState.value = snapshot.seeds
+        watchedShowSeedsUpdatedAtMs = snapshot.updatedAtMs
+        hasLoadedWatchedShowSeeds = snapshot.hasLoaded
+        watchedShowSeedsStale = snapshot.stale
+    }
+
     private suspend fun setMovieWatchedInCache(contentId: String, watched: Boolean) {
         val rawKey = contentId.trim()
         if (rawKey.isBlank()) return
@@ -861,6 +1365,56 @@ class TraktProgressService @Inject constructor(
         return if (canonical.isNotBlank()) canonical else contentId.trim()
     }
 
+    /**
+     * Resolves a content ID to a format accepted by Trakt path endpoints.
+     * Trakt path segments accept: IMDB ID, Trakt numeric ID, or Trakt slug.
+     * They do NOT accept tmdb:X format. When the content ID is tmdb-only,
+     * we use /search/tmdb/{id} to resolve it to a Trakt slug.
+     */
+    private suspend fun resolveToTraktAcceptedId(contentId: String): String {
+        val parsed = parseContentIds(contentId)
+        // IMDB ID - accepted directly
+        if (!parsed.imdb.isNullOrBlank()) return parsed.imdb
+        // Trakt numeric ID - accepted directly
+        if (parsed.trakt != null) return parsed.trakt.toString()
+        // TMDB ID - need to resolve
+        if (parsed.tmdb != null) {
+            // 1) Check local watched shows cache (instant, no network)
+            val fromWatchedShows = showIdToTraktPathId["tmdb:${parsed.tmdb}"]
+            if (fromWatchedShows != null) return fromWatchedShows
+            // 2) Try TMDB → IMDB lookup (cached, may hit network on first call)
+            try {
+                val imdbFromTmdb = tmdbService.tmdbToImdb(parsed.tmdb, "series")
+                    ?: tmdbService.tmdbToImdb(parsed.tmdb, "movie")
+                if (!imdbFromTmdb.isNullOrBlank()) return imdbFromTmdb
+            } catch (_: Exception) { }
+            // 3) Try Trakt search API (network call)
+            try {
+                val response = traktAuthService.executeAuthorizedRequest { authHeader ->
+                    traktApi.searchById(
+                        authorization = authHeader,
+                        idType = "tmdb",
+                        id = parsed.tmdb.toString(),
+                        type = "show"
+                    )
+                }
+                val result = response?.body()?.firstOrNull()
+                val slug = result?.show?.ids?.slug?.takeIf { it.isNotBlank() }
+                val traktId = result?.show?.ids?.trakt
+                val imdbId = result?.show?.ids?.imdb?.takeIf { it.isNotBlank() }
+                val resolved = imdbId ?: slug ?: traktId?.toString()
+                if (resolved != null) return resolved
+            } catch (_: Exception) { }
+            // Last resort - try tmdb:X anyway
+            return "tmdb:${parsed.tmdb}"
+        }
+        return contentId
+    }
+
+    private fun buildLightweightEpisodeVideoId(contentId: String, season: Int, episode: Int): String {
+        return "$contentId:$season:$episode"
+    }
+
     private fun watchedMovieLookupKeys(ids: TraktIdsDto?): List<String> {
         if (ids == null) return emptyList()
         return buildList {
@@ -872,28 +1426,78 @@ class TraktProgressService @Inject constructor(
     }
 
     private suspend fun fetchAllProgressSnapshot(force: Boolean = false): List<WatchProgress> {
-        val recentCompletedEpisodes = fetchRecentEpisodeHistorySnapshot()
         val playbackStartAt = recentWatchWindowMs()?.let { windowMs ->
             toTraktUtcDateTime(System.currentTimeMillis() - windowMs)
         }
-        val inProgressMovies = getPlayback("movies", force = force, startAt = playbackStartAt).mapNotNull { mapPlaybackMovie(it) }
-        val inProgressEpisodes = getPlayback("episodes", force = force, startAt = playbackStartAt).mapNotNull { mapPlaybackEpisode(it) }
+
+        val (recentCompletedEpisodes, inProgressMovies, inProgressEpisodes) = coroutineScope {
+            val historyDeferred = async { fetchRecentEpisodeHistorySnapshot() }
+            val moviesDeferred = async {
+                val playback = getPlayback("movies", force = force, startAt = playbackStartAt)
+                playback.map { item -> async { mapPlaybackMovie(item) } }
+                    .awaitAll()
+                    .filterNotNull()
+            }
+            val episodesDeferred = async {
+                val playback = getPlayback("episodes", force = force, startAt = playbackStartAt)
+                playback.map { item -> async { mapPlaybackEpisode(item, applyAddonRemap = true) } }
+                    .awaitAll()
+                    .filterNotNull()
+            }
+            val history = historyDeferred.await()
+            val movies = moviesDeferred.await()
+            val episodes = episodesDeferred.await()
+            Triple(history, movies, episodes)
+        }
+
+        inProgressEpisodes.take(5).forEach { p ->
+        }
+        recentCompletedEpisodes.take(5).forEach { p ->
+        }
 
         val mergedByKey = linkedMapOf<String, WatchProgress>()
 
+        // Completed episodes first (from history).
         recentCompletedEpisodes
             .sortedByDescending { it.lastWatched }
             .forEach { progress ->
                 mergedByKey[progressKey(progress)] = progress
             }
 
+        // In-progress items override completed entries for the same episode.
+        // This ensures that a partially-watched episode shows as "Resume"
+        // rather than "Next Up" even if it also appears in watched history
+        // (e.g. user rewatching, or scrobble/stop saved playback progress
+        // after the history entry was created).
         (inProgressMovies + inProgressEpisodes)
             .sortedByDescending { it.lastWatched }
             .forEach { progress ->
-                mergedByKey[progressKey(progress)] = progress
+                val key = progressKey(progress)
+                val existing = mergedByKey[key]
+                if (existing == null || progress.isInProgress()) {
+                    mergedByKey[key] = progress
+                }
             }
 
-        return mergedByKey.values.sortedByDescending { it.lastWatched }
+        val completedEpisodeKeys = recentCompletedEpisodes
+            .filter { it.season != null && it.episode != null }
+            .map { "${it.contentId}_s${it.season}e${it.episode}" }
+            .toSet()
+        // Remove playback entries that are completed (not in-progress) and
+        // already covered by a history entry — avoids duplicates.
+        mergedByKey.entries.removeAll { (key, progress) ->
+            progress.source == WatchProgress.SOURCE_TRAKT_PLAYBACK &&
+                !progress.isInProgress() &&
+                progress.season != null && progress.episode != null &&
+                "${progress.contentId}_s${progress.season}e${progress.episode}" in completedEpisodeKeys
+        }
+
+        val finalSnapshot = mergedByKey.values.sortedByDescending { it.lastWatched }
+        finalSnapshot.take(8).forEach { p ->
+            val tag = if (p.source == WatchProgress.SOURCE_TRAKT_PLAYBACK) "PB" else "HI"
+            val pct = p.progressPercentage.times(100).toInt()
+        }
+        return finalSnapshot
     }
 
     private suspend fun fetchRecentEpisodeHistorySnapshot(): List<WatchProgress> {
@@ -919,7 +1523,9 @@ class TraktProgressService @Inject constructor(
             val items = response.body().orEmpty()
             if (items.isEmpty()) break
 
+            // Filter items first (cheap), then map in parallel (expensive).
             var shouldStop = false
+            val candidateItems = mutableListOf<TraktUserEpisodeHistoryItemDto>()
             for (item in items) {
                 val contentId = normalizeContentId(item.show?.ids)
                 if (contentId.isBlank()) continue
@@ -931,11 +1537,22 @@ class TraktProgressService @Inject constructor(
                     continue
                 }
 
-                val mapped = mapEpisodeHistoryItem(item) ?: continue
-                results.putIfAbsent(mapped.contentId, mapped)
-                if (results.size >= maxRecentEpisodeHistoryEntries) {
+                candidateItems.add(item)
+                if (results.size + candidateItems.size >= maxRecentEpisodeHistoryEntries) {
                     shouldStop = true
-                    continue
+                    break
+                }
+            }
+
+            // Map candidates in parallel to speed up videoId resolution.
+            if (candidateItems.isNotEmpty()) {
+                val mapped = coroutineScope {
+                    candidateItems.map { item ->
+                        async { mapEpisodeHistoryItem(item, applyAddonRemap = true) }
+                    }.awaitAll()
+                }
+                mapped.filterNotNull().forEach { progress ->
+                    results.putIfAbsent(progress.contentId, progress)
                 }
             }
 
@@ -947,7 +1564,10 @@ class TraktProgressService @Inject constructor(
         return results.values.toList()
     }
 
-    private suspend fun mapEpisodeHistoryItem(item: TraktUserEpisodeHistoryItemDto): WatchProgress? {
+    private suspend fun mapEpisodeHistoryItem(
+        item: TraktUserEpisodeHistoryItemDto,
+        applyAddonRemap: Boolean
+    ): WatchProgress? {
         val show = item.show ?: return null
         val episode = item.episode ?: return null
         val season = episode.season ?: return null
@@ -957,12 +1577,16 @@ class TraktProgressService @Inject constructor(
         if (contentId.isBlank()) return null
 
         val lastWatched = parseIsoToMillis(item.watchedAt)
-        val resolvedEpisode = resolveAddonEpisodeProgress(
-            contentId = contentId,
-            season = season,
-            episode = number,
-            episodeTitle = episode.title
-        )
+        val resolvedEpisode = if (applyAddonRemap) {
+            resolveAddonEpisodeProgress(
+                contentId = contentId,
+                season = season,
+                episode = number,
+                episodeTitle = episode.title
+            )
+        } else {
+            null
+        }
         val resolvedSeason = resolvedEpisode?.season ?: season
         val resolvedNumber = resolvedEpisode?.episode ?: number
         val videoId = resolveEpisodeVideoId(contentId, resolvedSeason, resolvedNumber)
@@ -991,8 +1615,9 @@ class TraktProgressService @Inject constructor(
     private suspend fun fetchEpisodeProgressSnapshot(
         contentId: String
     ): EpisodeProgressFetchResult {
-        val pathId = toTraktPathId(contentId)
+        val pathId = resolveToTraktAcceptedId(contentId)
         val completed = mutableMapOf<Pair<Int, Int>, WatchProgress>()
+        var airedEpisodes = emptyList<Pair<Int, Int>>()
         var hasCompletedSnapshot = false
 
         val response = traktAuthService.executeAuthorizedRequest { authHeader ->
@@ -1004,7 +1629,21 @@ class TraktProgressService @Inject constructor(
 
         if (response?.isSuccessful == true) {
             hasCompletedSnapshot = true
-            val seasons = response.body()?.seasons.orEmpty()
+            val responseBody = response.body()
+            val seasons = responseBody?.seasons.orEmpty()
+            airedEpisodes = seasons
+                .asSequence()
+                .filter { (it.number ?: 0) > 0 }
+                .sortedBy { it.number }
+                .flatMap { season ->
+                    val seasonNumber = season.number ?: return@flatMap emptySequence()
+                    season.episodes.orEmpty().asSequence()
+                        .mapNotNull { episode ->
+                            val episodeNumber = episode.number ?: return@mapNotNull null
+                            seasonNumber to episodeNumber
+                        }
+                }
+                .toList()
             for (season in seasons) {
                 mapSeasonProgress(contentId, season).forEach { progress ->
                     val seasonNum = progress.season ?: return@forEach
@@ -1017,7 +1656,7 @@ class TraktProgressService @Inject constructor(
         val inProgress = getPlayback(
             type = "episodes"
         )
-            .mapNotNull { mapPlaybackEpisode(it) }
+            .mapNotNull { mapPlaybackEpisode(it, applyAddonRemap = true) }
             .filter { it.contentId == contentId }
 
         inProgress.forEach { progress ->
@@ -1028,6 +1667,7 @@ class TraktProgressService @Inject constructor(
 
         return EpisodeProgressFetchResult(
             progress = completed,
+            airedEpisodes = airedEpisodes,
             hasCompletedSnapshot = hasCompletedSnapshot
         )
     }
@@ -1100,7 +1740,10 @@ class TraktProgressService @Inject constructor(
         )
     }
 
-    private suspend fun mapPlaybackEpisode(item: TraktPlaybackItemDto): WatchProgress? {
+    private suspend fun mapPlaybackEpisode(
+        item: TraktPlaybackItemDto,
+        applyAddonRemap: Boolean
+    ): WatchProgress? {
         val show = item.show ?: return null
         val episode = item.episode ?: return null
         val season = episode.season ?: return null
@@ -1108,12 +1751,16 @@ class TraktProgressService @Inject constructor(
 
         val contentId = normalizeContentId(show.ids)
         if (contentId.isBlank()) return null
-        val resolvedEpisode = resolveAddonEpisodeProgress(
-            contentId = contentId,
-            season = season,
-            episode = number,
-            episodeTitle = episode.title
-        )
+        val resolvedEpisode = if (applyAddonRemap) {
+            resolveAddonEpisodeProgress(
+                contentId = contentId,
+                season = season,
+                episode = number,
+                episodeTitle = episode.title
+            )
+        } else {
+            null
+        }
         val resolvedSeason = resolvedEpisode?.season ?: season
         val resolvedNumber = resolvedEpisode?.episode ?: number
         val videoId = resolveEpisodeVideoId(contentId, resolvedSeason, resolvedNumber)
@@ -1183,7 +1830,7 @@ class TraktProgressService @Inject constructor(
         episode: Int,
         episodeTitle: String?
     ): EpisodeMappingEntry? {
-        return runCatching {
+        return try {
             traktEpisodeMappingService.resolveAddonEpisodeMapping(
                 contentId = contentId,
                 contentType = "series",
@@ -1191,7 +1838,7 @@ class TraktProgressService @Inject constructor(
                 episode = episode,
                 episodeTitle = episodeTitle
             )
-        }.getOrElse { error ->
+        } catch (error: Exception) {
             Log.w(
                 TAG,
                 "resolveAddonEpisodeProgress failed for $contentId s=$season e=$episode",
@@ -1209,28 +1856,18 @@ class TraktProgressService @Inject constructor(
         val key = "$contentId:$season:$episode"
         episodeVideoIdCache[key]?.let { return it }
 
-        val candidates = buildList {
-            add(contentId)
-            if (contentId.startsWith("tmdb:")) add(contentId.substringAfter(':'))
-            if (contentId.startsWith("trakt:")) add(contentId.substringAfter(':'))
-        }.distinct()
-
-        for (candidate in candidates) {
-            for (type in listOf("series", "tv")) {
-                val result = withTimeoutOrNull(2500) {
-                    metaRepository.getMetaFromAllAddons(type = type, id = candidate)
-                        .first { it !is NetworkResult.Loading }
-                } ?: continue
-
-                val meta = (result as? NetworkResult.Success)?.data ?: continue
-                val videoId = meta.videos.firstOrNull {
-                    it.season == season && it.episode == episode
-                }?.id
-
-                if (!videoId.isNullOrBlank()) {
-                    episodeVideoIdCache[key] = videoId
-                    return videoId
-                }
+        // Check if metadata is already cached (from a previous hydrateMetadata cycle).
+        // If so, resolve videoId from it without a network call.
+        val existingMeta = metadataState.value[contentId]
+        if (existingMeta != null) {
+            val episodeMeta = existingMeta.episodes.entries.firstOrNull {
+                it.key.first == season && it.key.second == episode
+            }
+            // Use the video ID pattern that matches addon meta structure
+            val videoId = episodeMeta?.let { "$contentId:${it.key.first}:${it.key.second}" }
+            if (videoId != null) {
+                episodeVideoIdCache[key] = videoId
+                return videoId
             }
         }
 
@@ -1260,6 +1897,94 @@ class TraktProgressService @Inject constructor(
             !notFound.shows.isNullOrEmpty() ||
             !notFound.seasons.isNullOrEmpty() ||
             !notFound.episodes.isNullOrEmpty()
+    }
+
+    /**
+     * Mark multiple episodes as watched on Trakt in a single API call.
+     * Groups episodes by show and sends one POST /sync/history request.
+     */
+    suspend fun markSeasonWatchedBatch(progressList: List<WatchProgress>) {
+        if (progressList.isEmpty()) return
+        val first = progressList.first()
+        val ids = resolveHistoryIds(first)
+        if (!ids.hasAnyId()) {
+            Log.w(TAG, "markSeasonWatchedBatch: no valid Trakt IDs for ${first.contentId}")
+            return
+        }
+        val watchedAt = toTraktUtcDateTime(System.currentTimeMillis())
+        val episodesBySeason = progressList
+            .filter { it.season != null && it.episode != null }
+            .groupBy { it.season!! }
+            .mapValues { (_, episodes) ->
+                episodes.map { ep ->
+                    TraktHistoryEpisodeAddDto(
+                        number = ep.episode,
+                        watchedAt = watchedAt
+                    )
+                }
+            }
+        val body = TraktHistoryAddRequestDto(
+            shows = listOf(
+                TraktHistoryShowAddDto(
+                    title = first.name.takeIf { it.isNotBlank() },
+                    year = null,
+                    ids = ids,
+                    seasons = episodesBySeason.map { (seasonNumber, episodes) ->
+                        TraktHistorySeasonAddDto(
+                            number = seasonNumber,
+                            episodes = episodes
+                        )
+                    }
+                )
+            )
+        )
+        Log.d(TAG, "markSeasonWatchedBatch: ${progressList.size} episodes in ${episodesBySeason.size} season(s)")
+        val response = traktAuthService.executeAuthorizedWriteRequest { authHeader ->
+            traktApi.addHistory(authHeader, body)
+        }
+        Log.d(TAG, "markSeasonWatchedBatch RESPONSE: code=${response?.code()} " +
+            "added=${response?.body()?.added}")
+        if (response?.isSuccessful != true) {
+            throw IllegalStateException("Trakt batch mark watched failed (${response?.code()})")
+        }
+        refreshNow()
+    }
+
+    /**
+     * Remove multiple episodes from Trakt history in a single API call.
+     */
+    suspend fun removeSeasonFromHistoryBatch(
+        contentId: String,
+        episodes: List<Pair<Int, Int>>
+    ) {
+        if (episodes.isEmpty()) return
+        val ids = toTraktIds(parseContentIds(contentId))
+        if (!ids.hasAnyId()) {
+            Log.w(TAG, "removeSeasonFromHistoryBatch: no valid Trakt IDs for $contentId")
+            return
+        }
+        val episodesBySeason = episodes.groupBy { it.first }
+        val body = TraktHistoryRemoveRequestDto(
+            shows = listOf(
+                TraktHistoryShowRemoveDto(
+                    ids = ids,
+                    seasons = episodesBySeason.map { (seasonNumber, eps) ->
+                        TraktHistorySeasonRemoveDto(
+                            number = seasonNumber,
+                            episodes = eps.map { (_, episodeNumber) ->
+                                TraktHistoryEpisodeRemoveDto(number = episodeNumber)
+                            }
+                        )
+                    }
+                )
+            )
+        )
+        Log.d(TAG, "removeSeasonFromHistoryBatch: ${episodes.size} episodes in ${episodesBySeason.size} season(s)")
+        val response = traktAuthService.executeAuthorizedWriteRequest { authHeader ->
+            traktApi.removeHistory(authHeader, body)
+        }
+        Log.d(TAG, "removeSeasonFromHistoryBatch RESPONSE: code=${response?.code()}")
+        refreshNow()
     }
 
     private fun buildHistoryAddRequest(
@@ -1325,7 +2050,7 @@ class TraktProgressService @Inject constructor(
         progress: WatchProgress,
         title: String?,
         year: Int?
-    ) = runCatching {
+    ): EpisodeHistoryAddAttempt? = runCatching {
         val remapped = resolveCanonicalEpisodeMapping(progress) ?: return@runCatching null
         val currentSeason = progress.season
         val currentEpisode = progress.episode
@@ -1361,7 +2086,10 @@ class TraktProgressService @Inject constructor(
                 "shows=${retryBody?.notFound?.shows?.map { it.ids }} " +
                 "episodes=${retryBody?.notFound?.episodes?.map { "s=${it.season} e=${it.number} ids=${it.ids}" }}]"
         )
-        retryResponse
+        EpisodeHistoryAddAttempt(
+            response = retryResponse,
+            remappedEpisode = remapped
+        )
     }.getOrElse { error ->
         Log.w(TAG, "markAsWatched: episode remap fallback failed", error)
         null
@@ -1440,7 +2168,27 @@ class TraktProgressService @Inject constructor(
         refreshSignals.tryEmit(Unit)
     }
 
+    private fun remainingMetadataWarmupDelayMs(): Long {
+        val elapsed = SystemClock.elapsedRealtime() - serviceStartedAtMs
+        return (initialMetadataHydrationDelayMs - elapsed).coerceAtLeast(0L)
+    }
+
+    private fun shouldDelayMetadataHydration(): Boolean {
+        val remainingDelayMs = remainingMetadataWarmupDelayMs()
+        if (remainingDelayMs <= 0L) return false
+        if (metadataWarmupScheduled) return true
+        metadataWarmupScheduled = true
+        scope.launch {
+            delay(remainingDelayMs)
+            metadataWarmupScheduled = false
+            hydrateMetadata(remoteProgress.value)
+        }
+        return true
+    }
+
     private fun hydrateMetadata(progressList: List<WatchProgress>) {
+        if (progressList.isEmpty()) return
+        if (shouldDelayMetadataHydration()) return
         val sorted = progressList.sortedByDescending { it.lastWatched }
         val uniqueByContent = linkedMapOf<String, WatchProgress>()
         sorted.forEach { progress ->

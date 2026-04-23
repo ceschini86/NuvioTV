@@ -38,6 +38,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.key
@@ -231,6 +232,12 @@ internal fun AddonFilterChips(
 
 
     val selectedIndex = if (selectedAddon == null) 0 else orderedNames.indexOf(selectedAddon) + 1
+    // Track the focused chip index to handle duplicate addon names correctly.
+    var focusedChipIndex by remember { mutableStateOf(selectedIndex.coerceAtLeast(0)) }
+    LaunchedEffect(selectedAddon, orderedNames) {
+        val idx = if (selectedAddon == null) 0 else (orderedNames.indexOf(selectedAddon) + 1).coerceAtLeast(0)
+        focusedChipIndex = idx
+    }
     LaunchedEffect(selectedAddon) {
         if (selectedIndex >= 0 && selectedIndex < focusRequesters.size) {
             try { focusRequesters[selectedIndex].requestFocus() } catch (_: Exception) {}
@@ -238,22 +245,35 @@ internal fun AddonFilterChips(
     }
 
     var chipRowHasFocus by remember { mutableStateOf(false) }
+    val lastKeyRepeatDispatchRef = remember { java.util.concurrent.atomic.AtomicLong(0L) }
 
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
         modifier = Modifier
+            .focusRestorer {
+                val idx = focusedChipIndex.coerceIn(0, focusRequesters.lastIndex)
+                focusRequesters[idx]
+            }
             .onFocusChanged { chipRowHasFocus = it.hasFocus }
             .onKeyEvent { event ->
                 if (event.nativeKeyEvent.action != android.view.KeyEvent.ACTION_DOWN) return@onKeyEvent false
+
+                // Throttle rapid key repeats (long-press)
+                if (event.nativeKeyEvent.repeatCount > 0) {
+                    val now = android.os.SystemClock.uptimeMillis()
+                    if (now - lastKeyRepeatDispatchRef.get() < 112L) return@onKeyEvent true
+                    lastKeyRepeatDispatchRef.set(now)
+                }
+
                 val allOptions = listOf<String?>(null) + orderedNames
-                val currentIdx = allOptions.indexOf(selectedAddon)
+                val currentIdx = focusedChipIndex.coerceIn(0, allOptions.lastIndex)
                 when (event.key) {
                     androidx.compose.ui.input.key.Key.DirectionLeft -> {
-                        if (currentIdx > 0) { onAddonSelected(allOptions[currentIdx - 1]); true } else false
+                        if (currentIdx > 0) { focusedChipIndex = currentIdx - 1; onAddonSelected(allOptions[currentIdx - 1]); true } else false
                     }
                     androidx.compose.ui.input.key.Key.DirectionRight -> {
-                        if (currentIdx < allOptions.lastIndex) { onAddonSelected(allOptions[currentIdx + 1]); true } else false
+                        if (currentIdx < allOptions.lastIndex) { focusedChipIndex = currentIdx + 1; onAddonSelected(allOptions[currentIdx + 1]); true } else false
                     }
                     else -> false
                 }
