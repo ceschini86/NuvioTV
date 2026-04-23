@@ -169,6 +169,8 @@ class HomeViewModel @Inject constructor(
     internal val cwEnrichedNextUpOverlay = Collections.synchronizedMap(mutableMapOf<String, NextUpInfo>())
     /** In-memory cache of enriched InProgress items per contentId+episode key. */
     internal val cwEnrichedInProgressOverlay = Collections.synchronizedMap(mutableMapOf<String, ContinueWatchingItem.InProgress>())
+    /** Bumped to force the CW pipeline to re-run (e.g. after cache clear). */
+    internal val cwPipelineRefreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0)
     internal val fullyWatchedSeriesIds get() = watchedSeriesStateHolder
     internal var tmdbEnrichFocusJob: Job? = null
     internal var pendingTmdbEnrichItemId: String? = null
@@ -249,6 +251,34 @@ class HomeViewModel @Inject constructor(
             delay(STARTUP_GRACE_PERIOD_MS)
             startupGracePeriodActive = false
         }
+
+        // Observe manual cache clear from Advanced settings.
+        viewModelScope.launch {
+            var lastSeen = cwEnrichmentCache.cacheCleared.value
+            cwEnrichmentCache.cacheCleared.collect { version ->
+                if (version != lastSeen) {
+                    lastSeen = version
+                    clearAllCwInMemoryCaches()
+                }
+            }
+        }
+    }
+
+    private fun clearAllCwInMemoryCaches() {
+        cwMetaCache.clear()
+        cwMetaNegativeCacheTimestamps.clear()
+        cwBadgeEpisodeCache.clear()
+        cwBadgeNextSeasonMs.clear()
+        cwTmdbIdCache.clear()
+        cwNextUpResolutionCache.clear()
+        cwNextUpNegativeCacheTimestamps.clear()
+        discoveredOlderNextUpItems.clear()
+        cwLastProcessedNextUpContentIds.clear()
+        cwEnrichedNextUpOverlay.clear()
+        cwEnrichedInProgressOverlay.clear()
+        _uiState.update { it.copy(continueWatchingItems = emptyList()) }
+        // Bump trigger so the pipeline's collectLatest restarts with fresh state.
+        cwPipelineRefreshTrigger.value++
     }
 
     internal fun remainingStartupGraceMs(nowMs: Long = SystemClock.elapsedRealtime()): Long {

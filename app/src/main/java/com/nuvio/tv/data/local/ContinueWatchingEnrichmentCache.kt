@@ -78,6 +78,10 @@ class ContinueWatchingEnrichmentCache @Inject constructor(
     private val gson = Gson()
     private val mutex = Mutex()
 
+    /** Incremented when cache is cleared; observers can collect to trigger refresh. */
+    private val _cacheCleared = kotlinx.coroutines.flow.MutableStateFlow(0)
+    val cacheCleared: kotlinx.coroutines.flow.StateFlow<Int> = _cacheCleared
+
     // --- Next Up snapshot cache ---
 
     private fun nextUpFile(): File {
@@ -144,6 +148,22 @@ class ContinueWatchingEnrichmentCache @Inject constructor(
                 Log.w(TAG, "Failed to write in-progress cache: ${e.message}")
             }
         }
+    }
+
+    /**
+     * Deletes all CW enrichment cache files for the active profile.
+     */
+    suspend fun clearAll() = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            try {
+                nextUpFile().delete()
+                inProgressFile().delete()
+                Log.d(TAG, "Cleared CW enrichment cache for profile ${profileManager.activeProfileId.value}")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to clear CW enrichment cache: ${e.message}")
+            }
+        }
+        _cacheCleared.value++
     }
 
 }

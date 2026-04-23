@@ -256,8 +256,9 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
             ) { daysCap, dismissedNextUp, showUnairedNextUp ->
                 Triple(daysCap, dismissedNextUp, showUnairedNextUp)
             },
-            watchedItemsPreferences.allItems.map { it.size }
-        ) { progressSnapshot, settingsSnapshot, watchedItemsSize ->
+            watchedItemsPreferences.allItems.map { it.size },
+            cwPipelineRefreshTrigger
+        ) { progressSnapshot, settingsSnapshot, watchedItemsSize, _ ->
             val (items, nextUpSeeds) = progressSnapshot
             val (daysCap, dismissedNextUp, showUnairedNextUp) = settingsSnapshot
             ContinueWatchingSettingsSnapshot(
