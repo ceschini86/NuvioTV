@@ -48,6 +48,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.animation.core.AnimationSpec
@@ -169,7 +170,8 @@ fun ContinueWatchingSection(
         LazyRow(
             modifier = Modifier
                 .fillMaxWidth()
-                .focusRestorer(restoreFocusRequester),
+                .focusRestorer(restoreFocusRequester)
+                .focusGroup(),
             contentPadding = PaddingValues(horizontal = 48.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             state = listState
@@ -190,7 +192,7 @@ fun ContinueWatchingSection(
                     else -> Modifier
                 }
 
-                ContinueWatchingCard(
+                    ContinueWatchingCard(
                     item = progress,
                     onClick = { onItemClick(progress) },
                     onLongPress = { optionsItem = progress },
