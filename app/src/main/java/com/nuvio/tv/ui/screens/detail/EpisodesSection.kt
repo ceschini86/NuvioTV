@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -143,7 +144,8 @@ fun SeasonTabs(
     LazyRow(
         modifier = Modifier
             .fillMaxWidth()
-            .focusRestorer(selectedTabFocusRequester),
+            .focusRestorer(selectedTabFocusRequester)
+            .focusGroup(),
         state = lazyListState,
         contentPadding = PaddingValues(horizontal = 48.dp, vertical = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
