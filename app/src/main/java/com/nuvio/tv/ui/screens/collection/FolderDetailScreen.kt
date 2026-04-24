@@ -99,6 +99,7 @@ fun FolderDetailScreen(
     }
 
     val enrichingItemId by viewModel.enrichingItemId.collectAsStateWithLifecycle()
+    val enrichedPreviews by viewModel.enrichedPreviews.collectAsStateWithLifecycle()
     val trailerPreviewUrls by viewModel.trailerPreviewUrls.collectAsStateWithLifecycle()
     val trailerPreviewAudioUrls by viewModel.trailerPreviewAudioUrls.collectAsStateWithLifecycle()
 
@@ -107,6 +108,7 @@ fun FolderDetailScreen(
             uiState = uiState,
             focusState = followLayoutFocusState,
             enrichingItemId = enrichingItemId,
+            enrichedPreviews = enrichedPreviews,
             onNavigateToDetail = onNavigateToDetail,
             onLoadMoreCatalog = viewModel::loadMoreForCatalog,
             onSaveFocusState = viewModel::saveFollowLayoutFocusState,
@@ -601,6 +603,7 @@ private fun FollowLayoutContent(
     uiState: FolderDetailUiState,
     focusState: HomeScreenFocusState,
     enrichingItemId: String? = null,
+    enrichedPreviews: Map<String, MetaPreview> = emptyMap(),
     onNavigateToDetail: (String, String, String) -> Unit,
     onLoadMoreCatalog: (String, String, String) -> Unit = { _, _, _ -> },
     onSaveFocusState: (Int, Int, Int, Int, Map<String, Int>) -> Unit,
@@ -671,6 +674,7 @@ private fun FollowLayoutContent(
             uiState = homeState,
             focusState = focusState,
             enrichingItemId = enrichingItemId,
+            enrichedPreviews = enrichedPreviews,
             trailerPreviewUrls = trailerPreviewUrls,
             trailerPreviewAudioUrls = trailerPreviewAudioUrls,
             onNavigateToDetail = onNavigateToDetail,

@@ -177,6 +177,8 @@ private fun ModernCatalogRowItem(
     onLongPress: () -> Unit,
     onBackdropInteraction: () -> Unit,
     onExpandedCatalogFocusKeyChange: (String?) -> Unit,
+    enrichedLogoUrl: String? = null,
+    enrichedBackdropUrl: String? = null,
     modifier: Modifier = Modifier
 ) {
     val focusKey = when (payload) {
@@ -262,6 +264,8 @@ private fun ModernCatalogRowItem(
         trailerPreviewUrl = trailerPreviewUrl,
         trailerPreviewAudioUrl = trailerPreviewAudioUrl,
         isWatched = isWatched,
+        enrichedLogoUrl = enrichedLogoUrl,
+        enrichedBackdropUrl = enrichedBackdropUrl,
         focusRequester = requester,
         onFocused = {
             focusEventId += 1
@@ -329,6 +333,7 @@ internal fun ModernRowSection(
     onCatalogItemLongPress: (MetaPreview, String) -> Unit,
     onItemFocus: (MetaPreview) -> Unit,
     onPreloadAdjacentItem: (MetaPreview) -> Unit,
+    enrichedPreviews: Map<String, MetaPreview> = emptyMap(),
     onCatalogSelectionFocused: (FocusedCatalogSelection) -> Unit,
     onNavigateToDetail: (String, String, String) -> Unit,
     onNavigateToFolderDetail: (String, String) -> Unit,
@@ -734,6 +739,8 @@ internal fun ModernRowSection(
                                 onLongPress = onLongPress,
                                 onBackdropInteraction = onBackdropInteraction,
                                 onExpandedCatalogFocusKeyChange = onExpandedCatalogFocusKeyChange,
+                                enrichedLogoUrl = (payload as? ModernPayload.Catalog)?.itemId?.let { enrichedPreviews[it]?.logo },
+                                enrichedBackdropUrl = (payload as? ModernPayload.Catalog)?.itemId?.let { enrichedPreviews[it]?.backdropUrl },
                                 modifier = verticalFocusModifier
                             )
                         }
@@ -761,6 +768,8 @@ private fun ModernCarouselCard(
     trailerPreviewUrl: String?,
     trailerPreviewAudioUrl: String?,
     isWatched: Boolean,
+    enrichedLogoUrl: String? = null,
+    enrichedBackdropUrl: String? = null,
     focusRequester: FocusRequester,
     onFocused: () -> Unit,
     onFocusStateChanged: (Boolean) -> Unit = {},
@@ -797,12 +806,18 @@ private fun ModernCarouselCard(
     if (frozenLogoUrl.value.isNullOrBlank() && !item.heroPreview.logo.isNullOrBlank()) {
         frozenLogoUrl.value = item.heroPreview.logo
     }
+    if (!useLandscapeOverlayTreatment && !enrichedLogoUrl.isNullOrBlank() && frozenLogoUrl.value != enrichedLogoUrl) {
+        frozenLogoUrl.value = enrichedLogoUrl
+    }
     val effectiveLogoUrl = frozenLogoUrl.value
     // Freeze the backdrop URL for landscape cards - prevents image reload when enrichment updates backdrop.
     val dataFrozenBackdrop = item.heroPreview.frozenBackdropUrl
     val frozenBackdropUrl = remember(item.key) { mutableStateOf(dataFrozenBackdrop ?: item.heroPreview.backdrop) }
     if (frozenBackdropUrl.value.isNullOrBlank() && !item.heroPreview.backdrop.isNullOrBlank()) {
         frozenBackdropUrl.value = item.heroPreview.backdrop
+    }
+    if (!useLandscapeOverlayTreatment && !enrichedBackdropUrl.isNullOrBlank() && frozenBackdropUrl.value != enrichedBackdropUrl) {
+        frozenBackdropUrl.value = enrichedBackdropUrl
     }
     val effectiveBackdropUrl = frozenBackdropUrl.value
     var isFocused by remember { mutableStateOf(false) }

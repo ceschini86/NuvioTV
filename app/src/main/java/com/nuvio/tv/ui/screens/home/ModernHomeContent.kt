@@ -953,6 +953,7 @@ fun ModernHomeContent(
                                 onCatalogItemLongPress = onCatalogItemLongPress,
                                 onItemFocus = onItemFocus,
                                 onPreloadAdjacentItem = onPreloadAdjacentItem,
+                                enrichedPreviews = enrichedPreviews,
                                 onCatalogSelectionFocused = remember(Unit) {
                                     { selection: FocusedCatalogSelection ->
                                         if (focusedCatalogSelection != selection) {
