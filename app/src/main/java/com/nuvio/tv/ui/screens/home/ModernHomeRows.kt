@@ -33,7 +33,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -75,10 +77,12 @@ import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import coil.compose.AsyncImage
-import coil.imageLoader
-import coil.memory.MemoryCache
-import coil.request.ImageRequest
+import coil3.compose.AsyncImage
+import coil3.imageLoader
+import coil3.memory.MemoryCache
+import coil3.request.ImageRequest
+import coil3.request.CachePolicy
+import coil3.request.crossfade
 import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.FocusedPosterTrailerPlaybackTarget
 import com.nuvio.tv.domain.model.MetaPreview
@@ -184,6 +188,8 @@ private fun ModernCatalogRowItem(
     onLongPress: () -> Unit,
     onBackdropInteraction: () -> Unit,
     onExpandedCatalogFocusKeyChange: (String?) -> Unit,
+    enrichedLogoUrl: String? = null,
+    enrichedBackdropUrl: String? = null,
     modifier: Modifier = Modifier
 ) {
     val focusKey = when (payload) {
@@ -269,6 +275,8 @@ private fun ModernCatalogRowItem(
         trailerPreviewUrl = trailerPreviewUrl,
         trailerPreviewAudioUrl = trailerPreviewAudioUrl,
         isWatched = isWatched,
+        enrichedLogoUrl = enrichedLogoUrl,
+        enrichedBackdropUrl = enrichedBackdropUrl,
         focusRequester = requester,
         onFocused = {
             focusEventId += 1
@@ -336,13 +344,13 @@ internal fun ModernRowSection(
     onCatalogItemLongPress: (MetaPreview, String) -> Unit,
     onItemFocus: (MetaPreview) -> Unit,
     onPreloadAdjacentItem: (MetaPreview) -> Unit,
+    enrichedPreviews: Map<String, MetaPreview> = emptyMap(),
     onCatalogSelectionFocused: (FocusedCatalogSelection) -> Unit,
     onNavigateToDetail: (String, String, String) -> Unit,
     onNavigateToFolderDetail: (String, String) -> Unit,
     onLoadMoreCatalog: (String, String, String) -> Unit,
     onBackdropInteraction: () -> Unit,
-    onExpandedCatalogFocusKeyChange: (String?) -> Unit,
-    onGetVerticalFocusRequester: (index: Int, isDown: Boolean) -> FocusRequester = { _, _ -> FocusRequester.Default }
+    onExpandedCatalogFocusKeyChange: (String?) -> Unit
 ) {
     val focusedItemByRow = uiCaches.focusedItemByRow
     val itemFocusRequesters = uiCaches.itemFocusRequesters
@@ -373,6 +381,19 @@ internal fun ModernRowSection(
                 prefetchStrategy = LazyListPrefetchStrategy(nestedPrefetchItemCount = 4)
             )
         }
+
+        // When fresh data prepends new items to a row the user hasn't
+        // scrolled, snap back to position 0 so the newest content is visible.
+        val firstItemKey = row.items.firstOrNull()?.key
+        LaunchedEffect(row.key, firstItemKey) {
+            if (firstItemKey == null) return@LaunchedEffect
+            val state = rowListState
+            // Only reset if the user hasn't scrolled at all.
+            if (state.firstVisibleItemIndex == 0 && state.firstVisibleItemScrollOffset == 0) {
+                state.scrollToItem(0)
+            }
+        }
+
         val isRowScrollingState = remember(rowListState) {
             derivedStateOf { rowListState.isScrollInProgress }
         }
@@ -620,9 +641,17 @@ internal fun ModernRowSection(
         }
 
         CompositionLocalProvider(LocalBringIntoViewSpec provides horizontalBringIntoViewSpec) {
+            val lastFocusedIdx = focusedItemByRow[rowKey] ?: 0
+            val restoreItemKey = row.items.getOrNull(
+                lastFocusedIdx.coerceIn(0, (row.items.size - 1).coerceAtLeast(0))
+            )?.key
+            val restoreFocusRequester = restoreItemKey?.let {
+                uiCaches.requesterFor(rowKey, it)
+            } ?: FocusRequester.Default
+
             LazyRow(
                 state = rowListState,
-                modifier = Modifier.focusRestorer().focusGroup(),
+                modifier = Modifier.focusRestorer(restoreFocusRequester).focusGroup(),
                 contentPadding = PaddingValues(horizontal = rowStartPadding),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -642,15 +671,7 @@ internal fun ModernRowSection(
                     val onFocused = remember(row.key, index, isContinueWatchingRow) {
                         { onRowItemFocused(row.key, index, isContinueWatchingRow) }
                     }
-                    val hasExpandedCard = expandedCatalogFocusKey != null
-                    val verticalFocusModifier = if (hasExpandedCard) {
-                        Modifier.focusProperties {
-                            up = onGetVerticalFocusRequester(index, false)
-                            down = onGetVerticalFocusRequester(index, true)
-                        }
-                    } else {
-                        Modifier
-                    }
+                    val isCwPayload = item.payload is ModernPayload.ContinueWatching
 
                     when (val payload = item.payload) {
                         is ModernPayload.ContinueWatching -> {
@@ -662,8 +683,7 @@ internal fun ModernRowSection(
                                 blurUnwatchedEpisodes = blurUnwatchedEpisodes,
                                 onFocused = onFocused,
                                 onContinueWatchingClick = onContinueWatchingClick,
-                                onShowOptions = onContinueWatchingOptions,
-                                modifier = verticalFocusModifier
+                                onShowOptions = onContinueWatchingOptions
                             )
                         }
 
@@ -717,7 +737,8 @@ internal fun ModernRowSection(
                                 onLongPress = onLongPress,
                                 onBackdropInteraction = onBackdropInteraction,
                                 onExpandedCatalogFocusKeyChange = onExpandedCatalogFocusKeyChange,
-                                modifier = verticalFocusModifier
+                                enrichedLogoUrl = (payload as? ModernPayload.Catalog)?.itemId?.let { enrichedPreviews[it]?.logo },
+                                enrichedBackdropUrl = (payload as? ModernPayload.Catalog)?.itemId?.let { enrichedPreviews[it]?.backdropUrl }
                             )
                         }
                     }
@@ -744,6 +765,8 @@ private fun ModernCarouselCard(
     trailerPreviewUrl: String?,
     trailerPreviewAudioUrl: String?,
     isWatched: Boolean,
+    enrichedLogoUrl: String? = null,
+    enrichedBackdropUrl: String? = null,
     focusRequester: FocusRequester,
     onFocused: () -> Unit,
     onFocusStateChanged: (Boolean) -> Unit = {},
@@ -780,12 +803,18 @@ private fun ModernCarouselCard(
     if (frozenLogoUrl.value.isNullOrBlank() && !item.heroPreview.logo.isNullOrBlank()) {
         frozenLogoUrl.value = item.heroPreview.logo
     }
+    if (!useLandscapeOverlayTreatment && !enrichedLogoUrl.isNullOrBlank() && frozenLogoUrl.value != enrichedLogoUrl) {
+        frozenLogoUrl.value = enrichedLogoUrl
+    }
     val effectiveLogoUrl = frozenLogoUrl.value
     // Freeze the backdrop URL for landscape cards - prevents image reload when enrichment updates backdrop.
     val dataFrozenBackdrop = item.heroPreview.frozenBackdropUrl
     val frozenBackdropUrl = remember(item.key) { mutableStateOf(dataFrozenBackdrop ?: item.heroPreview.backdrop) }
     if (frozenBackdropUrl.value.isNullOrBlank() && !item.heroPreview.backdrop.isNullOrBlank()) {
         frozenBackdropUrl.value = item.heroPreview.backdrop
+    }
+    if (!useLandscapeOverlayTreatment && !enrichedBackdropUrl.isNullOrBlank() && frozenBackdropUrl.value != enrichedBackdropUrl) {
+        frozenBackdropUrl.value = enrichedBackdropUrl
     }
     val effectiveBackdropUrl = frozenBackdropUrl.value
     var isFocused by remember { mutableStateOf(false) }
@@ -824,7 +853,7 @@ private fun ModernCarouselCard(
         imageUrl?.let {
             ImageRequest.Builder(context)
                 .data(it)
-                .crossfade(false)
+                .crossfade(true)
                 .memoryCacheKey("${it}_${requestWidthPx}x${requestHeightPx}")
                 .size(width = requestWidthPx, height = requestHeightPx)
                 .build()
@@ -852,18 +881,25 @@ private fun ModernCarouselCard(
     val shouldPlayTrailerInCard = playTrailerInExpandedCard && !trailerPreviewUrl.isNullOrBlank()
     val isVerticalRowsScrolling = LocalVerticalRowsScrolling.current
 
+    // Coil 3's AsyncImage is skippable — it compares ImageRequest structurally and won't
+    // re-trigger a failed memory-only request when policies change. We solve this by
+    // building a restricted request during scroll and using Compose's `key()` on the
+    // scroll state around AsyncImage so that stopping the scroll destroys the old
+    // (memory-only) AsyncImage and creates a fresh one with the full request.
     val scrollAwareImageModel = if (!isVerticalRowsScrolling || imageModel == null) {
         imageModel
     } else {
         remember(imageModel) {
             (imageModel as? ImageRequest)?.newBuilder()
-                ?.memoryCachePolicy(coil.request.CachePolicy.ENABLED)
-                ?.diskCachePolicy(coil.request.CachePolicy.DISABLED)
-                ?.networkCachePolicy(coil.request.CachePolicy.DISABLED)
+                ?.memoryCachePolicy(CachePolicy.ENABLED)
+                ?.diskCachePolicy(CachePolicy.DISABLED)
+                ?.networkCachePolicy(CachePolicy.DISABLED)
                 ?.build()
                 ?: imageModel
         }
     }
+    // When true, wrap AsyncImage in key(scrollPhaseKey) to force re-creation on scroll stop.
+    val scrollPhaseKey = isVerticalRowsScrolling
     val hasImage = !imageUrl.isNullOrBlank()
     val hasLandscapeLogo =
         (useLandscapeOverlayTreatment || isBackdropExpanded) &&
@@ -985,15 +1021,17 @@ private fun ModernCarouselCard(
 
                 Box(modifier = mediaLayerModifier) {
                     if (hasImage) {
-                        AsyncImage(
-                            model = scrollAwareImageModel,
-                            contentDescription = item.title,
-                            modifier = Modifier.fillMaxSize(),
-                            placeholder = backgroundPainter,
-                            error = backgroundPainter,
-                            fallback = backgroundPainter,
-                            contentScale = imageContentScale
-                        )
+                        key(scrollPhaseKey) {
+                            AsyncImage(
+                                model = scrollAwareImageModel,
+                                contentDescription = item.title,
+                                modifier = Modifier.fillMaxSize(),
+                                placeholder = backgroundPainter,
+                                error = backgroundPainter,
+                                fallback = backgroundPainter,
+                                contentScale = imageContentScale
+                            )
+                        }
                     } else {
                         MonochromePosterPlaceholder()
                     }

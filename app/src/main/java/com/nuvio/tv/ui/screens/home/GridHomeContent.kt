@@ -60,7 +60,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import com.nuvio.tv.domain.model.CollectionFolder
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
@@ -94,7 +94,8 @@ fun GridHomeContent(
     posterCardStyle: PosterCardStyle = PosterCardDefaults.Style,
     onItemFocus: (com.nuvio.tv.domain.model.MetaPreview) -> Unit = {},
     catalogSeeAllLabel: String? = null,
-    onSaveGridFocusState: (Int, Int, String?) -> Unit
+    onSaveGridFocusState: (Int, Int, String?) -> Unit,
+    scrollToTopTrigger: Int = 0
 ) {
     val gridState = rememberLazyGridState(
         initialFirstVisibleItemIndex = gridFocusState.verticalScrollIndex,
@@ -102,6 +103,13 @@ fun GridHomeContent(
     )
     val focusRequesters = remember { mutableMapOf<String, FocusRequester>() }
     var lastFocusedGridItemKey by remember { mutableStateOf(gridFocusState.focusedItemKey) }
+
+    // Scroll to top when triggered from sidebar Home button.
+    LaunchedEffect(scrollToTopTrigger) {
+        if (scrollToTopTrigger > 0) {
+            gridState.scrollToItem(0, 0)
+        }
+    }
 
     // Save scroll state when leaving
     DisposableEffect(Unit) {

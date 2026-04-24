@@ -7,6 +7,7 @@ package com.nuvio.tv.ui.screens.player
 
 import android.util.Log
 import android.view.KeyEvent
+import android.view.View
 import androidx.annotation.RawRes
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -100,9 +101,8 @@ import androidx.tv.material3.IconButton
 import androidx.tv.material3.IconButtonDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import coil.compose.rememberAsyncImagePainter
-import coil.decode.SvgDecoder
-import coil.request.ImageRequest
+import coil3.compose.rememberAsyncImagePainter
+import coil3.request.ImageRequest
 import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
 import com.nuvio.tv.core.player.ExternalPlayerLauncher
@@ -1149,6 +1149,7 @@ private fun MpvPlayerSurface(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val latestAspectMode by rememberUpdatedState(aspectMode)
     val mpvView = remember(context) {
         NuvioMpvSurfaceView(context)
     }
@@ -1162,6 +1163,16 @@ private fun MpvPlayerSurface(
         viewModel.attachMpvView(mpvView)
         onDispose {
             viewModel.attachMpvView(null)
+        }
+    }
+
+    DisposableEffect(mpvView) {
+        val listener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            mpvView.applyAspectMode(latestAspectMode)
+        }
+        mpvView.addOnLayoutChangeListener(listener)
+        onDispose {
+            mpvView.removeOnLayoutChangeListener(listener)
         }
     }
 
@@ -1232,22 +1243,32 @@ private fun ExoPlayerSurface(
         val listener = object : androidx.media3.common.Player.Listener {
             override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
                 playerView.post {
-                    playerView.applyExoAspectModeIfNeeded(latestAspectMode)
+                    playerView.applyExoAspectMode(latestAspectMode)
                 }
             }
 
             override fun onRenderedFirstFrame() {
                 playerView.post {
-                    playerView.applyExoAspectModeIfNeeded(latestAspectMode)
+                    playerView.applyExoAspectMode(latestAspectMode)
                 }
             }
         }
         player.addListener(listener)
         playerView.post {
-            playerView.applyExoAspectModeIfNeeded(latestAspectMode)
+            playerView.applyExoAspectMode(latestAspectMode)
         }
         onDispose {
             player.removeListener(listener)
+        }
+    }
+
+    DisposableEffect(playerView) {
+        val listener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            playerView.applyExoAspectMode(latestAspectMode)
+        }
+        playerView.addOnLayoutChangeListener(listener)
+        onDispose {
+            playerView.removeOnLayoutChangeListener(listener)
         }
     }
 
@@ -1259,7 +1280,7 @@ private fun ExoPlayerSurface(
     }
 
     LaunchedEffect(playerView, aspectMode) {
-        playerView.applyExoAspectModeIfNeeded(aspectMode)
+        playerView.applyExoAspectMode(aspectMode)
     }
 
     LaunchedEffect(playerView, player, useLibass, libassRenderType) {
@@ -1283,10 +1304,7 @@ private fun PlayerView.enableComposeSurfaceSyncWorkaroundIfAvailable() {
     }
 }
 
-private fun PlayerView.applyExoAspectModeIfNeeded(mode: AspectMode) {
-    if (getTag(R.id.player_view_aspect_mode_tag) == mode) {
-        return
-    }
+private fun PlayerView.applyExoAspectMode(mode: AspectMode) {
     setTag(R.id.player_view_aspect_mode_tag, mode)
     applyExoAspectMode(this, mode)
 }
@@ -2322,10 +2340,12 @@ private fun SubtitleDelayOverlay(
 @Composable
 private fun rememberRawSvgPainter(@RawRes iconRes: Int): Painter {
     val context = LocalContext.current
-    val request = remember(iconRes, context) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val sizePx = with(density) { 24.dp.roundToPx() }
+    val request = remember(iconRes, context, sizePx) {
         ImageRequest.Builder(context)
             .data(iconRes)
-            .decoderFactory(SvgDecoder.Factory())
+            .size(sizePx)
             .build()
     }
     return rememberAsyncImagePainter(model = request)

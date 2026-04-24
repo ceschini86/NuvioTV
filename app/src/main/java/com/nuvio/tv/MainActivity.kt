@@ -137,9 +137,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import coil.compose.rememberAsyncImagePainter
-import coil.decode.SvgDecoder
-import coil.request.ImageRequest
+import coil3.compose.rememberAsyncImagePainter
+import coil3.request.ImageRequest
 import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
 
@@ -1387,6 +1386,12 @@ private fun navigateToDrawerRoute(
     targetRoute: String
 ) {
     if (currentRoute == targetRoute) {
+        if (targetRoute == Screen.Home.route) {
+            // Scroll Home to top by clearing saved focus/scroll state on the ViewModel.
+            val homeEntry = navController.getBackStackEntry(Screen.Home.route)
+            val homeViewModel = androidx.lifecycle.ViewModelProvider(homeEntry)[com.nuvio.tv.ui.screens.home.HomeViewModel::class.java]
+            homeViewModel.requestScrollToTop()
+        }
         return
     }
     navController.navigate(targetRoute) {
@@ -1432,9 +1437,13 @@ private fun DrawerItemIcon(
 }
 
 @Composable
-private fun rememberRawSvgPainter(rawIconRes: Int): Painter = rememberAsyncImagePainter(
-    model = ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
-        .data(rawIconRes)
-        .decoderFactory(SvgDecoder.Factory())
-        .build()
-)
+private fun rememberRawSvgPainter(rawIconRes: Int): Painter {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val sizePx = with(density) { 24.dp.roundToPx() }
+    return rememberAsyncImagePainter(
+        model = ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+            .data(rawIconRes)
+            .size(sizePx)
+            .build()
+    )
+}
