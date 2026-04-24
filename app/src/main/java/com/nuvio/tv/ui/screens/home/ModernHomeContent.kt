@@ -137,17 +137,12 @@ private const val MODERN_HERO_RAPID_NAV_SETTLE_MS = 170L
  * [FocusRequester.requestFocus] — which also triggers the usual bringIntoView
  * alignment, so the landing card snaps cleanly to the start padding.
  */
-private const val FAST_SCROLL_HORIZONTAL_VELOCITY_DP_PER_SEC = 1600f
-// Vertical runs ~2x horizontal dp/sec because rows are significantly taller
-// than cards are wide, so matching raw dp/sec would feel sluggish in
-// rows-per-second terms. 3200 dp/sec brings the perceived rows/sec close to
-// the horizontal cards/sec rate while still staying readable during the drag.
 private const val FAST_SCROLL_VERTICAL_VELOCITY_DP_PER_SEC = 3200f
 private const val FAST_SCROLL_END_TIMEOUT_MS = 160L
 // Cap per-frame dt so a paused frame (e.g. GC) doesn't produce a jarring jump.
 private const val FAST_SCROLL_MAX_FRAME_DT_SEC = 0.048f
 
-private enum class FastScrollMode { None, Horizontal, Vertical }
+private enum class FastScrollMode { None, Vertical }
 
 private fun buildPrefetchRequest(
     context: android.content.Context,
@@ -302,6 +297,7 @@ fun ModernHomeContent(
     var restoredFromSavedState by remember { mutableStateOf(false) }
     var optionsItem by remember { mutableStateOf<ContinueWatchingItem?>(null) }
     val lastFocusedContinueWatchingIndexRef = remember { java.util.concurrent.atomic.AtomicInteger(-1) }
+    val lastKeyRepeatDispatchRef = remember { java.util.concurrent.atomic.AtomicLong(0L) }
     val lastHeroNavigationAtMsRef = remember { java.util.concurrent.atomic.AtomicLong(0L) }
     val heroFocusSettleDelayMsRef = remember { java.util.concurrent.atomic.AtomicLong(MODERN_HERO_FOCUS_DEBOUNCE_MS) }
     // Fast-scroll bookkeeping. See the FAST_SCROLL_* constants at the top of the file
@@ -895,42 +891,6 @@ fun ModernHomeContent(
                             fastScrollEndTimerRef.getAndSet(null)?.cancel()
                             if (isFastScrolling) isFastScrolling = false
                             when (mode) {
-                                FastScrollMode.Horizontal -> {
-                                    val rowKey = focusHolder.activeRowKey ?: return
-                                    val rowState = rowListStates[rowKey] ?: return
-                                    val row = carouselRows.firstOrNull { it.key == rowKey } ?: return
-                                    val layoutInfo = rowState.layoutInfo
-                                    val visibleItems = layoutInfo.visibleItemsInfo
-                                    // If the last card has fully entered the viewport from the
-                                    // right edge, land on it directly. This is the "hit the end
-                                    // of a fast horizontal scroll" case — the user wants focus
-                                    // on the final card they reached, not on whichever card
-                                    // happens to be leftmost-visible. Mirrors the last-row
-                                    // landing for vertical fast-scroll.
-                                    val lastIdx = row.items.size - 1
-                                    val viewportEnd = layoutInfo.viewportEndOffset
-                                    val lastItemAtRight = lastIdx >= 0 &&
-                                        visibleItems.lastOrNull { it.index == lastIdx }?.let {
-                                            it.offset + it.size <= viewportEnd
-                                        } == true
-                                    // Otherwise prefer the first FULLY visible item (offset past
-                                    // the start padding) so bringIntoView doesn't have to yank
-                                    // the list backwards to finish aligning a partially-clipped
-                                    // card. Falls back to the leftmost visible / first-visible
-                                    // index if the row is too narrow to contain a fully visible
-                                    // item.
-                                    val targetIndex = when {
-                                        lastItemAtRight -> lastIdx
-                                        else ->
-                                            visibleItems.firstOrNull { it.offset >= 0 }?.index
-                                                ?: visibleItems.firstOrNull()?.index
-                                                ?: rowState.firstVisibleItemIndex
-                                    }
-                                    val targetItemKey = row.items.getOrNull(targetIndex)?.key ?: return
-                                    runCatching {
-                                        uiCaches.requesterFor(rowKey, targetItemKey).requestFocus()
-                                    }
-                                }
                                 FastScrollMode.Vertical -> {
                                     val layoutInfo = verticalRowListState.layoutInfo
                                     val visibleRows = layoutInfo.visibleItemsInfo
@@ -997,25 +957,29 @@ fun ModernHomeContent(
                         // holding the key past the system repeat threshold.
                         if (native.repeatCount == 0) return@onPreviewKeyEvent false
 
-                        // Continue Watching horizontal: skip the fast-scroll takeover so
-                        // Compose's default focus navigation moves focus card-by-card at
-                        // the system key-repeat rate, with focus chrome visible the whole
-                        // time. Each CW card shows progress / next-episode info the user
-                        // needs to see while skimming — the normal fast-scroll model of
-                        // "drag the list silently while focus stays frozen" hides exactly
-                        // that information.
-                        if (isHoriz && focusHolder.activeRowKey == MODERN_CONTINUE_WATCHING_ROW_KEY) {
-                            // Tear down any lingering fast-scroll state from a previous
-                            // row / axis so isFastScrolling doesn't stay stuck on and CW
-                            // cards render their full focus chrome.
+                        if (isHoriz) {
                             if (fastScrollModeRef.get() != FastScrollMode.None) {
                                 endFastScroll()
                             }
-                            return@onPreviewKeyEvent false
+                            val gateMs = 80L
+                            val now = android.os.SystemClock.uptimeMillis()
+                            if (now - lastKeyRepeatDispatchRef.get() < gateMs) {
+                                return@onPreviewKeyEvent true
+                            }
+                            lastKeyRepeatDispatchRef.set(now)
+                            val direction = when (kc) {
+                                AndroidKeyEvent.KEYCODE_DPAD_LEFT -> FocusDirection.Left
+                                AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> FocusDirection.Right
+                                else -> null
+                            }
+                            if (direction != null) {
+                                focusManager.moveFocus(direction)
+                            }
+                            return@onPreviewKeyEvent true
                         }
 
                         // Key repeat: enter / extend fast-scroll drag mode.
-                        val desiredMode = if (isHoriz) FastScrollMode.Horizontal else FastScrollMode.Vertical
+                        val desiredMode = FastScrollMode.Vertical
                         val sign = when (kc) {
                             AndroidKeyEvent.KEYCODE_DPAD_LEFT, AndroidKeyEvent.KEYCODE_DPAD_UP -> -1
                             else -> 1
@@ -1027,12 +991,7 @@ fun ModernHomeContent(
 
                         if (needsStart) {
                             fastScrollJobRef.getAndSet(null)?.cancel()
-                            val targetState: LazyListState? = when (desiredMode) {
-                                FastScrollMode.Horizontal ->
-                                    focusHolder.activeRowKey?.let { rowListStates[it] }
-                                FastScrollMode.Vertical -> verticalRowListState
-                                FastScrollMode.None -> null
-                            }
+                            val targetState: LazyListState? = verticalRowListState
                             if (targetState == null) {
                                 // No row state to scroll (e.g. focus is on the hero carousel).
                                 // Let default navigation take over.
@@ -1047,7 +1006,7 @@ fun ModernHomeContent(
                             // chrome would flicker at the system key-repeat rate.
                             val atScrollEdge = (sign > 0 && !targetState.canScrollForward) ||
                                 (sign < 0 && !targetState.canScrollBackward)
-                            val vertAtLastRow = desiredMode == FastScrollMode.Vertical && sign > 0 && run {
+                            val vertAtLastRow = sign > 0 && run {
                                 val info = targetState.layoutInfo
                                 val lastIdx = carouselRows.size - 1
                                 val lastVisible = info.visibleItemsInfo.lastOrNull { it.index == lastIdx }
@@ -1065,17 +1024,12 @@ fun ModernHomeContent(
                                 return@onPreviewKeyEvent true
                             }
 
-                            fastScrollModeRef.set(desiredMode)
+                            fastScrollModeRef.set(FastScrollMode.Vertical)
                             fastScrollDirectionRef.set(sign)
                             if (!isFastScrolling) isFastScrolling = true
 
-                            val velocityDpPerSec = if (desiredMode == FastScrollMode.Horizontal) {
-                                FAST_SCROLL_HORIZONTAL_VELOCITY_DP_PER_SEC
-                            } else {
-                                FAST_SCROLL_VERTICAL_VELOCITY_DP_PER_SEC
-                            }
                             val velocityPxPerSec = with(localDensity) {
-                                velocityDpPerSec.dp.toPx()
+                                FAST_SCROLL_VERTICAL_VELOCITY_DP_PER_SEC.dp.toPx()
                             }
 
                             fastScrollJobRef.set(
@@ -1097,7 +1051,7 @@ fun ModernHomeContent(
                                                 // would then have to yank the list backwards to
                                                 // re-align the last row at topInsetPx, which is
                                                 // what the user sees as "thrown back up."
-                                                if (desiredMode == FastScrollMode.Vertical && sign > 0) {
+                                                if (sign > 0) {
                                                     val info = targetState.layoutInfo
                                                     val lastIdx = carouselRows.size - 1
                                                     val lastVisible = info.visibleItemsInfo
