@@ -9,6 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -80,17 +82,18 @@ fun AboutSettingsContent(
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                Spacer(modifier = Modifier.height(4.dp))
 
                 Image(
                     painter = painterResource(id = R.drawable.app_logo_wordmark),
                     contentDescription = stringResource(R.string.cd_nuvio_logo),
                     modifier = Modifier
-                        .width(140.dp)
+                        .width(180.dp)
                         .height(40.dp),
                     contentScale = ContentScale.Fit
                 )
@@ -108,6 +111,8 @@ fun AboutSettingsContent(
                     color = NuvioColors.TextSecondary,
                     textAlign = TextAlign.Center
                 )
+
+                Spacer(modifier = Modifier.height(2.dp))
 
                 SettingsActionRow(
                     title = stringResource(R.string.about_check_updates),
