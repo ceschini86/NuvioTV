@@ -626,9 +626,17 @@ internal fun ModernRowSection(
         }
 
         CompositionLocalProvider(LocalBringIntoViewSpec provides horizontalBringIntoViewSpec) {
+            val lastFocusedIdx = focusedItemByRow[rowKey] ?: 0
+            val restoreItemKey = row.items.getOrNull(
+                lastFocusedIdx.coerceIn(0, (row.items.size - 1).coerceAtLeast(0))
+            )?.key
+            val restoreFocusRequester = restoreItemKey?.let {
+                uiCaches.requesterFor(rowKey, it)
+            } ?: FocusRequester.Default
+
             LazyRow(
                 state = rowListState,
-                modifier = Modifier.focusRestorer().focusGroup(),
+                modifier = Modifier.focusRestorer(restoreFocusRequester).focusGroup(),
                 contentPadding = PaddingValues(horizontal = rowStartPadding),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {

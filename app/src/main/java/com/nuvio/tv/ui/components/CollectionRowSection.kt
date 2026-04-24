@@ -153,12 +153,18 @@ fun CollectionRowSection(
         }
 
         CompositionLocalProvider(LocalBringIntoViewSpec provides horizontalBringIntoViewSpec) {
+        val restoreIdx = lastFocusedItemIndex.coerceIn(0, (collection.folders.size - 1).coerceAtLeast(0))
+        val restoreFolder = collection.folders.getOrNull(restoreIdx)
+        val restoreFocusRequester = if (restoreFolder != null) {
+            itemFocusRequesters.getOrPut(folderFocusKey(restoreIdx, restoreFolder)) { FocusRequester() }
+        } else FocusRequester.Default
+
         LazyRow(
             state = listState,
             modifier = Modifier
                 .fillMaxWidth()
                 .focusRequester(rowFocusRequester)
-                .focusRestorer()
+                .focusRestorer(restoreFocusRequester)
                 .focusGroup(),
             contentPadding = PaddingValues(start = 48.dp, end = 200.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)

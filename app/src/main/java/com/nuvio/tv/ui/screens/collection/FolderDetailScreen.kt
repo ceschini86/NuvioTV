@@ -130,6 +130,7 @@ fun FolderDetailScreen(
                     onSelectTab = viewModel::selectTab,
                     onNavigateToDetail = onNavigateToDetail,
                     isItemWatched = isItemWatched,
+                    onItemFocus = viewModel::onItemFocused,
                     onLoadMore = { viewModel.loadMoreItems(uiState.selectedTabIndex) },
                     onSaveFocusState = { verticalIndex, verticalOffset, focusedItemKey ->
                         viewModel.saveTabFocusState(
@@ -148,7 +149,8 @@ fun FolderDetailScreen(
                         onNavigateToDetail = onNavigateToDetail,
                         isItemWatched = isItemWatched,
                         onLoadMoreCatalog = viewModel::loadMoreForCatalog,
-                        onSaveFocusState = viewModel::saveRowsFocusState
+                        onSaveFocusState = viewModel::saveRowsFocusState,
+                        onItemFocus = viewModel::onItemFocused
                     )
                 }
                 FolderViewMode.FOLLOW_LAYOUT -> {} // handled above
@@ -209,7 +211,8 @@ private fun TabbedGridContent(
     onNavigateToDetail: (String, String, String) -> Unit,
     onSaveFocusState: (Int, Int, String?) -> Unit,
     onLoadMore: () -> Unit = {},
-    isItemWatched: (MetaPreview) -> Boolean = { false }
+    isItemWatched: (MetaPreview) -> Boolean = { false },
+    onItemFocus: (MetaPreview) -> Unit = {}
 ) {
     val tabFocusRequesters = remember(uiState.tabs.size) { uiState.tabs.indices.map { FocusRequester() } }
 
@@ -407,7 +410,10 @@ private fun TabbedGridContent(
                         posterCardStyle = posterCardStyle,
                         focusRequester = focusReq,
                         isWatched = isItemWatched(item),
-                        onFocus = { _ -> lastFocusedItemKey = itemKey },
+                        onFocus = { focusedItem ->
+                            lastFocusedItemKey = itemKey
+                            onItemFocus(focusedItem)
+                        },
                         onClick = {
                             onNavigateToDetail(
                                 item.id,
@@ -444,7 +450,8 @@ private fun RowsContent(
     onNavigateToDetail: (String, String, String) -> Unit,
     onLoadMoreCatalog: (String, String, String) -> Unit = { _, _, _ -> },
     onSaveFocusState: (Int, Int, Int, Int, Map<String, Int>) -> Unit,
-    isItemWatched: (MetaPreview) -> Boolean = { false }
+    isItemWatched: (MetaPreview) -> Boolean = { false },
+    onItemFocus: (MetaPreview) -> Unit = {}
 ) {
     val sourceTabs = uiState.tabs.filter { !it.isAllTab }
     val columnListState = rememberLazyListState(
@@ -567,6 +574,7 @@ private fun RowsContent(
                             showAddonName = false,
                             showCatalogTypeSuffix = true,
                             isItemWatched = isItemWatched,
+                            onItemFocus = onItemFocus,
                             listState = listState,
                             focusedItemIndex = if (
                                 focusState.hasSavedFocus &&
@@ -643,6 +651,7 @@ private fun FollowLayoutContent(
             onRequestTrailerPreview = { item ->
                 onRequestTrailerPreview(item.id, item.name, item.releaseInfo, item.apiType)
             },
+            onItemFocus = onItemFocus,
             onSaveFocusState = onSaveFocusState
         )
         HomeLayout.GRID -> GridHomeContent(

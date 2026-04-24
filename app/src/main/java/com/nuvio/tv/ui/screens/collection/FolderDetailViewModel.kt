@@ -722,8 +722,9 @@ class FolderDetailViewModel @Inject constructor(
                     var result = merged
                 if (finalEnrichment != null) {
                     if (tmdbSettings.useBasicInfo) {
+                        val isModern = _uiState.value.homeLayout == HomeLayout.MODERN
                         result = result.copy(
-                            name = finalEnrichment.localizedTitle ?: result.name,
+                            name = if (isModern) finalEnrichment.localizedTitle ?: result.name else result.name,
                             description = finalEnrichment.description ?: result.description,
                             genres = if (finalEnrichment.genres.isNotEmpty()) finalEnrichment.genres else result.genres
                         )
