@@ -1340,8 +1340,6 @@
     <string name="update_ignore">Ignorovať</string>
     <string name="watchlist_added">Pridané do watchlistu</string>
     <string name="watchlist_removed">Odstránené z watchlistu</string>
-    <string name="playback_player_auto">Automaticky (Najlepšie pre obsah)</string>
-    <string name="playback_player_auto_desc">ExoPlayer pre filmy a seriály · MPV pre anime</string>
 
     <!-- Profile PIN errors -->
     <string name="profile_pin_save_error">PIN sa nepodarilo uložiť. Skúste znova.</string>
@@ -1392,4 +1390,6 @@
     <!-- Trakt errors -->
     <string name="trakt_error_code_expired">Kód zariadenia vypršal. Začnite znova.</string>
     <string name="trakt_error_code_used">Kód zariadenia bol už použitý. Začnite znova.</string>
-    <string name="trakt_error_denied">Autorizácia bola zamietnutá na Trakt.
+    <string name="trakt_error_denied">Autorizácia bola zamietnutá na Trakt.</string>
+
+</resources>
