@@ -1251,15 +1251,21 @@ private suspend fun HomeViewModel.buildLightweightNextUpItems(
             nextUpDismissKey(progress.contentId, progress.season, progress.episode) !in dismissedNextUp
         }
         .sortedByDescending { it.lastWatched }
-        // Skip seeds validated as "no next-up" — they were already checked and
-        // don't need re-resolution until their TTL expires. This avoids wasting
-        // slots in the top-32 on series that will return null anyway.
+        // Skip seeds validated as "no next-up" ONLY if the seed hasn't changed.
+        // The cache key includes season+episode, so a changed seed (user watched
+        // a new episode) produces a cache miss and is always processed.
         .filter { progress ->
             val cacheKey = buildNextUpSeedCacheKey(progress, showUnairedNextUp)
-            val hasCachedResult = synchronized(cwNextUpResolutionCache) {
-                cwNextUpResolutionCache.containsKey(cacheKey) && cwNextUpResolutionCache[cacheKey] != null
+            val inCache = synchronized(cwNextUpResolutionCache) {
+                cwNextUpResolutionCache.containsKey(cacheKey)
             }
-            hasCachedResult || !fullyWatchedSeriesIds.isSeriesValidationFresh(progress.contentId)
+            if (!inCache) return@filter true // cache miss — seed changed or first time
+            val cachedValue = synchronized(cwNextUpResolutionCache) {
+                cwNextUpResolutionCache[cacheKey]
+            }
+            if (cachedValue != null) return@filter true // positive hit — has next-up
+            // Negative hit (no next-up) — skip if TTL is fresh
+            !fullyWatchedSeriesIds.isSeriesValidationFresh(progress.contentId)
         }
         .take(CW_MAX_NEXT_UP_LOOKUPS)
 
