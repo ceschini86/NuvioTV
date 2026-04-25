@@ -5,6 +5,7 @@ import com.nuvio.tv.data.local.TmdbSettingsDataStore
 import com.nuvio.tv.data.remote.api.TmdbApi
 import com.nuvio.tv.data.remote.api.TmdbDiscoverResponse
 import com.nuvio.tv.data.remote.api.TmdbDiscoverResult
+import com.nuvio.tv.data.remote.api.TmdbCollectionResponse
 import com.nuvio.tv.data.remote.api.TmdbListDetailsResponse
 import com.nuvio.tv.data.remote.api.TmdbListItem
 import com.nuvio.tv.domain.model.TmdbCollectionFilters
@@ -82,6 +83,41 @@ class TmdbCollectionSourceResolverTest {
         assertEquals("series", result.data.items[1].apiType)
         assertEquals(2, result.data.currentPage)
         assertTrue(result.data.hasMore)
+    }
+
+    @Test
+    fun `list import metadata uses tmdb list name`() = runTest {
+        val api = mockk<TmdbApi>()
+        coEvery { api.getListDetails(44, any(), "en", 1) } returns Response.success(
+            TmdbListDetailsResponse(
+                id = 44,
+                name = "Weekend Watchlist"
+            )
+        )
+        val resolver = TmdbCollectionSourceResolver(api, settings)
+
+        val metadata = resolver.listImportMetadata(44)
+
+        assertEquals("Weekend Watchlist", metadata.title)
+    }
+
+    @Test
+    fun `collection import metadata uses name and poster cover`() = runTest {
+        val api = mockk<TmdbApi>()
+        coEvery { api.getCollectionDetails(10, any(), "en") } returns Response.success(
+            TmdbCollectionResponse(
+                id = 10,
+                name = "Star Wars Collection",
+                posterPath = "/collection.jpg",
+                backdropPath = "/collection-backdrop.jpg"
+            )
+        )
+        val resolver = TmdbCollectionSourceResolver(api, settings)
+
+        val metadata = resolver.collectionImportMetadata(10)
+
+        assertEquals("Star Wars Collection", metadata.title)
+        assertEquals("https://image.tmdb.org/t/p/w500/collection.jpg", metadata.coverImageUrl)
     }
 
     @Test

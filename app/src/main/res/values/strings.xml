@@ -1548,7 +1548,7 @@
     <string name="collections_editor_tmdb_public_list">Public TMDB list</string>
     <string name="collections_editor_tmdb_network_id">Network ID</string>
     <string name="collections_editor_tmdb_collection_id">Collection ID</string>
-    <string name="collections_editor_tmdb_company_search">Production company</string>
+    <string name="collections_editor_tmdb_company_search">Production company name, ID, or URL</string>
     <string name="collections_editor_tmdb_display_title">Display title</string>
     <string name="collections_editor_tmdb_title_optional">Title (optional)</string>
     <string name="collections_editor_tmdb_search">Search</string>
@@ -1556,11 +1556,11 @@
     <string name="collections_editor_tmdb_collection">TMDB Collection</string>
     <string name="collections_editor_tmdb_help_presets">Pick a ready-made source. You can edit or remove it after adding.</string>
     <string name="collections_editor_tmdb_help_list">Paste a public TMDB list URL or only the number from the URL.</string>
-    <string name="collections_editor_tmdb_help_production">Search by studio name, then choose the matching company from the results.</string>
+    <string name="collections_editor_tmdb_help_production">Search by studio name, or paste a TMDB company ID/URL and add it directly.</string>
     <string name="collections_editor_tmdb_help_network">Enter a network ID. Common networks are available in Presets and quick filters.</string>
     <string name="collections_editor_tmdb_help_collection">Search a movie collection name or paste the collection ID from TMDB.</string>
     <string name="collections_editor_tmdb_help_discover">Build a live TMDB row using optional filters. Leave fields empty when you do not need that filter.</string>
-    <string name="collections_editor_tmdb_search_helper">Example: Marvel Studios, Pixar, Warner Bros.</string>
+    <string name="collections_editor_tmdb_search_helper">Examples: Marvel Studios, 420, or https://www.themoviedb.org/company/420.</string>
     <string name="collections_editor_tmdb_collection_helper">Example: Star Wars Collection, Harry Potter Collection, or a collection URL.</string>
     <string name="collections_editor_tmdb_network_helper">Example IDs: Netflix 213, HBO 49, Disney+ 2739.</string>
     <string name="collections_editor_tmdb_list_helper">Example: https://www.themoviedb.org/list/8504994 or 8504994.</string>

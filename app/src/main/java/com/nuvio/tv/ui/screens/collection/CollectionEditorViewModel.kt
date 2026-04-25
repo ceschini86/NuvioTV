@@ -48,6 +48,7 @@ data class CollectionEditorUiState(
     val tmdbInput: String = "",
     val tmdbTitleInput: String = "",
     val tmdbMediaType: TmdbCollectionMediaType = TmdbCollectionMediaType.MOVIE,
+    val tmdbMediaBoth: Boolean = false,
     val tmdbSortBy: String = TmdbCollectionSort.POPULAR_DESC.value,
     val tmdbFilters: TmdbCollectionFilters = TmdbCollectionFilters(),
     val tmdbCompanyResults: List<TmdbCompanySearchResult> = emptyList(),
@@ -405,10 +406,17 @@ class CollectionEditorViewModel @Inject constructor(
 
     fun setTmdbBuilderMode(mode: TmdbBuilderMode) {
         _uiState.update {
+            val mediaType = when (mode) {
+                TmdbBuilderMode.NETWORK -> TmdbCollectionMediaType.TV
+                else -> TmdbCollectionMediaType.MOVIE
+            }
             it.copy(
                 tmdbBuilderMode = mode,
                 tmdbInput = "",
                 tmdbTitleInput = "",
+                tmdbMediaType = mediaType,
+                tmdbMediaBoth = false,
+                tmdbSortBy = TmdbCollectionSort.POPULAR_DESC.value,
                 tmdbCompanyResults = emptyList(),
                 tmdbCollectionResults = emptyList(),
                 tmdbSearchError = null
@@ -425,7 +433,11 @@ class CollectionEditorViewModel @Inject constructor(
     }
 
     fun setTmdbMediaType(mediaType: TmdbCollectionMediaType) {
-        _uiState.update { it.copy(tmdbMediaType = mediaType) }
+        _uiState.update { it.copy(tmdbMediaType = mediaType, tmdbMediaBoth = false) }
+    }
+
+    fun setTmdbMediaBoth(enabled: Boolean) {
+        _uiState.update { it.copy(tmdbMediaBoth = enabled, tmdbMediaType = TmdbCollectionMediaType.MOVIE) }
     }
 
     fun setTmdbSortBy(sortBy: String) {
@@ -465,11 +477,47 @@ class CollectionEditorViewModel @Inject constructor(
     }
 
     fun addTmdbSource(source: TmdbCollectionSource) {
+        if (source.sourceType == TmdbCollectionSourceType.COLLECTION && source.tmdbId != null) {
+            viewModelScope.launch {
+                val metadata = runCatching { tmdbCollectionSourceResolver.collectionImportMetadata(source.tmdbId) }
+                val resolved = metadata.getOrNull()
+                addTmdbSourceToFolder(
+                    source = if (source.title.isBlank()) source.copy(title = resolved?.title.orEmpty()) else source,
+                    coverImageUrl = resolved?.coverImageUrl
+                )
+            }
+            return
+        }
+        addTmdbSourceToFolder(source)
+    }
+
+    fun addTmdbSources(sources: List<TmdbCollectionSource>) {
+        addTmdbSourcesToFolder(sources)
+    }
+
+    private fun addTmdbSourceToFolder(source: TmdbCollectionSource, coverImageUrl: String? = null) {
+        addTmdbSourcesToFolder(listOf(source), coverImageUrl)
+    }
+
+    private fun addTmdbSourcesToFolder(sources: List<TmdbCollectionSource>, coverImageUrl: String? = null) {
         _uiState.update { state ->
             val folder = state.editingFolder ?: return@update state
-            if (folder.sources.any { it == source }) return@update state
+            val newSources = sources.filterNot { source -> folder.sources.any { it == source } }
+            if (newSources.isEmpty()) return@update state
+            val shouldApplyCover = newSources.any { it.sourceType == TmdbCollectionSourceType.COLLECTION } &&
+                !coverImageUrl.isNullOrBlank() &&
+                folder.coverImageUrl.isNullOrBlank()
+            val updatedFolder = if (shouldApplyCover) {
+                folder.copy(
+                    sources = folder.sources + newSources,
+                    coverImageUrl = coverImageUrl,
+                    coverEmoji = null
+                )
+            } else {
+                folder.copy(sources = folder.sources + newSources)
+            }
             state.copy(
-                editingFolder = folder.copy(sources = folder.sources + source),
+                editingFolder = updatedFolder,
                 showTmdbSourcePicker = false,
                 tmdbInput = "",
                 tmdbTitleInput = "",
@@ -502,29 +550,110 @@ class CollectionEditorViewModel @Inject constructor(
             _uiState.update { it.copy(tmdbSearchError = "Enter a valid TMDB ID or URL") }
             return
         }
-        addTmdbSource(
-            TmdbCollectionSource(
-                sourceType = sourceType,
-                title = title,
-                tmdbId = id,
-                mediaType = if (sourceType == TmdbCollectionSourceType.NETWORK) TmdbCollectionMediaType.TV else state.tmdbMediaType,
-                sortBy = state.tmdbSortBy,
-                filters = state.tmdbFilters
+        val mediaType = when (sourceType) {
+            TmdbCollectionSourceType.NETWORK -> TmdbCollectionMediaType.TV
+            TmdbCollectionSourceType.COLLECTION,
+            TmdbCollectionSourceType.LIST -> TmdbCollectionMediaType.MOVIE
+            TmdbCollectionSourceType.COMPANY,
+            TmdbCollectionSourceType.DISCOVER -> state.tmdbMediaType
+        }
+        val mediaTypes = selectedMediaTypes(state, sourceType)
+        if (sourceType == TmdbCollectionSourceType.LIST || sourceType == TmdbCollectionSourceType.COLLECTION) {
+            viewModelScope.launch {
+                val metadata = runCatching {
+                    if (sourceType == TmdbCollectionSourceType.LIST) {
+                        tmdbCollectionSourceResolver.listImportMetadata(id!!)
+                    } else {
+                        tmdbCollectionSourceResolver.collectionImportMetadata(id!!)
+                    }
+                }
+                val resolved = metadata.getOrNull()
+                if (metadata.isFailure) {
+                    _uiState.update { it.copy(tmdbSearchError = metadata.exceptionOrNull()?.message ?: "Could not load TMDB source") }
+                    return@launch
+                }
+                addTmdbSourceToFolder(
+                    source = TmdbCollectionSource(
+                        sourceType = sourceType,
+                        title = state.tmdbTitleInput.ifBlank { resolved?.title ?: title },
+                        tmdbId = id,
+                        mediaType = mediaType,
+                        sortBy = state.tmdbSortBy,
+                        filters = state.tmdbFilters
+                    ),
+                    coverImageUrl = resolved?.coverImageUrl
+                )
+            }
+            return
+        }
+        if (mediaTypes.size > 1) {
+            addTmdbSourcesToFolder(
+                mediaTypes.map { type ->
+                    TmdbCollectionSource(
+                        sourceType = sourceType,
+                        title = titleForMedia(title, type, addSuffix = true),
+                        tmdbId = id,
+                        mediaType = type,
+                        sortBy = state.tmdbSortBy,
+                        filters = state.tmdbFilters
+                    )
+                }
             )
-        )
+        } else {
+            addTmdbSourceToFolder(
+                TmdbCollectionSource(
+                    sourceType = sourceType,
+                    title = title,
+                    tmdbId = id,
+                    mediaType = mediaType,
+                    sortBy = state.tmdbSortBy,
+                    filters = state.tmdbFilters
+                )
+            )
+        }
     }
 
     fun addDiscoverSource() {
         val state = _uiState.value
-        addTmdbSource(
-            TmdbCollectionSource(
-                sourceType = TmdbCollectionSourceType.DISCOVER,
-                title = state.tmdbTitleInput.ifBlank { "TMDB Discover" },
-                mediaType = state.tmdbMediaType,
-                sortBy = state.tmdbSortBy,
-                filters = state.tmdbFilters
-            )
+        val baseTitle = state.tmdbTitleInput.ifBlank { "TMDB Discover" }
+        val mediaTypes = selectedMediaTypes(state, TmdbCollectionSourceType.DISCOVER)
+        addTmdbSourcesToFolder(
+            mediaTypes.map { mediaType ->
+                TmdbCollectionSource(
+                    sourceType = TmdbCollectionSourceType.DISCOVER,
+                    title = titleForMedia(baseTitle, mediaType, addSuffix = mediaTypes.size > 1),
+                    mediaType = mediaType,
+                    sortBy = state.tmdbSortBy,
+                    filters = state.tmdbFilters
+                )
+            }
         )
+    }
+
+    private fun selectedMediaTypes(
+        state: CollectionEditorUiState,
+        sourceType: TmdbCollectionSourceType
+    ): List<TmdbCollectionMediaType> {
+        return when (sourceType) {
+            TmdbCollectionSourceType.COMPANY,
+            TmdbCollectionSourceType.DISCOVER -> if (state.tmdbMediaBoth) {
+                listOf(TmdbCollectionMediaType.MOVIE, TmdbCollectionMediaType.TV)
+            } else {
+                listOf(state.tmdbMediaType)
+            }
+            TmdbCollectionSourceType.NETWORK -> listOf(TmdbCollectionMediaType.TV)
+            TmdbCollectionSourceType.COLLECTION,
+            TmdbCollectionSourceType.LIST -> listOf(TmdbCollectionMediaType.MOVIE)
+        }
+    }
+
+    private fun titleForMedia(title: String, mediaType: TmdbCollectionMediaType, addSuffix: Boolean): String {
+        if (!addSuffix) return title
+        val suffix = when (mediaType) {
+            TmdbCollectionMediaType.MOVIE -> "Movies"
+            TmdbCollectionMediaType.TV -> "Series"
+        }
+        return "$title $suffix"
     }
 
     fun tmdbPresets(): List<TmdbPresetSource> = listOf(

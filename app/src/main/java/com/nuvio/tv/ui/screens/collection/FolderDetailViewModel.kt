@@ -750,10 +750,10 @@ class FolderDetailViewModel @Inject constructor(
     private fun buildTmdbTypeLabel(source: TmdbCollectionSource): String {
         return when (source.sourceType.name) {
             "LIST" -> "TMDB List"
-            "COLLECTION" -> "TMDB Collection"
+            "COLLECTION" -> "TMDB Movie Collection"
             "COMPANY" -> "Production"
             "NETWORK" -> "Network"
-            else -> "TMDB"
+            else -> "TMDB Discover"
         }
     }
 

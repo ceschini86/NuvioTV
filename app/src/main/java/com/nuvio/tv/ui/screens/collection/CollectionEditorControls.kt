@@ -202,16 +202,22 @@ fun collectionSourceKey(source: CollectionSource): String {
 }
 
 fun tmdbSourceSubtitle(source: TmdbCollectionSource): String {
-    val type = when (source.sourceType) {
-        TmdbCollectionSourceType.LIST -> "TMDB List"
-        TmdbCollectionSourceType.COLLECTION -> "TMDB Collection"
-        TmdbCollectionSourceType.COMPANY -> "Production"
-        TmdbCollectionSourceType.NETWORK -> "Network"
-        TmdbCollectionSourceType.DISCOVER -> "TMDB Discover"
-    }
     val media = when (source.mediaType) {
         TmdbCollectionMediaType.MOVIE -> "Movies"
         TmdbCollectionMediaType.TV -> "Series"
     }
-    return listOf(type, media, source.sortBy).joinToString(" • ")
+    val sort = when (source.sortBy) {
+        TmdbCollectionSort.POPULAR_DESC.value -> "Popular"
+        TmdbCollectionSort.VOTE_AVERAGE_DESC.value -> "Top Rated"
+        TmdbCollectionSort.RELEASE_DATE_DESC.value,
+        TmdbCollectionSort.FIRST_AIR_DATE_DESC.value -> "Recent"
+        else -> source.sortBy
+    }
+    return when (source.sourceType) {
+        TmdbCollectionSourceType.LIST -> "TMDB List"
+        TmdbCollectionSourceType.COLLECTION -> "TMDB Movie Collection"
+        TmdbCollectionSourceType.COMPANY -> listOf("Production", media, sort).joinToString(" • ")
+        TmdbCollectionSourceType.NETWORK -> listOf("Network", "Series", sort).joinToString(" • ")
+        TmdbCollectionSourceType.DISCOVER -> listOf("TMDB Discover", media, sort).joinToString(" • ")
+    }
 }

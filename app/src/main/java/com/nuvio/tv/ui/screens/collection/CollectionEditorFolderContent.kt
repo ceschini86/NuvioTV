@@ -109,11 +109,13 @@ fun FolderEditorContent(
             onInputChange = { viewModel.setTmdbInput(it) },
             onTitleChange = { viewModel.setTmdbTitleInput(it) },
             onMediaTypeChange = { viewModel.setTmdbMediaType(it) },
+            onMediaBothChange = { viewModel.setTmdbMediaBoth(it) },
             onSortChange = { viewModel.setTmdbSortBy(it) },
             onFiltersChange = { viewModel.setTmdbFilters(it) },
             onSearchCompanies = { viewModel.searchTmdbCompanies() },
             onSearchCollections = { viewModel.searchTmdbCollections() },
             onAddSource = { viewModel.addTmdbSource(it) },
+            onAddSources = { viewModel.addTmdbSources(it) },
             onAddFromInput = { viewModel.addTmdbSourceFromInput() },
             onAddDiscover = { viewModel.addDiscoverSource() },
             onBack = { viewModel.hideTmdbSourcePicker() }

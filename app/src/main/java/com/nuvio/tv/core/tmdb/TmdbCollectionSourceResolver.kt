@@ -24,6 +24,11 @@ import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
+data class TmdbSourceImportMetadata(
+    val title: String? = null,
+    val coverImageUrl: String? = null
+)
+
 @Singleton
 class TmdbCollectionSourceResolver @Inject constructor(
     private val tmdbApi: TmdbApi,
@@ -58,6 +63,25 @@ class TmdbCollectionSourceResolver @Inject constructor(
         if (query.isBlank()) return@withContext emptyList()
         val language = tmdbSettingsDataStore.settings.first().language
         tmdbApi.searchCollections(BuildConfig.TMDB_API_KEY, query.trim(), language).body()?.results.orEmpty()
+    }
+
+    suspend fun listImportMetadata(id: Int): TmdbSourceImportMetadata = withContext(Dispatchers.IO) {
+        val language = tmdbSettingsDataStore.settings.first().language
+        val body = tmdbApi.getListDetails(id, BuildConfig.TMDB_API_KEY, language, 1).body()
+            ?: error("TMDB list not found")
+        TmdbSourceImportMetadata(
+            title = body.name?.takeIf { it.isNotBlank() }
+        )
+    }
+
+    suspend fun collectionImportMetadata(id: Int): TmdbSourceImportMetadata = withContext(Dispatchers.IO) {
+        val language = tmdbSettingsDataStore.settings.first().language
+        val body = tmdbApi.getCollectionDetails(id, BuildConfig.TMDB_API_KEY, language).body()
+            ?: error("TMDB collection not found")
+        TmdbSourceImportMetadata(
+            title = body.name?.takeIf { it.isNotBlank() },
+            coverImageUrl = imageUrl(body.posterPath, "w500") ?: imageUrl(body.backdropPath, "w1280")
+        )
     }
 
     suspend fun searchKeywords(query: String): Map<Int, String> = withContext(Dispatchers.IO) {

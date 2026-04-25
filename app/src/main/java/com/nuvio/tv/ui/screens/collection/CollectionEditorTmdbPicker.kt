@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -92,11 +93,13 @@ fun TmdbSourcePickerContent(
     onInputChange: (String) -> Unit,
     onTitleChange: (String) -> Unit,
     onMediaTypeChange: (TmdbCollectionMediaType) -> Unit,
+    onMediaBothChange: (Boolean) -> Unit,
     onSortChange: (String) -> Unit,
     onFiltersChange: (TmdbCollectionFilters) -> Unit,
     onSearchCompanies: () -> Unit,
     onSearchCollections: () -> Unit,
     onAddSource: (TmdbCollectionSource) -> Unit,
+    onAddSources: (List<TmdbCollectionSource>) -> Unit,
     onAddFromInput: () -> Unit,
     onAddDiscover: () -> Unit,
     onBack: () -> Unit
@@ -121,7 +124,11 @@ fun TmdbSourcePickerContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(end = 16.dp, top = 4.dp, bottom = 4.dp)
+        ) {
             items(TmdbBuilderMode.values().toList()) { mode ->
                 val selected = uiState.tmdbBuilderMode == mode
                 Button(
@@ -132,7 +139,8 @@ fun TmdbSourcePickerContent(
                         focusedContainerColor = NuvioColors.FocusBackground,
                         focusedContentColor = NuvioColors.Primary
                     ),
-                    shape = ButtonDefaults.shape(RoundedCornerShape(12.dp))
+                    shape = ButtonDefaults.shape(RoundedCornerShape(12.dp)),
+                    scale = ButtonDefaults.scale(focusedScale = 1f)
                 ) {
                     Text(tmdbModeLabel(mode))
                 }
@@ -148,7 +156,7 @@ fun TmdbSourcePickerContent(
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 8.dp, end = 8.dp, bottom = 48.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 48.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
@@ -167,14 +175,17 @@ fun TmdbSourcePickerContent(
                 TmdbBuilderMode.LIST,
                 TmdbBuilderMode.NETWORK -> {
                     item {
+                        val isNetwork = uiState.tmdbBuilderMode == TmdbBuilderMode.NETWORK
                         TmdbBasicSourceForm(
                             uiState = uiState,
                             onInputChange = onInputChange,
                             onTitleChange = onTitleChange,
                             onMediaTypeChange = onMediaTypeChange,
+                            onMediaBothChange = onMediaBothChange,
                             onSortChange = onSortChange,
                             onAdd = onAddFromInput,
-                            lockTv = uiState.tmdbBuilderMode == TmdbBuilderMode.NETWORK
+                            showMediaControls = false,
+                            showSortControls = isNetwork
                         )
                     }
                 }
@@ -185,6 +196,7 @@ fun TmdbSourcePickerContent(
                             onInputChange = onInputChange,
                             onTitleChange = onTitleChange,
                             onMediaTypeChange = onMediaTypeChange,
+                            onMediaBothChange = onMediaBothChange,
                             onSortChange = onSortChange,
                             onAdd = onAddFromInput,
                             onSearch = onSearchCompanies
@@ -196,15 +208,17 @@ fun TmdbSourcePickerContent(
                             title = title,
                             subtitle = listOfNotNull("Production", result.originCountry).joinToString(" • "),
                             onClick = {
-                                onAddSource(
-                                    TmdbCollectionSource(
-                                        sourceType = TmdbCollectionSourceType.COMPANY,
-                                        title = title,
-                                        tmdbId = result.id,
-                                        mediaType = uiState.tmdbMediaType,
-                                        sortBy = uiState.tmdbSortBy,
-                                        filters = uiState.tmdbFilters
-                                    )
+                                onAddSources(
+                                    tmdbSelectedMediaTypes(uiState).map { mediaType ->
+                                        TmdbCollectionSource(
+                                            sourceType = TmdbCollectionSourceType.COMPANY,
+                                            title = tmdbTitleForMedia(title, mediaType, uiState.tmdbMediaBoth),
+                                            tmdbId = result.id,
+                                            mediaType = mediaType,
+                                            sortBy = uiState.tmdbSortBy,
+                                            filters = uiState.tmdbFilters
+                                        )
+                                    }
                                 )
                             }
                         )
@@ -217,10 +231,12 @@ fun TmdbSourcePickerContent(
                             onInputChange = onInputChange,
                             onTitleChange = onTitleChange,
                             onMediaTypeChange = onMediaTypeChange,
+                            onMediaBothChange = onMediaBothChange,
                             onSortChange = onSortChange,
                             onAdd = onAddFromInput,
                             onSearch = onSearchCollections,
-                            lockMovie = true
+                            showMediaControls = false,
+                            showSortControls = false
                         )
                     }
                     items(uiState.tmdbCollectionResults) { result ->
@@ -248,6 +264,7 @@ fun TmdbSourcePickerContent(
                             uiState = uiState,
                             onTitleChange = onTitleChange,
                             onMediaTypeChange = onMediaTypeChange,
+                            onMediaBothChange = onMediaBothChange,
                             onSortChange = onSortChange,
                             onFiltersChange = onFiltersChange,
                             onAdd = onAddDiscover
@@ -266,11 +283,12 @@ private fun TmdbBasicSourceForm(
     onInputChange: (String) -> Unit,
     onTitleChange: (String) -> Unit,
     onMediaTypeChange: (TmdbCollectionMediaType) -> Unit,
+    onMediaBothChange: (Boolean) -> Unit,
     onSortChange: (String) -> Unit,
     onAdd: () -> Unit,
     onSearch: (() -> Unit)? = null,
-    lockTv: Boolean = false,
-    lockMovie: Boolean = false
+    showMediaControls: Boolean = true,
+    showSortControls: Boolean = true
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         TmdbLabeledField(
@@ -287,7 +305,7 @@ private fun TmdbBasicSourceForm(
                 TmdbBuilderMode.LIST -> "https://www.themoviedb.org/list/8504994 or 8504994"
                 TmdbBuilderMode.NETWORK -> "213 for Netflix, 49 for HBO, 2739 for Disney+"
                 TmdbBuilderMode.COLLECTION -> "10 for Star Wars Collection"
-                TmdbBuilderMode.PRODUCTION -> "Marvel Studios, Pixar, Warner Bros."
+                TmdbBuilderMode.PRODUCTION -> "Marvel Studios, 420, or company URL"
                 else -> stringResource(R.string.collections_editor_tmdb_id_or_url)
             },
             helper = when (uiState.tmdbBuilderMode) {
@@ -305,20 +323,19 @@ private fun TmdbBasicSourceForm(
             placeholder = "Marvel Movies, Netflix Originals, Pixar",
             helper = stringResource(R.string.collections_editor_tmdb_title_helper)
         )
-        TmdbMediaSortControls(
-            mediaType = uiState.tmdbMediaType,
-            sortBy = uiState.tmdbSortBy,
-            onMediaTypeChange = onMediaTypeChange,
-            onSortChange = onSortChange,
-            lockTv = lockTv,
-            lockMovie = lockMovie
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            onSearch?.let {
-                NuvioButton(onClick = it) { Text(stringResource(R.string.collections_editor_tmdb_search)) }
-            }
-            NuvioButton(onClick = onAdd) { Text(stringResource(R.string.collections_editor_add_source)) }
+        if (showMediaControls || showSortControls) {
+            TmdbMediaSortControls(
+                mediaType = uiState.tmdbMediaType,
+                bothSelected = uiState.tmdbMediaBoth,
+                sortBy = uiState.tmdbSortBy,
+                onMediaTypeChange = onMediaTypeChange,
+                onBothChange = onMediaBothChange,
+                onSortChange = onSortChange,
+                showMediaControls = showMediaControls,
+                showSortControls = showSortControls
+            )
         }
+        TmdbActionButtons(onSearch = onSearch, onAdd = onAdd)
     }
 }
 
@@ -328,6 +345,7 @@ private fun TmdbDiscoverForm(
     uiState: CollectionEditorUiState,
     onTitleChange: (String) -> Unit,
     onMediaTypeChange: (TmdbCollectionMediaType) -> Unit,
+    onMediaBothChange: (Boolean) -> Unit,
     onSortChange: (String) -> Unit,
     onFiltersChange: (TmdbCollectionFilters) -> Unit,
     onAdd: () -> Unit
@@ -343,8 +361,10 @@ private fun TmdbDiscoverForm(
         )
         TmdbMediaSortControls(
             mediaType = uiState.tmdbMediaType,
+            bothSelected = uiState.tmdbMediaBoth,
             sortBy = uiState.tmdbSortBy,
             onMediaTypeChange = onMediaTypeChange,
+            onBothChange = onMediaBothChange,
             onSortChange = onSortChange
         )
         TmdbQuickChips(
@@ -473,7 +493,7 @@ private fun TmdbDiscoverForm(
         ) {
             onFiltersChange(filters.copy(year = it.toIntOrNull()))
         }
-        NuvioButton(onClick = onAdd) { Text(stringResource(R.string.collections_editor_add_source)) }
+        TmdbActionButtons(onSearch = null, onAdd = onAdd)
     }
 }
 
@@ -516,6 +536,58 @@ private fun TmdbLabeledField(
     }
 }
 
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun TmdbActionButtons(
+    onSearch: (() -> Unit)?,
+    onAdd: () -> Unit
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        onSearch?.let {
+            TmdbActionButton(onClick = it, primary = false) {
+                Icon(Icons.Default.Search, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(stringResource(R.string.collections_editor_tmdb_search))
+            }
+        }
+        TmdbActionButton(onClick = onAdd, primary = true) {
+            Icon(Icons.Default.Add, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(stringResource(R.string.collections_editor_add_source))
+        }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun TmdbActionButton(
+    onClick: () -> Unit,
+    primary: Boolean,
+    content: @Composable () -> Unit
+) {
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.colors(
+            containerColor = if (primary) NuvioColors.Secondary else NuvioColors.BackgroundCard,
+            contentColor = if (primary) NuvioColors.OnSecondary else NuvioColors.TextSecondary,
+            focusedContainerColor = if (primary) NuvioColors.SecondaryVariant else NuvioColors.FocusBackground,
+            focusedContentColor = if (primary) NuvioColors.OnSecondaryVariant else NuvioColors.Primary
+        ),
+        border = ButtonDefaults.border(
+            focusedBorder = Border(
+                border = BorderStroke(2.dp, if (primary) NuvioColors.SecondaryVariant else NuvioColors.FocusRing),
+                shape = RoundedCornerShape(12.dp)
+            )
+        ),
+        shape = ButtonDefaults.shape(RoundedCornerShape(12.dp)),
+        scale = ButtonDefaults.scale(focusedScale = 1f)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            content()
+        }
+    }
+}
+
 @Composable
 private fun TmdbModeHelp(mode: TmdbBuilderMode) {
     val text = when (mode) {
@@ -537,7 +609,11 @@ private fun TmdbQuickChips(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = NuvioColors.TextSecondary)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+        ) {
             items(chips) { (chipLabel, value) ->
                 TmdbChoiceButton(
                     label = chipLabel,
@@ -570,48 +646,95 @@ private fun tmdbGenreQuickChips(mediaType: TmdbCollectionMediaType): List<Pair<S
     }
 }
 
+private fun tmdbSelectedMediaTypes(uiState: CollectionEditorUiState): List<TmdbCollectionMediaType> {
+    return if (uiState.tmdbMediaBoth) {
+        listOf(TmdbCollectionMediaType.MOVIE, TmdbCollectionMediaType.TV)
+    } else {
+        listOf(uiState.tmdbMediaType)
+    }
+}
+
+private fun tmdbTitleForMedia(
+    title: String,
+    mediaType: TmdbCollectionMediaType,
+    addSuffix: Boolean
+): String {
+    if (!addSuffix) return title
+    val suffix = when (mediaType) {
+        TmdbCollectionMediaType.MOVIE -> "Movies"
+        TmdbCollectionMediaType.TV -> "Series"
+    }
+    return "$title $suffix"
+}
+
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun TmdbMediaSortControls(
     mediaType: TmdbCollectionMediaType,
+    bothSelected: Boolean,
     sortBy: String,
     onMediaTypeChange: (TmdbCollectionMediaType) -> Unit,
+    onBothChange: (Boolean) -> Unit,
     onSortChange: (String) -> Unit,
-    lockTv: Boolean = false,
-    lockMovie: Boolean = false
+    showMediaControls: Boolean = true,
+    showSortControls: Boolean = true
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TmdbChoiceButton(
-                label = stringResource(R.string.type_movie),
-                selected = mediaType == TmdbCollectionMediaType.MOVIE,
-                enabled = !lockTv,
-                onClick = { onMediaTypeChange(TmdbCollectionMediaType.MOVIE) }
-            )
-            TmdbChoiceButton(
-                label = stringResource(R.string.type_series),
-                selected = mediaType == TmdbCollectionMediaType.TV,
-                enabled = !lockMovie,
-                onClick = { onMediaTypeChange(TmdbCollectionMediaType.TV) }
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            val sorts = listOf(
-                TmdbCollectionSort.POPULAR_DESC.value to stringResource(R.string.tmdb_entity_rail_popular),
-                TmdbCollectionSort.VOTE_AVERAGE_DESC.value to stringResource(R.string.tmdb_entity_rail_top_rated),
-                if (mediaType == TmdbCollectionMediaType.TV) {
-                    TmdbCollectionSort.FIRST_AIR_DATE_DESC.value to stringResource(R.string.tmdb_entity_rail_recent)
-                } else {
-                    TmdbCollectionSort.RELEASE_DATE_DESC.value to stringResource(R.string.tmdb_entity_rail_recent)
-                }
-            )
-            sorts.forEach { (value, label) ->
+        if (showMediaControls) {
+            TmdbOptionRow(label = stringResource(R.string.library_filter_type)) {
                 TmdbChoiceButton(
-                    label = label,
-                    selected = sortBy == value,
-                    onClick = { onSortChange(value) }
+                    label = stringResource(R.string.type_movie),
+                    selected = mediaType == TmdbCollectionMediaType.MOVIE && !bothSelected,
+                    onClick = { onMediaTypeChange(TmdbCollectionMediaType.MOVIE) }
+                )
+                TmdbChoiceButton(
+                    label = stringResource(R.string.type_series),
+                    selected = mediaType == TmdbCollectionMediaType.TV && !bothSelected,
+                    onClick = { onMediaTypeChange(TmdbCollectionMediaType.TV) }
+                )
+                TmdbChoiceButton(
+                    label = "Both",
+                    selected = bothSelected,
+                    onClick = { onBothChange(true) }
                 )
             }
+        }
+        if (showSortControls) {
+            TmdbOptionRow(label = stringResource(R.string.library_filter_sort)) {
+                val sorts = listOf(
+                    TmdbCollectionSort.POPULAR_DESC.value to stringResource(R.string.tmdb_entity_rail_popular),
+                    TmdbCollectionSort.VOTE_AVERAGE_DESC.value to stringResource(R.string.tmdb_entity_rail_top_rated),
+                    if (mediaType == TmdbCollectionMediaType.TV && !bothSelected) {
+                        TmdbCollectionSort.FIRST_AIR_DATE_DESC.value to stringResource(R.string.tmdb_entity_rail_recent)
+                    } else {
+                        TmdbCollectionSort.RELEASE_DATE_DESC.value to stringResource(R.string.tmdb_entity_rail_recent)
+                    }
+                )
+                sorts.forEach { (value, label) ->
+                    TmdbChoiceButton(
+                        label = label,
+                        selected = sortBy == value,
+                        onClick = { onSortChange(value) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TmdbOptionRow(
+    label: String,
+    content: @Composable () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = NuvioColors.TextSecondary
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            content()
         }
     }
 }
@@ -633,7 +756,8 @@ private fun TmdbChoiceButton(
             focusedContainerColor = NuvioColors.FocusBackground,
             focusedContentColor = NuvioColors.Primary
         ),
-        shape = ButtonDefaults.shape(RoundedCornerShape(12.dp))
+        shape = ButtonDefaults.shape(RoundedCornerShape(12.dp)),
+        scale = ButtonDefaults.scale(focusedScale = 1f)
     ) {
         Text(label)
     }
@@ -655,7 +779,8 @@ private fun TmdbPickerCard(title: String, subtitle: String, onClick: () -> Unit)
                 shape = RoundedCornerShape(12.dp)
             )
         ),
-        shape = CardDefaults.shape(RoundedCornerShape(12.dp))
+        shape = CardDefaults.shape(RoundedCornerShape(12.dp)),
+        scale = CardDefaults.scale(focusedScale = 1f)
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, style = MaterialTheme.typography.titleSmall, color = NuvioColors.TextPrimary)
