@@ -6,8 +6,10 @@ import com.nuvio.tv.data.remote.api.TmdbApi
 import com.nuvio.tv.data.remote.api.TmdbDiscoverResponse
 import com.nuvio.tv.data.remote.api.TmdbDiscoverResult
 import com.nuvio.tv.data.remote.api.TmdbCollectionResponse
+import com.nuvio.tv.data.remote.api.TmdbCompanyDetailsResponse
 import com.nuvio.tv.data.remote.api.TmdbListDetailsResponse
 import com.nuvio.tv.data.remote.api.TmdbListItem
+import com.nuvio.tv.data.remote.api.TmdbNetworkDetailsResponse
 import com.nuvio.tv.domain.model.TmdbCollectionFilters
 import com.nuvio.tv.domain.model.TmdbCollectionMediaType
 import com.nuvio.tv.domain.model.TmdbCollectionSource
@@ -118,6 +120,42 @@ class TmdbCollectionSourceResolverTest {
 
         assertEquals("Star Wars Collection", metadata.title)
         assertEquals("https://image.tmdb.org/t/p/w500/collection.jpg", metadata.coverImageUrl)
+    }
+
+    @Test
+    fun `company import metadata uses name and logo cover`() = runTest {
+        val api = mockk<TmdbApi>()
+        coEvery { api.getCompanyDetails(420, any()) } returns Response.success(
+            TmdbCompanyDetailsResponse(
+                id = 420,
+                name = "Marvel Studios",
+                logoPath = "/marvel.png"
+            )
+        )
+        val resolver = TmdbCollectionSourceResolver(api, settings)
+
+        val metadata = resolver.companyImportMetadata(420)
+
+        assertEquals("Marvel Studios", metadata.title)
+        assertEquals("https://image.tmdb.org/t/p/w500/marvel.png", metadata.coverImageUrl)
+    }
+
+    @Test
+    fun `network import metadata uses name and logo cover`() = runTest {
+        val api = mockk<TmdbApi>()
+        coEvery { api.getNetworkDetails(2552, any()) } returns Response.success(
+            TmdbNetworkDetailsResponse(
+                id = 2552,
+                name = "Apple TV+",
+                logoPath = "/apple.png"
+            )
+        )
+        val resolver = TmdbCollectionSourceResolver(api, settings)
+
+        val metadata = resolver.networkImportMetadata(2552)
+
+        assertEquals("Apple TV+", metadata.title)
+        assertEquals("https://image.tmdb.org/t/p/w500/apple.png", metadata.coverImageUrl)
     }
 
     @Test

@@ -84,6 +84,24 @@ class TmdbCollectionSourceResolver @Inject constructor(
         )
     }
 
+    suspend fun companyImportMetadata(id: Int): TmdbSourceImportMetadata = withContext(Dispatchers.IO) {
+        val body = tmdbApi.getCompanyDetails(id, BuildConfig.TMDB_API_KEY).body()
+            ?: error("TMDB company not found")
+        TmdbSourceImportMetadata(
+            title = body.name?.takeIf { it.isNotBlank() },
+            coverImageUrl = imageUrl(body.logoPath, "w500")
+        )
+    }
+
+    suspend fun networkImportMetadata(id: Int): TmdbSourceImportMetadata = withContext(Dispatchers.IO) {
+        val body = tmdbApi.getNetworkDetails(id, BuildConfig.TMDB_API_KEY).body()
+            ?: error("TMDB network not found")
+        TmdbSourceImportMetadata(
+            title = body.name?.takeIf { it.isNotBlank() },
+            coverImageUrl = imageUrl(body.logoPath, "w500")
+        )
+    }
+
     suspend fun searchKeywords(query: String): Map<Int, String> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyMap()
         tmdbApi.searchKeywords(BuildConfig.TMDB_API_KEY, query.trim()).body()?.results.orEmpty()

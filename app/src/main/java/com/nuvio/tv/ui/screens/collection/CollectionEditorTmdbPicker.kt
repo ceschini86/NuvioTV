@@ -156,7 +156,7 @@ fun TmdbSourcePickerContent(
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 48.dp),
+            contentPadding = PaddingValues(top = 6.dp, bottom = 48.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {

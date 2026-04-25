@@ -477,9 +477,9 @@ class CollectionEditorViewModel @Inject constructor(
     }
 
     fun addTmdbSource(source: TmdbCollectionSource) {
-        if (source.sourceType == TmdbCollectionSourceType.COLLECTION && source.tmdbId != null) {
+        if (source.tmdbId != null && source.sourceType in coverMetadataSourceTypes) {
             viewModelScope.launch {
-                val metadata = runCatching { tmdbCollectionSourceResolver.collectionImportMetadata(source.tmdbId) }
+                val metadata = runCatching { importMetadataFor(source.sourceType, source.tmdbId) }
                 val resolved = metadata.getOrNull()
                 addTmdbSourceToFolder(
                     source = if (source.title.isBlank()) source.copy(title = resolved?.title.orEmpty()) else source,
@@ -492,6 +492,15 @@ class CollectionEditorViewModel @Inject constructor(
     }
 
     fun addTmdbSources(sources: List<TmdbCollectionSource>) {
+        val metadataSource = sources.firstOrNull { it.tmdbId != null && it.sourceType in coverMetadataSourceTypes }
+        if (metadataSource != null) {
+            viewModelScope.launch {
+                val metadata = runCatching { importMetadataFor(metadataSource.sourceType, metadataSource.tmdbId!!) }
+                val resolved = metadata.getOrNull()
+                addTmdbSourcesToFolder(sources, resolved?.coverImageUrl)
+            }
+            return
+        }
         addTmdbSourcesToFolder(sources)
     }
 
@@ -504,7 +513,7 @@ class CollectionEditorViewModel @Inject constructor(
             val folder = state.editingFolder ?: return@update state
             val newSources = sources.filterNot { source -> folder.sources.any { it == source } }
             if (newSources.isEmpty()) return@update state
-            val shouldApplyCover = newSources.any { it.sourceType == TmdbCollectionSourceType.COLLECTION } &&
+            val shouldApplyCover = newSources.any { it.sourceType in coverMetadataSourceTypes } &&
                 !coverImageUrl.isNullOrBlank() &&
                 folder.coverImageUrl.isNullOrBlank()
             val updatedFolder = if (shouldApplyCover) {
@@ -655,6 +664,20 @@ class CollectionEditorViewModel @Inject constructor(
         }
         return "$title $suffix"
     }
+
+    private suspend fun importMetadataFor(sourceType: TmdbCollectionSourceType, id: Int) = when (sourceType) {
+        TmdbCollectionSourceType.COLLECTION -> tmdbCollectionSourceResolver.collectionImportMetadata(id)
+        TmdbCollectionSourceType.COMPANY -> tmdbCollectionSourceResolver.companyImportMetadata(id)
+        TmdbCollectionSourceType.NETWORK -> tmdbCollectionSourceResolver.networkImportMetadata(id)
+        TmdbCollectionSourceType.LIST -> tmdbCollectionSourceResolver.listImportMetadata(id)
+        TmdbCollectionSourceType.DISCOVER -> null
+    }
+
+    private val coverMetadataSourceTypes = setOf(
+        TmdbCollectionSourceType.COLLECTION,
+        TmdbCollectionSourceType.COMPANY,
+        TmdbCollectionSourceType.NETWORK
+    )
 
     fun tmdbPresets(): List<TmdbPresetSource> = listOf(
         TmdbPresetSource("Marvel Studios", TmdbCollectionSource(TmdbCollectionSourceType.COMPANY, "Marvel Studios", 420, TmdbCollectionMediaType.MOVIE)),
