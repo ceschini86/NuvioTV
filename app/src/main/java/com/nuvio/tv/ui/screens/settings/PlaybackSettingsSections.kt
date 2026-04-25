@@ -340,6 +340,7 @@ internal fun PlaybackSettingsSections(
                         snapshot = displayCapabilities,
                         afrModeOn = playerSettings.frameRateMatchingMode != FrameRateMatchingMode.OFF,
                         resolutionMatchingOn = playerSettings.resolutionMatchingEnabled,
+                        headerFocusRequester = afrHeaderFocus,
                         onDisableAll = onDisableAfrAndResolution,
                         onDisableAfrOnly = onDisableAfrOnly,
                         onDisableResolutionOnly = onDisableResolutionOnly,
@@ -648,6 +649,7 @@ private fun AfrCapabilityWarningCard(
     snapshot: DisplayCapabilities.Snapshot,
     afrModeOn: Boolean,
     resolutionMatchingOn: Boolean,
+    headerFocusRequester: FocusRequester,
     onDisableAll: () -> Unit,
     onDisableAfrOnly: () -> Unit,
     onDisableResolutionOnly: () -> Unit,
@@ -713,7 +715,10 @@ private fun AfrCapabilityWarningCard(
         Spacer(modifier = Modifier.height(12.dp))
         AfrCapabilityDisableButton(
             label = stringResource(buttonRes),
-            onClick = onDisable,
+            onClick = {
+                runCatching { headerFocusRequester.requestFocus() }
+                onDisable()
+            },
             onFocused = onFocused
         )
     }
