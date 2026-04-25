@@ -142,6 +142,20 @@ internal fun applyAspectMode(playerView: PlayerView, mode: AspectMode) {
     applyAspectScale(targetView, mode, viewAspect, videoAspect)
 }
 
+internal fun addExoAspectLayoutChangeListener(
+    playerView: PlayerView,
+    listener: View.OnLayoutChangeListener
+): () -> Unit {
+    val targets = linkedSetOf<View>()
+    targets.add(playerView)
+    playerView.findViewById<View>(androidx.media3.ui.R.id.exo_content_frame)?.let(targets::add)
+    resolveVideoSurfaceView(playerView)?.let(targets::add)
+    targets.forEach { it.addOnLayoutChangeListener(listener) }
+    return {
+        targets.forEach { it.removeOnLayoutChangeListener(listener) }
+    }
+}
+
 private fun applyAspectScale(targetView: View, mode: AspectMode, viewAspect: Float, videoAspect: Float?) {
     val scale = resolveAspectScale(
         mode = mode,
