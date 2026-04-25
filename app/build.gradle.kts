@@ -68,6 +68,22 @@ android {
         buildConfigField("String", "GITHUB_REPO", "\"NuvioTV\"")
     }
 
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("full") {
+            dimension = "distribution"
+            buildConfigField("boolean", "FEATURE_PLUGINS_ENABLED", "true")
+            buildConfigField("boolean", "FEATURE_IN_APP_TRAILERS_ENABLED", "true")
+            buildConfigField("boolean", "FEATURE_EXTERNAL_TRAILERS_ENABLED", "true")
+        }
+        create("playstore") {
+            dimension = "distribution"
+            buildConfigField("boolean", "FEATURE_PLUGINS_ENABLED", "false")
+            buildConfigField("boolean", "FEATURE_IN_APP_TRAILERS_ENABLED", "false")
+            buildConfigField("boolean", "FEATURE_EXTERNAL_TRAILERS_ENABLED", "true")
+        }
+    }
+
     signingConfigs {
         create("release") {
             keyAlias = releaseKeyAliasValue
@@ -308,24 +324,15 @@ dependencies {
         exclude(group = "org.jetbrains.compose.foundation")
     }
 
-    // Local Plugin System
-    implementation(libs.quickjs.kt)
-    implementation(libs.jsoup)
     implementation(libs.gson)
 
-    // Jackson — required by CloudStream DEX extensions at runtime
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.17.0")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.0")
-
-    // NiceHTTP — HTTP client used by CloudStream extensions via `app.get()`
-    implementation(libs.nicehttp)
-
-    // Conscrypt — TLS provider with browser-compatible fingerprint for Cloudflare bypass
-    implementation(libs.conscrypt.android)
-
-    // CloudStream library — provides core API classes for extension compatibility
-    implementation(libs.cloudstream.library) {
-        // Exclude heavy deps we don't need or that conflict
+    add("fullImplementation", libs.quickjs.kt)
+    add("fullImplementation", libs.jsoup)
+    add("fullImplementation", "com.fasterxml.jackson.core:jackson-databind:2.17.0")
+    add("fullImplementation", "com.fasterxml.jackson.module:jackson-module-kotlin:2.17.0")
+    add("fullImplementation", libs.nicehttp)
+    add("fullImplementation", libs.conscrypt.android)
+    add("fullImplementation", "com.github.recloudstream.cloudstream:library:${libs.versions.cloudstream.get()}") {
         exclude(group = "org.mozilla", module = "rhino")
         exclude(group = "com.github.AmarullisVFX", module = "newpipeextractor")
         exclude(group = "com.github.AmaryllisVFX", module = "newpipeextractor")
@@ -336,8 +343,7 @@ dependencies {
     // Markdown rendering
     implementation(libs.markdown.renderer.m3)
 
-    // Bundle real crypto-js (JS) for QuickJS plugins
-    implementation(libs.crypto.js)
+    add("fullImplementation", libs.crypto.js)
     // QR code + local server for addon management
     implementation(libs.nanohttpd)
     implementation(libs.zxing.core)
@@ -356,8 +362,7 @@ dependencies {
     implementation("androidx.metrics:metrics-performance:1.0.0-rc01")  // JankStats
     debugImplementation("androidx.compose.runtime:runtime-tracing")     
 
-    // Bundle real crypto-js (JS) for QuickJS plugins
-    implementation("org.webjars.npm:crypto-js:4.2.0")
+    add("fullImplementation", "org.webjars.npm:crypto-js:4.2.0")
 
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

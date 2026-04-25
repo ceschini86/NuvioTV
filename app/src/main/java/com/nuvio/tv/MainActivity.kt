@@ -88,6 +88,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import com.nuvio.tv.core.runtime.PluginRuntimeHooks
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -220,8 +221,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         window?.setBackgroundDrawable(null)
 
-        // Store Activity reference for CloudStream extensions that need it in plugin.load()
-        com.lagradost.cloudstream3.AcraApplication.setActivity(this)
+        PluginRuntimeHooks.onActivityCreate(this)
 
         window?.decorView?.post {
             val snapshot = com.nuvio.tv.core.player.DisplayCapabilities.detect(this)
@@ -560,7 +560,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        com.lagradost.cloudstream3.AcraApplication.setActivity(null)
+        PluginRuntimeHooks.onActivityDestroy()
     }
 }
 
