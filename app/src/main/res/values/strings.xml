@@ -131,7 +131,7 @@
     <string name="hero_director">Director: %1$s</string>
     <string name="hero_writer">Writer: %1$s</string>
     <string name="hero_play">Play</string>
-    <string name="hero_play_episode">Play S%1$d, E%2$d</string>
+    <string name="hero_play_episode">Play S%1$d E%2$d</string>
     <string name="hero_add_to_library">Add to library</string>
     <string name="hero_remove_from_library">Remove from library</string>
     <string name="hero_mark_watched">Mark as watched</string>
@@ -173,9 +173,9 @@
     <!-- MetaDetailsScreen -->
     <string name="detail_btn_play">Play</string>
     <string name="detail_btn_resume">Resume</string>
-    <string name="detail_btn_play_episode">Play S%1$dE%2$d</string>
-    <string name="detail_btn_resume_episode">Resume S%1$dE%2$d</string>
-    <string name="detail_btn_next_episode">Next S%1$dE%2$d</string>
+    <string name="detail_btn_play_episode">Play S%1$d E%2$d</string>
+    <string name="detail_btn_resume_episode">Resume S%1$d E%2$d</string>
+    <string name="detail_btn_next_episode">Next S%1$d E%2$d</string>
     <string name="detail_tab_cast">Creator and Cast</string>
     <string name="cast_role_creator">Creator</string>
     <string name="cast_role_director">Director</string>
@@ -949,7 +949,7 @@
     <string name="player_ends_at">Ends at %1$s</string>
     <string name="player_via">via %1$s</string>
     <!-- Season/episode code shown in player UI (e.g. S01E02). %1$d = season, %2$d = episode. -->
-    <string name="season_episode_format">S%1$02dE%2$02d</string>
+    <string name="season_episode_format">S%1$d E%2$d</string>
     <string name="player_subtitle_delay">Subtitles Delay</string>
     <string name="player_error_title">Playback Error</string>
     <string name="player_go_back">Go Back</string>
