@@ -127,16 +127,16 @@
     <string name="settings_profiles">Profile</string>
     <string name="settings_profiles_subtitle">Zarządzaj profilami użytkowników</string>
     <string name="settings_layout">Układ</string>
-    <string name="settings_layout_subtitle">Struktura strony głównej i style kart.</string>
+    <string name="settings_layout_subtitle">Struktura strony głównej i style kart</string>
     <string name="settings_plugins">Wtyczki</string>
-    <string name="settings_plugins_subtitle">Repozytoria i dostawcy.</string>
+    <string name="settings_plugins_subtitle">Repozytoria i dostawcy</string>
     <string name="settings_integration">Integracje</string>
     <string name="settings_playback">Odtwarzanie</string>
-    <string name="settings_playback_subtitle">Odtwarzacz, napisy i automatyczne odtwarzanie.</string>
-    <string name="settings_trakt_subtitle">Otwórz ekran połączenia z Trakt.</string>
-    <string name="settings_about_subtitle">Wersja i polityki.</string>
+    <string name="settings_playback_subtitle">Odtwarzacz, napisy i automatyczne odtwarzanie</string>
+    <string name="settings_trakt_subtitle">Otwórz ekran połączenia z Trakt</string>
+    <string name="settings_about_subtitle">Wersja i polityki</string>
     <string name="settings_debug">Debug</string>
-    <string name="settings_debug_subtitle">Narzędzia deweloperskie i flagi funkcji.</string>
+    <string name="settings_debug_subtitle">Narzędzia deweloperskie i flagi funkcji</string>
     <string name="settings_plugins_section_subtitle">Zarządzaj repozytoriami, dostawcami i stanami wtyczek</string>
     <string name="settings_account_section_subtitle">Status konta i synchronizacji</string>
     <string name="account_stat_addons">dodatki</string>
@@ -145,7 +145,7 @@
     <string name="account_stat_progress">postęp</string>
     <string name="account_stat_watched">obejrzane</string>
     <string name="settings_integrations_section">Integracje</string>
-    <string name="settings_integrations_section_subtitle">Wybierz ustawienia TMDB lub MDBList</string>
+    <string name="settings_integrations_section_subtitle">Zarządzaj dostępnymi integracjami</string>
     <string name="settings_tmdb_subtitle">Kontrolki wzbogacania metadanych</string>
     <string name="settings_mdblist_subtitle">Zewnętrzni dostawcy ocen</string>
 
@@ -191,6 +191,14 @@
     <string name="playback_afr_on_start_stop_sub">Przełącz przy starcie i przywróć przy zatrzymaniu.</string>
     <string name="playback_resolution_matching">Dopasowanie rozdzielczości</string>
     <string name="playback_resolution_matching_sub">Zezwól na zmianę trybu wyświetlania w celu dopasowania rozdzielczości wideo.</string>
+    <string name="playback_resolution_matching_unsupported_sub">Wyświetlacz zgłasza tylko jedną rozdzielczość; dopasowanie może nie mieć efektu.</string>
+    <string name="playback_afr_capability_unsupported_title">Niektóre ustawienia mogą nie działać</string>
+    <string name="playback_afr_capability_both_problem_body">Auto częstotliwość odświeżania i dopasowanie rozdzielczości są włączone, ale wyświetlacz zgłasza tylko jedną częstotliwość odświeżania i jedną rozdzielczość. Żadne z nich może nie zadziałać — zalecane jest wyłączenie obu.</string>
+    <string name="playback_afr_capability_only_afr_unsupported_body">Auto częstotliwość odświeżania jest włączona, ale wyświetlacz zgłasza tylko jedną częstotliwość odświeżania. Przełączanie może nie mieć efektu — zalecane jest wyłączenie.</string>
+    <string name="playback_afr_capability_only_res_unsupported_body">Dopasowanie rozdzielczości jest włączone, ale wyświetlacz zgłasza tylko jedną rozdzielczość. Dopasowanie może nie mieć efektu — zalecane jest wyłączenie.</string>
+    <string name="playback_afr_capability_disable_button">Wyłącz AFR</string>
+    <string name="playback_afr_capability_disable_resolution_button">Wyłącz dopasowanie rozdzielczości</string>
+    <string name="playback_afr_capability_disable_both_button">Wyłącz oba</string>
     <string name="playback_player_external_desc">Zawsze otwieraj strumienie w zewnętrznej aplikacji</string>
     <string name="playback_player_ask_desc">Wybieraj odtwarzacz za każdym razem</string>
 
@@ -548,7 +556,7 @@
 
     <!-- ProfileSettingsContent -->
     <string name="profile_title">Profile</string>
-    <string name="profile_subtitle">Zarządzaj profilami użytkowników dla tego konta.</string>
+    <string name="profile_subtitle">Zarządzaj profilami użytkowników dla tego konta</string>
     <string name="profile_primary_label">Główny</string>
     <string name="profile_shares_primary">Współdzieli %1$s profilu głównego</string>
     <string name="profile_edit_label">Edytuj</string>
@@ -1029,6 +1037,15 @@
     <string name="series_status_rumored">Plotki</string>
     <string name="series_status_in_production">W produkcji</string>
     <string name="series_status_post_production">Postprodukcja</string>
+    <string name="movie_status_ended">Zakończony</string>
+    <string name="movie_status_continuing">W trakcie</string>
+    <string name="movie_status_current">Na żywo</string>
+    <string name="movie_status_cancelled">Anulowany</string>
+    <string name="movie_status_released">Wydany</string>
+    <string name="movie_status_planned">Planowany</string>
+    <string name="movie_status_rumored">Plotki</string>
+    <string name="movie_status_in_production">W produkcji</string>
+    <string name="movie_status_post_production">Postprodukcja</string>
     <string name="watchlist_added">Dodano do listy</string>
     <string name="watchlist_removed">Usunięto z listy</string>
     <string name="account_sync_restart_note">Synchronizacja nie jest natychmiastowa na aktywnych urządzeniach. Uruchom ponownie to urządzenie po zalogowaniu lub aby pobrać zmiany wprowadzone gdzie indziej.</string>
@@ -1485,6 +1502,10 @@
     <string name="collections_editor_all_genres">Wszystkie gatunki</string>
     <string name="collections_editor_genre_required">Gatunek wymagany</string>
     <string name="collections_editor_genre_optional">Filtr gatunku dostępny</string>
+    <string name="collections_editor_hero_backdrop">Tło hero (Nowoczesny ekran główny)</string>
+    <string name="collections_editor_placeholder_hero_backdrop">URL niestandardowego tła hero (opcjonalnie)</string>
+    <string name="collections_editor_title_logo">Logo tytułu (Nowoczesny ekran główny)</string>
+    <string name="collections_editor_placeholder_title_logo">URL niestandardowego logo tytułu (opcjonalnie)</string>
     <string name="collections_card_title">Kolekcje</string>
     <string name="collections_card_subtitle">Grupuj katalogi w folderach na ekranie głównym</string>
     <string name="collections_tab_all">Wszystko</string>
@@ -1515,4 +1536,30 @@
     <string name="qr_login_signing_in">Logowanie…</string>
     <string name="qr_login_success">Zalogowano pomyślnie</string>
     <string name="qr_login_exchange_failed">Nie udało się dokończyć logowania QR</string>
+    <string name="playback_player_auto">Zalecane (Najlepsze dla treści)</string>
+    <string name="playback_player_auto_desc">ExoPlayer dla filmów i seriali · MPV dla anime</string>
+
+    <string name="advanced_clear_cw_cache">Wyczyść pamięć podręczną Kontynuuj oglądanie</string>
+    <string name="advanced_clear_cw_cache_done">Pamięć podręczna wyczyszczona</string>
+    <string name="advanced_clear_cw_cache_subtitle">Usuń zapisane miniatury, tytuły i dane wzbogacania dla Kontynuuj oglądanie</string>
+    <string name="detail_tab_trailer">Zwiastun</string>
+    <string name="detail_trailer_error">Nie udało się załadować zwiastuna.</string>
+    <string name="detail_trailer_loading">Ładowanie zwiastuna…</string>
+    <string name="library_empty_trakt_not_auth_subtitle">Połącz konto Trakt w Ustawieniach, aby zobaczyć swoją bibliotekę Trakt</string>
+    <string name="library_empty_trakt_not_auth_title">Trakt nie jest połączony</string>
+    <string name="profile_pin_current_required">Ten profil ma już PIN. Wprowadź aktualny PIN, aby go zmienić.</string>
+    <string name="profile_pin_overlay_delete_verify_heading">Wprowadź aktualny PIN, aby usunąć %1$s.</string>
+    <string name="profile_pin_overlay_delete_verify_support">Wprowadź aktualny 4-cyfrowy PIN przed usunięciem tego profilu.</string>
+    <string name="season_episode_format">S%1$02dE%2$02d</string>
+    <string name="stream_info_player_engine">Silnik odtwarzacza</string>
+    <string name="tmdb_trailers_subtitle">Kandydaci na zwiastuny z filmów TMDB dla sekcji zwiastunów</string>
+    <string name="tmdb_trailers_title">Zwiastuny</string>
+    <string name="trakt_library_source_dialog_subtitle">Wybierz, gdzie zapisywać i zarządzać elementami biblioteki</string>
+    <string name="trakt_library_source_dialog_title">Źródło biblioteki</string>
+    <string name="trakt_library_source_nuvio">Biblioteka Nuvio</string>
+    <string name="trakt_library_source_nuvio_selected">Wybrano bibliotekę Nuvio</string>
+    <string name="trakt_library_source_subtitle">Wybierz, której biblioteki używać do zapisywania i przeglądania kolekcji</string>
+    <string name="trakt_library_source_title">Źródło biblioteki</string>
+    <string name="trakt_library_source_trakt">Trakt</string>
+    <string name="trakt_library_source_trakt_selected">Wybrano bibliotekę Trakt</string>
 </resources>

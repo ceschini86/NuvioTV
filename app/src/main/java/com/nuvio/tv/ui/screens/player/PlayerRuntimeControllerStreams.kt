@@ -1,5 +1,7 @@
 package com.nuvio.tv.ui.screens.player
 
+import android.content.Intent
+import android.net.Uri
 import androidx.media3.common.util.UnstableApi
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.player.StreamAutoPlaySelector
@@ -354,8 +356,66 @@ private fun PlayerRuntimeController.persistTorrentStreamForReuse(stream: Stream)
     }
 }
 
+private fun PlayerRuntimeController.openExternalStreamInBrowser(
+    stream: Stream,
+    fromEpisodePanel: Boolean
+): Boolean {
+    if (!stream.isExternal()) return false
+
+    val externalUrl = stream.getStreamUrl()
+    if (externalUrl.isNullOrBlank()) {
+        _uiState.update {
+            if (fromEpisodePanel) {
+                it.copy(episodeStreamsError = "Invalid external URL")
+            } else {
+                it.copy(sourceStreamsError = "Invalid external URL")
+            }
+        }
+        return true
+    }
+
+    val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(externalUrl))
+        .addCategory(Intent.CATEGORY_BROWSABLE)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    runCatching {
+        context.startActivity(browserIntent)
+    }.onSuccess {
+        _uiState.update {
+            if (fromEpisodePanel) {
+                it.copy(
+                    showEpisodesPanel = false,
+                    showEpisodeStreams = false,
+                    isLoadingEpisodeStreams = false,
+                    episodeStreamsError = null
+                )
+            } else {
+                it.copy(
+                    showSourcesPanel = false,
+                    isLoadingSourceStreams = false,
+                    sourceStreamsError = null
+                )
+            }
+        }
+    }.onFailure { error ->
+        _uiState.update {
+            if (fromEpisodePanel) {
+                it.copy(episodeStreamsError = error.message ?: "Unable to open external link")
+            } else {
+                it.copy(sourceStreamsError = error.message ?: "Unable to open external link")
+            }
+        }
+    }
+
+    return true
+}
+
 @androidx.annotation.OptIn(UnstableApi::class)
 internal fun PlayerRuntimeController.switchToSourceStream(stream: Stream) {
+    if (openExternalStreamInBrowser(stream = stream, fromEpisodePanel = false)) {
+        return
+    }
+
     // Torrent streams: delegate to torrent-aware path
     if (stream.isTorrent()) {
         val infoHash = stream.infoHash ?: return
@@ -671,6 +731,10 @@ internal fun PlayerRuntimeController.reloadEpisodeStreams() {
 }
 
 internal fun PlayerRuntimeController.switchToEpisodeStream(stream: Stream, forcedTargetVideo: Video? = null) {
+    if (openExternalStreamInBrowser(stream = stream, fromEpisodePanel = true)) {
+        return
+    }
+
     // Torrent streams: delegate to torrent-aware path
     if (stream.isTorrent()) {
         val infoHash = stream.infoHash ?: return
@@ -709,7 +773,6 @@ internal fun PlayerRuntimeController.switchToEpisodeStream(stream: Stream, force
         url = url,
         headers = newHeaders
     )
-    persistSelectedStreamForReuse(stream = stream, url = url, headers = newHeaders)
     persistedTrackPreference = null
     subtitleDisabledByPersistedPreference = false
     subtitleAddonRestoredByPersistedPreference = false
@@ -720,6 +783,7 @@ internal fun PlayerRuntimeController.switchToEpisodeStream(stream: Stream, force
     currentSeason = targetVideo?.season ?: _uiState.value.episodeStreamsSeason ?: currentSeason
     currentEpisode = targetVideo?.episode ?: _uiState.value.episodeStreamsEpisode ?: currentEpisode
     currentEpisodeTitle = targetVideo?.title ?: _uiState.value.episodeStreamsTitle ?: currentEpisodeTitle
+    persistSelectedStreamForReuse(stream = stream, url = url, headers = newHeaders)
     currentTraktEpisodeMapping = null
     currentTraktEpisodeMappingKey = null
     lastSavedPosition = 0L
@@ -1017,7 +1081,6 @@ internal fun PlayerRuntimeController.playNextEpisode() {
                     innerJob.join()
                 }
             } else {
-                timeoutElapsed = true
                 innerJob.join()
             }
 

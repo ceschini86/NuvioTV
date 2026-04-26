@@ -4,6 +4,7 @@ import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.foundation.layout.Box
@@ -18,9 +19,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.animation.core.animateDpAsState
@@ -31,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -57,8 +61,10 @@ import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.ui.theme.NuvioColors
 import com.nuvio.tv.ui.theme.NuvioTheme
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.CachePolicy
+import coil3.request.crossfade
 import kotlinx.coroutines.delay
 
 /**
@@ -79,6 +85,7 @@ fun ContentCard(
     focusRequester: FocusRequester? = null,
     posterCardStyle: PosterCardStyle = PosterCardDefaults.Style,
     showLabels: Boolean = true,
+    placeholderShimmerOffsetState: State<Float>? = null,
     focusedPosterBackdropExpandEnabled: Boolean = false,
     focusedPosterBackdropExpandDelaySeconds: Int = 3,
     focusedPosterBackdropTrailerEnabled: Boolean = false,
@@ -88,6 +95,9 @@ fun ContentCard(
     onRequestTrailerPreview: (MetaPreview) -> Unit = {},
     isWatched: Boolean = false,
     onFocus: (MetaPreview) -> Unit = {},
+    onBackdropExpandedChanged: ((Boolean) -> Unit)? = null,
+    expandedDownFocusRequester: FocusRequester? = null,
+    expandedUpFocusRequester: FocusRequester? = null,
     onLongPress: (() -> Unit)? = null,
     onClick: () -> Unit = {}
 ) {
@@ -111,7 +121,9 @@ fun ContentCard(
     var trailerFirstFrameRendered by remember(trailerPreviewUrl) { mutableStateOf(false) }
     val lifecycleOwner = LocalLifecycleOwner.current
 
-
+    LaunchedEffect(isBackdropExpanded) {
+        onBackdropExpandedChanged?.invoke(isBackdropExpanded)
+    }
     val needsFocusState = focusedPosterBackdropExpandEnabled || focusedPosterBackdropTrailerEnabled
     val lastFocusedRef = remember { booleanArrayOf(false) }
 
@@ -209,24 +221,26 @@ fun ContentCard(
         val imageModel = remember(imageUrl, requestWidthPx, requestHeightPx) {
             ImageRequest.Builder(context)
                 .data(imageUrl)
-                .crossfade(false)
+                .crossfade(true)
                 .memoryCacheKey("${imageUrl}_${requestWidthPx}x${requestHeightPx}")
                 .size(width = requestWidthPx, height = requestHeightPx)
                 .build()
         }
+        // Coil 3's skippable AsyncImage makes the memory-only-during-scroll hack incompatible.
         val isSuppressingImages = LocalVerticalScrollSuppressImages.current
         val scrollAwareImageModel = if (!isSuppressingImages || imageModel == null) {
             imageModel
         } else {
             remember(imageModel) {
                 (imageModel as? ImageRequest)?.newBuilder()
-                    ?.memoryCachePolicy(coil.request.CachePolicy.ENABLED)
-                    ?.diskCachePolicy(coil.request.CachePolicy.DISABLED)
-                    ?.networkCachePolicy(coil.request.CachePolicy.DISABLED)
+                    ?.memoryCachePolicy(CachePolicy.ENABLED)
+                    ?.diskCachePolicy(CachePolicy.DISABLED)
+                    ?.networkCachePolicy(CachePolicy.DISABLED)
                     ?.build()
                     ?: imageModel
             }
         }
+        val scrollPhaseKey = isSuppressingImages
         val logoRequestHeightPx = remember(density) {
             with(density) { 48.dp.roundToPx() }
         }
@@ -305,6 +319,14 @@ fun ContentCard(
                     false
                 }
                 .then(
+                    if (isBackdropExpanded && (expandedDownFocusRequester != null || expandedUpFocusRequester != null)) {
+                        Modifier.focusProperties {
+                            if (expandedDownFocusRequester != null) down = expandedDownFocusRequester
+                            if (expandedUpFocusRequester != null) up = expandedUpFocusRequester
+                        }
+                    } else Modifier
+                )
+                .then(
                     if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier
                 ),
             shape = CardDefaults.shape(shape = cardShape),
@@ -326,16 +348,32 @@ fun ContentCard(
                     .height(baseCardHeight)
                     .clip(cardShape)
             ) {
-                if (!imageUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = scrollAwareImageModel,
-                        contentDescription = item.name,
-                        modifier = Modifier.fillMaxSize(),
-                        placeholder = backgroundPainter,
-                        error = backgroundPainter,
-                        fallback = backgroundPainter,
-                        contentScale = ContentScale.Crop
+                val isPlaceholderItem = imageUrl?.startsWith("placeholder://") == true
+                if (isPlaceholderItem) {
+                    val effectivePlaceholderShimmerOffsetState =
+                        placeholderShimmerOffsetState ?: rememberPlaceholderShimmerOffsetState(
+                            label = "classicPlaceholderShimmer"
+                        )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .placeholderCardShimmer(
+                                shimmerOffsetState = effectivePlaceholderShimmerOffsetState,
+                                backgroundColor = NuvioColors.BackgroundCard
+                            )
                     )
+                } else if (!imageUrl.isNullOrBlank()) {
+                    key(scrollPhaseKey) {
+                        AsyncImage(
+                            model = scrollAwareImageModel,
+                            contentDescription = item.name,
+                            modifier = Modifier.fillMaxSize(),
+                            placeholder = backgroundPainter,
+                            error = backgroundPainter,
+                            fallback = backgroundPainter,
+                            contentScale = ContentScale.Crop
+                        )
+                    }
                 } else {
                     MonochromePosterPlaceholder()
                 }

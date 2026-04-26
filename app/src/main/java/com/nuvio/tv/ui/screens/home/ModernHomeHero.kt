@@ -42,9 +42,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import coil.compose.AsyncImage
-import coil.decode.SvgDecoder
-import coil.request.ImageRequest
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import coil3.request.transitionFactory
 import com.nuvio.tv.R
 import com.nuvio.tv.ui.components.TrailerPlayer
 import com.nuvio.tv.ui.theme.NuvioColors
@@ -114,11 +115,18 @@ internal fun ModernHeroMediaLayer(
     // so Coil crossfade starts with the final URL, not an intermediate one.
     var stableBackdrop by remember { mutableStateOf(heroBackdrop) }
     if (!enrichmentActive) stableBackdrop = heroBackdrop
+    val heroBackdropTransitionFactory = remember { AlwaysCrossfadeTransitionFactory(durationMillis = 400) }
 
-    val imageModel = remember(localContext, stableBackdrop, requestWidthPx, requestHeightPx) {
+    val imageModel = remember(
+        localContext,
+        stableBackdrop,
+        requestWidthPx,
+        requestHeightPx,
+        heroBackdropTransitionFactory
+    ) {
         ImageRequest.Builder(localContext)
             .data(stableBackdrop)
-            .crossfade(400)
+            .transitionFactory(heroBackdropTransitionFactory)
             .size(width = requestWidthPx, height = requestHeightPx)
             .build()
     }
@@ -293,7 +301,6 @@ private fun HeroTitleContent(
             ImageRequest.Builder(context)
                 .data(it)
                 .crossfade(false)
-                .decoderFactory(SvgDecoder.Factory())
                 .size(width = logoMaxWidthPx, height = logoHeightPx)
                 .build()
         }
@@ -301,7 +308,6 @@ private fun HeroTitleContent(
     val imdbLogoModel = remember(context) {
         ImageRequest.Builder(context)
             .data(com.nuvio.tv.R.raw.imdb_logo_2016)
-            .decoderFactory(SvgDecoder.Factory())
             .build()
     }
 
@@ -351,15 +357,15 @@ private fun HeroTitleContent(
             )
         }
 
-        val strStatusEnded = stringResource(R.string.series_status_ended)
-        val strStatusContinuing = stringResource(R.string.series_status_continuing)
-        val strStatusCurrent = stringResource(R.string.series_status_current)
-        val strStatusCancelled = stringResource(R.string.series_status_cancelled)
-        val strStatusReleased = stringResource(R.string.series_status_released)
-        val strStatusPlanned = stringResource(R.string.series_status_planned)
-        val strStatusRumored = stringResource(R.string.series_status_rumored)
-        val strStatusInProduction = stringResource(R.string.series_status_in_production)
-        val strStatusPostProduction = stringResource(R.string.series_status_post_production)
+        val strStatusEnded = stringResource(if (preview.isSeries) R.string.series_status_ended else R.string.movie_status_ended)
+        val strStatusContinuing = stringResource(if (preview.isSeries) R.string.series_status_continuing else R.string.movie_status_continuing)
+        val strStatusCurrent = stringResource(if (preview.isSeries) R.string.series_status_current else R.string.movie_status_current)
+        val strStatusCancelled = stringResource(if (preview.isSeries) R.string.series_status_cancelled else R.string.movie_status_cancelled)
+        val strStatusReleased = stringResource(if (preview.isSeries) R.string.series_status_released else R.string.movie_status_released)
+        val strStatusPlanned = stringResource(if (preview.isSeries) R.string.series_status_planned else R.string.movie_status_planned)
+        val strStatusRumored = stringResource(if (preview.isSeries) R.string.series_status_rumored else R.string.movie_status_rumored)
+        val strStatusInProduction = stringResource(if (preview.isSeries) R.string.series_status_in_production else R.string.movie_status_in_production)
+        val strStatusPostProduction = stringResource(if (preview.isSeries) R.string.series_status_post_production else R.string.movie_status_post_production)
         val secondaryMeta = remember(
             preview.secondaryHighlightText,
             preview.ageRatingText,

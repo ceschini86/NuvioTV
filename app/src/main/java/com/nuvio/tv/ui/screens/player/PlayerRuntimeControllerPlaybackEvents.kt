@@ -311,7 +311,7 @@ internal fun PlayerRuntimeController.emitScrobbleStop(progressPercent: Float? = 
     if (!hasRequestedScrobbleStartForCurrentItem && (provided ?: 0f) < 80f) return
 
     val percent = provided ?: currentPlaybackProgressPercent()
-    scope.launch {
+    scope.launch(kotlinx.coroutines.NonCancellable) {
         traktScrobbleService.scrobbleStop(
             item = item,
             progressPercent = percent
@@ -328,7 +328,7 @@ internal fun PlayerRuntimeController.emitPauseScrobbleStop(progressPercent: Floa
     if (item == null) return
     if (!hasRequestedScrobbleStartForCurrentItem) return
 
-    scope.launch {
+    scope.launch(kotlinx.coroutines.NonCancellable) {
         traktScrobbleService.scrobbleStop(
             item = item,
             progressPercent = progressPercent
@@ -450,7 +450,9 @@ internal fun PlayerRuntimeController.adjustSubtitleDelay(deltaMs: Int, showOverl
             .buildUpon()
             .build()
     }
-    
+    // Remember the delay so it survives to the next session (issue #1063).
+    persistTrackPreference()
+
     if (!showOverlay || keepInlineInSubtitleOverlay) {
         hideSubtitleDelayOverlayJob?.cancel()
         hideSubtitleDelayOverlayJob = null
@@ -710,13 +712,11 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             if (isUsingMpvEngine()) {
                 setPlaybackSpeedInternal(event.speed)
             } else {
-                val requiresPcm = _exoPlayer?.let(::selectedAudioRequiresPcmForSpeed) == true
-                playbackSpeedAwareAudioOutputProvider?.updatePlaybackSpeed(
-                    event.speed,
-                    selectedAudioRequiresPcmForSpeed = requiresPcm
-                )
                 _exoPlayer?.let { player ->
                     player.setPlaybackSpeed(event.speed)
+                    player.trackSelectionParameters = player.trackSelectionParameters
+                        .buildUpon()
+                        .build()
                 }
             }
             _uiState.update { 
@@ -1055,13 +1055,17 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             }
             val newMode = nextAspectMode(state.aspectMode)
             val label = aspectModeLabel(newMode, context::getString)
-            Log.d("PlayerViewModel", "Aspect mode toggled: ${state.aspectMode} -> $newMode ($label)")
+            Log.d(PlayerRuntimeController.TAG, "Aspect mode toggled by user: ${state.aspectMode} -> $newMode ($label)")
             _uiState.update {
                 it.copy(
                     aspectMode = newMode,
                     showAspectRatioIndicator = true,
                     aspectRatioIndicatorText = label
                 )
+            }
+            scope.launch {
+                Log.d(PlayerRuntimeController.TAG, "Persisting aspect mode: $newMode")
+                deviceLocalPlayerPreferences.setAspectMode(newMode)
             }
             hideAspectRatioIndicatorJob?.cancel()
             hideAspectRatioIndicatorJob = scope.launch {
@@ -1124,6 +1128,11 @@ internal fun PlayerRuntimeController.buildStreamInfoData(): StreamInfoData {
             addonSub != null -> context.getString(R.string.stream_info_subtitle_source_addon)
             selectedSubtitle != null -> context.getString(R.string.stream_info_subtitle_source_embedded)
             else -> null
+        },
+        playerEngine = when (currentInternalPlayerEngine) {
+            com.nuvio.tv.data.local.InternalPlayerEngine.EXOPLAYER -> context.getString(R.string.playback_engine_exoplayer)
+            com.nuvio.tv.data.local.InternalPlayerEngine.MVP_PLAYER -> context.getString(R.string.playback_engine_mvplayer)
+            com.nuvio.tv.data.local.InternalPlayerEngine.AUTO -> null
         }
     )
 }

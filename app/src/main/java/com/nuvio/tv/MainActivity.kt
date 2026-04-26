@@ -88,6 +88,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import com.nuvio.tv.core.runtime.PluginRuntimeHooks
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -97,6 +98,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.tv.material3.DrawerValue
+import androidx.tv.material3.Card
+import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Icon
 import androidx.tv.material3.ModalNavigationDrawer
@@ -106,6 +109,7 @@ import androidx.tv.material3.Text
 import androidx.tv.material3.rememberDrawerState
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.auth.AuthManager
+import com.nuvio.tv.core.build.AppFeaturePolicy
 import com.nuvio.tv.data.local.AppOnboardingDataStore
 import com.nuvio.tv.data.local.LayoutPreferenceDataStore
 import com.nuvio.tv.data.local.ThemeDataStore
@@ -135,9 +139,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import coil.compose.rememberAsyncImagePainter
-import coil.decode.SvgDecoder
-import coil.request.ImageRequest
+import coil3.compose.rememberAsyncImagePainter
+import coil3.request.ImageRequest
 import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
 
@@ -157,7 +160,8 @@ private data class MainUiPrefs(
     val hasChosenLayout: Boolean? = null,
     val sidebarCollapsed: Boolean = false,
     val modernSidebarEnabled: Boolean = false,
-    val modernSidebarBlurPref: Boolean = false
+    val modernSidebarBlurPref: Boolean = false,
+    val smoothBringIntoViewEnabled: Boolean = true
 )
 
 @AndroidEntryPoint
@@ -219,16 +223,21 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         window?.setBackgroundDrawable(null)
 
-        // Store Activity reference for CloudStream extensions that need it in plugin.load()
-        com.lagradost.cloudstream3.AcraApplication.setActivity(this)
+        PluginRuntimeHooks.onActivityCreate(this)
+
+        window?.decorView?.post {
+            val snapshot = com.nuvio.tv.core.player.DisplayCapabilities.detect(this)
+            com.nuvio.tv.core.player.DisplayCapabilities.logSummary(snapshot)
+        }
+
         setContent {
             var hasSelectedProfileThisSession by rememberSaveable { mutableStateOf(false) }
             var onboardingCompletedThisSession by remember { mutableStateOf(false) }
             var onboardingProfileSyncInProgress by remember { mutableStateOf(false) }
-            val hasSeenAuthQrOnFirstLaunch by appOnboardingDataStore
-                .hasSeenAuthQrOnFirstLaunch
-                .map<Boolean, Boolean?> { it }
-                .collectAsState(initial = null)
+            val hasSeenAuthQrFlow = remember(appOnboardingDataStore) {
+                appOnboardingDataStore.hasSeenAuthQrOnFirstLaunch.map<Boolean, Boolean?> { it }
+            }
+            val hasSeenAuthQrOnFirstLaunch by hasSeenAuthQrFlow.collectAsState(initial = null)
             val authState by authManager.authState.collectAsState()
 
             LaunchedEffect(hasSeenAuthQrOnFirstLaunch, authState) {
@@ -286,13 +295,21 @@ class MainActivity : ComponentActivity() {
                     )
                 }.combine(layoutPreferenceDataStore.modernSidebarBlurEnabled) { prefs, modernSidebarBlurPref ->
                     prefs.copy(modernSidebarBlurPref = modernSidebarBlurPref)
+                }.combine(layoutPreferenceDataStore.smoothBringIntoViewEnabled) { prefs, smoothBringIntoViewEnabled ->
+                    prefs.copy(smoothBringIntoViewEnabled = smoothBringIntoViewEnabled)
                 }
             }
             val mainUiPrefs by mainUiPrefsFlow.collectAsState(initial = MainUiPrefs(hasChosenLayout = null))
 
             NuvioTheme(appTheme = mainUiPrefs.theme, appFont = mainUiPrefs.font) {
+                val defaultBringIntoViewSpec = LocalBringIntoViewSpec.current
+                val bringIntoViewSpec = if (mainUiPrefs.smoothBringIntoViewEnabled) {
+                    NuvioScrollDefaults.smoothScrollSpec
+                } else {
+                    defaultBringIntoViewSpec
+                }
                 CompositionLocalProvider(
-                    LocalBringIntoViewSpec provides NuvioScrollDefaults.smoothScrollSpec
+                    LocalBringIntoViewSpec provides bringIntoViewSpec
                 ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -386,13 +403,16 @@ class MainActivity : ComponentActivity() {
                         mainUiPrefs.modernSidebarBlurPref && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
                     val hideBuiltInHeadersForFloatingPill = modernSidebarEnabled && !sidebarCollapsed
 
-                    val updateViewModel: UpdateViewModel = hiltViewModel(this@MainActivity)
-                    val updateState by updateViewModel.uiState.collectAsState()
-
                     val startDestination = if (layoutChosen) Screen.Home.route else Screen.LayoutSelection.route
                     val navController = rememberNavController()
+                    var optimisticRoute by remember { mutableStateOf<String?>(null) }
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
-                    val currentRoute = navBackStackEntry?.destination?.route
+                    val actualRoute = navBackStackEntry?.destination?.route
+                    val currentRoute = optimisticRoute ?: actualRoute
+
+                    LaunchedEffect(actualRoute) {
+                        optimisticRoute = null
+                    }
 
                     val view = LocalView.current
                     LaunchedEffect(currentRoute) {
@@ -474,6 +494,7 @@ class MainActivity : ComponentActivity() {
                             activeProfileAvatarImageUrl = activeProfileAvatarImageUrl,
                             showProfileSelector = profiles.size > 1,
                             onSwitchProfile = { hasSelectedProfileThisSession = false },
+                            onNavigate = { optimisticRoute = it },
                             onExitApp = {
                                 finishAffinity()
                                 finishAndRemoveTask()
@@ -494,6 +515,7 @@ class MainActivity : ComponentActivity() {
                             activeProfileAvatarImageUrl = activeProfileAvatarImageUrl,
                             showProfileSelector = profiles.size > 1,
                             onSwitchProfile = { hasSelectedProfileThisSession = false },
+                            onNavigate = { optimisticRoute = it },
                             onExitApp = {
                                 finishAffinity()
                                 finishAndRemoveTask()
@@ -501,14 +523,18 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    UpdatePromptDialog(
-                        state = updateState,
-                        onDismiss = { updateViewModel.dismissDialog() },
-                        onDownload = { updateViewModel.downloadUpdate() },
-                        onInstall = { updateViewModel.installUpdateOrRequestPermission() },
-                        onIgnore = { updateViewModel.ignoreThisVersion() },
-                        onOpenUnknownSources = { updateViewModel.openUnknownSourcesSettings() }
-                    )
+                    if (AppFeaturePolicy.inAppUpdatesEnabled) {
+                        val updateViewModel: UpdateViewModel = hiltViewModel(this@MainActivity)
+                        val updateState by updateViewModel.uiState.collectAsState()
+                        UpdatePromptDialog(
+                            state = updateState,
+                            onDismiss = { updateViewModel.dismissDialog() },
+                            onDownload = { updateViewModel.downloadUpdate() },
+                            onInstall = { updateViewModel.installUpdateOrRequestPermission() },
+                            onIgnore = { updateViewModel.ignoreThisVersion() },
+                            onOpenUnknownSources = { updateViewModel.openUnknownSourcesSettings() }
+                        )
+                    }
                 }
             }
             }
@@ -545,7 +571,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        com.lagradost.cloudstream3.AcraApplication.setActivity(null)
+        PluginRuntimeHooks.onActivityDestroy()
     }
 }
 
@@ -565,6 +591,7 @@ private fun LegacySidebarScaffold(
     activeProfileAvatarImageUrl: String?,
     showProfileSelector: Boolean,
     onSwitchProfile: () -> Unit,
+    onNavigate: (String) -> Unit,
     onExitApp: () -> Unit
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -721,6 +748,7 @@ private fun LegacySidebarScaffold(
                                 selected = selectedDrawerRoute == item.route,
                                 expanded = isExpanded,
                                 onClick = {
+                                    onNavigate(item.route)
                                     navigateToDrawerRoute(
                                         navController = navController,
                                         currentRoute = currentRoute,
@@ -823,14 +851,26 @@ private fun LegacySidebarButton(
         label = "legacySidebarItemIconTint"
     )
 
-    Box(
+    Card(
+        onClick = onClick,
         modifier = modifier
             .height(52.dp)
             .focusProperties { canFocus = expanded }
-            .background(color = backgroundColor, shape = itemShape)
-            .onFocusChanged { isFocused = it.isFocused }
-            .clickable(onClick = onClick),
+            .onFocusChanged { isFocused = it.hasFocus },
+        colors = CardDefaults.colors(
+            containerColor = backgroundColor,
+            focusedContainerColor = backgroundColor,
+        ),
+        border = CardDefaults.border(
+            border = androidx.tv.material3.Border.None,
+            focusedBorder = androidx.tv.material3.Border(
+                border = androidx.compose.foundation.BorderStroke(1.5.dp, Color.Transparent),
+                shape = itemShape
+            )
+        ),
+        shape = CardDefaults.shape(shape = itemShape)
     ) {
+        Box(modifier = Modifier.fillMaxSize()) {
         DrawerItemIcon(
             iconRes = iconRes,
             icon = icon,
@@ -847,11 +887,9 @@ private fun LegacySidebarButton(
             }
         )
         if (expanded) {
-            Text(
+            com.nuvio.tv.ui.components.AutoResizeText(
                 text = label,
                 color = contentColor,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 textAlign = TextAlign.Start,
                 modifier = Modifier
                     .align(Alignment.CenterStart)
@@ -860,6 +898,7 @@ private fun LegacySidebarButton(
             )
         }
     }
+}
 }
 
 @Composable
@@ -879,6 +918,7 @@ private fun ModernSidebarScaffold(
     activeProfileAvatarImageUrl: String?,
     showProfileSelector: Boolean,
     onSwitchProfile: () -> Unit,
+    onNavigate: (String) -> Unit,
     onExitApp: () -> Unit
 ) {
     val showSidebar = currentRoute in rootRoutes
@@ -1200,6 +1240,7 @@ private fun ModernSidebarScaffold(
                         drawerItemFocusRequesters = drawerItemFocusRequesters,
                         onDrawerItemFocused = { focusedDrawerIndex = it },
                         onDrawerItemClick = { targetRoute ->
+                            onNavigate(targetRoute)
                             navigateToDrawerRoute(
                                 navController = navController,
                                 currentRoute = currentRoute,
@@ -1360,6 +1401,12 @@ private fun navigateToDrawerRoute(
     targetRoute: String
 ) {
     if (currentRoute == targetRoute) {
+        if (targetRoute == Screen.Home.route) {
+            // Scroll Home to top by clearing saved focus/scroll state on the ViewModel.
+            val homeEntry = navController.getBackStackEntry(Screen.Home.route)
+            val homeViewModel = androidx.lifecycle.ViewModelProvider(homeEntry)[com.nuvio.tv.ui.screens.home.HomeViewModel::class.java]
+            homeViewModel.requestScrollToTop()
+        }
         return
     }
     navController.navigate(targetRoute) {
@@ -1405,9 +1452,13 @@ private fun DrawerItemIcon(
 }
 
 @Composable
-private fun rememberRawSvgPainter(rawIconRes: Int): Painter = rememberAsyncImagePainter(
-    model = ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
-        .data(rawIconRes)
-        .decoderFactory(SvgDecoder.Factory())
-        .build()
-)
+private fun rememberRawSvgPainter(rawIconRes: Int): Painter {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val sizePx = with(density) { 24.dp.roundToPx() }
+    return rememberAsyncImagePainter(
+        model = ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+            .data(rawIconRes)
+            .size(sizePx)
+            .build()
+    )
+}
