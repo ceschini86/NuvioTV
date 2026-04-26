@@ -78,6 +78,7 @@ class LayoutPreferenceDataStore @Inject constructor(
     private val showFullReleaseDateKey = booleanPreferencesKey("show_full_release_date")
     private val memoryOnlyVerticalScrollKey = booleanPreferencesKey("memory_only_vertical_scroll")
     private val smoothBringIntoViewEnabledKey = booleanPreferencesKey("smooth_bring_into_view_enabled")
+    private val fastHorizontalNavigationEnabledKey = booleanPreferencesKey("fast_horizontal_navigation_enabled")
 
     private fun <T> profileFlow(extract: (prefs: androidx.datastore.preferences.core.Preferences) -> T): Flow<T> =
         profileManager.activeProfileId.flatMapLatest { pid ->
@@ -242,6 +243,10 @@ class LayoutPreferenceDataStore @Inject constructor(
         prefs[smoothBringIntoViewEnabledKey] ?: true
     }
 
+    val fastHorizontalNavigationEnabled: Flow<Boolean> = profileFlow { prefs ->
+        prefs[fastHorizontalNavigationEnabledKey] ?: false
+    }
+
     suspend fun setMemoryOnlyVerticalScroll(enabled: Boolean) {
         store().edit { prefs ->
             prefs[memoryOnlyVerticalScrollKey] = enabled
@@ -251,6 +256,12 @@ class LayoutPreferenceDataStore @Inject constructor(
     suspend fun setSmoothBringIntoViewEnabled(enabled: Boolean) {
         store().edit { prefs ->
             prefs[smoothBringIntoViewEnabledKey] = enabled
+        }
+    }
+
+    suspend fun setFastHorizontalNavigationEnabled(enabled: Boolean) {
+        store().edit { prefs ->
+            prefs[fastHorizontalNavigationEnabledKey] = enabled
         }
     }
 

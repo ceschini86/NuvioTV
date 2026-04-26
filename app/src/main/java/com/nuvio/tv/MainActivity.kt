@@ -129,6 +129,7 @@ import com.nuvio.tv.ui.screens.account.AuthQrSignInScreen
 import com.nuvio.tv.ui.screens.profile.ProfileSelectionScreen
 import com.nuvio.tv.ui.theme.NuvioColors
 import com.nuvio.tv.ui.theme.NuvioTheme
+import com.nuvio.tv.ui.util.LocalFastHorizontalNavigationEnabled
 import com.nuvio.tv.updater.UpdateViewModel
 import com.nuvio.tv.updater.ui.UpdatePromptDialog
 import dagger.hilt.android.AndroidEntryPoint
@@ -161,7 +162,8 @@ private data class MainUiPrefs(
     val sidebarCollapsed: Boolean = false,
     val modernSidebarEnabled: Boolean = false,
     val modernSidebarBlurPref: Boolean = false,
-    val smoothBringIntoViewEnabled: Boolean = true
+    val smoothBringIntoViewEnabled: Boolean = true,
+    val fastHorizontalNavigationEnabled: Boolean = false
 )
 
 @AndroidEntryPoint
@@ -297,6 +299,8 @@ class MainActivity : ComponentActivity() {
                     prefs.copy(modernSidebarBlurPref = modernSidebarBlurPref)
                 }.combine(layoutPreferenceDataStore.smoothBringIntoViewEnabled) { prefs, smoothBringIntoViewEnabled ->
                     prefs.copy(smoothBringIntoViewEnabled = smoothBringIntoViewEnabled)
+                }.combine(layoutPreferenceDataStore.fastHorizontalNavigationEnabled) { prefs, fastHorizontalNavigationEnabled ->
+                    prefs.copy(fastHorizontalNavigationEnabled = fastHorizontalNavigationEnabled)
                 }
             }
             val mainUiPrefs by mainUiPrefsFlow.collectAsState(initial = MainUiPrefs(hasChosenLayout = null))
@@ -309,7 +313,8 @@ class MainActivity : ComponentActivity() {
                     defaultBringIntoViewSpec
                 }
                 CompositionLocalProvider(
-                    LocalBringIntoViewSpec provides bringIntoViewSpec
+                    LocalBringIntoViewSpec provides bringIntoViewSpec,
+                    LocalFastHorizontalNavigationEnabled provides mainUiPrefs.fastHorizontalNavigationEnabled
                 ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),

@@ -406,7 +406,7 @@ fun SettingsScreen(
                                 null
                             }
                         )
-                        SettingsCategory.ADVANCED -> NetworkSettingsContent(
+                        SettingsCategory.ADVANCED -> AdvancedSettingsContent(
                             initialFocusRequester = if (allowDetailAutofocus) {
                                 contentFocusRequesters[SettingsCategory.ADVANCED]
                             } else {
