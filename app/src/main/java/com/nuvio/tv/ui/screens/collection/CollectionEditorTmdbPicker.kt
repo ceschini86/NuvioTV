@@ -90,6 +90,7 @@ import androidx.compose.ui.res.stringResource
 fun TmdbSourcePickerContent(
     uiState: CollectionEditorUiState,
     presets: List<TmdbPresetSource>,
+    isEditing: Boolean,
     onModeChange: (TmdbBuilderMode) -> Unit,
     onInputChange: (String) -> Unit,
     onTitleChange: (String) -> Unit,
@@ -112,7 +113,7 @@ fun TmdbSourcePickerContent(
 
     LaunchedEffect(Unit) {
         repeat(3) { androidx.compose.runtime.withFrameNanos { } }
-        try { modeFocusRequesters[TmdbBuilderMode.PRESETS]?.requestFocus() } catch (_: Exception) {}
+        try { modeFocusRequesters[uiState.tmdbBuilderMode]?.requestFocus() } catch (_: Exception) {}
     }
 
     Column(
@@ -126,7 +127,9 @@ fun TmdbSourcePickerContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = stringResource(R.string.collections_editor_tmdb_sources),
+                text = stringResource(
+                    if (isEditing) R.string.collections_editor_edit_tmdb_source else R.string.collections_editor_tmdb_sources
+                ),
                 style = MaterialTheme.typography.headlineMedium,
                 color = NuvioColors.TextPrimary
             )
@@ -202,6 +205,9 @@ fun TmdbSourcePickerContent(
                             onMediaBothChange = onMediaBothChange,
                             onSortChange = onSortChange,
                             onAdd = onAddFromInput,
+                            actionLabel = stringResource(
+                                if (isEditing) R.string.collections_editor_save_source else R.string.collections_editor_add_source
+                            ),
                             showMediaControls = false,
                             showSortControls = true,
                             showOriginalSort = !isNetwork,
@@ -219,7 +225,10 @@ fun TmdbSourcePickerContent(
                             onMediaBothChange = onMediaBothChange,
                             onSortChange = onSortChange,
                             onAdd = onAddFromInput,
-                            onSearch = onSearchCompanies
+                            onSearch = onSearchCompanies,
+                            actionLabel = stringResource(
+                                if (isEditing) R.string.collections_editor_save_source else R.string.collections_editor_add_source
+                            )
                         )
                     }
                     items(uiState.tmdbCompanyResults) { result ->
@@ -255,6 +264,9 @@ fun TmdbSourcePickerContent(
                             onSortChange = onSortChange,
                             onAdd = onAddFromInput,
                             onSearch = onSearchCollections,
+                            actionLabel = stringResource(
+                                if (isEditing) R.string.collections_editor_save_source else R.string.collections_editor_add_source
+                            ),
                             showMediaControls = false,
                             showSortControls = true,
                             showOriginalSort = true,
@@ -289,7 +301,10 @@ fun TmdbSourcePickerContent(
                             onMediaBothChange = onMediaBothChange,
                             onSortChange = onSortChange,
                             onFiltersChange = onFiltersChange,
-                            onAdd = onAddDiscover
+                            onAdd = onAddDiscover,
+                            actionLabel = stringResource(
+                                if (isEditing) R.string.collections_editor_save_source else R.string.collections_editor_add_source
+                            )
                         )
                     }
                 }
@@ -309,6 +324,7 @@ private fun TmdbBasicSourceForm(
     onSortChange: (String) -> Unit,
     onAdd: () -> Unit,
     onSearch: (() -> Unit)? = null,
+    actionLabel: String,
     showMediaControls: Boolean = true,
     showSortControls: Boolean = true,
     showOriginalSort: Boolean = false,
@@ -361,7 +377,7 @@ private fun TmdbBasicSourceForm(
                 showPopularSort = showPopularSort
             )
         }
-        TmdbActionButtons(onSearch = onSearch, onAdd = onAdd)
+        TmdbActionButtons(onSearch = onSearch, onAdd = onAdd, addLabel = actionLabel)
     }
 }
 
@@ -374,7 +390,8 @@ private fun TmdbDiscoverForm(
     onMediaBothChange: (Boolean) -> Unit,
     onSortChange: (String) -> Unit,
     onFiltersChange: (TmdbCollectionFilters) -> Unit,
-    onAdd: () -> Unit
+    onAdd: () -> Unit,
+    actionLabel: String
 ) {
     val filters = uiState.tmdbFilters
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -519,7 +536,7 @@ private fun TmdbDiscoverForm(
         ) {
             onFiltersChange(filters.copy(year = it.toIntOrNull()))
         }
-        TmdbActionButtons(onSearch = null, onAdd = onAdd)
+        TmdbActionButtons(onSearch = null, onAdd = onAdd, addLabel = actionLabel)
     }
 }
 
@@ -566,7 +583,8 @@ private fun TmdbLabeledField(
 @Composable
 private fun TmdbActionButtons(
     onSearch: (() -> Unit)?,
-    onAdd: () -> Unit
+    onAdd: () -> Unit,
+    addLabel: String
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         onSearch?.let {
@@ -579,7 +597,7 @@ private fun TmdbActionButtons(
         TmdbActionButton(onClick = onAdd, primary = true) {
             Icon(Icons.Default.Add, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
-            Text(stringResource(R.string.collections_editor_add_source))
+            Text(addLabel)
         }
     }
 }

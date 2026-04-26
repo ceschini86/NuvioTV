@@ -1551,6 +1551,7 @@
     <string name="collections_editor_shape_square">Square</string>
     <string name="collections_editor_addon_missing">Addon not installed: %1$s</string>
     <string name="collections_editor_add_tmdb_source">Add TMDB Source</string>
+    <string name="collections_editor_edit_tmdb_source">Edit TMDB Source</string>
     <string name="collections_editor_tmdb_sources">TMDB Sources</string>
     <string name="collections_editor_tmdb_id_or_url">TMDB ID or URL</string>
     <string name="collections_editor_tmdb_public_list">Public TMDB list</string>
@@ -1561,6 +1562,7 @@
     <string name="collections_editor_tmdb_title_optional">Title (optional)</string>
     <string name="collections_editor_tmdb_search">Search</string>
     <string name="collections_editor_add_source">Add Source</string>
+    <string name="collections_editor_save_source">Save Source</string>
     <string name="collections_editor_tmdb_collection">TMDB Collection</string>
     <string name="collections_editor_tmdb_help_presets">Pick a ready-made source. You can edit or remove it after adding.</string>
     <string name="collections_editor_tmdb_help_list">Paste a public TMDB list URL or only the number from the URL.</string>

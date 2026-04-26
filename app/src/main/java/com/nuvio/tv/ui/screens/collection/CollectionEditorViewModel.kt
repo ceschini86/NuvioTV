@@ -44,6 +44,7 @@ data class CollectionEditorUiState(
     val showFolderEditor: Boolean = false,
     val showCatalogPicker: Boolean = false,
     val showTmdbSourcePicker: Boolean = false,
+    val editingTmdbSourceIndex: Int? = null,
     val tmdbBuilderMode: TmdbBuilderMode = TmdbBuilderMode.PRESETS,
     val tmdbInput: String = "",
     val tmdbTitleInput: String = "",
@@ -397,11 +398,49 @@ class CollectionEditorViewModel @Inject constructor(
     }
 
     fun showTmdbSourcePicker() {
-        _uiState.update { it.copy(showTmdbSourcePicker = true, genrePickerSourceIndex = null) }
+        _uiState.update {
+            it.copy(
+                showTmdbSourcePicker = true,
+                editingTmdbSourceIndex = null,
+                genrePickerSourceIndex = null,
+                tmdbBuilderMode = TmdbBuilderMode.PRESETS,
+                tmdbInput = "",
+                tmdbTitleInput = "",
+                tmdbMediaType = TmdbCollectionMediaType.MOVIE,
+                tmdbMediaBoth = false,
+                tmdbSortBy = TmdbCollectionSort.POPULAR_DESC.value,
+                tmdbFilters = TmdbCollectionFilters(),
+                tmdbCompanyResults = emptyList(),
+                tmdbCollectionResults = emptyList(),
+                tmdbSearchError = null
+            )
+        }
     }
 
     fun hideTmdbSourcePicker() {
-        _uiState.update { it.copy(showTmdbSourcePicker = false, tmdbSearchError = null) }
+        _uiState.update { it.copy(showTmdbSourcePicker = false, editingTmdbSourceIndex = null, tmdbSearchError = null) }
+    }
+
+    fun editTmdbSource(index: Int) {
+        _uiState.update { state ->
+            val folder = state.editingFolder ?: return@update state
+            val source = folder.sources.getOrNull(index) as? TmdbCollectionSource ?: return@update state
+            state.copy(
+                showTmdbSourcePicker = true,
+                editingTmdbSourceIndex = index,
+                genrePickerSourceIndex = null,
+                tmdbBuilderMode = source.sourceType.toBuilderMode(),
+                tmdbInput = source.tmdbId?.toString().orEmpty(),
+                tmdbTitleInput = source.title,
+                tmdbMediaType = source.mediaType,
+                tmdbMediaBoth = false,
+                tmdbSortBy = source.sortBy,
+                tmdbFilters = source.filters,
+                tmdbCompanyResults = emptyList(),
+                tmdbCollectionResults = emptyList(),
+                tmdbSearchError = null
+            )
+        }
     }
 
     fun setTmdbBuilderMode(mode: TmdbBuilderMode) {
@@ -451,24 +490,6 @@ class CollectionEditorViewModel @Inject constructor(
 
     fun setTmdbFilters(filters: TmdbCollectionFilters) {
         _uiState.update { it.copy(tmdbFilters = filters) }
-    }
-
-    fun updateTmdbSourceTitle(index: Int, title: String) {
-        updateTmdbSource(index) { it.copy(title = title) }
-    }
-
-    fun updateTmdbSourceSort(index: Int, sortBy: String) {
-        updateTmdbSource(index) { it.copy(sortBy = sortBy) }
-    }
-
-    private fun updateTmdbSource(index: Int, transform: (TmdbCollectionSource) -> TmdbCollectionSource) {
-        _uiState.update { state ->
-            val folder = state.editingFolder ?: return@update state
-            val source = folder.sources.getOrNull(index) as? TmdbCollectionSource ?: return@update state
-            val updatedSources = folder.sources.toMutableList()
-            updatedSources[index] = transform(source)
-            state.copy(editingFolder = folder.copy(sources = updatedSources))
-        }
     }
 
     fun searchTmdbCompanies() {
@@ -534,23 +555,41 @@ class CollectionEditorViewModel @Inject constructor(
     private fun addTmdbSourcesToFolder(sources: List<TmdbCollectionSource>, coverImageUrl: String? = null) {
         _uiState.update { state ->
             val folder = state.editingFolder ?: return@update state
-            val newSources = sources.filterNot { source -> folder.sources.any { it == source } }
+            val editingIndex = state.editingTmdbSourceIndex
+            val newSources = sources.filterIndexed { sourceIndex, source ->
+                folder.sources.noneIndexed { existingIndex, existing ->
+                    existing == source && (editingIndex == null || existingIndex != editingIndex || sourceIndex > 0)
+                }
+            }
             if (newSources.isEmpty()) return@update state
             val shouldApplyCover = newSources.any { it.sourceType in coverMetadataSourceTypes } &&
                 !coverImageUrl.isNullOrBlank() &&
                 folder.coverImageUrl.isNullOrBlank()
+            val updatedSources = if (
+                editingIndex != null &&
+                editingIndex in folder.sources.indices &&
+                folder.sources[editingIndex] is TmdbCollectionSource
+            ) {
+                folder.sources.toMutableList().also {
+                    it.removeAt(editingIndex)
+                    it.addAll(editingIndex, newSources)
+                }
+            } else {
+                folder.sources + newSources
+            }
             val updatedFolder = if (shouldApplyCover) {
                 folder.copy(
-                    sources = folder.sources + newSources,
+                    sources = updatedSources,
                     coverImageUrl = coverImageUrl,
                     coverEmoji = null
                 )
             } else {
-                folder.copy(sources = folder.sources + newSources)
+                folder.copy(sources = updatedSources)
             }
             state.copy(
                 editingFolder = updatedFolder,
                 showTmdbSourcePicker = false,
+                editingTmdbSourceIndex = null,
                 tmdbInput = "",
                 tmdbTitleInput = "",
                 tmdbSearchError = null
@@ -686,6 +725,23 @@ class CollectionEditorViewModel @Inject constructor(
             TmdbCollectionMediaType.TV -> "Series"
         }
         return "$title $suffix"
+    }
+
+    private fun TmdbCollectionSourceType.toBuilderMode(): TmdbBuilderMode {
+        return when (this) {
+            TmdbCollectionSourceType.LIST -> TmdbBuilderMode.LIST
+            TmdbCollectionSourceType.COLLECTION -> TmdbBuilderMode.COLLECTION
+            TmdbCollectionSourceType.COMPANY -> TmdbBuilderMode.PRODUCTION
+            TmdbCollectionSourceType.NETWORK -> TmdbBuilderMode.NETWORK
+            TmdbCollectionSourceType.DISCOVER -> TmdbBuilderMode.DISCOVER
+        }
+    }
+
+    private inline fun List<CollectionSource>.noneIndexed(predicate: (Int, CollectionSource) -> Boolean): Boolean {
+        forEachIndexed { index, source ->
+            if (predicate(index, source)) return false
+        }
+        return true
     }
 
     private suspend fun importMetadataFor(sourceType: TmdbCollectionSourceType, id: Int) = when (sourceType) {

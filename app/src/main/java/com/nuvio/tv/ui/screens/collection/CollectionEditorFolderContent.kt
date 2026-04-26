@@ -78,7 +78,6 @@ import com.nuvio.tv.domain.model.TmdbCollectionFilters
 import com.nuvio.tv.domain.model.TmdbCollectionMediaType
 import com.nuvio.tv.domain.model.TmdbCollectionSort
 import com.nuvio.tv.domain.model.TmdbCollectionSource
-import com.nuvio.tv.domain.model.TmdbCollectionSourceType
 import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.theme.NuvioColors
 import com.nuvio.tv.R
@@ -108,6 +107,7 @@ fun FolderEditorContent(
         TmdbSourcePickerContent(
             uiState = uiState,
             presets = viewModel.tmdbPresets(),
+            isEditing = uiState.editingTmdbSourceIndex != null,
             onModeChange = { viewModel.setTmdbBuilderMode(it) },
             onInputChange = { viewModel.setTmdbInput(it) },
             onTitleChange = { viewModel.setTmdbTitleInput(it) },
@@ -674,32 +674,28 @@ fun FolderEditorContent(
                                     }
                                 }
                             }
-                            if (tmdbSource != null) {
-                                Spacer(modifier = Modifier.height(10.dp))
-                                NuvioTextField(
-                                    value = tmdbSource.title,
-                                    onValueChange = { viewModel.updateTmdbSourceTitle(index, it) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    placeholder = stringResource(R.string.collections_editor_tmdb_display_title)
-                                )
-                                Spacer(modifier = Modifier.height(10.dp))
-                                TmdbMediaSortControls(
-                                    mediaType = tmdbSource.mediaType,
-                                    bothSelected = false,
-                                    sortBy = tmdbSource.sortBy,
-                                    onMediaTypeChange = {},
-                                    onBothChange = {},
-                                    onSortChange = { viewModel.updateTmdbSourceSort(index, it) },
-                                    showMediaControls = false,
-                                    showSortControls = true,
-                                    showOriginalSort = tmdbSource.sourceType == TmdbCollectionSourceType.LIST ||
-                                        tmdbSource.sourceType == TmdbCollectionSourceType.COLLECTION,
-                                    showPopularSort = tmdbSource.sourceType != TmdbCollectionSourceType.LIST &&
-                                        tmdbSource.sourceType != TmdbCollectionSourceType.COLLECTION
-                                )
-                            }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            if (tmdbSource != null) {
+                                Button(
+                                    onClick = { viewModel.editTmdbSource(index) },
+                                    colors = ButtonDefaults.colors(
+                                        containerColor = NuvioColors.BackgroundCard,
+                                        contentColor = NuvioColors.TextSecondary,
+                                        focusedContainerColor = NuvioColors.FocusBackground,
+                                        focusedContentColor = NuvioColors.TextPrimary
+                                    ),
+                                    border = ButtonDefaults.border(
+                                        focusedBorder = Border(
+                                            border = BorderStroke(2.dp, NuvioColors.FocusRing),
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
+                                    ),
+                                    shape = ButtonDefaults.shape(RoundedCornerShape(12.dp))
+                                ) {
+                                    Icon(Icons.Default.Edit, stringResource(R.string.cd_edit))
+                                }
+                            }
                             Button(
                                 onClick = { viewModel.moveCatalogSourceUp(index) },
                                 colors = ButtonDefaults.colors(
