@@ -8,6 +8,8 @@ import android.content.ContextWrapper
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,12 +20,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.LaunchedEffect
@@ -120,7 +122,9 @@ fun ThemeSettingsContent(
     }
 
     Column(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         SettingsDetailHeader(
@@ -129,22 +133,20 @@ fun ThemeSettingsContent(
         )
 
         SettingsGroupCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
+            modifier = Modifier.fillMaxWidth(),
+            title = stringResource(R.string.appearance_color_theme),
+            subtitle = stringResource(R.string.appearance_color_theme_subtitle)
         ) {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 itemsIndexed(
                     items = uiState.availableThemes,
                     key = { _, theme -> theme.name }
                 ) { index, theme ->
-                    ThemeCard(
+                    ThemeSwatchChip(
                         theme = theme,
                         isSelected = theme == uiState.selectedTheme,
                         onClick = { viewModel.onEvent(ThemeSettingsEvent.SelectTheme(theme)) },
@@ -159,7 +161,9 @@ fun ThemeSettingsContent(
         }
 
         SettingsGroupCard(
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            title = stringResource(R.string.appearance_font_and_language),
+            subtitle = stringResource(R.string.appearance_font_and_language_subtitle)
         ) {
             SettingsActionRow(
                 title = stringResource(R.string.appearance_font),
@@ -167,11 +171,6 @@ fun ThemeSettingsContent(
                 value = uiState.selectedFont.displayName,
                 onClick = { showFontDialog = true }
             )
-        }
-
-        SettingsGroupCard(
-            modifier = Modifier.fillMaxWidth()
-        ) {
             SettingsActionRow(
                 title = stringResource(R.string.appearance_language),
                 subtitle = stringResource(R.string.appearance_language_subtitle),
@@ -289,7 +288,7 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 }
 
 @Composable
-private fun ThemeCard(
+private fun ThemeSwatchChip(
     theme: AppTheme,
     isSelected: Boolean,
     onClick: () -> Unit,
@@ -297,11 +296,12 @@ private fun ThemeCard(
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val palette = ThemeColors.getColorPalette(theme)
+    val chipShape = RoundedCornerShape(18.dp)
 
     Card(
         onClick = onClick,
         modifier = modifier
-            .fillMaxWidth()
+            .width(96.dp)
             .onFocusChanged { state ->
                 val nowFocused = state.isFocused
                 if (isFocused != nowFocused) {
@@ -313,27 +313,24 @@ private fun ThemeCard(
             focusedContainerColor = NuvioColors.Background
         ),
         border = CardDefaults.border(
-            border = if (isSelected) Border(
-                border = BorderStroke(1.dp, NuvioColors.FocusRing),
-                shape = RoundedCornerShape(SettingsSecondaryCardRadius)
-            ) else Border.None,
+            border = Border.None,
             focusedBorder = Border(
                 border = BorderStroke(2.dp, NuvioColors.FocusRing),
-                shape = RoundedCornerShape(SettingsSecondaryCardRadius)
+                shape = chipShape
             )
         ),
-        shape = CardDefaults.shape(RoundedCornerShape(SettingsSecondaryCardRadius)),
-        scale = CardDefaults.scale(focusedScale = 1f)
+        shape = CardDefaults.shape(chipShape),
+        scale = CardDefaults.scale(focusedScale = 1f, pressedScale = 1f)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(8.dp),
+                .padding(horizontal = 8.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(40.dp)
                     .clip(CircleShape)
                     .background(palette.secondary),
                 contentAlignment = Alignment.Center
@@ -343,28 +340,18 @@ private fun ThemeCard(
                         imageVector = Icons.Default.Check,
                         contentDescription = stringResource(R.string.cd_selected),
                         tint = palette.onSecondary,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Text(
                 text = theme.displayName,
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.labelMedium,
                 color = if (isFocused || isSelected) NuvioColors.TextPrimary else NuvioColors.TextSecondary,
                 maxLines = 1
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.8f)
-                    .height(2.dp)
-                    .clip(RoundedCornerShape(SettingsPillRadius))
-                    .background(palette.focusRing)
             )
         }
     }
