@@ -34,7 +34,7 @@
     <string name="hero_director">Reżyser: %1$s</string>
     <string name="hero_writer">Scenarzysta: %1$s</string>
     <string name="hero_play">Odtwórz</string>
-    <string name="hero_play_episode">Odtwórz S%1$d, E%2$d</string>
+    <string name="hero_play_episode">Odtwórz S%1$d E%2$d</string>
     <string name="hero_add_to_library">Dodaj do biblioteki</string>
     <string name="hero_remove_from_library">Usuń z biblioteki</string>
     <string name="hero_mark_watched">Oznacz jako obejrzane</string>
@@ -76,9 +76,9 @@
     <!-- MetaDetailsScreen -->
     <string name="detail_btn_play">Odtwórz</string>
     <string name="detail_btn_resume">Wznów</string>
-    <string name="detail_btn_play_episode">Odtwórz S%1$dE%2$d</string>
-    <string name="detail_btn_resume_episode">Wznów S%1$dE%2$d</string>
-    <string name="detail_btn_next_episode">Następny S%1$dE%2$d</string>
+    <string name="detail_btn_play_episode">Odtwórz S%1$d E%2$d</string>
+    <string name="detail_btn_resume_episode">Wznów S%1$d E%2$d</string>
+    <string name="detail_btn_next_episode">Następny S%1$d E%2$d</string>
     <string name="detail_tab_cast">Twórcy i obsada</string>
     <string name="cast_role_creator">Twórca</string>
     <string name="cast_role_director">Reżyser</string>
@@ -1550,7 +1550,7 @@
     <string name="profile_pin_current_required">Ten profil ma już PIN. Wprowadź aktualny PIN, aby go zmienić.</string>
     <string name="profile_pin_overlay_delete_verify_heading">Wprowadź aktualny PIN, aby usunąć %1$s.</string>
     <string name="profile_pin_overlay_delete_verify_support">Wprowadź aktualny 4-cyfrowy PIN przed usunięciem tego profilu.</string>
-    <string name="season_episode_format">S%1$02dE%2$02d</string>
+    <string name="season_episode_format">S%1$d E%2$d</string>
     <string name="stream_info_player_engine">Silnik odtwarzacza</string>
     <string name="tmdb_trailers_subtitle">Kandydaci na zwiastuny z filmów TMDB dla sekcji zwiastunów</string>
     <string name="tmdb_trailers_title">Zwiastuny</string>
