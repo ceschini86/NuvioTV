@@ -21,14 +21,21 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import coil3.BitmapImage
 import coil3.imageLoader
+import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.request.allowHardware
 import coil3.size.Size
 import com.nuvio.tv.ui.theme.NuvioColors
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import java.util.LinkedHashMap
 import kotlin.math.max
+
+private const val CLASSIC_FOCUS_GRADIENT_DEBOUNCE_MS = 140L
+private const val CLASSIC_FOCUS_GRADIENT_CACHE_RETRY_MS = 360L
+private const val CLASSIC_FOCUS_GRADIENT_COLOR_CACHE_SIZE = 256
 
 internal data class ClassicFocusArtwork(
     val imageUrl: String?,
@@ -43,7 +50,7 @@ internal fun ClassicFocusGradientBackdrop(
 ) {
     val context = LocalContext.current
     val fallbackColor = NuvioColors.FocusBackground
-    val colorCache = remember { mutableMapOf<ClassicFocusArtwork, Color>() }
+    val colorCache = remember(fallbackColor) { classicFocusGradientColorCache() }
     var targetColor by remember { mutableStateOf(Color.Transparent) }
     val animatedColor by animateColorAsState(
         targetValue = targetColor,
@@ -52,11 +59,26 @@ internal fun ClassicFocusGradientBackdrop(
     )
 
     LaunchedEffect(context, artwork, enabled, fallbackColor) {
-        targetColor = if (enabled && artwork != null) {
-            colorCache[artwork] ?: resolveArtworkColor(context, artwork, fallbackColor)
-                .also { colorCache[artwork] = it }
-        } else {
-            Color.Transparent
+        if (!enabled || artwork == null) {
+            targetColor = Color.Transparent
+            return@LaunchedEffect
+        }
+
+        colorCache[artwork]?.let {
+            targetColor = it
+            return@LaunchedEffect
+        }
+
+        delay(CLASSIC_FOCUS_GRADIENT_DEBOUNCE_MS)
+        var resolvedColor = resolveArtworkColor(context, artwork, fallbackColor)
+        targetColor = resolvedColor.color
+        if (!resolvedColor.cacheable) {
+            delay(CLASSIC_FOCUS_GRADIENT_CACHE_RETRY_MS)
+            resolvedColor = resolveArtworkColor(context, artwork, fallbackColor)
+            targetColor = resolvedColor.color
+        }
+        if (resolvedColor.cacheable) {
+            colorCache[artwork] = resolvedColor.color
         }
     }
 
@@ -79,23 +101,49 @@ internal fun ClassicFocusGradientBackdrop(
     )
 }
 
+private data class ResolvedArtworkColor(
+    val color: Color,
+    val cacheable: Boolean
+)
+
+private fun classicFocusGradientColorCache(): MutableMap<ClassicFocusArtwork, Color> {
+    return object : LinkedHashMap<ClassicFocusArtwork, Color>(
+        CLASSIC_FOCUS_GRADIENT_COLOR_CACHE_SIZE,
+        0.75f,
+        true
+    ) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<ClassicFocusArtwork, Color>?): Boolean {
+            return size > CLASSIC_FOCUS_GRADIENT_COLOR_CACHE_SIZE
+        }
+    }
+}
+
 private suspend fun resolveArtworkColor(
     context: Context,
     artwork: ClassicFocusArtwork,
     fallbackColor: Color
-): Color {
+): ResolvedArtworkColor {
     val fallback = deriveSeedColor(artwork.seed, fallbackColor)
-    val imageUrl = artwork.imageUrl?.takeIf { it.isNotBlank() } ?: return fallback
+    val imageUrl = artwork.imageUrl?.takeIf { it.isNotBlank() }
+        ?: return ResolvedArtworkColor(fallback, cacheable = true)
     return withContext(Dispatchers.IO) {
         val request = ImageRequest.Builder(context)
             .data(imageUrl)
             .allowHardware(false)
+            .memoryCachePolicy(CachePolicy.ENABLED)
+            .diskCachePolicy(CachePolicy.ENABLED)
+            .networkCachePolicy(CachePolicy.DISABLED)
             .size(Size(72, 72))
             .build()
-        val result = context.imageLoader.execute(request)
-        val image = (result as? SuccessResult)?.image ?: return@withContext fallback
-        val bitmap = (image as? BitmapImage)?.bitmap ?: return@withContext fallback
-        sampledProminentColor(bitmap) ?: fallback
+        val result = runCatching { context.imageLoader.execute(request) }.getOrNull()
+        val image = (result as? SuccessResult)?.image
+            ?: return@withContext ResolvedArtworkColor(fallback, cacheable = false)
+        val bitmap = (image as? BitmapImage)?.bitmap
+            ?: return@withContext ResolvedArtworkColor(fallback, cacheable = false)
+        ResolvedArtworkColor(
+            color = sampledProminentColor(bitmap) ?: fallback,
+            cacheable = true
+        )
     }
 }
 

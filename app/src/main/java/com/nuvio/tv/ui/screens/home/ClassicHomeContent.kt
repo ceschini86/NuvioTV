@@ -442,8 +442,10 @@ fun ClassicHomeContent(
                     onItemFocused = { itemIndex ->
                         currentFocusSnapshot.rowIndex = -1
                         currentFocusSnapshot.itemIndex = itemIndex
-                        focusedArtwork = uiState.continueWatchingItems.getOrNull(itemIndex)
-                            ?.toClassicFocusArtwork(uiState.focusedPosterBackdropExpandEnabled)
+                        if (uiState.classicFocusGradientEnabled) {
+                            focusedArtwork = uiState.continueWatchingItems.getOrNull(itemIndex)
+                                ?.toClassicFocusArtwork(uiState.focusedPosterBackdropExpandEnabled)
+                        }
                     },
                     blurUnwatchedEpisodes = uiState.blurUnwatchedEpisodes,
                     downFocusRequester = cwDownRequester,
@@ -570,8 +572,10 @@ fun ClassicHomeContent(
                             currentFocusSnapshot.itemIndex = itemIndex
                             currentFocusSnapshot.rowKey = collectionKey
                             rowFocusedItemIndex[collectionKey] = itemIndex
-                            focusedArtwork = homeRow.collection.folders.getOrNull(itemIndex)
-                                ?.toClassicFocusArtwork(uiState.focusedPosterBackdropExpandEnabled)
+                            if (uiState.classicFocusGradientEnabled) {
+                                focusedArtwork = homeRow.collection.folders.getOrNull(itemIndex)
+                                    ?.toClassicFocusArtwork(uiState.focusedPosterBackdropExpandEnabled)
+                            }
                         }
                     )
                 }
