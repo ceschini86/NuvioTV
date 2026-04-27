@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalDensity
 import com.nuvio.tv.ui.util.dpadVerticalFastScroll
 import androidx.compose.ui.unit.dp
@@ -256,6 +257,13 @@ fun ClassicHomeContent(
         latestOnItemFocus(item)
     }
 
+    fun handleHeroFocus(item: MetaPreview) {
+        if (uiState.classicFocusGradientEnabled) {
+            focusedArtwork = null
+        }
+        latestOnItemFocus(item)
+    }
+
     LaunchedEffect(uiState.classicFocusGradientEnabled) {
         if (!uiState.classicFocusGradientEnabled) {
             focusedArtwork = null
@@ -375,7 +383,12 @@ fun ClassicHomeContent(
                 HeroCarousel(
                     items = uiState.heroItems,
                     focusRequester = if (shouldRequestInitialFocus) heroFocusRequester else null,
-                    onItemFocus = ::handleMetaFocus,
+                    modifier = Modifier.onFocusChanged {
+                        if (it.hasFocus && uiState.classicFocusGradientEnabled) {
+                            focusedArtwork = null
+                        }
+                    },
+                    onItemFocus = ::handleHeroFocus,
                     onItemClick = { item ->
                         onNavigateToDetail(
                             item.id,
