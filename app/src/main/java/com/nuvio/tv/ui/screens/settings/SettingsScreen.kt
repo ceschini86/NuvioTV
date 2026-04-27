@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,11 +58,13 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.R
 import com.nuvio.tv.core.build.AppFeaturePolicy
+import com.nuvio.tv.domain.model.ExperienceMode
 import com.nuvio.tv.ui.screens.plugin.PluginScreenContent
 import com.nuvio.tv.ui.theme.NuvioColors
 import kotlinx.coroutines.delay
 
 internal enum class SettingsCategory {
+    EXPERIENCE,
     ACCOUNT,
     PROFILES,
     APPEARANCE,
@@ -102,6 +105,13 @@ private const val SETTINGS_DETAIL_ANIM_OUT_DURATION_MS = 180
 
 @Composable
 private fun rememberSettingsSectionSpecs() = listOf(
+    SettingsSectionSpec(
+        category = SettingsCategory.EXPERIENCE,
+        title = "Experience",
+        icon = Icons.Default.Tune,
+        subtitle = "Essential or Advanced",
+        destination = SettingsSectionDestination.Inline
+    ),
     SettingsSectionSpec(
         category = SettingsCategory.ACCOUNT,
         title = stringResource(R.string.settings_account),
@@ -185,21 +195,29 @@ private fun rememberSettingsSectionSpecs() = listOf(
 fun SettingsScreen(
     showBuiltInHeader: Boolean = true,
     onNavigateToTrakt: () -> Unit = {},
+    onNavigateToAddons: () -> Unit = {},
     onNavigateToAuthQrSignIn: () -> Unit = {},
     onNavigateToManageProfiles: () -> Unit = {},
     onNavigateToSupportersContributors: () -> Unit = {},
-    profileViewModel: ProfileSettingsViewModel = hiltViewModel()
+    profileViewModel: ProfileSettingsViewModel = hiltViewModel(),
+    experienceModeViewModel: ExperienceModeSettingsViewModel = hiltViewModel()
 ) {
     val isPrimaryProfileActive by profileViewModel.isPrimaryProfileActive.collectAsStateWithLifecycle()
+    val experienceMode by experienceModeViewModel.mode.collectAsStateWithLifecycle(initialValue = null)
+    val isEssentialMode = experienceMode == ExperienceMode.ESSENTIAL
 
     val allSectionSpecs = rememberSettingsSectionSpecs()
-    val visibleSections = remember(isPrimaryProfileActive, allSectionSpecs) {
+    val visibleSections = remember(isPrimaryProfileActive, isEssentialMode, allSectionSpecs) {
         allSectionSpecs.filter { section ->
             when (section.category) {
-                SettingsCategory.DEBUG -> BuildConfig.IS_DEBUG_BUILD
+                SettingsCategory.EXPERIENCE -> isEssentialMode
+                SettingsCategory.DEBUG -> BuildConfig.IS_DEBUG_BUILD && !isEssentialMode
                 SettingsCategory.PROFILES -> isPrimaryProfileActive
                 SettingsCategory.ACCOUNT -> isPrimaryProfileActive
-                SettingsCategory.PLUGINS -> AppFeaturePolicy.pluginsEnabled
+                SettingsCategory.LAYOUT -> !isEssentialMode
+                SettingsCategory.PLUGINS -> AppFeaturePolicy.pluginsEnabled && !isEssentialMode
+                SettingsCategory.INTEGRATION -> !isEssentialMode
+                SettingsCategory.ADVANCED -> !isEssentialMode
                 else -> true
             }
         }
@@ -217,6 +235,7 @@ fun SettingsScreen(
     val contentFocusRequesters = remember {
             mapOf(
                 SettingsCategory.APPEARANCE to FocusRequester(),
+                SettingsCategory.EXPERIENCE to FocusRequester(),
                 SettingsCategory.LAYOUT to FocusRequester(),
                 SettingsCategory.INTEGRATION to FocusRequester(),
                 SettingsCategory.PLAYBACK to FocusRequester(),
@@ -382,6 +401,14 @@ fun SettingsScreen(
                         }
                 ) {
                     when (selectedCategory) {
+                        SettingsCategory.EXPERIENCE -> ExperienceModeSettingsContent(
+                            experienceModeViewModel = experienceModeViewModel,
+                            initialFocusRequester = if (allowDetailAutofocus) {
+                                contentFocusRequesters[SettingsCategory.EXPERIENCE]
+                            } else {
+                                null
+                            }
+                        )
                         SettingsCategory.PROFILES -> ProfileSettingsContent(
                             onManageProfiles = onNavigateToManageProfiles
                         )
@@ -399,19 +426,30 @@ fun SettingsScreen(
                                 null
                             }
                         )
-                        SettingsCategory.PLAYBACK -> PlaybackSettingsContent(
-                            initialFocusRequester = if (allowDetailAutofocus) {
-                                contentFocusRequesters[SettingsCategory.PLAYBACK]
-                            } else {
-                                null
-                            }
-                        )
+                        SettingsCategory.PLAYBACK -> if (isEssentialMode) {
+                            EssentialPlaybackSettingsContent(
+                                initialFocusRequester = if (allowDetailAutofocus) {
+                                    contentFocusRequesters[SettingsCategory.PLAYBACK]
+                                } else {
+                                    null
+                                }
+                            )
+                        } else {
+                            PlaybackSettingsContent(
+                                initialFocusRequester = if (allowDetailAutofocus) {
+                                    contentFocusRequesters[SettingsCategory.PLAYBACK]
+                                } else {
+                                    null
+                                }
+                            )
+                        }
                         SettingsCategory.ADVANCED -> AdvancedSettingsContent(
                             initialFocusRequester = if (allowDetailAutofocus) {
                                 contentFocusRequesters[SettingsCategory.ADVANCED]
                             } else {
                                 null
-                            }
+                            },
+                            experienceModeViewModel = experienceModeViewModel
                         )
                         SettingsCategory.INTEGRATION -> IntegrationSettingsContent(
                             selectedSection = integrationSection,
@@ -474,6 +512,35 @@ private fun PluginsSettingsContent() {
                     showHeader = false
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun ExperienceModeSettingsContent(
+    experienceModeViewModel: ExperienceModeSettingsViewModel,
+    initialFocusRequester: FocusRequester?
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        SettingsDetailHeader(
+            title = "Experience",
+            subtitle = "Choose how much setup and customization Nuvio shows."
+        )
+        SettingsGroupCard(modifier = Modifier.fillMaxWidth()) {
+            SettingsActionRow(
+                title = "Switch to Advanced",
+                subtitle = "Show full layout, plug-in, integration, catalog, collection, debug, and tuning settings.",
+                value = "Advanced",
+                onClick = { experienceModeViewModel.setMode(ExperienceMode.ADVANCED) },
+                modifier = if (initialFocusRequester != null) {
+                    Modifier.focusRequester(initialFocusRequester)
+                } else {
+                    Modifier
+                }
+            )
         }
     }
 }

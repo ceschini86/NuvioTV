@@ -111,12 +111,15 @@ import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.auth.AuthManager
 import com.nuvio.tv.core.build.AppFeaturePolicy
 import com.nuvio.tv.data.local.AppOnboardingDataStore
+import com.nuvio.tv.data.local.ExperienceModeDataStore
 import com.nuvio.tv.data.local.LayoutPreferenceDataStore
 import com.nuvio.tv.data.local.ThemeDataStore
 import com.nuvio.tv.data.repository.TraktProgressService
 import com.nuvio.tv.domain.model.AppFont
 import com.nuvio.tv.domain.model.AppTheme
 import com.nuvio.tv.domain.model.AuthState
+import com.nuvio.tv.domain.model.ExperienceMode
+import com.nuvio.tv.domain.repository.AddonRepository
 import com.nuvio.tv.core.sync.ProfileSettingsSyncService
 import com.nuvio.tv.core.sync.ProfileSyncService
 import com.nuvio.tv.core.sync.StartupSyncService
@@ -126,6 +129,7 @@ import com.nuvio.tv.ui.navigation.Screen
 import com.nuvio.tv.ui.components.NuvioScrollDefaults
 import com.nuvio.tv.ui.components.ProfileAvatarCircle
 import com.nuvio.tv.ui.screens.account.AuthQrSignInScreen
+import com.nuvio.tv.ui.screens.addon.EssentialAddonSetupScreen
 import com.nuvio.tv.ui.screens.profile.ProfileSelectionScreen
 import com.nuvio.tv.ui.theme.NuvioColors
 import com.nuvio.tv.ui.theme.NuvioTheme
@@ -161,6 +165,9 @@ private data class MainUiPrefs(
     val amoledMode: Boolean = false,
     val amoledSurfacesMode: Boolean = false,
     val hasChosenLayout: Boolean? = null,
+    val experienceMode: ExperienceMode? = null,
+    val experienceModeLoaded: Boolean = false,
+    val addonSetupSkipped: Boolean = false,
     val sidebarCollapsed: Boolean = false,
     val modernSidebarEnabled: Boolean = false,
     val modernSidebarBlurPref: Boolean = false,
@@ -176,6 +183,12 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var layoutPreferenceDataStore: LayoutPreferenceDataStore
+
+    @Inject
+    lateinit var experienceModeDataStore: ExperienceModeDataStore
+
+    @Inject
+    lateinit var addonRepository: AddonRepository
 
     @Inject
     lateinit var traktProgressService: TraktProgressService
@@ -294,7 +307,7 @@ class MainActivity : ComponentActivity() {
                 activeProfile?.avatarId?.let { avatarRepository.getAvatarImageUrl(it, avatarCatalog) }
             }
 
-            val mainUiPrefsFlow = remember(themeDataStore, layoutPreferenceDataStore) {
+            val mainUiPrefsFlow = remember(themeDataStore, layoutPreferenceDataStore, experienceModeDataStore) {
                 combine(
                     themeDataStore.selectedTheme,
                     themeDataStore.selectedFont,
@@ -309,6 +322,10 @@ class MainActivity : ComponentActivity() {
                         sidebarCollapsed = sidebarCollapsed,
                         modernSidebarEnabled = modernSidebarEnabled,
                     )
+                }.combine(experienceModeDataStore.mode) { prefs, experienceMode ->
+                    prefs.copy(experienceMode = experienceMode, experienceModeLoaded = true)
+                }.combine(experienceModeDataStore.addonSetupSkipped) { prefs, addonSetupSkipped ->
+                    prefs.copy(addonSetupSkipped = addonSetupSkipped)
                 }.combine(themeDataStore.amoledMode) { prefs, amoledMode ->
                     prefs.copy(amoledMode = amoledMode)
                 }.combine(themeDataStore.amoledSurfacesMode) { prefs, amoledSurfacesMode ->
@@ -322,6 +339,9 @@ class MainActivity : ComponentActivity() {
                 }
             }
             val mainUiPrefs by mainUiPrefsFlow.collectAsState(initial = MainUiPrefs(hasChosenLayout = null))
+            val installedAddons by remember(addonRepository) {
+                addonRepository.getInstalledAddons()
+            }.collectAsState(initial = null)
 
             NuvioTheme(
                 appTheme = mainUiPrefs.theme,
@@ -417,11 +437,29 @@ class MainActivity : ComponentActivity() {
                     }
 
                     val layoutChosen = mainUiPrefs.hasChosenLayout
-                    if (layoutChosen == null) {
+                    if (layoutChosen == null || !mainUiPrefs.experienceModeLoaded || installedAddons == null) {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(NuvioColors.Background)
+                        )
+                        return@Surface
+                    }
+                    val effectiveExperienceMode = mainUiPrefs.experienceMode
+                        ?: if (layoutChosen) ExperienceMode.ADVANCED else null
+                    val needsExperienceSelection = effectiveExperienceMode == null
+                    val needsEssentialAddonSetup =
+                        effectiveExperienceMode == ExperienceMode.ESSENTIAL &&
+                            installedAddons.orEmpty().isEmpty() &&
+                            !mainUiPrefs.addonSetupSkipped
+
+                    if (needsEssentialAddonSetup) {
+                        EssentialAddonSetupScreen(
+                            onSkip = {
+                                lifecycleScope.launch {
+                                    experienceModeDataStore.setAddonSetupSkipped(true)
+                                }
+                            }
                         )
                         return@Surface
                     }
@@ -431,7 +469,11 @@ class MainActivity : ComponentActivity() {
                         mainUiPrefs.modernSidebarBlurPref && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
                     val hideBuiltInHeadersForFloatingPill = modernSidebarEnabled && !sidebarCollapsed
 
-                    val startDestination = if (layoutChosen) Screen.Home.route else Screen.LayoutSelection.route
+                    val startDestination = when {
+                        needsExperienceSelection -> Screen.ExperienceModeSelection.route
+                        layoutChosen -> Screen.Home.route
+                        else -> Screen.LayoutSelection.route
+                    }
                     val navController = rememberNavController()
                     var optimisticRoute by remember { mutableStateOf<String?>(null) }
                     val navBackStackEntry by navController.currentBackStackEntryAsState()

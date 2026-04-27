@@ -5,7 +5,11 @@ internal fun sanitizePendingAddonChange(
     proposedChange: PendingAddonChange,
     currentState: PageState
 ): PendingAddonChange {
-    if (mode.allowAddonManagement && mode.allowCatalogManagement) {
+    if (
+        mode.allowAddonManagement &&
+        mode.allowCatalogManagement &&
+        mode.allowCollectionManagement
+    ) {
         return proposedChange
     }
 
@@ -26,6 +30,16 @@ internal fun sanitizePendingAddonChange(
             currentState.catalogs
                 .filter { it.isDisabled }
                 .map { it.disableKey }
+        },
+        proposedCollectionsJson = if (mode.allowCollectionManagement) {
+            proposedChange.proposedCollectionsJson
+        } else {
+            null
+        },
+        proposedDisabledCollectionKeys = if (mode.allowCollectionManagement) {
+            proposedChange.proposedDisabledCollectionKeys
+        } else {
+            currentState.disabledCollectionKeys
         }
     )
 }

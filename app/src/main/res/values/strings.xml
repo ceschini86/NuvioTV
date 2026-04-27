@@ -7,6 +7,7 @@
     <!-- WebConfigServers -->
     <string name="web_manage_addons_title">Manage Addons</string>
     <string name="web_manage_addons_subtitle">Manage addons, catalogs, and collections</string>
+    <string name="web_manage_addons_only_subtitle">Install or remove add-ons</string>
     <string name="web_add_addon_url">Add addon by URL</string>
     <string name="web_placeholder_url">https://example.com/manifest.json</string>
     <string name="web_btn_add">Add</string>
@@ -908,10 +909,12 @@
     <string name="addon_remove">Remove</string>
     <string name="addon_manage_from_phone_title">Manage from phone</string>
     <string name="addon_manage_from_phone_subtitle">Scan a QR code to manage addons, catalogs, and collections from your phone</string>
+    <string name="addon_manage_addons_only_from_phone_subtitle">Scan a QR code to install or remove add-ons from your phone</string>
     <string name="addon_manage_collections_from_phone_subtitle">Scan a QR code to manage collections from your phone</string>
     <string name="addon_reorder_title">Reorder home catalogs</string>
     <string name="addon_reorder_subtitle">Controls catalog and collection row order on Home (Classic + Modern + Grid)</string>
     <string name="addon_qr_scan_instruction">Scan with your phone to manage addons, catalogs, and collections</string>
+    <string name="addon_qr_addons_only_scan_instruction">Scan with your phone to install or remove add-ons</string>
     <string name="addon_qr_collections_scan_instruction">Scan with your phone to manage collections</string>
     <string name="addon_qr_close">Close</string>
     <string name="addon_confirm_title">Confirm addon &amp; catalog changes</string>

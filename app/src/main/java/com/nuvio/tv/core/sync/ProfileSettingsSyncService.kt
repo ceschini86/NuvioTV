@@ -13,6 +13,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.nuvio.tv.core.auth.AuthManager
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.data.local.ExperienceModeDataStore
 import com.nuvio.tv.data.local.ProfileDataStoreFactory
 import com.nuvio.tv.data.remote.supabase.SupabaseProfileSettingsBlob
 import io.github.jan.supabase.postgrest.Postgrest
@@ -75,6 +76,7 @@ class ProfileSettingsSyncService @Inject constructor(
     private val syncedFeatures = listOf(
         "theme_settings",
         "layout_settings",
+        ExperienceModeDataStore.FEATURE,
         "player_settings",
         "trailer_settings",
         "tmdb_settings",

@@ -82,6 +82,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogDescriptor
+import com.nuvio.tv.domain.model.ExperienceMode
 import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.theme.NuvioColors
 import androidx.lifecycle.Lifecycle
@@ -101,7 +102,9 @@ fun AddonManagerScreen(
     onNavigateToCollections: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val webConfigMode = viewModel.webConfigMode
+    val experienceMode by viewModel.experienceMode.collectAsState(initial = null)
+    val isEssential = experienceMode == ExperienceMode.ESSENTIAL
+    val webConfigMode = viewModel.webConfigMode(experienceMode ?: ExperienceMode.ADVANCED)
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -334,18 +337,20 @@ fun AddonManagerScreen(
             item {
                 ManageFromPhoneCard(
                     subtitle = manageFromPhoneSubtitle,
-                    onClick = viewModel::startQrMode
+                    onClick = { viewModel.startQrMode(webConfigMode) }
                 )
             }
 
-            if (!viewModel.isReadOnly && hasHomeVisibleCatalogs) {
+            if (!viewModel.isReadOnly && !isEssential && hasHomeVisibleCatalogs) {
                 item {
                     CatalogOrderEntryCard(onClick = onNavigateToCatalogOrder)
                 }
             }
 
-            item {
-                CollectionsEntryCard(onClick = onNavigateToCollections)
+            if (!isEssential) {
+                item {
+                    CollectionsEntryCard(onClick = onNavigateToCollections)
+                }
             }
 
             item {
@@ -385,7 +390,8 @@ fun AddonManagerScreen(
                         onMoveUp = { viewModel.moveAddonUp(addon.baseUrl) },
                         onMoveDown = { viewModel.moveAddonDown(addon.baseUrl) },
                         onRemove = { viewModel.removeAddon(addon.baseUrl) },
-                        isReadOnly = viewModel.isReadOnly
+                        isReadOnly = viewModel.isReadOnly,
+                        showReorder = !isEssential
                     )
                 }
             }
@@ -426,7 +432,7 @@ fun AddonManagerScreen(
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun AddonMessageOverlay(
+internal fun AddonMessageOverlay(
     message: String?,
     isError: Boolean
 ) {
@@ -662,7 +668,7 @@ private fun CollectionsEntryCard(onClick: () -> Unit) {
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun QrCodeOverlay(
+internal fun QrCodeOverlay(
     qrBitmap: Bitmap?,
     serverUrl: String?,
     instruction: String,
@@ -758,7 +764,7 @@ private fun QrCodeOverlay(
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun ConfirmAddonChangesDialog(
+internal fun ConfirmAddonChangesDialog(
     pendingChange: PendingChangeInfo,
     onConfirm: () -> Unit,
     onReject: () -> Unit
@@ -1051,7 +1057,8 @@ private fun AddonCard(
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
     onRemove: () -> Unit,
-    isReadOnly: Boolean = false
+    isReadOnly: Boolean = false,
+    showReorder: Boolean = true
 ) {
     if (isReadOnly) {
         Surface(
@@ -1089,7 +1096,8 @@ private fun AddonCard(
                 canMoveDown = canMoveDown,
                 onMoveUp = onMoveUp,
                 onMoveDown = onMoveDown,
-                onRemove = onRemove
+                onRemove = onRemove,
+                showReorder = showReorder
             )
         }
     }
@@ -1104,7 +1112,8 @@ private fun AddonCardContent(
     canMoveDown: Boolean = false,
     onMoveUp: () -> Unit = {},
     onMoveDown: () -> Unit = {},
-    onRemove: () -> Unit = {}
+    onRemove: () -> Unit = {},
+    showReorder: Boolean = true
 ) {
     Column(modifier = Modifier.padding(20.dp)) {
         Row(
@@ -1129,31 +1138,33 @@ private fun AddonCardContent(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Button(
-                        onClick = onMoveUp,
-                        enabled = canMoveUp,
-                        colors = ButtonDefaults.colors(
-                            containerColor = NuvioColors.BackgroundCard,
-                            contentColor = NuvioColors.TextSecondary,
-                            focusedContainerColor = NuvioColors.FocusBackground,
-                            focusedContentColor = NuvioColors.Primary
-                        ),
-                        shape = ButtonDefaults.shape(RoundedCornerShape(12.dp))
-                    ) {
-                        Icon(imageVector = Icons.Default.ArrowUpward, contentDescription = stringResource(R.string.cd_move_up))
-                    }
-                    Button(
-                        onClick = onMoveDown,
-                        enabled = canMoveDown,
-                        colors = ButtonDefaults.colors(
-                            containerColor = NuvioColors.BackgroundCard,
-                            contentColor = NuvioColors.TextSecondary,
-                            focusedContainerColor = NuvioColors.FocusBackground,
-                            focusedContentColor = NuvioColors.Primary
-                        ),
-                        shape = ButtonDefaults.shape(RoundedCornerShape(12.dp))
-                    ) {
-                        Icon(imageVector = Icons.Default.ArrowDownward, contentDescription = stringResource(R.string.cd_move_down))
+                    if (showReorder) {
+                        Button(
+                            onClick = onMoveUp,
+                            enabled = canMoveUp,
+                            colors = ButtonDefaults.colors(
+                                containerColor = NuvioColors.BackgroundCard,
+                                contentColor = NuvioColors.TextSecondary,
+                                focusedContainerColor = NuvioColors.FocusBackground,
+                                focusedContentColor = NuvioColors.Primary
+                            ),
+                            shape = ButtonDefaults.shape(RoundedCornerShape(12.dp))
+                        ) {
+                            Icon(imageVector = Icons.Default.ArrowUpward, contentDescription = stringResource(R.string.cd_move_up))
+                        }
+                        Button(
+                            onClick = onMoveDown,
+                            enabled = canMoveDown,
+                            colors = ButtonDefaults.colors(
+                                containerColor = NuvioColors.BackgroundCard,
+                                contentColor = NuvioColors.TextSecondary,
+                                focusedContainerColor = NuvioColors.FocusBackground,
+                                focusedContentColor = NuvioColors.Primary
+                            ),
+                            shape = ButtonDefaults.shape(RoundedCornerShape(12.dp))
+                        ) {
+                            Icon(imageVector = Icons.Default.ArrowDownward, contentDescription = stringResource(R.string.cd_move_down))
+                        }
                     }
                     Button(
                         onClick = onRemove,

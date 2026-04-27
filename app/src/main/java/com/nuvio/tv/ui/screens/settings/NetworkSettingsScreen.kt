@@ -61,6 +61,7 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
+import com.nuvio.tv.domain.model.ExperienceMode
 import com.nuvio.tv.ui.theme.NuvioColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -165,7 +166,8 @@ private suspend fun fetchFastComUrls(): List<String> = withContext(Dispatchers.I
 @Composable
 fun AdvancedSettingsContent(
     initialFocusRequester: FocusRequester? = null,
-    viewModel: AdvancedSettingsViewModel = hiltViewModel()
+    viewModel: AdvancedSettingsViewModel = hiltViewModel(),
+    experienceModeViewModel: ExperienceModeSettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -276,6 +278,17 @@ fun AdvancedSettingsContent(
                 ) {
                     ConnectionStatusBadge(type = connectionType)
                 }
+            }
+        }
+
+        item(key = "experience_mode_settings") {
+            SettingsGroupCard(modifier = Modifier.fillMaxWidth(), title = "Experience mode") {
+                SettingsActionRow(
+                    title = "Switch to Essential",
+                    subtitle = "Hide advanced setup surfaces without changing your saved values.",
+                    value = "Essential",
+                    onClick = { experienceModeViewModel.setMode(ExperienceMode.ESSENTIAL) }
+                )
             }
         }
 
