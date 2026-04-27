@@ -39,6 +39,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
@@ -91,8 +93,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -118,6 +118,8 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.lazy.rememberLazyListState
+import kotlinx.coroutines.delay
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.media3.exoplayer.ExoPlayer
@@ -2415,6 +2417,18 @@ private fun SpeedSelectionDialog(
     onSpeedSelected: (Float) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val listState = rememberLazyListState()
+    val speedFocusRequesters = remember {
+        PLAYBACK_SPEEDS.map { FocusRequester() }
+    }
+
+    LaunchedEffect(currentSpeed) {
+        val selectedIndex = PLAYBACK_SPEEDS.indexOfFirst { it == currentSpeed }.takeIf { it >= 0 } ?: 0
+        listState.scrollToItem(selectedIndex)
+        delay(120)
+        runCatching { speedFocusRequesters[selectedIndex].requestFocus() }
+    }
+
     Dialog(onDismissRequest = onDismiss) {
         Box(
             modifier = Modifier
@@ -2433,11 +2447,13 @@ private fun SpeedSelectionDialog(
                 )
 
                 LazyColumn(
+                    state = listState,
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(top = 4.dp)
                 ) {
-                    items(PLAYBACK_SPEEDS) { speed ->
+                    itemsIndexed(PLAYBACK_SPEEDS) { index, speed ->
                         SpeedItem(
+                            modifier = Modifier.focusRequester(speedFocusRequesters[index]),
                             speed = speed,
                             isSelected = speed == currentSpeed,
                             onClick = { onSpeedSelected(speed) }
@@ -2520,6 +2536,7 @@ private fun MoreActionItem(
 
 @Composable
 private fun SpeedItem(
+    modifier: Modifier = Modifier,
     speed: Float,
     isSelected: Boolean,
     onClick: () -> Unit
@@ -2528,7 +2545,7 @@ private fun SpeedItem(
 
     Card(
         onClick = onClick,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .onFocusChanged { isFocused = it.isFocused },
         colors = CardDefaults.colors(
