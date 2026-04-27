@@ -20,13 +20,15 @@ data class ThemeSettingsUiState(
     val availableThemes: List<AppTheme> = listOf(AppTheme.WHITE) + AppTheme.entries.filterNot { it == AppTheme.WHITE },
     val selectedFont: AppFont = AppFont.INTER,
     val availableFonts: List<AppFont> = AppFont.entries.toList(),
-    val amoledMode: Boolean = false
+    val amoledMode: Boolean = false,
+    val amoledSurfacesMode: Boolean = false
 )
 
 sealed class ThemeSettingsEvent {
     data class SelectTheme(val theme: AppTheme) : ThemeSettingsEvent()
     data class SelectFont(val font: AppFont) : ThemeSettingsEvent()
     data class ToggleAmoledMode(val enabled: Boolean) : ThemeSettingsEvent()
+    data class ToggleAmoledSurfacesMode(val enabled: Boolean) : ThemeSettingsEvent()
 }
 
 @HiltViewModel
@@ -65,6 +67,15 @@ class ThemeSettingsViewModel @Inject constructor(
                     }
                 }
         }
+        viewModelScope.launch {
+            themeDataStore.amoledSurfacesMode
+                .distinctUntilChanged()
+                .collectLatest { enabled ->
+                    _uiState.update { state ->
+                        if (state.amoledSurfacesMode == enabled) state else state.copy(amoledSurfacesMode = enabled)
+                    }
+                }
+        }
     }
 
     private fun currentTheme(): AppTheme {
@@ -76,6 +87,7 @@ class ThemeSettingsViewModel @Inject constructor(
             is ThemeSettingsEvent.SelectTheme -> selectTheme(event.theme)
             is ThemeSettingsEvent.SelectFont -> selectFont(event.font)
             is ThemeSettingsEvent.ToggleAmoledMode -> setAmoledMode(event.enabled)
+            is ThemeSettingsEvent.ToggleAmoledSurfacesMode -> setAmoledSurfacesMode(event.enabled)
         }
     }
 
@@ -97,6 +109,13 @@ class ThemeSettingsViewModel @Inject constructor(
         if (_uiState.value.amoledMode == enabled) return
         viewModelScope.launch {
             themeDataStore.setAmoledMode(enabled)
+        }
+    }
+
+    private fun setAmoledSurfacesMode(enabled: Boolean) {
+        if (_uiState.value.amoledSurfacesMode == enabled) return
+        viewModelScope.launch {
+            themeDataStore.setAmoledSurfacesMode(enabled)
         }
     }
 }

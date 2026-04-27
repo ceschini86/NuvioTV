@@ -174,6 +174,18 @@ fun ThemeSettingsContent(
                         viewModel.onEvent(ThemeSettingsEvent.ToggleAmoledMode(!uiState.amoledMode))
                     }
                 )
+                if (uiState.amoledMode) {
+                    SettingsToggleRow(
+                        title = stringResource(R.string.appearance_amoled_surfaces_mode),
+                        subtitle = stringResource(R.string.appearance_amoled_surfaces_mode_subtitle),
+                        checked = uiState.amoledSurfacesMode,
+                        onToggle = {
+                            viewModel.onEvent(
+                                ThemeSettingsEvent.ToggleAmoledSurfacesMode(!uiState.amoledSurfacesMode)
+                            )
+                        }
+                    )
+                }
             }
 
             SettingsGroupCard(

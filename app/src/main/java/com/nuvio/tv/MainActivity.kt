@@ -159,6 +159,7 @@ private data class MainUiPrefs(
     val theme: AppTheme = AppTheme.WHITE,
     val font: AppFont = AppFont.INTER,
     val amoledMode: Boolean = false,
+    val amoledSurfacesMode: Boolean = false,
     val hasChosenLayout: Boolean? = null,
     val sidebarCollapsed: Boolean = false,
     val modernSidebarEnabled: Boolean = false,
@@ -310,6 +311,8 @@ class MainActivity : ComponentActivity() {
                     )
                 }.combine(themeDataStore.amoledMode) { prefs, amoledMode ->
                     prefs.copy(amoledMode = amoledMode)
+                }.combine(themeDataStore.amoledSurfacesMode) { prefs, amoledSurfacesMode ->
+                    prefs.copy(amoledSurfacesMode = amoledSurfacesMode)
                 }.combine(layoutPreferenceDataStore.modernSidebarBlurEnabled) { prefs, modernSidebarBlurPref ->
                     prefs.copy(modernSidebarBlurPref = modernSidebarBlurPref)
                 }.combine(layoutPreferenceDataStore.smoothBringIntoViewEnabled) { prefs, smoothBringIntoViewEnabled ->
@@ -320,7 +323,12 @@ class MainActivity : ComponentActivity() {
             }
             val mainUiPrefs by mainUiPrefsFlow.collectAsState(initial = MainUiPrefs(hasChosenLayout = null))
 
-            NuvioTheme(appTheme = mainUiPrefs.theme, appFont = mainUiPrefs.font, amoledMode = mainUiPrefs.amoledMode) {
+            NuvioTheme(
+                appTheme = mainUiPrefs.theme,
+                appFont = mainUiPrefs.font,
+                amoledMode = mainUiPrefs.amoledMode,
+                amoledSurfacesMode = mainUiPrefs.amoledSurfacesMode
+            ) {
                 val defaultBringIntoViewSpec = LocalBringIntoViewSpec.current
                 val bringIntoViewSpec = if (mainUiPrefs.smoothBringIntoViewEnabled) {
                     NuvioScrollDefaults.smoothScrollSpec
