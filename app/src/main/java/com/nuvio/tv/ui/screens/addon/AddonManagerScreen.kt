@@ -92,6 +92,12 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.map
+
+private sealed interface AddonExperienceModeState {
+    data object Loading : AddonExperienceModeState
+    data class Loaded(val mode: ExperienceMode?) : AddonExperienceModeState
+}
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -102,7 +108,23 @@ fun AddonManagerScreen(
     onNavigateToCollections: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val experienceMode by viewModel.experienceMode.collectAsState(initial = null)
+    val experienceModeState by remember(viewModel) {
+        viewModel.experienceMode.map<ExperienceMode?, AddonExperienceModeState> {
+            AddonExperienceModeState.Loaded(it)
+        }
+    }.collectAsState(initial = AddonExperienceModeState.Loading)
+    val experienceMode = (experienceModeState as? AddonExperienceModeState.Loaded)?.mode
+    if (experienceModeState is AddonExperienceModeState.Loading) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(NuvioColors.Background),
+            contentAlignment = Alignment.Center
+        ) {
+            LoadingIndicator()
+        }
+        return
+    }
     val isEssential = experienceMode == ExperienceMode.ESSENTIAL
     val webConfigMode = viewModel.webConfigMode(experienceMode ?: ExperienceMode.ADVANCED)
     val keyboardController = LocalSoftwareKeyboardController.current

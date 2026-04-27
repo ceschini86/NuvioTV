@@ -75,7 +75,7 @@ fun EssentialAddonSetupScreen(
             )
             Spacer(modifier = Modifier.height(10.dp))
             Text(
-                text = "Install one add-on to start streaming. You can add more later from Settings.",
+                text = "Install one add-on to start streaming. You can add more later from Addons.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = NuvioColors.TextSecondary
             )

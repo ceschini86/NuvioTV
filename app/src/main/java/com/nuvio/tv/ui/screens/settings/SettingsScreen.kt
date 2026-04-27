@@ -62,6 +62,7 @@ import com.nuvio.tv.domain.model.ExperienceMode
 import com.nuvio.tv.ui.screens.plugin.PluginScreenContent
 import com.nuvio.tv.ui.theme.NuvioColors
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.map
 
 internal enum class SettingsCategory {
     EXPERIENCE,
@@ -102,6 +103,11 @@ internal data class SettingsSectionSpec(
 private const val SETTINGS_DETAIL_FOCUS_DELAY_MS = 120L
 private const val SETTINGS_DETAIL_ANIM_IN_DURATION_MS = 200
 private const val SETTINGS_DETAIL_ANIM_OUT_DURATION_MS = 180
+
+private sealed interface ExperienceModeLoadState {
+    data object Loading : ExperienceModeLoadState
+    data class Loaded(val mode: ExperienceMode?) : ExperienceModeLoadState
+}
 
 @Composable
 private fun rememberSettingsSectionSpecs() = listOf(
@@ -203,21 +209,37 @@ fun SettingsScreen(
     experienceModeViewModel: ExperienceModeSettingsViewModel = hiltViewModel()
 ) {
     val isPrimaryProfileActive by profileViewModel.isPrimaryProfileActive.collectAsStateWithLifecycle()
-    val experienceMode by experienceModeViewModel.mode.collectAsStateWithLifecycle(initialValue = null)
-    val isEssentialMode = experienceMode == ExperienceMode.ESSENTIAL
+    val experienceModeState by remember(experienceModeViewModel) {
+        experienceModeViewModel.mode.map<ExperienceMode?, ExperienceModeLoadState> {
+            ExperienceModeLoadState.Loaded(it)
+        }
+    }.collectAsStateWithLifecycle(initialValue = ExperienceModeLoadState.Loading)
+    val loadedExperienceMode = (experienceModeState as? ExperienceModeLoadState.Loaded)?.mode
+    val experienceModeLoaded = experienceModeState is ExperienceModeLoadState.Loaded
+
+    if (!experienceModeLoaded) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(NuvioColors.Background)
+        )
+        return
+    }
+
+    val isEssentialMode = loadedExperienceMode == ExperienceMode.ESSENTIAL
 
     val allSectionSpecs = rememberSettingsSectionSpecs()
     val visibleSections = remember(isPrimaryProfileActive, isEssentialMode, allSectionSpecs) {
         allSectionSpecs.filter { section ->
             when (section.category) {
-                SettingsCategory.EXPERIENCE -> isEssentialMode
+                SettingsCategory.EXPERIENCE -> false
                 SettingsCategory.DEBUG -> BuildConfig.IS_DEBUG_BUILD && !isEssentialMode
                 SettingsCategory.PROFILES -> isPrimaryProfileActive
                 SettingsCategory.ACCOUNT -> isPrimaryProfileActive
                 SettingsCategory.LAYOUT -> !isEssentialMode
                 SettingsCategory.PLUGINS -> AppFeaturePolicy.pluginsEnabled && !isEssentialMode
                 SettingsCategory.INTEGRATION -> !isEssentialMode
-                SettingsCategory.ADVANCED -> !isEssentialMode
+                SettingsCategory.ADVANCED -> true
                 else -> true
             }
         }
@@ -401,7 +423,7 @@ fun SettingsScreen(
                         }
                 ) {
                     when (selectedCategory) {
-                        SettingsCategory.EXPERIENCE -> ExperienceModeSettingsContent(
+                        SettingsCategory.EXPERIENCE -> EssentialAdvancedSettingsContent(
                             experienceModeViewModel = experienceModeViewModel,
                             initialFocusRequester = if (allowDetailAutofocus) {
                                 contentFocusRequesters[SettingsCategory.EXPERIENCE]
@@ -443,14 +465,25 @@ fun SettingsScreen(
                                 }
                             )
                         }
-                        SettingsCategory.ADVANCED -> AdvancedSettingsContent(
-                            initialFocusRequester = if (allowDetailAutofocus) {
-                                contentFocusRequesters[SettingsCategory.ADVANCED]
-                            } else {
-                                null
-                            },
-                            experienceModeViewModel = experienceModeViewModel
-                        )
+                        SettingsCategory.ADVANCED -> if (isEssentialMode) {
+                            EssentialAdvancedSettingsContent(
+                                experienceModeViewModel = experienceModeViewModel,
+                                initialFocusRequester = if (allowDetailAutofocus) {
+                                    contentFocusRequesters[SettingsCategory.ADVANCED]
+                                } else {
+                                    null
+                                }
+                            )
+                        } else {
+                            AdvancedSettingsContent(
+                                initialFocusRequester = if (allowDetailAutofocus) {
+                                    contentFocusRequesters[SettingsCategory.ADVANCED]
+                                } else {
+                                    null
+                                },
+                                experienceModeViewModel = experienceModeViewModel
+                            )
+                        }
                         SettingsCategory.INTEGRATION -> IntegrationSettingsContent(
                             selectedSection = integrationSection,
                             onSelectSection = { integrationSection = it },
@@ -517,7 +550,7 @@ private fun PluginsSettingsContent() {
 }
 
 @Composable
-private fun ExperienceModeSettingsContent(
+private fun EssentialAdvancedSettingsContent(
     experienceModeViewModel: ExperienceModeSettingsViewModel,
     initialFocusRequester: FocusRequester?
 ) {
@@ -526,8 +559,8 @@ private fun ExperienceModeSettingsContent(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         SettingsDetailHeader(
-            title = "Experience",
-            subtitle = "Choose how much setup and customization Nuvio shows."
+            title = stringResource(R.string.settings_advanced),
+            subtitle = "Switch to Advanced for the full settings surface."
         )
         SettingsGroupCard(modifier = Modifier.fillMaxWidth()) {
             SettingsActionRow(
