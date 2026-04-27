@@ -124,7 +124,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.media3.exoplayer.ExoPlayer
 import io.github.peerless2012.ass.media.widget.AssSubtitleView
-import kotlinx.coroutines.delay
+import kotlin.math.abs
 
 @Composable
 fun PlayerScreen(
@@ -2417,15 +2417,17 @@ private fun SpeedSelectionDialog(
     onSpeedSelected: (Float) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val listState = rememberLazyListState()
+    val selectedIndex = remember(currentSpeed) {
+        PLAYBACK_SPEEDS.indices.minByOrNull { index ->
+            abs(PLAYBACK_SPEEDS[index] - currentSpeed)
+        } ?: 0
+    }
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = selectedIndex)
     val speedFocusRequesters = remember {
         PLAYBACK_SPEEDS.map { FocusRequester() }
     }
 
-    LaunchedEffect(currentSpeed) {
-        val selectedIndex = PLAYBACK_SPEEDS.indexOfFirst { it == currentSpeed }.takeIf { it >= 0 } ?: 0
-        listState.scrollToItem(selectedIndex)
-        delay(120)
+    LaunchedEffect(selectedIndex) {
         runCatching { speedFocusRequesters[selectedIndex].requestFocus() }
     }
 
