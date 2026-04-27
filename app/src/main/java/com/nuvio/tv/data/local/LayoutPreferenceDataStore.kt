@@ -60,6 +60,7 @@ class LayoutPreferenceDataStore @Inject constructor(
     private val posterLabelsEnabledKey = booleanPreferencesKey("poster_labels_enabled")
     private val catalogAddonNameEnabledKey = booleanPreferencesKey("catalog_addon_name_enabled")
     private val catalogTypeSuffixEnabledKey = booleanPreferencesKey("catalog_type_suffix_enabled")
+    private val classicFocusGradientEnabledKey = booleanPreferencesKey("classic_focus_gradient_enabled")
     private val focusedPosterBackdropExpandEnabledKey = booleanPreferencesKey("focused_poster_backdrop_expand_enabled")
     private val focusedPosterBackdropExpandDelaySecondsKey = intPreferencesKey("focused_poster_backdrop_expand_delay_seconds")
     private val focusedPosterBackdropTrailerEnabledKey = booleanPreferencesKey("focused_poster_backdrop_trailer_enabled")
@@ -171,6 +172,10 @@ class LayoutPreferenceDataStore @Inject constructor(
 
     val catalogTypeSuffixEnabled: Flow<Boolean> = profileFlow { prefs ->
         prefs[catalogTypeSuffixEnabledKey] ?: true
+    }
+
+    val classicFocusGradientEnabled: Flow<Boolean> = profileFlow { prefs ->
+        prefs[classicFocusGradientEnabledKey] ?: false
     }
 
     val focusedPosterBackdropExpandEnabled: Flow<Boolean> = profileFlow { prefs ->
@@ -383,6 +388,12 @@ class LayoutPreferenceDataStore @Inject constructor(
     suspend fun setCatalogTypeSuffixEnabled(enabled: Boolean) {
         store().edit { prefs ->
             prefs[catalogTypeSuffixEnabledKey] = enabled
+        }
+    }
+
+    suspend fun setClassicFocusGradientEnabled(enabled: Boolean) {
+        store().edit { prefs ->
+            prefs[classicFocusGradientEnabledKey] = enabled
         }
     }
 

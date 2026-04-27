@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.Collection
+import com.nuvio.tv.domain.model.CollectionFolder
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -245,6 +246,21 @@ fun ClassicHomeContent(
         .apply { value = trailerPreviewUrls }
     val stableTrailerPreviewAudioUrls = remember { androidx.compose.runtime.mutableStateOf(trailerPreviewAudioUrls) }
         .apply { value = trailerPreviewAudioUrls }
+    var focusedArtwork by remember { mutableStateOf<ClassicFocusArtwork?>(null) }
+    val latestOnItemFocus by rememberUpdatedState(onItemFocus)
+
+    fun handleMetaFocus(item: MetaPreview) {
+        if (uiState.classicFocusGradientEnabled) {
+            focusedArtwork = item.toClassicFocusArtwork(uiState.focusedPosterBackdropExpandEnabled)
+        }
+        latestOnItemFocus(item)
+    }
+
+    LaunchedEffect(uiState.classicFocusGradientEnabled) {
+        if (!uiState.classicFocusGradientEnabled) {
+            focusedArtwork = null
+        }
+    }
 
     if (deferContentFocus) {
         // Show spinner while waiting for hero data to arrive — prevents
@@ -296,6 +312,12 @@ fun ClassicHomeContent(
         LocalVerticalScrollSuppressImages provides (uiState.memoryOnlyVerticalScroll && isVerticalScrollingState.value),
         LocalFastScrollActive provides isFastScrolling
     ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+    ClassicFocusGradientBackdrop(
+        artwork = focusedArtwork,
+        enabled = uiState.classicFocusGradientEnabled,
+        modifier = Modifier.fillMaxSize()
+    )
     LazyColumn(
         state = columnListState,
         modifier = Modifier
@@ -353,7 +375,7 @@ fun ClassicHomeContent(
                 HeroCarousel(
                     items = uiState.heroItems,
                     focusRequester = if (shouldRequestInitialFocus) heroFocusRequester else null,
-                    onItemFocus = onItemFocus,
+                    onItemFocus = ::handleMetaFocus,
                     onItemClick = { item ->
                         onNavigateToDetail(
                             item.id,
@@ -420,6 +442,8 @@ fun ClassicHomeContent(
                     onItemFocused = { itemIndex ->
                         currentFocusSnapshot.rowIndex = -1
                         currentFocusSnapshot.itemIndex = itemIndex
+                        focusedArtwork = uiState.continueWatchingItems.getOrNull(itemIndex)
+                            ?.toClassicFocusArtwork(uiState.focusedPosterBackdropExpandEnabled)
                     },
                     blurUnwatchedEpisodes = uiState.blurUnwatchedEpisodes,
                     downFocusRequester = cwDownRequester,
@@ -487,7 +511,7 @@ fun ClassicHomeContent(
                         trailerPreviewUrls = stableTrailerPreviewUrls.value,
                         trailerPreviewAudioUrls = stableTrailerPreviewAudioUrls.value,
                         onRequestTrailerPreview = onRequestTrailerPreview,
-                        onItemFocus = onItemFocus,
+                        onItemFocus = ::handleMetaFocus,
                         isItemWatched = isCatalogItemWatched,
                         onItemLongPress = onCatalogItemLongPress,
                         seeAllLabel = catalogSeeAllLabel,
@@ -546,6 +570,8 @@ fun ClassicHomeContent(
                             currentFocusSnapshot.itemIndex = itemIndex
                             currentFocusSnapshot.rowKey = collectionKey
                             rowFocusedItemIndex[collectionKey] = itemIndex
+                            focusedArtwork = homeRow.collection.folders.getOrNull(itemIndex)
+                                ?.toClassicFocusArtwork(uiState.focusedPosterBackdropExpandEnabled)
                         }
                     )
                 }
@@ -554,5 +580,49 @@ fun ClassicHomeContent(
             }
         }
     }
+    }
     } // CompositionLocalProvider
+}
+
+private fun MetaPreview.toClassicFocusArtwork(useBackdrop: Boolean): ClassicFocusArtwork {
+    return ClassicFocusArtwork(
+        imageUrl = if (useBackdrop) {
+            background ?: landscapePoster ?: poster
+        } else {
+            poster ?: landscapePoster ?: background
+        },
+        seed = "$id|$name|$apiType"
+    )
+}
+
+private fun ContinueWatchingItem.toClassicFocusArtwork(useBackdrop: Boolean): ClassicFocusArtwork {
+    return when (this) {
+        is ContinueWatchingItem.InProgress -> ClassicFocusArtwork(
+            imageUrl = if (useBackdrop) {
+                episodeThumbnail ?: progress.backdrop ?: progress.poster
+            } else {
+                progress.poster ?: episodeThumbnail ?: progress.backdrop
+            },
+            seed = "${progress.contentId}|${progress.name}|${progress.contentType}"
+        )
+        is ContinueWatchingItem.NextUp -> ClassicFocusArtwork(
+            imageUrl = if (useBackdrop) {
+                info.backdrop ?: info.thumbnail ?: info.poster
+            } else {
+                info.poster ?: info.thumbnail ?: info.backdrop
+            },
+            seed = "${info.contentId}|${info.name}|${info.contentType}"
+        )
+    }
+}
+
+private fun CollectionFolder.toClassicFocusArtwork(useBackdrop: Boolean): ClassicFocusArtwork {
+    return ClassicFocusArtwork(
+        imageUrl = if (useBackdrop) {
+            heroBackdropUrl ?: coverImageUrl
+        } else {
+            coverImageUrl ?: heroBackdropUrl
+        },
+        seed = "$id|$title"
+    )
 }

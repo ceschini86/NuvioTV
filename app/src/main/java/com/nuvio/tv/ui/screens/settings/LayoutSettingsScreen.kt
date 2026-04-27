@@ -240,6 +240,20 @@ fun LayoutSettingsContent(
                         )
                     }
 
+                    if (uiState.selectedLayout == HomeLayout.CLASSIC) {
+                        CompactToggleRow(
+                            title = stringResource(R.string.layout_classic_focus_gradient),
+                            subtitle = stringResource(R.string.layout_classic_focus_gradient_sub),
+                            checked = uiState.classicFocusGradientEnabled,
+                            onToggle = {
+                                viewModel.onEvent(
+                                    LayoutSettingsEvent.SetClassicFocusGradientEnabled(!uiState.classicFocusGradientEnabled)
+                                )
+                            },
+                            onFocused = { focusedSection = LayoutSettingsSection.HOME_LAYOUT }
+                        )
+                    }
+
                     if (uiState.heroSectionEnabled && uiState.availableCatalogs.isNotEmpty() && uiState.selectedLayout != HomeLayout.MODERN) {
                         Text(
                             text = stringResource(R.string.layout_hero_catalogs),
