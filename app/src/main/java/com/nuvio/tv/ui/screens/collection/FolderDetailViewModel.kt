@@ -6,16 +6,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.build.AppFeaturePolicy
 import com.nuvio.tv.core.network.NetworkResult
+import com.nuvio.tv.core.tmdb.TmdbCollectionSourceResolver
 import com.nuvio.tv.data.trailer.TrailerService
 import com.nuvio.tv.data.local.CollectionsDataStore
 import com.nuvio.tv.data.local.LayoutPreferenceDataStore
+import com.nuvio.tv.domain.model.AddonCatalogCollectionSource
 import com.nuvio.tv.domain.model.CatalogRow
-import com.nuvio.tv.domain.model.CollectionCatalogSource
+import com.nuvio.tv.domain.model.CollectionSource
 import com.nuvio.tv.domain.model.CollectionFolder
 import com.nuvio.tv.domain.model.FocusedPosterTrailerPlaybackTarget
 import com.nuvio.tv.domain.model.FolderViewMode
 import com.nuvio.tv.domain.model.HomeLayout
 import com.nuvio.tv.domain.model.MetaPreview
+import com.nuvio.tv.domain.model.TmdbCollectionSource
 import com.nuvio.tv.domain.model.skipStep
 import com.nuvio.tv.domain.model.supportsExtra
 import com.nuvio.tv.domain.repository.AddonRepository
@@ -75,6 +78,7 @@ data class FolderTab(
     val label: String,
     val typeLabel: String = "",
     val rawType: String = "",
+    val source: CollectionSource? = null,
     val catalogRow: CatalogRow? = null,
     val isLoading: Boolean = true,
     val error: String? = null,
@@ -105,6 +109,7 @@ class FolderDetailViewModel @Inject constructor(
     private val mdbListSettingsDataStore: com.nuvio.tv.data.local.MDBListSettingsDataStore,
     private val metaRepository: com.nuvio.tv.domain.repository.MetaRepository,
     private val trailerService: TrailerService,
+    private val tmdbCollectionSourceResolver: TmdbCollectionSourceResolver,
     val posterOptions: com.nuvio.tv.ui.components.posteroptions.PosterOptionsController
 ) : ViewModel() {
 
@@ -179,7 +184,7 @@ class FolderDetailViewModel @Inject constructor(
         get() {
             val state = _uiState.value
             val folder = state.folder ?: return false
-            return state.tabs.firstOrNull()?.isAllTab == true && folder.catalogSources.size >= 2
+            return state.tabs.firstOrNull()?.isAllTab == true && folder.sources.size >= 2
         }
 
     private fun loadFolder() {
@@ -188,7 +193,7 @@ class FolderDetailViewModel @Inject constructor(
             val collection = collections.find { it.id == collectionId }
             val folder = collection?.folders?.find { it.id == folderId }
 
-            if (folder == null || folder.catalogSources.isEmpty()) {
+            if (folder == null || folder.sources.isEmpty()) {
                 _uiState.update {
                     it.copy(
                         folder = folder,
@@ -218,15 +223,21 @@ class FolderDetailViewModel @Inject constructor(
             val posterCardWidthDp = layoutPreferenceDataStore.posterCardWidthDp.first()
             val posterCardHeightDp = layoutPreferenceDataStore.posterCardHeightDp.first()
             val posterCardCornerRadiusDp = layoutPreferenceDataStore.posterCardCornerRadiusDp.first()
-            val showAll = (collection?.showAllTab ?: true) && folder.catalogSources.size >= 2
+            val showAll = (collection?.showAllTab ?: true) && folder.sources.size >= 2
 
-            val sourceTabs = folder.catalogSources.map { source ->
-                val addon = addons.find { it.id == source.addonId }
-                val catalog = addon?.catalogs?.find { it.id == source.catalogId && it.apiType == source.type }
-                    ?: addon?.catalogs?.find { it.id == source.catalogId.substringBefore(",") && it.apiType == source.type }
-                    ?: addons.firstNotNullOfOrNull { a -> a.catalogs.find { it.id == source.catalogId && it.apiType == source.type } }
-                val (name, typeLabel) = buildTabLabels(source, catalog?.name)
-                FolderTab(label = name, typeLabel = typeLabel, rawType = source.type, isLoading = true)
+            val sourceTabs = folder.sources.map { source ->
+                val (name, typeLabel, rawType) = when (source) {
+                    is AddonCatalogCollectionSource -> {
+                        val addon = addons.find { it.id == source.addonId }
+                        val catalog = addon?.catalogs?.find { it.id == source.catalogId && it.apiType == source.type }
+                            ?: addon?.catalogs?.find { it.id == source.catalogId.substringBefore(",") && it.apiType == source.type }
+                            ?: addons.firstNotNullOfOrNull { a -> a.catalogs.find { it.id == source.catalogId && it.apiType == source.type } }
+                        val labels = buildAddonTabLabels(source, catalog?.name)
+                        Triple(labels.first, labels.second, source.type)
+                    }
+                    is TmdbCollectionSource -> Triple(source.title, buildTmdbTypeLabel(source), source.mediaType.value.toCollectionRawType())
+                }
+                FolderTab(label = name, typeLabel = typeLabel, rawType = rawType, source = source, isLoading = true)
             }
 
             val tabs = if (showAll) {
@@ -265,8 +276,8 @@ class FolderDetailViewModel @Inject constructor(
             // The offset for source tab indices when "All" tab is present
             val tabOffset = if (showAll) 1 else 0
 
-            folder.catalogSources.forEachIndexed { index, source ->
-                loadCatalogForTab(index + tabOffset, source)
+            folder.sources.forEachIndexed { index, source ->
+                loadSourceForTab(index + tabOffset, source)
             }
         }
     }
@@ -403,7 +414,14 @@ class FolderDetailViewModel @Inject constructor(
         return result
     }
 
-    private fun loadCatalogForTab(tabIndex: Int, source: CollectionCatalogSource) {
+    private fun loadSourceForTab(tabIndex: Int, source: CollectionSource) {
+        when (source) {
+            is AddonCatalogCollectionSource -> loadAddonCatalogForTab(tabIndex, source)
+            is TmdbCollectionSource -> loadTmdbSourceForTab(tabIndex, source, page = 1, append = false)
+        }
+    }
+
+    private fun loadAddonCatalogForTab(tabIndex: Int, source: AddonCatalogCollectionSource) {
         viewModelScope.launch {
             val addons = addonRepository.getInstalledAddons().first()
             val addon = addons.find { it.id == source.addonId }
@@ -502,6 +520,11 @@ class FolderDetailViewModel @Inject constructor(
 
         val row = tab.catalogRow ?: return
         if (!row.hasMore || row.isLoading) return
+
+        if (tab.source is TmdbCollectionSource) {
+            loadTmdbSourceForTab(tabIndex, tab.source, page = row.currentPage + 1, append = true)
+            return
+        }
 
         // Mark the tab's catalogRow as loading
         _uiState.update { s ->
@@ -656,7 +679,64 @@ class FolderDetailViewModel @Inject constructor(
         }
     }
 
-    private fun buildTabLabels(source: CollectionCatalogSource, catalogName: String?): Pair<String, String> {
+    private fun loadTmdbSourceForTab(tabIndex: Int, source: TmdbCollectionSource, page: Int, append: Boolean) {
+        if (append) {
+            _uiState.update { s ->
+                val tabs = s.tabs.toMutableList()
+                val row = tabs.getOrNull(tabIndex)?.catalogRow
+                if (row != null) tabs[tabIndex] = tabs[tabIndex].copy(catalogRow = row.copy(isLoading = true))
+                s.copy(tabs = tabs)
+            }
+            rebuildAllTab()
+            rebuildFollowLayoutState()
+        }
+        viewModelScope.launch {
+            tmdbCollectionSourceResolver.resolve(source, page).collect { result ->
+                when (result) {
+                    is NetworkResult.Success -> {
+                        _uiState.update { s ->
+                            val tabs = s.tabs.toMutableList()
+                            val currentRow = tabs.getOrNull(tabIndex)?.catalogRow
+                            val row = if (append && currentRow != null) {
+                                val existingIds = currentRow.items.map { "${it.apiType}:${it.id}" }.toHashSet()
+                                val newItems = result.data.items.filter { "${it.apiType}:${it.id}" !in existingIds }
+                                result.data.copy(
+                                    items = currentRow.items + newItems,
+                                    hasMore = result.data.hasMore && newItems.isNotEmpty(),
+                                    isLoading = false
+                                )
+                            } else {
+                                result.data
+                            }
+                            if (tabIndex < tabs.size) tabs[tabIndex] = tabs[tabIndex].copy(catalogRow = row, isLoading = false)
+                            s.copy(tabs = tabs)
+                        }
+                        rebuildAllTab()
+                        rebuildFollowLayoutState()
+                    }
+                    is NetworkResult.Error -> {
+                        _uiState.update { s ->
+                            val tabs = s.tabs.toMutableList()
+                            val current = tabs.getOrNull(tabIndex)
+                            if (current != null) {
+                                tabs[tabIndex] = current.copy(
+                                    isLoading = false,
+                                    error = result.message,
+                                    catalogRow = current.catalogRow?.copy(isLoading = false)
+                                )
+                            }
+                            s.copy(tabs = tabs)
+                        }
+                        rebuildAllTab()
+                        rebuildFollowLayoutState()
+                    }
+                    NetworkResult.Loading -> {}
+                }
+            }
+        }
+    }
+
+    private fun buildAddonTabLabels(source: AddonCatalogCollectionSource, catalogName: String?): Pair<String, String> {
         val typeLabel = when (source.type.lowercase()) {
             "movie" -> "Movies"
             "series" -> "Series"
@@ -671,7 +751,21 @@ class FolderDetailViewModel @Inject constructor(
         return name to typeLabel
     }
 
-    private fun buildCatalogExtraArgs(source: CollectionCatalogSource): Map<String, String> {
+    private fun buildTmdbTypeLabel(source: TmdbCollectionSource): String {
+        return when (source.sourceType.name) {
+            "LIST" -> "TMDB List"
+            "COLLECTION" -> "TMDB Movie Collection"
+            "COMPANY" -> "Production"
+            "NETWORK" -> "Network"
+            else -> "TMDB Discover"
+        }
+    }
+
+    private fun String.toCollectionRawType(): String {
+        return if (lowercase() == "tv") "series" else this
+    }
+
+    private fun buildCatalogExtraArgs(source: AddonCatalogCollectionSource): Map<String, String> {
         val genre = source.genre?.takeIf { it.isNotBlank() } ?: return emptyMap()
         return mapOf("genre" to genre)
     }
@@ -859,4 +953,5 @@ class FolderDetailViewModel @Inject constructor(
             if (changed) state.copy(tabs = updatedTabs) else state
         }
     }
+
 }
