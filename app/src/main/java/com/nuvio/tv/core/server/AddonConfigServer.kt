@@ -12,6 +12,8 @@ class AddonConfigServer(
     private val webConfigMode: AddonWebConfigMode,
     private val currentPageStateProvider: () -> PageState,
     private val onChangeProposed: (PendingAddonChange) -> Unit,
+    private val tmdbMetadataProvider: ((TmdbSourceMetadataRequest) -> TmdbSourceMetadataInfo?)? = null,
+    private val tmdbSearchProvider: ((TmdbSourceSearchRequest) -> List<TmdbSourceSearchResultInfo>)? = null,
     private val logoProvider: (() -> ByteArray?)? = null,
     port: Int = 8080
 ) : NanoHTTPD(port) {
@@ -38,6 +40,8 @@ class AddonConfigServer(
             method == Method.GET && uri == "/api/addons" -> serveAddonList()
             method == Method.POST && uri == "/api/addons" -> handleAddonUpdate(session)
             method == Method.GET && uri == "/api/collections" -> serveCollections()
+            method == Method.GET && uri == "/api/tmdb/metadata" -> serveTmdbMetadata(session)
+            method == Method.GET && uri == "/api/tmdb/search" -> serveTmdbSearch(session)
             method == Method.GET && uri.startsWith("/api/status/") -> serveChangeStatus(uri)
             else -> newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not found")
         }
@@ -81,6 +85,38 @@ class AddonConfigServer(
         val state = currentPageStateProvider()
         val json = gson.toJson(state)
         return newFixedLengthResponse(Response.Status.OK, "application/json; charset=utf-8", json)
+    }
+
+    private fun serveTmdbMetadata(session: IHTTPSession): Response {
+        val provider = tmdbMetadataProvider
+            ?: return newFixedLengthResponse(Response.Status.NOT_FOUND, "application/json; charset=utf-8", gson.toJson(mapOf("error" to "TMDB metadata unavailable")))
+        val sourceType = session.parameters["sourceType"]?.firstOrNull()?.trim().orEmpty()
+        val tmdbId = session.parameters["id"]?.firstOrNull()?.trim()?.toIntOrNull()
+        if (sourceType.isBlank() || tmdbId == null) {
+            return newFixedLengthResponse(Response.Status.BAD_REQUEST, "application/json; charset=utf-8", gson.toJson(mapOf("error" to "Invalid TMDB metadata request")))
+        }
+        val metadata = runCatching {
+            provider(TmdbSourceMetadataRequest(sourceType = sourceType, tmdbId = tmdbId))
+        }.getOrNull()
+        return if (metadata != null) {
+            newFixedLengthResponse(Response.Status.OK, "application/json; charset=utf-8", gson.toJson(metadata))
+        } else {
+            newFixedLengthResponse(Response.Status.NOT_FOUND, "application/json; charset=utf-8", gson.toJson(mapOf("error" to "TMDB source not found")))
+        }
+    }
+
+    private fun serveTmdbSearch(session: IHTTPSession): Response {
+        val provider = tmdbSearchProvider
+            ?: return newFixedLengthResponse(Response.Status.NOT_FOUND, "application/json; charset=utf-8", gson.toJson(mapOf("error" to "TMDB search unavailable")))
+        val sourceType = session.parameters["sourceType"]?.firstOrNull()?.trim().orEmpty()
+        val query = session.parameters["query"]?.firstOrNull()?.trim().orEmpty()
+        if (sourceType.isBlank() || query.isBlank()) {
+            return newFixedLengthResponse(Response.Status.BAD_REQUEST, "application/json; charset=utf-8", gson.toJson(mapOf("error" to "Invalid TMDB search request")))
+        }
+        val results = runCatching {
+            provider(TmdbSourceSearchRequest(sourceType = sourceType, query = query))
+        }.getOrElse { emptyList() }
+        return newFixedLengthResponse(Response.Status.OK, "application/json; charset=utf-8", gson.toJson(results))
     }
 
     private fun handleAddonUpdate(session: IHTTPSession): Response {
@@ -152,6 +188,8 @@ class AddonConfigServer(
             webConfigMode: AddonWebConfigMode = AddonWebConfigMode.FULL,
             currentPageStateProvider: () -> PageState,
             onChangeProposed: (PendingAddonChange) -> Unit,
+            tmdbMetadataProvider: ((TmdbSourceMetadataRequest) -> TmdbSourceMetadataInfo?)? = null,
+            tmdbSearchProvider: ((TmdbSourceSearchRequest) -> List<TmdbSourceSearchResultInfo>)? = null,
             logoProvider: (() -> ByteArray?)? = null,
             startPort: Int = 8080,
             maxAttempts: Int = 10
@@ -163,6 +201,8 @@ class AddonConfigServer(
                         webConfigMode = webConfigMode,
                         currentPageStateProvider = currentPageStateProvider,
                         onChangeProposed = onChangeProposed,
+                        tmdbMetadataProvider = tmdbMetadataProvider,
+                        tmdbSearchProvider = tmdbSearchProvider,
                         logoProvider = logoProvider,
                         port = port
                     )

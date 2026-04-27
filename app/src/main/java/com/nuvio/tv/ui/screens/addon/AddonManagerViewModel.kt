@@ -21,7 +21,12 @@ import com.nuvio.tv.core.server.FolderInfo
 import com.nuvio.tv.core.server.PageState
 import com.nuvio.tv.core.server.PendingAddonChange
 import com.nuvio.tv.core.server.TmdbFiltersInfo
+import com.nuvio.tv.core.server.TmdbSourceMetadataInfo
+import com.nuvio.tv.core.server.TmdbSourceMetadataRequest
+import com.nuvio.tv.core.server.TmdbSourceSearchRequest
+import com.nuvio.tv.core.server.TmdbSourceSearchResultInfo
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.tmdb.TmdbCollectionSourceResolver
 import com.nuvio.tv.data.local.CollectionsDataStore
 import com.nuvio.tv.data.local.LayoutPreferenceDataStore
 import com.nuvio.tv.domain.model.Addon
@@ -29,6 +34,7 @@ import com.nuvio.tv.domain.model.Collection
 import com.nuvio.tv.domain.model.CatalogDescriptor
 import com.nuvio.tv.domain.model.AddonCatalogCollectionSource
 import com.nuvio.tv.domain.model.TmdbCollectionSource
+import com.nuvio.tv.domain.model.TmdbCollectionSourceType
 import com.nuvio.tv.domain.repository.AddonRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -41,6 +47,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
@@ -51,6 +58,7 @@ class AddonManagerViewModel @Inject constructor(
     private val collectionsDataStore: CollectionsDataStore,
     private val homeCatalogSettingsSyncService: HomeCatalogSettingsSyncService,
     private val profileManager: ProfileManager,
+    private val tmdbCollectionSourceResolver: TmdbCollectionSourceResolver,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -271,6 +279,8 @@ class AddonManagerViewModel @Inject constructor(
                 )
             },
             onChangeProposed = { change -> handleChangeProposed(change) },
+            tmdbMetadataProvider = { request -> fetchTmdbSourceMetadata(request) },
+            tmdbSearchProvider = { request -> searchTmdbSources(request) },
             logoProvider = { logoBytes }
         )
 
@@ -329,6 +339,54 @@ class AddonManagerViewModel @Inject constructor(
     private fun stopServerInternal() {
         server?.stop()
         server = null
+    }
+
+    private fun fetchTmdbSourceMetadata(request: TmdbSourceMetadataRequest): TmdbSourceMetadataInfo? {
+        val sourceType = runCatching { TmdbCollectionSourceType.valueOf(request.sourceType.uppercase()) }.getOrNull()
+            ?: return null
+        return runBlocking {
+            runCatching {
+                val metadata = when (sourceType) {
+                    TmdbCollectionSourceType.LIST -> tmdbCollectionSourceResolver.listImportMetadata(request.tmdbId)
+                    TmdbCollectionSourceType.COLLECTION -> tmdbCollectionSourceResolver.collectionImportMetadata(request.tmdbId)
+                    TmdbCollectionSourceType.COMPANY -> tmdbCollectionSourceResolver.companyImportMetadata(request.tmdbId)
+                    TmdbCollectionSourceType.NETWORK -> tmdbCollectionSourceResolver.networkImportMetadata(request.tmdbId)
+                    TmdbCollectionSourceType.DISCOVER -> return@runBlocking null
+                }
+                TmdbSourceMetadataInfo(
+                    title = metadata.title,
+                    coverImageUrl = metadata.coverImageUrl
+                )
+            }.getOrNull()
+        }
+    }
+
+    private fun searchTmdbSources(request: TmdbSourceSearchRequest): List<TmdbSourceSearchResultInfo> {
+        val sourceType = runCatching { TmdbCollectionSourceType.valueOf(request.sourceType.uppercase()) }.getOrNull()
+            ?: return emptyList()
+        return runBlocking {
+            runCatching {
+                when (sourceType) {
+                    TmdbCollectionSourceType.COMPANY -> tmdbCollectionSourceResolver.searchCompanies(request.query)
+                        .map {
+                            TmdbSourceSearchResultInfo(
+                                id = it.id,
+                                title = it.name ?: "TMDB Company ${it.id}",
+                                subtitle = it.originCountry?.takeIf { value -> value.isNotBlank() }
+                            )
+                        }
+                    TmdbCollectionSourceType.COLLECTION -> tmdbCollectionSourceResolver.searchCollections(request.query)
+                        .map {
+                            TmdbSourceSearchResultInfo(
+                                id = it.id,
+                                title = it.name ?: "TMDB Collection ${it.id}",
+                                subtitle = it.overview?.takeIf { value -> value.isNotBlank() }
+                            )
+                        }
+                    else -> emptyList()
+                }
+            }.getOrElse { emptyList() }
+        }
     }
 
     private fun handleChangeProposed(change: PendingAddonChange) {

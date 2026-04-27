@@ -93,6 +93,28 @@ data class TmdbFiltersInfo(
     val year: Int? = null
 )
 
+data class TmdbSourceMetadataRequest(
+    val sourceType: String,
+    val tmdbId: Int
+)
+
+data class TmdbSourceMetadataInfo(
+    val title: String? = null,
+    val coverImageUrl: String? = null
+)
+
+data class TmdbSourceSearchRequest(
+    val sourceType: String,
+    val query: String
+)
+
+data class TmdbSourceSearchResultInfo(
+    val id: Int,
+    val title: String,
+    val subtitle: String? = null,
+    val coverImageUrl: String? = null
+)
+
 data class PageState(
     val addons: List<AddonInfo>,
     val catalogs: List<CatalogInfo>,
