@@ -44,10 +44,11 @@ val LocalAppTheme = staticCompositionLocalOf { AppTheme.WHITE }
 fun NuvioTheme(
     appTheme: AppTheme = AppTheme.WHITE,
     appFont: AppFont = AppFont.INTER,
+    amoledMode: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val palette = ThemeColors.getColorPalette(appTheme)
-    val colorScheme = NuvioColorScheme(palette)
+    val colorScheme = NuvioColorScheme(palette, amoledMode)
 
     val materialColorScheme = darkColorScheme(
         primary = colorScheme.Primary,

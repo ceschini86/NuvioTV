@@ -166,6 +166,14 @@ fun ThemeSettingsContent(
                     }
                     SettingsHorizontalScrollIndicators(state = themeRowState)
                 }
+                SettingsToggleRow(
+                    title = stringResource(R.string.appearance_amoled_mode),
+                    subtitle = stringResource(R.string.appearance_amoled_mode_subtitle),
+                    checked = uiState.amoledMode,
+                    onToggle = {
+                        viewModel.onEvent(ThemeSettingsEvent.ToggleAmoledMode(!uiState.amoledMode))
+                    }
+                )
             }
 
             SettingsGroupCard(

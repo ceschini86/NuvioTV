@@ -158,6 +158,7 @@ data class DrawerItem(
 private data class MainUiPrefs(
     val theme: AppTheme = AppTheme.WHITE,
     val font: AppFont = AppFont.INTER,
+    val amoledMode: Boolean = false,
     val hasChosenLayout: Boolean? = null,
     val sidebarCollapsed: Boolean = false,
     val modernSidebarEnabled: Boolean = false,
@@ -307,6 +308,8 @@ class MainActivity : ComponentActivity() {
                         sidebarCollapsed = sidebarCollapsed,
                         modernSidebarEnabled = modernSidebarEnabled,
                     )
+                }.combine(themeDataStore.amoledMode) { prefs, amoledMode ->
+                    prefs.copy(amoledMode = amoledMode)
                 }.combine(layoutPreferenceDataStore.modernSidebarBlurEnabled) { prefs, modernSidebarBlurPref ->
                     prefs.copy(modernSidebarBlurPref = modernSidebarBlurPref)
                 }.combine(layoutPreferenceDataStore.smoothBringIntoViewEnabled) { prefs, smoothBringIntoViewEnabled ->
@@ -317,7 +320,7 @@ class MainActivity : ComponentActivity() {
             }
             val mainUiPrefs by mainUiPrefsFlow.collectAsState(initial = MainUiPrefs(hasChosenLayout = null))
 
-            NuvioTheme(appTheme = mainUiPrefs.theme, appFont = mainUiPrefs.font) {
+            NuvioTheme(appTheme = mainUiPrefs.theme, appFont = mainUiPrefs.font, amoledMode = mainUiPrefs.amoledMode) {
                 val defaultBringIntoViewSpec = LocalBringIntoViewSpec.current
                 val bringIntoViewSpec = if (mainUiPrefs.smoothBringIntoViewEnabled) {
                     NuvioScrollDefaults.smoothScrollSpec
