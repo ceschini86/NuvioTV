@@ -139,10 +139,6 @@ private class AudioDelayMediaPeriod(
         mediaPeriod.reevaluateBuffer(positionUs)
     }
 
-    override fun setEndPositionUs(endPositionUs: Long): Long {
-        return mediaPeriod.setEndPositionUs(endPositionUs)
-    }
-
     override fun onPrepared(mediaPeriod: MediaPeriod) {
         callback?.onPrepared(this)
     }

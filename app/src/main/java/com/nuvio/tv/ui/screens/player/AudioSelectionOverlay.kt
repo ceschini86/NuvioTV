@@ -608,8 +608,8 @@ private fun StepCard(
 
 private fun formatAudioDelay(delayMs: Int): String {
     return if (delayMs == 0) {
-        String.format(Locale.US, "%.2fs", 0f)
+        String.format(Locale.US, "%.3fs", 0f)
     } else {
-        String.format(Locale.US, "%+.2fs", delayMs / 1000f)
+        String.format(Locale.US, "%+.3fs", delayMs / 1000f)
     }
 }

@@ -18,7 +18,7 @@ internal const val AUDIO_AMPLIFICATION_MIN_DB = 0
 internal const val AUDIO_AMPLIFICATION_MAX_DB = 10
 internal const val AUDIO_DELAY_MIN_MS = -3000
 internal const val AUDIO_DELAY_MAX_MS = 3000
-internal const val AUDIO_DELAY_STEP_MS = 250
+internal const val AUDIO_DELAY_STEP_MS = 25
 
 internal fun PlayerRuntimeController.applyAudioDelay(delayMs: Int) {
     val clampedDelayMs = delayMs.coerceIn(AUDIO_DELAY_MIN_MS, AUDIO_DELAY_MAX_MS)
