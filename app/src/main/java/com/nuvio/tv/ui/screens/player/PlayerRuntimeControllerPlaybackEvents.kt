@@ -17,6 +17,20 @@ import kotlinx.coroutines.launch
 internal const val AUDIO_AMPLIFICATION_MIN_DB = 0
 internal const val AUDIO_AMPLIFICATION_MAX_DB = 10
 
+internal fun PlayerRuntimeController.skipActiveInterval(): Boolean {
+    val interval = _uiState.value.activeSkipInterval ?: return false
+    val duration = currentPlaybackDurationMs().takeIf { it > 0 } ?: Long.MAX_VALUE
+    val seekMs = if (interval.endTime == Double.MAX_VALUE) {
+        duration
+    } else {
+        (interval.endTime * 1000).toLong()
+    }
+    seekPlaybackTo(seekMs.coerceAtMost(duration))
+    scheduleProgressSyncAfterSeek()
+    _uiState.update { it.copy(activeSkipInterval = null, skipIntervalDismissed = true) }
+    return true
+}
+
 internal fun PlayerRuntimeController.applyAudioAmplification(db: Int) {
     val clampedDb = db.coerceIn(AUDIO_AMPLIFICATION_MIN_DB, AUDIO_AMPLIFICATION_MAX_DB)
     gainAudioProcessor.setGainDb(clampedDb)
@@ -978,14 +992,7 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             cancelPauseOverlay()
         }
         PlayerEvent.OnSkipIntro -> {
-            _uiState.value.activeSkipInterval?.let { interval ->
-                val duration = currentPlaybackDurationMs().takeIf { it > 0 } ?: Long.MAX_VALUE
-                val seekMs = if (interval.endTime == Double.MAX_VALUE) duration
-                             else (interval.endTime * 1000).toLong()
-                seekPlaybackTo(seekMs.coerceAtMost(duration))
-                scheduleProgressSyncAfterSeek()
-                _uiState.update { it.copy(activeSkipInterval = null, skipIntervalDismissed = true) }
-            }
+            skipActiveInterval()
         }
         PlayerEvent.OnDismissSkipIntro -> {
             _uiState.update { it.copy(skipIntervalDismissed = true) }

@@ -8,6 +8,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import com.nuvio.tv.core.plugin.PluginManager
 import com.nuvio.tv.core.torrent.TorrentService
+import com.nuvio.tv.data.local.AutoSkipSegmentType
 import com.nuvio.tv.data.local.InternalPlayerEngine
 import com.nuvio.tv.data.local.MpvHardwareDecodeMode
 import com.nuvio.tv.data.local.NextEpisodeThresholdMode
@@ -265,7 +266,9 @@ class PlayerRuntimeController(
     
     internal var skipIntervals: List<SkipInterval> = emptyList()
     internal var skipIntroEnabled: Boolean = true
+    internal var autoSkipSegmentTypes: Set<AutoSkipSegmentType> = emptySet()
     internal var skipIntroFetchedKey: String? = null
+    internal var lastAutoSkippedIntervalKey: String? = null
     internal var lastActiveSkipType: String? = null
     internal var autoSubtitleSelected: Boolean = false
     internal var lastSubtitlePreferredLanguage: String? = null
