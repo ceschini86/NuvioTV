@@ -108,6 +108,11 @@ internal fun PlayerRuntimeController.initializePlayer(
             hasTriedDv7HevcFallback = false
             mpvDelayStartAfterAfrSwitch = false
             val playerSettings = playerSettingsDataStore.playerSettings.first()
+            rememberAudioDelayPerDeviceEnabled = playerSettings.rememberAudioDelayPerDevice
+            if (rememberAudioDelayPerDeviceEnabled) {
+                registerAudioDelayRouteCallback()
+                applyStoredAudioDelayForCurrentRouteIfEnabled()
+            }
             cachedDecoderPriority = playerSettings.decoderPriority
             val preferredAudioLanguages = resolvePreferredAudioLanguages(
                 preferredAudioLanguage = playerSettings.preferredAudioLanguage,

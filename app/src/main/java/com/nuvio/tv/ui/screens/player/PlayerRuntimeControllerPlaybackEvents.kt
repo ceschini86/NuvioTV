@@ -20,10 +20,16 @@ internal const val AUDIO_DELAY_MIN_MS = -3000
 internal const val AUDIO_DELAY_MAX_MS = 3000
 internal const val AUDIO_DELAY_STEP_MS = 25
 
-internal fun PlayerRuntimeController.applyAudioDelay(delayMs: Int) {
+internal fun PlayerRuntimeController.applyAudioDelay(
+    delayMs: Int,
+    persistForCurrentRoute: Boolean = true
+) {
     val clampedDelayMs = delayMs.coerceIn(AUDIO_DELAY_MIN_MS, AUDIO_DELAY_MAX_MS)
     audioDelayUs.set(clampedDelayMs.toLong() * 1000L)
     _uiState.update { it.copy(audioDelayMs = clampedDelayMs) }
+    if (persistForCurrentRoute) {
+        persistAudioDelayForCurrentRoute(clampedDelayMs)
+    }
 }
 
 internal fun PlayerRuntimeController.applyAudioAmplification(db: Int) {

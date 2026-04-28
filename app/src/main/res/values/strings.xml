@@ -436,6 +436,8 @@
     <string name="audio_preferred_lang">Preferred Audio Language</string>
     <string name="audio_skip_silence">Skip Silence</string>
     <string name="audio_skip_silence_sub">Skip silent portions of audio during playback</string>
+    <string name="audio_remember_delay_per_device">Remember audio delay per device</string>
+    <string name="audio_remember_delay_per_device_sub">Save and restore the in-player audio delay for the current audio output route</string>
     <string name="audio_advanced_section">Advanced Audio</string>
     <string name="audio_advanced_warning">These settings may cause issues on some devices. Change only if you know what you\'re doing.</string>
     <string name="audio_decoder_device_only">Device decoders only</string>
