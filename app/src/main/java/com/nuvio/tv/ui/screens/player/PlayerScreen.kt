@@ -140,7 +140,9 @@ fun PlayerScreen(
     val streamsFocusRequester = remember { FocusRequester() }
     val sourceStreamsFocusRequester = remember { FocusRequester() }
     val skipIntroFocusRequester = remember { FocusRequester() }
+    val streamInfoFocusRequester = remember { FocusRequester() }
     var skipButtonActuallyVisible by remember { mutableStateOf(false) }
+    var restoreStreamInfoFocus by remember { mutableStateOf(false) }
     val nextEpisodeFocusRequester = remember { FocusRequester() }
     var subtitleDelayAutoSyncFocused by remember { mutableStateOf(false) }
     var subtitleTimingConsumeNextConfirmKeyUp by remember { mutableStateOf(false) }
@@ -152,6 +154,9 @@ fun PlayerScreen(
         viewModel.stopAndRelease()
         onPlaybackErrorBack()
     }
+    val dismissStreamInfoOverlay = {
+        viewModel.onEvent(PlayerEvent.OnDismissStreamInfo)
+    }
 
     val handleBackPress = {
         if (uiState.error != null) {
@@ -159,7 +164,7 @@ fun PlayerScreen(
         } else if (uiState.showAudioOverlay || uiState.showSubtitleOverlay) {
             viewModel.onEvent(PlayerEvent.OnDismissTransientOverlay)
         } else if (uiState.showStreamInfoOverlay) {
-            viewModel.onEvent(PlayerEvent.OnDismissStreamInfo)
+            dismissStreamInfoOverlay()
         } else if (uiState.showPauseOverlay) {
             viewModel.onEvent(PlayerEvent.OnDismissPauseOverlay)
         } else if (uiState.showMoreDialog) {
@@ -313,6 +318,13 @@ fun PlayerScreen(
     LaunchedEffect(uiState.showSubtitleTimingDialog) {
         if (!uiState.showSubtitleTimingDialog) {
             subtitleTimingConsumeNextConfirmKeyUp = false
+        }
+    }
+    LaunchedEffect(uiState.showStreamInfoOverlay, uiState.showControls, uiState.showMoreDialog) {
+        if (!uiState.showStreamInfoOverlay && uiState.showControls && uiState.showMoreDialog && restoreStreamInfoFocus) {
+            delay(250)
+            runCatching { streamInfoFocusRequester.requestFocus() }
+            restoreStreamInfoFocus = false
         }
     }
 
@@ -603,7 +615,7 @@ fun PlayerScreen(
 
         StreamInfoOverlay(
             visible = uiState.showStreamInfoOverlay && uiState.error == null && !uiState.showLoadingOverlay,
-            onClose = { viewModel.onEvent(PlayerEvent.OnDismissStreamInfo) },
+            onClose = dismissStreamInfoOverlay,
             data = uiState.streamInfoData,
             modifier = Modifier
                 .fillMaxSize()
@@ -807,6 +819,7 @@ fun PlayerScreen(
                 viewModel = viewModel,
                 playPauseFocusRequester = playPauseFocusRequester,
                 progressBarFocusRequester = progressBarFocusRequester,
+                streamInfoFocusRequester = streamInfoFocusRequester,
                 progressBarUpFocusRequester = when {
                     skipButtonActuallyVisible -> skipIntroFocusRequester
                     uiState.showNextEpisodeCard && uiState.nextEpisode != null -> nextEpisodeFocusRequester
@@ -847,7 +860,10 @@ fun PlayerScreen(
                         headers = headers
                     )
                 },
-                onShowStreamInfo = { viewModel.onEvent(PlayerEvent.OnShowStreamInfo) },
+                onShowStreamInfo = {
+                    restoreStreamInfoFocus = true
+                    viewModel.onEvent(PlayerEvent.OnShowStreamInfo)
+                },
                 onResetHideTimer = { viewModel.scheduleHideControls(); viewModel.onUserInteraction() },
                 onHideControls = { viewModel.hideControls() },
                 onBack = { exitPlayer() },
@@ -1429,6 +1445,7 @@ private fun PlayerControlsOverlay(
     viewModel: PlayerViewModel,
     playPauseFocusRequester: FocusRequester,
     progressBarFocusRequester: FocusRequester,
+    streamInfoFocusRequester: FocusRequester,
     progressBarUpFocusRequester: FocusRequester? = null,
     onPlayPause: () -> Unit,
     onPlayNextEpisode: () -> Unit,
@@ -1735,6 +1752,7 @@ private fun PlayerControlsOverlay(
                                 onClick = {
                                     onShowStreamInfo()
                                 },
+                                focusRequester = streamInfoFocusRequester,
                                 upFocusRequester = progressBarFocusRequester,
                                 onDownKey = onHideControls,
                                 onFocused = onResetHideTimer
