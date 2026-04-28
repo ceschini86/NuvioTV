@@ -869,7 +869,11 @@ private fun ModernCarouselCard(
     val cardShape = remember(cardCornerRadius) { RoundedCornerShape(cardCornerRadius) }
     val context = LocalContext.current
     val density = LocalDensity.current
-    val expandedCardWidth = cardHeight * (16f / 9f)
+    val expandedCardWidth = if (useLandscapeOverlayTreatment) {
+        cardWidth
+    } else {
+        cardHeight * (16f / 9f)
+    }
     val targetCardWidth = if (focusedPosterBackdropExpandEnabled && isBackdropExpanded) {
         expandedCardWidth
     } else {
@@ -911,7 +915,11 @@ private fun ModernCarouselCard(
     val payload = item.payload as? ModernPayload.CollectionFolder
     val isCollectionFolder = item.payload is ModernPayload.CollectionFolder
     val baseImageUrl = if (focusedPosterBackdropExpandEnabled && isBackdropExpanded) {
-        item.heroPreview.backdrop ?: item.imageUrl ?: item.heroPreview.poster
+        if (useLandscapeOverlayTreatment) {
+            effectiveBackdropUrl ?: item.heroPreview.backdrop ?: item.imageUrl ?: item.heroPreview.poster
+        } else {
+            item.heroPreview.backdrop ?: item.imageUrl ?: item.heroPreview.poster
+        }
     } else if (useLandscapeOverlayTreatment && !isCollectionFolder) {
         effectiveBackdropUrl ?: item.heroPreview.poster
     } else {
@@ -1111,7 +1119,7 @@ private fun ModernCarouselCard(
                 }
 
                 Box(modifier = mediaLayerModifier) {
-                    val isPlaceholderItem = imageUrl?.startsWith("placeholder://") == true
+                    val isPlaceholderItem = item.imageUrl?.startsWith("placeholder://") == true
                     if (isPlaceholderItem) {
                         // Horizontal sweeping shimmer for placeholder cards
                         val effectivePlaceholderShimmerOffsetState =
