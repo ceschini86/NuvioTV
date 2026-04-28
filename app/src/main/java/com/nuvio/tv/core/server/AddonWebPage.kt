@@ -2503,8 +2503,10 @@ function updateSaveButtonState() {
 }
 
 function renderCollections() {
+  if (!allowCollectionManagement) return;
   var container = document.getElementById('collectionsList');
   var empty = document.getElementById('collectionsEmptyState');
+  if (!container || !empty) return;
   container.innerHTML = '';
   if (collections.length === 0) { empty.style.display = 'block'; return; }
   empty.style.display = 'none';
