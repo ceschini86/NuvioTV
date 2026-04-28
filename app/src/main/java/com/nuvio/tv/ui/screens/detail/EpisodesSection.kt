@@ -720,21 +720,12 @@ private fun EpisodeCard(
                     )
                 }
 
-                if (isUnavailable || runtimeLabel != null || ratingLabel != null || formattedDate.isNotBlank()) {
+                if (runtimeLabel != null || ratingLabel != null || formattedDate.isNotBlank()) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (isUnavailable) {
-                            Text(
-                                text = strUnavailable,
-                                style = metaLabelStyle,
-                                color = Color(0xFFFFB74D),
-                                maxLines = 1
-                            )
-                        }
-
                         runtimeLabel?.let { runtime ->
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
