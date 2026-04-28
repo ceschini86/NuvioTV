@@ -1086,8 +1086,7 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
                 it.copy(
                     showStreamInfoOverlay = true,
                     streamInfoData = info,
-                    showMoreDialog = false,
-                    showControls = false
+                    showControls = true
                 )
             }
         }
