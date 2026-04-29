@@ -815,6 +815,39 @@ class TraktProgressService @Inject constructor(
         }
         Log.d(TAG, "removeFromHistory RESPONSE: code=${response?.code()} body=${response?.body()}")
 
+        // If Trakt didn't delete anything for a series episode, retry with remapped
+        // numbering (anime where addon S3E12 maps to a different Trakt numbering).
+        val responseBody = response?.body()
+        if (likelySeries && season != null && episode != null &&
+            (responseBody?.deleted?.episodes ?: 0) == 0
+        ) {
+            val remapped = traktEpisodeMappingService.resolveEpisodeMapping(
+                contentId = contentId,
+                contentType = "series",
+                videoId = videoId,
+                season = season,
+                episode = episode
+            )
+            if (remapped != null && (remapped.season != season || remapped.episode != episode)) {
+                val remappedBody = TraktHistoryRemoveRequestDto(
+                    shows = listOf(
+                        TraktHistoryShowRemoveDto(
+                            ids = ids,
+                            seasons = listOf(
+                                TraktHistorySeasonRemoveDto(
+                                    number = remapped.season,
+                                    episodes = listOf(TraktHistoryEpisodeRemoveDto(number = remapped.episode))
+                                )
+                            )
+                        )
+                    )
+                )
+                traktAuthService.executeAuthorizedWriteRequest { authHeader ->
+                    traktApi.removeHistory(authHeader, remappedBody)
+                }
+            }
+        }
+
         if (!likelySeries) {
             setMovieWatchedInCache(
                 contentId = normalizeContentId(ids = ids, fallback = contentId.trim()),
