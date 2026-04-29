@@ -1334,6 +1334,8 @@ function tmdbSourceSubtitle(src) {
   if (src.tmdbSourceType === 'COMPANY') return ['Production', media, sortLabel(src.sortBy || 'popularity.desc')].join(' • ');
   if (src.tmdbSourceType === 'COLLECTION') return i18n.tmdbCollection;
   if (src.tmdbSourceType === 'LIST') return 'TMDB List';
+  if (src.tmdbSourceType === 'PERSON') return ['Person Credits', media, sortLabel(src.sortBy || 'popularity.desc')].join(' • ');
+  if (src.tmdbSourceType === 'DIRECTOR') return ['Director Credits', media, sortLabel(src.sortBy || 'popularity.desc')].join(' • ');
   return ['TMDB Discover', media, sortLabel(src.sortBy || 'popularity.desc')].join(' • ');
 }
 

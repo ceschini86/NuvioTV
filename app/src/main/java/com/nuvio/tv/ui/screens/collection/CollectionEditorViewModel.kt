@@ -633,6 +633,8 @@ class CollectionEditorViewModel @Inject constructor(
             TmdbCollectionSourceType.NETWORK -> TmdbCollectionMediaType.TV
             TmdbCollectionSourceType.COLLECTION,
             TmdbCollectionSourceType.LIST -> TmdbCollectionMediaType.MOVIE
+            TmdbCollectionSourceType.PERSON,
+            TmdbCollectionSourceType.DIRECTOR,
             TmdbCollectionSourceType.COMPANY,
             TmdbCollectionSourceType.DISCOVER -> state.tmdbMediaType
         }
@@ -715,6 +717,8 @@ class CollectionEditorViewModel @Inject constructor(
     ): List<TmdbCollectionMediaType> {
         return when (sourceType) {
             TmdbCollectionSourceType.COMPANY,
+            TmdbCollectionSourceType.PERSON,
+            TmdbCollectionSourceType.DIRECTOR,
             TmdbCollectionSourceType.DISCOVER -> if (state.tmdbMediaBoth) {
                 listOf(TmdbCollectionMediaType.MOVIE, TmdbCollectionMediaType.TV)
             } else {
@@ -741,6 +745,8 @@ class CollectionEditorViewModel @Inject constructor(
             TmdbCollectionSourceType.COLLECTION -> TmdbBuilderMode.COLLECTION
             TmdbCollectionSourceType.COMPANY -> TmdbBuilderMode.PRODUCTION
             TmdbCollectionSourceType.NETWORK -> TmdbBuilderMode.NETWORK
+            TmdbCollectionSourceType.PERSON,
+            TmdbCollectionSourceType.DIRECTOR,
             TmdbCollectionSourceType.DISCOVER -> TmdbBuilderMode.DISCOVER
         }
     }
@@ -756,6 +762,8 @@ class CollectionEditorViewModel @Inject constructor(
         TmdbCollectionSourceType.COLLECTION -> tmdbCollectionSourceResolver.collectionImportMetadata(id)
         TmdbCollectionSourceType.COMPANY -> tmdbCollectionSourceResolver.companyImportMetadata(id)
         TmdbCollectionSourceType.NETWORK -> tmdbCollectionSourceResolver.networkImportMetadata(id)
+        TmdbCollectionSourceType.PERSON,
+        TmdbCollectionSourceType.DIRECTOR -> tmdbCollectionSourceResolver.personImportMetadata(id)
         TmdbCollectionSourceType.LIST -> tmdbCollectionSourceResolver.listImportMetadata(id)
         TmdbCollectionSourceType.DISCOVER -> null
     }
@@ -763,7 +771,9 @@ class CollectionEditorViewModel @Inject constructor(
     private val coverMetadataSourceTypes = setOf(
         TmdbCollectionSourceType.COLLECTION,
         TmdbCollectionSourceType.COMPANY,
-        TmdbCollectionSourceType.NETWORK
+        TmdbCollectionSourceType.NETWORK,
+        TmdbCollectionSourceType.PERSON,
+        TmdbCollectionSourceType.DIRECTOR
     )
 
     fun tmdbPresets(): List<TmdbPresetSource> = listOf(

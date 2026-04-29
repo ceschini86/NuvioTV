@@ -36,7 +36,9 @@ enum class TmdbCollectionSourceType {
     COLLECTION,
     COMPANY,
     NETWORK,
-    DISCOVER
+    DISCOVER,
+    PERSON,
+    DIRECTOR
 }
 
 enum class TmdbCollectionMediaType(val value: String) {

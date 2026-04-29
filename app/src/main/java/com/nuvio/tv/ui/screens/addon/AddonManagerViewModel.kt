@@ -353,6 +353,8 @@ class AddonManagerViewModel @Inject constructor(
                     TmdbCollectionSourceType.COLLECTION -> tmdbCollectionSourceResolver.collectionImportMetadata(request.tmdbId)
                     TmdbCollectionSourceType.COMPANY -> tmdbCollectionSourceResolver.companyImportMetadata(request.tmdbId)
                     TmdbCollectionSourceType.NETWORK -> tmdbCollectionSourceResolver.networkImportMetadata(request.tmdbId)
+                    TmdbCollectionSourceType.PERSON,
+                    TmdbCollectionSourceType.DIRECTOR -> tmdbCollectionSourceResolver.personImportMetadata(request.tmdbId)
                     TmdbCollectionSourceType.DISCOVER -> return@runBlocking null
                 }
                 TmdbSourceMetadataInfo(
