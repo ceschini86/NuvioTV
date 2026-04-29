@@ -445,7 +445,7 @@ fun AdvancedSettingsContent(
             SettingsGroupCard(modifier = Modifier.fillMaxWidth()) {
                 SettingsActionRow(
                     title = "Refresh Addons",
-                    subtitle = "Pull latest addon changes for the current profile without changing layout or player settings.",
+                    subtitle = "Pull latest addon changes for current profile.",
                     onClick = {
                         viewModel.onEvent(AdvancedSettingsEvent.RefreshAddons)
                     }
