@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.collection
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nuvio.tv.core.sync.CollectionSyncService
 import com.nuvio.tv.core.tmdb.TmdbCollectionSourceResolver
 import com.nuvio.tv.data.remote.api.TmdbCollectionSearchResult
 import com.nuvio.tv.data.remote.api.TmdbCompanySearchResult
@@ -88,7 +89,8 @@ class CollectionEditorViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val collectionsDataStore: CollectionsDataStore,
     private val addonRepository: AddonRepository,
-    private val tmdbCollectionSourceResolver: TmdbCollectionSourceResolver
+    private val tmdbCollectionSourceResolver: TmdbCollectionSourceResolver,
+    private val collectionSyncService: CollectionSyncService
 ) : ViewModel() {
 
     private val collectionIdArg: String = savedStateHandle["collectionId"] ?: ""
@@ -867,6 +869,7 @@ class CollectionEditorViewModel @Inject constructor(
             } else {
                 collectionsDataStore.updateCollection(collection)
             }
+            collectionSyncService.triggerPush()
             onComplete()
         }
     }
