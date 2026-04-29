@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.media3.common.Player
 import com.nuvio.tv.R
 import com.nuvio.tv.data.local.SubtitleStyleSettings
+import com.nuvio.tv.data.repository.SkipInterval
 import com.nuvio.tv.data.repository.TraktScrobbleItem
 import com.nuvio.tv.data.repository.extractYear
 import com.nuvio.tv.data.repository.parseContentIds
@@ -18,7 +19,10 @@ internal const val AUDIO_AMPLIFICATION_MIN_DB = 0
 internal const val AUDIO_AMPLIFICATION_MAX_DB = 10
 
 internal fun PlayerRuntimeController.skipActiveInterval(): Boolean {
-    val interval = _uiState.value.activeSkipInterval ?: return false
+    return skipInterval(_uiState.value.activeSkipInterval ?: return false)
+}
+
+internal fun PlayerRuntimeController.skipInterval(interval: SkipInterval): Boolean {
     val duration = currentPlaybackDurationMs().takeIf { it > 0 } ?: Long.MAX_VALUE
     val seekMs = if (interval.endTime == Double.MAX_VALUE) {
         duration

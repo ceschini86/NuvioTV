@@ -375,7 +375,7 @@ internal fun PlayerRuntimeController.updateActiveSkipInterval(positionMs: Long) 
             lastAutoSkippedIntervalKey != activeKey
         ) {
             lastAutoSkippedIntervalKey = activeKey
-            skipActiveInterval()
+            skipInterval(active)
         }
     } else if (currentActive != null) {
         

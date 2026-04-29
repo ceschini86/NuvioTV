@@ -255,10 +255,10 @@ enum class AutoSkipSegmentType(val storedValue: String) {
         fun fromStoredValue(value: String): AutoSkipSegmentType? =
             values().firstOrNull { it.storedValue == value }
 
-        fun fromSkipIntervalType(type: String): AutoSkipSegmentType? = when (type.lowercase()) {
-            "op", "mixed-op", "intro" -> INTRO
+        fun fromSkipIntervalType(type: String): AutoSkipSegmentType? = when (type.trim().lowercase()) {
+            "op", "opening", "mixed-op", "intro" -> INTRO
             "recap" -> RECAP
-            "ed", "mixed-ed", "outro" -> OUTRO
+            "ed", "ending", "mixed-ed", "outro", "credits" -> OUTRO
             else -> null
         }
     }
