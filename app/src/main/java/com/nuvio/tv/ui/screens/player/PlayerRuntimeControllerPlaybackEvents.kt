@@ -16,6 +16,21 @@ import kotlinx.coroutines.launch
 
 internal const val AUDIO_AMPLIFICATION_MIN_DB = 0
 internal const val AUDIO_AMPLIFICATION_MAX_DB = 10
+internal const val AUDIO_DELAY_MIN_MS = -3000
+internal const val AUDIO_DELAY_MAX_MS = 3000
+internal const val AUDIO_DELAY_STEP_MS = 25
+
+internal fun PlayerRuntimeController.applyAudioDelay(
+    delayMs: Int,
+    persistForCurrentRoute: Boolean = true
+) {
+    val clampedDelayMs = delayMs.coerceIn(AUDIO_DELAY_MIN_MS, AUDIO_DELAY_MAX_MS)
+    audioDelayUs.set(clampedDelayMs.toLong() * 1000L)
+    _uiState.update { it.copy(audioDelayMs = clampedDelayMs) }
+    if (persistForCurrentRoute) {
+        persistAudioDelayForCurrentRoute(clampedDelayMs)
+    }
+}
 
 internal fun PlayerRuntimeController.applyAudioAmplification(db: Int) {
     val clampedDb = db.coerceIn(AUDIO_AMPLIFICATION_MIN_DB, AUDIO_AMPLIFICATION_MAX_DB)
@@ -628,6 +643,9 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
                     showSubtitleTimingDialog = false
                 )
             }
+        }
+        is PlayerEvent.OnSetAudioDelayMs -> {
+            applyAudioDelay(event.delayMs)
         }
         is PlayerEvent.OnSetAudioAmplificationDb -> {
             val clampedDb = event.db.coerceIn(AUDIO_AMPLIFICATION_MIN_DB, AUDIO_AMPLIFICATION_MAX_DB)
