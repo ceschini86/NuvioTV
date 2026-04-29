@@ -81,6 +81,17 @@ object AddonWebPage {
   <div class="tab-content" id="tab-catalogs">
     <div class="section-block">
       <div class="section-label">${context.getString(R.string.web_home_catalogs)}</div>
+      <div id="followAddonsToggle" class="addon-item" style="border-top:none;padding:0.75rem 0">
+        <div class="catalog-info">
+          <div class="catalog-name">${context.getString(R.string.catalog_order_follow_addons)}</div>
+          <div class="catalog-meta">${context.getString(R.string.catalog_order_follow_addons_desc)}</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="followAddonsCheckbox" onchange="toggleFollowAddonsOrder()">
+          <span class="toggle-track"></span>
+          <span class="toggle-thumb"></span>
+        </label>
+      </div>
       <div class="add-section" style="display:flex;gap:0.5rem">
         <button class="btn" onclick="enableAllCatalogs()" style="flex:1">${context.getString(R.string.web_btn_enable_all)}</button>
         <button class="btn" onclick="disableAllCatalogs()" style="flex:1">${context.getString(R.string.web_btn_disable_all)}</button>
@@ -1103,6 +1114,7 @@ var originalCollections = [];
 var disabledCollectionKeys = [];
 var originalDisabledCollectionKeys = [];
 var availableCatalogs = [];
+var followAddonsOrder = false;
 var pollTimer = null;
 var pollStartTime = 0;
 var POLL_TIMEOUT = 120000;
@@ -1478,6 +1490,7 @@ async function loadState() {
     catalogs = state.catalogs || [];
     collections = normalizeCollectionsForEditing(state.collections || []);
     disabledCollectionKeys = (state.disabledCollectionKeys || []).slice();
+    followAddonsOrder = state.followAddonsOrder || false;
     originalAddons = JSON.parse(JSON.stringify(addons));
     originalCatalogs = JSON.parse(JSON.stringify(catalogs));
     originalCollections = JSON.parse(JSON.stringify(collections));
@@ -1550,6 +1563,13 @@ function renderCatalogs() {
   if (!list || !empty) return;
   list.innerHTML = '';
 
+  // Render follow addons order toggle
+  var toggleDiv = document.getElementById('followAddonsToggle');
+  if (toggleDiv) {
+    var cb = document.getElementById('followAddonsCheckbox');
+    if (cb) cb.checked = followAddonsOrder;
+  }
+
   if (catalogs.length === 0) {
     empty.style.display = 'block';
     return;
@@ -1567,18 +1587,25 @@ function renderCatalogs() {
     var isCollection = catalog.isCollection || false;
     var typeDisplay = isCollection ? 'Collection' : formatCatalogTitle(catalog.catalogName, catalog.type);
 
+    // In follow addons order mode, disable move buttons for non-collection items
+    var moveDisabled = followAddonsOrder && !isCollection;
+    var upDisabled = isFirst || moveDisabled;
+    var downDisabled = isLast || moveDisabled;
+    var topDisabled = isFirst || moveDisabled;
+    var bottomDisabled = isLast || moveDisabled;
+
     li.innerHTML =
       '<div class="addon-order">' +
-        '<button class="btn-order" onclick="moveCatalogToTop(' + i + ')"' + (isFirst ? ' disabled' : '') + ' title="Send to top">' +
+        '<button class="btn-order" onclick="moveCatalogToTop(' + i + ')"' + (topDisabled ? ' disabled' : '') + ' title="Send to top">' +
           '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11l-6-6-6 6"/><path d="M18 18l-6-6-6 6"/></svg>' +
         '</button>' +
-        '<button class="btn-order" onclick="moveCatalog(' + i + ',-1)"' + (isFirst ? ' disabled' : '') + ' title="Move up">' +
+        '<button class="btn-order" onclick="moveCatalog(' + i + ',-1)"' + (upDisabled ? ' disabled' : '') + ' title="Move up">' +
           '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>' +
         '</button>' +
-        '<button class="btn-order" onclick="moveCatalog(' + i + ',1)"' + (isLast ? ' disabled' : '') + ' title="Move down">' +
+        '<button class="btn-order" onclick="moveCatalog(' + i + ',1)"' + (downDisabled ? ' disabled' : '') + ' title="Move down">' +
           '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>' +
         '</button>' +
-        '<button class="btn-order" onclick="moveCatalogToBottom(' + i + ')"' + (isLast ? ' disabled' : '') + ' title="Send to bottom">' +
+        '<button class="btn-order" onclick="moveCatalogToBottom(' + i + ')"' + (bottomDisabled ? ' disabled' : '') + ' title="Send to bottom">' +
           '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l6 6 6-6"/><path d="M6 13l6 6 6-6"/></svg>' +
         '</button>' +
       '</div>' +
@@ -1599,6 +1626,32 @@ function renderCatalogs() {
   });
 }
 
+function toggleFollowAddonsOrder() {
+  followAddonsOrder = !followAddonsOrder;
+  if (followAddonsOrder) {
+    // Reorder: addon catalogs in manifest order, collections keep relative position
+    var addonItems = catalogs.filter(function(c) { return !c.isCollection; });
+    var collectionItems = [];
+    var collectionPositions = [];
+    catalogs.forEach(function(c, i) {
+      if (c.isCollection) {
+        collectionItems.push(c);
+        collectionPositions.push(i);
+      }
+    });
+    // Rebuild: start with addon items in their original manifest order (from server)
+    var manifestAddonOrder = originalCatalogs.filter(function(c) { return !(c.key && c.key.indexOf('collection_') === 0); });
+    var addonByKey = {};
+    addonItems.forEach(function(a) { addonByKey[a.key] = a; });
+    var orderedAddons = manifestAddonOrder.map(function(c) { return addonByKey[c.key]; }).filter(Boolean);
+    // Add any addon items not in manifest (shouldn't happen but safety)
+    addonItems.forEach(function(a) { if (orderedAddons.indexOf(a) < 0) orderedAddons.push(a); });
+    // Place collections at end
+    catalogs = orderedAddons.concat(collectionItems);
+  }
+  renderCatalogs();
+}
+
 function moveAddon(index, direction) {
   if (!allowAddonManagement) return;
   var newIndex = index + direction;
@@ -1610,16 +1663,46 @@ function moveAddon(index, direction) {
 
 function moveCatalog(index, direction) {
   if (!allowCatalogManagement) return;
-  var newIndex = index + direction;
-  if (newIndex < 0 || newIndex >= catalogs.length) return;
-  var item = catalogs.splice(index, 1)[0];
-  catalogs.splice(newIndex, 0, item);
+  var item = catalogs[index];
+  if (!item) return;
+
+  if (followAddonsOrder) {
+    // In follow mode, only collections can move, and they jump between addon blocks
+    if (!item.isCollection) return;
+    var newIndex;
+    if (direction < 0) {
+      // Move up: find start of previous addon block
+      var scanIdx = index - 1;
+      while (scanIdx >= 0 && catalogs[scanIdx].isCollection) scanIdx--;
+      if (scanIdx < 0) return;
+      var targetAddon = catalogs[scanIdx].addonName;
+      while (scanIdx > 0 && !catalogs[scanIdx - 1].isCollection && catalogs[scanIdx - 1].addonName === targetAddon) scanIdx--;
+      newIndex = scanIdx;
+    } else {
+      // Move down: find end of next addon block
+      var scanIdx = index + 1;
+      while (scanIdx < catalogs.length && catalogs[scanIdx].isCollection) scanIdx++;
+      if (scanIdx >= catalogs.length) return;
+      var targetAddon = catalogs[scanIdx].addonName;
+      while (scanIdx < catalogs.length - 1 && !catalogs[scanIdx + 1].isCollection && catalogs[scanIdx + 1].addonName === targetAddon) scanIdx++;
+      newIndex = scanIdx;
+    }
+    if (newIndex === index) return;
+    catalogs.splice(index, 1);
+    catalogs.splice(direction < 0 ? newIndex : newIndex, 0, item);
+  } else {
+    var newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= catalogs.length) return;
+    catalogs.splice(index, 1);
+    catalogs.splice(newIndex, 0, item);
+  }
   renderCatalogs();
 }
 
 function moveCatalogToTop(index) {
   if (!allowCatalogManagement) return;
   if (index <= 0) return;
+  if (followAddonsOrder && !catalogs[index].isCollection) return;
   var item = catalogs.splice(index, 1)[0];
   catalogs.unshift(item);
   renderCatalogs();
@@ -1628,6 +1711,7 @@ function moveCatalogToTop(index) {
 function moveCatalogToBottom(index) {
   if (!allowCatalogManagement) return;
   if (index >= catalogs.length - 1) return;
+  if (followAddonsOrder && !catalogs[index].isCollection) return;
   var item = catalogs.splice(index, 1)[0];
   catalogs.push(item);
   renderCatalogs();
@@ -1749,7 +1833,8 @@ async function saveChanges() {
         catalogOrderKeys: catalogOrderKeys,
         disabledCatalogKeys: disabledCatalogKeys,
         collections: collections,
-        disabledCollectionKeys: disabledCollectionKeys
+        disabledCollectionKeys: disabledCollectionKeys,
+        followAddonsOrder: followAddonsOrder
       })
     }, 8000);
     var data = await res.json();

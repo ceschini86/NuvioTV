@@ -174,20 +174,80 @@ internal fun HomeViewModel.rebuildCatalogOrder(addons: List<Addon>) {
     val collectionKeys = collectionsCache.map { "collection_${it.id}" }
     val allAvailable = (defaultOrder + collectionKeys).toSet()
 
-    val savedValid = homeCatalogOrderKeys
-        .asSequence()
-        .filter { it in allAvailable }
-        .distinct()
-        .toList()
+    if (followAddonsOrderEnabled) {
+        // In follow addons order mode, addon catalogs always stay in manifest order.
+        // Collections are positioned based on their relative position in saved order.
+        val savedValid = homeCatalogOrderKeys
+            .asSequence()
+            .filter { it in allAvailable }
+            .distinct()
+            .toList()
 
-    val savedSet = savedValid.toSet()
-    val unsavedCatalogs = defaultOrder.filterNot { it in savedSet }
-    val unsavedCollections = collectionKeys.filterNot { it in savedSet }
-    val mergedOrder = savedValid + unsavedCatalogs + unsavedCollections
+        val collectionKeysSet = collectionKeys.toSet()
 
-    synchronized(catalogStateLock) {
-        catalogOrder.clear()
-        catalogOrder.addAll(mergedOrder)
+        if (savedValid.isNotEmpty()) {
+            val result = mutableListOf<String>()
+            var addonPointer = 0
+
+            for (savedKey in savedValid) {
+                if (savedKey in collectionKeysSet) {
+                    result.add(savedKey)
+                } else {
+                    // Addon catalog - advance manifest pointer to include all up to this one
+                    val targetIdx = defaultOrder.indexOf(savedKey)
+                    if (targetIdx >= 0) {
+                        while (addonPointer <= targetIdx) {
+                            val ak = defaultOrder[addonPointer]
+                            if (ak !in result) {
+                                result.add(ak)
+                            }
+                            addonPointer++
+                        }
+                    }
+                }
+            }
+            // Append remaining addon keys
+            while (addonPointer < defaultOrder.size) {
+                val ak = defaultOrder[addonPointer]
+                if (ak !in result) {
+                    result.add(ak)
+                }
+                addonPointer++
+            }
+            // Append any collections not in saved order
+            for (ck in collectionKeys) {
+                if (ck !in result) {
+                    result.add(ck)
+                }
+            }
+
+            synchronized(catalogStateLock) {
+                catalogOrder.clear()
+                catalogOrder.addAll(result)
+            }
+        } else {
+            // No saved order - manifest order + collections at end
+            synchronized(catalogStateLock) {
+                catalogOrder.clear()
+                catalogOrder.addAll(defaultOrder + collectionKeys)
+            }
+        }
+    } else {
+        val savedValid = homeCatalogOrderKeys
+            .asSequence()
+            .filter { it in allAvailable }
+            .distinct()
+            .toList()
+
+        val savedSet = savedValid.toSet()
+        val unsavedCatalogs = defaultOrder.filterNot { it in savedSet }
+        val unsavedCollections = collectionKeys.filterNot { it in savedSet }
+        val mergedOrder = savedValid + unsavedCatalogs + unsavedCollections
+
+        synchronized(catalogStateLock) {
+            catalogOrder.clear()
+            catalogOrder.addAll(mergedOrder)
+        }
     }
 }
 

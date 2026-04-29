@@ -138,6 +138,7 @@ class AddonConfigServer(
             val collectionsRaw = parsed["collections"]
             val collectionsJson = if (collectionsRaw != null) gson.toJson(collectionsRaw) else null
             val disabledCollectionKeys = parseStringList(parsed["disabledCollectionKeys"])
+            val followAddonsOrder = parsed["followAddonsOrder"] as? Boolean
             sanitizePendingAddonChange(
                 mode = webConfigMode,
                 proposedChange = PendingAddonChange(
@@ -145,7 +146,8 @@ class AddonConfigServer(
                     proposedCatalogOrderKeys = catalogOrderKeys,
                     proposedDisabledCatalogKeys = disabledCatalogKeys,
                     proposedCollectionsJson = collectionsJson,
-                    proposedDisabledCollectionKeys = disabledCollectionKeys
+                    proposedDisabledCollectionKeys = disabledCollectionKeys,
+                    proposedFollowAddonsOrder = followAddonsOrder
                 ),
                 currentState = currentPageStateProvider()
             )

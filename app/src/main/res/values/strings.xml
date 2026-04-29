@@ -935,6 +935,8 @@
     <!-- CatalogOrderScreen -->
     <string name="catalog_order_title">Reorder Home Catalogs</string>
     <string name="catalog_order_subtitle">This controls catalog row order on Home (Classic + Modern + Grid).</string>
+    <string name="catalog_order_follow_addons">Follow addons order</string>
+    <string name="catalog_order_follow_addons_desc">Catalogs follow addon manifest order. Collections can still be moved between addons.</string>
     <string name="catalog_order_empty">No home catalogs available yet.</string>
     <string name="catalog_order_disabled_on_home">Disabled on Home</string>
     <string name="catalog_order_enable">Enable</string>
