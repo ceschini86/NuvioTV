@@ -82,6 +82,7 @@ sealed class ModernPayload {
         val focusGifEnabled: Boolean,
         val focusGifUrl: String?,
         val heroBackdropUrl: String?,
+        val heroVideoUrl: String?,
         val titleLogoUrl: String?
     ) : ModernPayload()
 }
@@ -89,7 +90,7 @@ sealed class ModernPayload {
 @Immutable
 internal data class FocusedCatalogSelection(
     val focusKey: String,
-    val payload: ModernPayload.Catalog
+    val payload: ModernPayload
 )
 
 @Immutable
@@ -153,6 +154,7 @@ internal data class ModernHeroSceneState(
     val trailerFirstFrameRendered: Boolean,
     val trailerUrl: String?,
     val trailerAudioUrl: String?,
+    val trailerPlaybackKey: String?,
     val trailerMuted: Boolean,
     val fullScreenBackdrop: Boolean
 )
@@ -528,6 +530,7 @@ internal fun buildCollectionFolderItem(
             focusGifEnabled = folder.focusGifEnabled,
             focusGifUrl = folder.focusGifUrl,
             heroBackdropUrl = folder.heroBackdropUrl,
+            heroVideoUrl = folder.heroVideoUrl,
             titleLogoUrl = folder.titleLogoUrl
         )
     )
