@@ -951,10 +951,16 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                         pass
                     }
                 val allNextUpItems = nextUpItems + olderToInclude
+                val freshContentIds = allNextUpItems.map { it.info.contentId }.toSet()
+                val retainedFromCache = cachedNextUpItems.filter {
+                    it.info.contentId !in freshContentIds &&
+                        nextUpDismissKey(it.info.contentId, it.info.seedSeason, it.info.seedEpisode) !in dismissedNextUp
+                }
+                val finalNextUpItems = allNextUpItems + retainedFromCache
                 val normalItems = applyContinueWatchingEnrichmentOverlay(
                     mergeContinueWatchingItems(
                         inProgressItems = inProgressOnly,
-                        nextUpItems = allNextUpItems.map { nextUp ->
+                        nextUpItems = finalNextUpItems.map { nextUp ->
                             val cached = cachedEnrichmentFromNextUp[nextUp.info.contentId]
                             if (cached != null) {
                                 nextUp.copy(info = nextUp.info.copy(
