@@ -313,6 +313,7 @@ class HomeViewModel @Inject constructor(
         cwEnrichedNextUpOverlay.clear()
         cwEnrichedInProgressOverlay.clear()
         cwLastBadgeEpisodeKeys = emptySet()
+        watchedSeriesStateHolder.clearValidationState()
         _uiState.update { it.copy(continueWatchingItems = emptyList()) }
         // Bump trigger so the pipeline's collectLatest restarts with fresh state.
         cwPipelineRefreshTrigger.value++
