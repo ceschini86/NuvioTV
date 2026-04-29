@@ -2666,6 +2666,7 @@ private fun resolveNextUpReleaseState(
         (nowMs - releaseTimestamp) < sixtyDaysMs
 
     return NextUpReleaseState(
+        sortTimestamp = if (isReleaseAlert) releaseTimestamp!! else seedProgress.lastWatched,
         releaseTimestamp = releaseTimestamp,
         isReleaseAlert = isReleaseAlert,
         isNewSeasonRelease = isReleaseAlert && seedProgress.season != null && nextSeason != seedProgress.season
