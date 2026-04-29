@@ -441,18 +441,6 @@ fun AdvancedSettingsContent(
                 modifier = Modifier.padding(top = 4.dp)
             )
         }
-        item(key = "refresh_addons") {
-            SettingsGroupCard(modifier = Modifier.fillMaxWidth()) {
-                SettingsActionRow(
-                    title = "Refresh Addons",
-                    subtitle = "Pull latest addon changes for current profile.",
-                    onClick = {
-                        viewModel.onEvent(AdvancedSettingsEvent.RefreshAddons)
-                    }
-                )
-            }
-        }
-
 
         item(key = "clear_cw_cache") {
             SettingsGroupCard(modifier = Modifier.fillMaxWidth()) {
