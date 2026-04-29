@@ -221,9 +221,13 @@ internal fun HomeViewModel.rebuildCatalogOrder(addons: List<Addon>) {
                 }
             }
 
+            // Normalize: push collections that ended up mid-addon-block to the block boundary
+            val addonKeyToOwner = buildAddonKeyOwnerMap(addons)
+            val normalized = normalizeCollectionBoundaries(result, addonKeyToOwner)
+
             synchronized(catalogStateLock) {
                 catalogOrder.clear()
-                catalogOrder.addAll(result)
+                catalogOrder.addAll(normalized)
             }
         } else {
             // No saved order - manifest order + collections at end
@@ -317,4 +321,61 @@ internal fun MetaPreview.hasHeroArtwork(): Boolean {
 internal fun HomeViewModel.extractYear(releaseInfo: String?): String? {
     if (releaseInfo.isNullOrBlank()) return null
     return Regex("\\b(19|20)\\d{2}\\b").find(releaseInfo)?.value
+}
+
+private fun buildAddonKeyOwnerMap(addons: List<Addon>): Map<String, String> {
+    val map = mutableMapOf<String, String>()
+    addons.forEach { addon ->
+        addon.catalogs.forEach { catalog ->
+            val key = "${addon.id}_${catalog.apiType}_${catalog.id}"
+            map[key] = addon.id
+        }
+    }
+    return map
+}
+
+private fun normalizeCollectionBoundaries(
+    order: List<String>,
+    addonKeyToOwner: Map<String, String>
+): List<String> {
+    val result = order.toMutableList()
+    var i = 0
+    while (i < result.size) {
+        val key = result[i]
+        if (!key.startsWith("collection_")) {
+            i++
+            continue
+        }
+        val prevOwner = findOwnerBefore(result, i, addonKeyToOwner)
+        val nextOwner = findOwnerAfter(result, i, addonKeyToOwner)
+        if (prevOwner != null && nextOwner != null && prevOwner == nextOwner) {
+            // Collection is mid-block, push to end of this addon block
+            result.removeAt(i)
+            var insertPos = i
+            while (insertPos < result.size &&
+                !result[insertPos].startsWith("collection_") &&
+                addonKeyToOwner[result[insertPos]] == prevOwner
+            ) {
+                insertPos++
+            }
+            result.add(insertPos, key)
+        } else {
+            i++
+        }
+    }
+    return result
+}
+
+private fun findOwnerBefore(order: List<String>, index: Int, owners: Map<String, String>): String? {
+    for (j in index - 1 downTo 0) {
+        if (!order[j].startsWith("collection_")) return owners[order[j]]
+    }
+    return null
+}
+
+private fun findOwnerAfter(order: List<String>, index: Int, owners: Map<String, String>): String? {
+    for (j in index + 1 until order.size) {
+        if (!order[j].startsWith("collection_")) return owners[order[j]]
+    }
+    return null
 }

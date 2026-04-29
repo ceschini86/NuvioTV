@@ -56,11 +56,6 @@ class CatalogOrderViewModel @Inject constructor(
     fun toggleFollowAddonsOrder(enabled: Boolean) {
         viewModelScope.launch {
             layoutPreferenceDataStore.setFollowAddonsOrder(enabled)
-            if (enabled) {
-                // Clear saved order so addon manifest order is used
-                layoutPreferenceDataStore.setHomeCatalogOrderKeys(emptyList())
-                homeCatalogSettingsSyncService.triggerPush()
-            }
         }
     }
 
@@ -276,7 +271,9 @@ class CatalogOrderViewModel @Inject constructor(
                         result.add(ck)
                     }
                 }
-                effectiveOrder = result
+                // Normalize: ensure collections sit at addon block boundaries, not mid-block.
+                // If a collection is between two catalogs of the same addon, push it after that block.
+                effectiveOrder = normalizeCollectionPositions(result, availableMap)
             } else {
                 // No saved order - addon manifest order + collections at end
                 effectiveOrder = addonKeys + collectionKeys.toList()
@@ -325,6 +322,71 @@ class CatalogOrderViewModel @Inject constructor(
                 canMoveDown = canMoveDown
             )
         }
+    }
+
+    /**
+     * Ensures collections are positioned at addon block boundaries.
+     * If a collection ended up between two catalogs of the same addon,
+     * push it to the end of that addon's block.
+     */
+    private fun normalizeCollectionPositions(
+        order: List<String>,
+        availableMap: Map<String, CatalogOrderEntry>
+    ): List<String> {
+        val result = order.toMutableList()
+        var i = 0
+        while (i < result.size) {
+            val key = result[i]
+            if (!key.startsWith("collection_")) {
+                i++
+                continue
+            }
+            // Check if this collection is between catalogs of the same addon
+            val prevAddon = findAddonNameBefore(result, i, availableMap)
+            val nextAddon = findAddonNameAfter(result, i, availableMap)
+            if (prevAddon != null && nextAddon != null && prevAddon == nextAddon) {
+                // Collection is mid-block. Move it after the end of this addon block.
+                result.removeAt(i)
+                var insertPos = i
+                while (insertPos < result.size &&
+                    !result[insertPos].startsWith("collection_") &&
+                    availableMap[result[insertPos]]?.addonName == prevAddon
+                ) {
+                    insertPos++
+                }
+                result.add(insertPos, key)
+                // Don't increment i - re-check this position
+            } else {
+                i++
+            }
+        }
+        return result
+    }
+
+    private fun findAddonNameBefore(
+        order: List<String>,
+        index: Int,
+        availableMap: Map<String, CatalogOrderEntry>
+    ): String? {
+        for (j in index - 1 downTo 0) {
+            if (!order[j].startsWith("collection_")) {
+                return availableMap[order[j]]?.addonName
+            }
+        }
+        return null
+    }
+
+    private fun findAddonNameAfter(
+        order: List<String>,
+        index: Int,
+        availableMap: Map<String, CatalogOrderEntry>
+    ): String? {
+        for (j in index + 1 until order.size) {
+            if (!order[j].startsWith("collection_")) {
+                return availableMap[order[j]]?.addonName
+            }
+        }
+        return null
     }
 
     private fun buildDefaultCatalogEntries(addons: List<Addon>): List<CatalogOrderEntry> {
