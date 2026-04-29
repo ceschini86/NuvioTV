@@ -1215,6 +1215,19 @@ private fun resolveVideoForProgress(progress: WatchProgress, meta: CwMetaSummary
     val episode = progress.episode
     if (season != null && episode != null) {
         videos.firstOrNull { it.season == season && it.episode == episode }?.let { return it }
+
+        // Fallback: if not found by season+episode (anime with absolute numbering
+        // on Trakt vs multi-season on addon), try global index matching.
+        val addonSeasons = videos.mapTo(mutableSetOf()) { it.season }
+        if (season == 1 && addonSeasons.size > 1 && episode > 0) {
+            val sorted = videos.sortedWith(
+                compareBy<CwVideoSummary>({ it.season ?: Int.MAX_VALUE }, { it.episode ?: Int.MAX_VALUE })
+            )
+            val globalIndex = episode - 1
+            if (globalIndex in sorted.indices) {
+                return sorted[globalIndex]
+            }
+        }
     }
 
     return null
@@ -1770,7 +1783,8 @@ private suspend fun HomeViewModel.findNextUpEpisodeFromMetaSeed(
         }
         return null
     }
-    val nextVideo = resolveNextUpVideoFromMeta(progress, meta, showUnairedNextUp) ?: run {
+    val nextVideo = resolveNextUpVideoFromMeta(progress, meta, showUnairedNextUp)
+    if (nextVideo == null) {
         debug?.recordNextUpResult(
             progress = progress,
             reason = "no-next-video-after-seed",
@@ -1845,7 +1859,30 @@ private fun resolveNextUpVideoFromMeta(
     val seedEpisode = progress.episode
     if (seedSeason == null || seedEpisode == null) return null
 
-    val watchedIndex = episodes.indexOfFirst { it.season == seedSeason && it.episode == seedEpisode }
+    var watchedIndex = episodes.indexOfFirst { it.season == seedSeason && it.episode == seedEpisode }
+
+    // Fallback: if the seed wasn't found by season+episode
+    if (watchedIndex < 0) {
+        val videoId = progress.videoId.takeIf { it.isNotBlank() }
+        if (videoId != null) {
+            watchedIndex = episodes.indexOfFirst { it.id == videoId }
+        }
+        if (watchedIndex < 0) {
+            // Index-based fallback: treat the seed as the Nth episode overall
+            val addonSeasons = episodes.mapTo(mutableSetOf()) { it.season }
+            if (seedSeason == 1 && addonSeasons.size > 1 && seedEpisode > 0) {
+                val globalIndex = seedEpisode - 1 // 0-based
+                if (globalIndex in episodes.indices) {
+                    watchedIndex = globalIndex
+                    logNextUpDecision(
+                        "remap-index contentId=${progress.contentId} seed=${seedSeason}x${seedEpisode} " +
+                            "-> ${episodes[globalIndex].season}x${episodes[globalIndex].episode} (index=$globalIndex)"
+                    )
+                }
+            }
+        }
+    }
+
     if (watchedIndex < 0) {
         logNextUpDecision(
             "drop contentId=${progress.contentId} name=${progress.name} reason=seed-not-found-in-meta seed=${seedSeason}x${seedEpisode}"
@@ -1854,9 +1891,10 @@ private fun resolveNextUpVideoFromMeta(
     }
 
     val todayLocal = LocalDate.now(ZoneId.systemDefault())
+    val watchedEpisodeSeason = episodes[watchedIndex].season
     val nextVideo = episodes.drop(watchedIndex + 1).firstOrNull { video ->
         val releaseDate = parseEpisodeReleaseDate(video.released)
-        val isSeasonRollover = video.season != seedSeason
+        val isSeasonRollover = video.season != watchedEpisodeSeason
         if (isSeasonRollover) {
             if (releaseDate == null) {
                 logNextUpDecision(
@@ -2024,9 +2062,6 @@ private suspend fun HomeViewModel.resolveBadgeGroup(group: List<String>) {
     }
     if (!alreadyCached) {
         val episodes = resolveBadgeEpisodes(primaryId, "series")
-        if (episodes == null) {
-        } else {
-        }
         if (group.size > 1) {
             synchronized(cwBadgeEpisodeCache) {
                 for (siblingId in group.drop(1)) {
@@ -2036,7 +2071,6 @@ private suspend fun HomeViewModel.resolveBadgeGroup(group: List<String>) {
                 }
             }
         }
-    } else {
     }
 }
 
@@ -2308,11 +2342,18 @@ private fun HomeViewModel.publishBadgeUpdate(
             } ?: return@filter false
             if (airedEpisodes.isEmpty()) return@filter false
             val watched = allWatchedEpisodes[contentId] ?: return@filter false
+            // Primary check: exact season+episode match
             val allWatched = airedEpisodes.all { it in watched }
-            if (!allWatched && watched.isNotEmpty()) {
+            // Fallback: if exact match fails but the watched count covers all aired
+            // episodes, treat as fully watched. This handles anime where Trakt uses
+            // absolute numbering (S1E1..S1E48) but addon splits into seasons
+            // (S1E1..S1E24, S2E1..S2E24) — the pairs don't match but the counts do.
+            val fullyWatchedByCount = !allWatched &&
+                watched.size >= airedEpisodes.size
+            if (!allWatched && !fullyWatchedByCount && watched.isNotEmpty()) {
                 validatedNotFullyWatched.add(contentId)
             }
-            allWatched
+            allWatched || fullyWatchedByCount
         }
         .toSet()
     // Expand IDs: for each fully-watched IMDB ID, also include the
@@ -2341,8 +2382,6 @@ private fun HomeViewModel.publishBadgeUpdate(
     // But DO remove badges for series we've confirmed are NOT fully watched.
     val current = fullyWatchedSeriesIds.fullyWatchedSeriesIds.value
     val merged = (current - expandedNotFullyWatched) + expandedFullyWatched
-    if (updatedFullyWatched.isNotEmpty()) {
-    }
     // Build per-series revalidation deadlines from upcoming season dates.
     // Fully-watched: revalidate at next season premiere or after default TTL.
     // Not-fully-watched: no deadline — status can only change when user watches more.
