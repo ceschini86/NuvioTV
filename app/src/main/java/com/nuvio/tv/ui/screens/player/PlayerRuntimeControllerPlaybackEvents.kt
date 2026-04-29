@@ -172,10 +172,10 @@ internal fun PlayerRuntimeController.saveWatchProgressIfNeeded() {
     if (!hasRenderedFirstFrame) return
     val currentPosition = currentPlaybackPositionMs() ?: return
     val duration = getEffectiveDuration(currentPosition)
-    // Don't save progress for very short streams (< 2 minutes) — these are
+    // Don't save progress for very short streams (< 1 minute) — these are
     // typically error/warning messages or "stream not ready" placeholders that
     // would incorrectly mark content as watched when the user exits.
-    if (duration in 1..119999) return
+    if (duration in 1..59999) return
     
     
     if (kotlin.math.abs(currentPosition - lastSavedPosition) >= saveThresholdMs) {
@@ -188,7 +188,7 @@ internal fun PlayerRuntimeController.saveWatchProgress() {
     if (!hasRenderedFirstFrame) return
     val currentPosition = currentPlaybackPositionMs() ?: return
     val duration = getEffectiveDuration(currentPosition)
-    if (duration in 1..119999) return
+    if (duration in 1..59999) return
     saveWatchProgressInternal(currentPosition, duration)
 }
 
