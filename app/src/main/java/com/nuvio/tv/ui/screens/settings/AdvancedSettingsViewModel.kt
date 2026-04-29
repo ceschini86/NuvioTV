@@ -2,6 +2,7 @@ package com.nuvio.tv.ui.screens.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nuvio.tv.core.sync.StartupSyncService
 import com.nuvio.tv.data.local.LayoutPreferenceDataStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -22,11 +23,13 @@ sealed class AdvancedSettingsEvent {
     data class SetFastHorizontalNavigationEnabled(val enabled: Boolean) : AdvancedSettingsEvent()
     data class SetSmoothBringIntoViewEnabled(val enabled: Boolean) : AdvancedSettingsEvent()
     data class SetMemoryOnlyVerticalScroll(val enabled: Boolean) : AdvancedSettingsEvent()
+    object RefreshAddons : AdvancedSettingsEvent()
 }
 
 @HiltViewModel
 class AdvancedSettingsViewModel @Inject constructor(
-    private val layoutPreferenceDataStore: LayoutPreferenceDataStore
+    private val layoutPreferenceDataStore: LayoutPreferenceDataStore,
+    private val startupSyncService: StartupSyncService
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AdvancedSettingsUiState())
     val uiState: StateFlow<AdvancedSettingsUiState> = _uiState.asStateFlow()
@@ -65,6 +68,9 @@ class AdvancedSettingsViewModel @Inject constructor(
                 viewModelScope.launch {
                     layoutPreferenceDataStore.setMemoryOnlyVerticalScroll(event.enabled)
                 }
+            }
+            AdvancedSettingsEvent.RefreshAddons -> {
+                startupSyncService.requestAddonSyncNow()
             }
         }
     }
