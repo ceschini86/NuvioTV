@@ -170,7 +170,7 @@ data class PlayerSettings(
     val skipSilence: Boolean = false,
     val audioAmplificationDb: Int = 0,
     val persistAudioAmplification: Boolean = false,
-    val rememberAudioDelayPerDevice: Boolean = false,
+    val rememberAudioDelayPerDevice: Boolean = true,
     val preferredAudioLanguage: String = AudioLanguageOption.DEVICE,
     val secondaryPreferredAudioLanguage: String? = null,
     val loadingOverlayEnabled: Boolean = true,
@@ -450,7 +450,7 @@ class PlayerSettingsDataStore @Inject constructor(
                     AUDIO_AMPLIFICATION_DB_MAX
                 ),
                 persistAudioAmplification = prefs[persistAudioAmplificationKey] ?: false,
-                rememberAudioDelayPerDevice = prefs[rememberAudioDelayPerDeviceKey] ?: false,
+                rememberAudioDelayPerDevice = prefs[rememberAudioDelayPerDeviceKey] ?: true,
                 preferredAudioLanguage = normalizeSelectableLanguageCode(
                     prefs[preferredAudioLanguageKey] ?: AudioLanguageOption.DEVICE
                 ),
