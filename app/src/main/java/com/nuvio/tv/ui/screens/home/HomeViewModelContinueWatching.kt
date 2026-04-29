@@ -1668,7 +1668,7 @@ private suspend fun HomeViewModel.enrichNextUpItem(
         ?: item.info.released
     val releaseDate = parseEpisodeReleaseDate(released)
     val todayLocal = LocalDate.now(ZoneId.systemDefault())
-    val hasAired = releaseDate?.let { !it.isAfter(todayLocal) } ?: item.info.hasAired
+    val hasAired = hasEpisodeAired(released, fallback = item.info.hasAired)
     val releaseState = resolveNextUpReleaseState(
         seedProgress = progressSeed,
         nextSeason = video?.season ?: item.info.season,
@@ -1823,8 +1823,11 @@ private suspend fun HomeViewModel.findNextUpEpisodeFromMetaSeed(
             ),
         episodeTitle = nextVideo.title?.takeIf { it.isNotBlank() },
         released = nextVideo.released?.trim()?.takeIf { it.isNotBlank() },
-        hasAired = nextVideo.released?.let(::parseEpisodeReleaseDate)?.let { !it.isAfter(LocalDate.now(ZoneId.systemDefault())) } ?: true,
-        airDateLabel = nextVideo.released?.let(::parseEpisodeReleaseDate)?.takeIf { it.isAfter(LocalDate.now(ZoneId.systemDefault())) }?.let(::formatEpisodeAirDateLabel),
+        hasAired = hasEpisodeAired(nextVideo.released, fallback = true),
+        airDateLabel = nextVideo.released?.let(::parseEpisodeReleaseDate)?.let { releaseDate ->
+            if (hasEpisodeAired(nextVideo.released, fallback = true)) null
+            else formatEpisodeAirDateLabel(releaseDate)
+        },
         lastWatched = progress.lastWatched
     )
     debug?.recordNextUpResult(
@@ -2443,6 +2446,18 @@ private fun parseEpisodeReleaseInstant(raw: String?): Instant? {
     }.getOrNull()
 }
 
+/**
+ * Determines whether an episode has actually aired by comparing the full release
+ * instant (including time-of-day when available) against the current moment.
+ * If the raw string only contains a date (no time component), falls back to
+ * date-only comparison (start of day UTC) so episodes without a known air time
+ * are still treated as aired once the calendar date arrives.
+ */
+private fun hasEpisodeAired(raw: String?, fallback: Boolean = true): Boolean {
+    val instant = parseEpisodeReleaseInstant(raw) ?: return fallback
+    return !instant.isAfter(Instant.now())
+}
+
 private suspend fun HomeViewModel.resolveContinueWatchingTmdbData(
     progress: WatchProgress,
     meta: CwMetaSummary,
@@ -2650,18 +2665,7 @@ private fun resolveNextUpReleaseState(
         // the user likely abandoned the show.
         (nowMs - releaseTimestamp) < sixtyDaysMs
 
-    // Use midnight of the release date for sorting instead of the full
-    // timestamp.  Meta sources sometimes report a future hour on the
-    // current day which would pin the alert above freshly-watched items.
-    val releaseDateMidnight = releaseTimestamp?.let { ts ->
-        val localDate = Instant.ofEpochMilli(ts)
-            .atZone(ZoneId.systemDefault())
-            .toLocalDate()
-        localDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-    }
-
     return NextUpReleaseState(
-        sortTimestamp = if (isReleaseAlert) releaseDateMidnight ?: releaseTimestamp!! else seedProgress.lastWatched,
         releaseTimestamp = releaseTimestamp,
         isReleaseAlert = isReleaseAlert,
         isNewSeasonRelease = isReleaseAlert && seedProgress.season != null && nextSeason != seedProgress.season
