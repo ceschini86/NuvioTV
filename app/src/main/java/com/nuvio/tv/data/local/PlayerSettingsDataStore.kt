@@ -121,6 +121,7 @@ val AVAILABLE_SUBTITLE_LANGUAGES = listOf(
 data class SubtitleStyleSettings(
     val preferredLanguage: String = "en",
     val secondaryPreferredLanguage: String? = null,
+    val showOnlyPreferredLanguages: Boolean = false,
     val size: Int = 120, // Percentage (50-200)
     val verticalOffset: Int = 5, // Percentage from bottom (-20 to 50)
     val bold: Boolean = false,
@@ -337,6 +338,7 @@ class PlayerSettingsDataStore @Inject constructor(
     // Subtitle style settings keys
     private val subtitlePreferredLanguageKey = stringPreferencesKey("subtitle_preferred_language")
     private val subtitleSecondaryLanguageKey = stringPreferencesKey("subtitle_secondary_language")
+    private val subtitleShowOnlyPreferredLanguagesKey = booleanPreferencesKey("subtitle_show_only_preferred_languages")
     private val subtitleSizeKey = intPreferencesKey("subtitle_size")
     private val subtitleVerticalOffsetKey = intPreferencesKey("subtitle_vertical_offset")
     private val subtitleBoldKey = booleanPreferencesKey("subtitle_bold")
@@ -512,6 +514,7 @@ class PlayerSettingsDataStore @Inject constructor(
                     ),
                     secondaryPreferredLanguage = prefs[subtitleSecondaryLanguageKey]
                         ?.let(::normalizeSelectableLanguageCode),
+                    showOnlyPreferredLanguages = prefs[subtitleShowOnlyPreferredLanguagesKey] ?: false,
                     size = prefs[subtitleSizeKey] ?: 100,
                     verticalOffset = prefs[subtitleVerticalOffsetKey] ?: 5,
                     bold = prefs[subtitleBoldKey] ?: false,
@@ -902,6 +905,12 @@ class PlayerSettingsDataStore @Inject constructor(
             } else {
                 prefs.remove(subtitleSecondaryLanguageKey)
             }
+        }
+    }
+
+    suspend fun setSubtitleShowOnlyPreferredLanguages(enabled: Boolean) {
+        store().edit { prefs ->
+            prefs[subtitleShowOnlyPreferredLanguagesKey] = enabled
         }
     }
 
