@@ -537,25 +537,27 @@ class TraktLibraryService @Inject constructor(
     }
 
     private suspend fun fetchWatchlistEntries(): List<LibraryEntry> {
-        val moviesResponse = traktAuthService.executeAuthorizedRequest { authHeader ->
-            traktApi.getWatchlist(
-                authorization = authHeader,
-                type = "movies"
-            )
-        } ?: throw IllegalStateException("Failed to fetch watchlist movies")
-
-        val showsResponse = traktAuthService.executeAuthorizedRequest { authHeader ->
-            traktApi.getWatchlist(
-                authorization = authHeader,
-                type = "shows"
-            )
-        } ?: throw IllegalStateException("Failed to fetch watchlist shows")
-
-        if (!moviesResponse.isSuccessful || !showsResponse.isSuccessful) {
-            throw IllegalStateException("Failed to fetch watchlist")
+        val movies = fetchAllPages { page ->
+            traktAuthService.executeAuthorizedRequest { authHeader ->
+                traktApi.getWatchlist(
+                    authorization = authHeader,
+                    type = "movies",
+                    page = page
+                )
+            } ?: throw IllegalStateException("Failed to fetch watchlist movies")
         }
 
-        return (moviesResponse.body().orEmpty() + showsResponse.body().orEmpty())
+        val shows = fetchAllPages { page ->
+            traktAuthService.executeAuthorizedRequest { authHeader ->
+                traktApi.getWatchlist(
+                    authorization = authHeader,
+                    type = "shows",
+                    page = page
+                )
+            } ?: throw IllegalStateException("Failed to fetch watchlist shows")
+        }
+
+        return (movies + shows)
             .mapNotNull { mapListItem(listKey = WATCHLIST_KEY, item = it) }
             .sortedWith(
                 compareBy<LibraryEntry> { it.traktRank ?: Int.MAX_VALUE }
@@ -616,20 +618,18 @@ class TraktLibraryService @Inject constructor(
         type: String,
         listKey: String
     ): List<LibraryEntry> {
-        val response = traktAuthService.executeAuthorizedRequest { authHeader ->
-            traktApi.getUserListItems(
-                authorization = authHeader,
-                id = ME_PATH,
-                listId = listIdPath,
-                type = type
-            )
-        } ?: throw IllegalStateException("Failed to fetch list items")
-
-        if (!response.isSuccessful) {
-            throw IllegalStateException("Failed to fetch list items (${response.code()})")
+        val items = fetchAllPages { page ->
+            traktAuthService.executeAuthorizedRequest { authHeader ->
+                traktApi.getUserListItems(
+                    authorization = authHeader,
+                    id = ME_PATH,
+                    listId = listIdPath,
+                    type = type,
+                    page = page
+                )
+            } ?: throw IllegalStateException("Failed to fetch list items")
         }
-        return response.body().orEmpty()
-            .mapNotNull { mapListItem(listKey = listKey, item = it) }
+        return items.mapNotNull { mapListItem(listKey = listKey, item = it) }
     }
 
     private fun mapListTab(dto: TraktListSummaryDto): LibraryListTab? {
@@ -941,6 +941,28 @@ class TraktLibraryService @Inject constructor(
         }
 
         return null
+    }
+
+    /**
+     * Fetches all pages from a paginated Trakt endpoint by reading
+     * X-Pagination-Page-Count from response headers.
+     */
+    private suspend fun <T> fetchAllPages(
+        fetch: suspend (page: Int) -> Response<List<T>>
+    ): List<T> {
+        val allItems = mutableListOf<T>()
+        var currentPage = 1
+        while (true) {
+            val response = fetch(currentPage)
+            if (!response.isSuccessful) {
+                throw IllegalStateException("Trakt paginated fetch failed (${response.code()})")
+            }
+            allItems.addAll(response.body().orEmpty())
+            val pageCount = response.headers()["X-Pagination-Page-Count"]?.toIntOrNull() ?: 1
+            if (currentPage >= pageCount) break
+            currentPage++
+        }
+        return allItems
     }
 
     companion object {
