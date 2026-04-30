@@ -41,6 +41,7 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
+import retrofit2.Response
 
 @Singleton
 class TraktLibraryService @Inject constructor(
@@ -537,7 +538,7 @@ class TraktLibraryService @Inject constructor(
     }
 
     private suspend fun fetchWatchlistEntries(): List<LibraryEntry> {
-        val movies = fetchAllPages { page ->
+        val movies = fetchAllPages<TraktListItemDto> { page ->
             traktAuthService.executeAuthorizedRequest { authHeader ->
                 traktApi.getWatchlist(
                     authorization = authHeader,
@@ -547,7 +548,7 @@ class TraktLibraryService @Inject constructor(
             } ?: throw IllegalStateException("Failed to fetch watchlist movies")
         }
 
-        val shows = fetchAllPages { page ->
+        val shows = fetchAllPages<TraktListItemDto> { page ->
             traktAuthService.executeAuthorizedRequest { authHeader ->
                 traktApi.getWatchlist(
                     authorization = authHeader,
@@ -618,7 +619,7 @@ class TraktLibraryService @Inject constructor(
         type: String,
         listKey: String
     ): List<LibraryEntry> {
-        val items = fetchAllPages { page ->
+        val items = fetchAllPages<TraktListItemDto> { page ->
             traktAuthService.executeAuthorizedRequest { authHeader ->
                 traktApi.getUserListItems(
                     authorization = authHeader,
