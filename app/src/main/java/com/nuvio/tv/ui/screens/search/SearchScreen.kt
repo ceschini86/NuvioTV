@@ -8,6 +8,7 @@ import android.view.KeyEvent
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -143,6 +144,14 @@ fun SearchScreen(
             null
         }
     }
+    val buildRecognizeIntent: () -> Intent = {
+        Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
+        }
+    }
     val hasRecordAudioPermission by remember(context) {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
@@ -161,14 +170,13 @@ fun SearchScreen(
         recordAudioPermissionGranted = granted
         if (granted) {
             isVoiceListening = true
-            speechRecognizer?.startListening(
-                Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
-                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                    putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to search")
-                }
-            )
+            runCatching {
+                speechRecognizer?.cancel()
+                speechRecognizer?.startListening(buildRecognizeIntent())
+            }.onFailure {
+                isVoiceListening = false
+                Toast.makeText(context, strVoiceUnavailable, Toast.LENGTH_SHORT).show()
+            }
         } else {
             Toast.makeText(context, strVoiceMicPermission, Toast.LENGTH_SHORT).show()
         }
@@ -187,8 +195,17 @@ fun SearchScreen(
 
             override fun onError(error: Int) {
                 isVoiceListening = false
-                if (error != SpeechRecognizer.ERROR_CLIENT) {
-                    Toast.makeText(context, strVoiceFailed, Toast.LENGTH_SHORT).show()
+                Log.w("SearchScreen", "Voice recognition error: $error")
+                when (error) {
+                    SpeechRecognizer.ERROR_NO_MATCH,
+                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT ->
+                        Toast.makeText(context, strVoiceNoSpeech, Toast.LENGTH_SHORT).show()
+                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
+                    SpeechRecognizer.ERROR_CLIENT -> Unit
+                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
+                        Toast.makeText(context, strVoiceMicPermission, Toast.LENGTH_SHORT).show()
+                    else ->
+                        Toast.makeText(context, strVoiceFailed, Toast.LENGTH_SHORT).show()
                 }
             }
 
@@ -222,14 +239,8 @@ fun SearchScreen(
         } else {
             isVoiceListening = true
             runCatching {
-                speechRecognizer.startListening(
-                    Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                        putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
-                        putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                        putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to search")
-                    }
-                )
+                speechRecognizer.cancel()
+                speechRecognizer.startListening(buildRecognizeIntent())
             }.onFailure {
                 isVoiceListening = false
                 Toast.makeText(context, strVoiceUnavailable, Toast.LENGTH_SHORT).show()
