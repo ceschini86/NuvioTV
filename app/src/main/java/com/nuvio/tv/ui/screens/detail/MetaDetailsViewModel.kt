@@ -1467,6 +1467,7 @@ class MetaDetailsViewModel @Inject constructor(
     private fun calculateNextToWatch() {
         val meta = _uiState.value.meta ?: return
         val progressMap = _uiState.value.episodeProgressMap
+        val watchedEpisodes = _uiState.value.watchedEpisodes
         val isSeries = meta.apiType in listOf("series", "tv")
         nextToWatchJob?.cancel()
 
@@ -1525,14 +1526,47 @@ class MetaDetailsViewModel @Inject constructor(
                         .thenByDescending { it.episode ?: 0 }
                 )
                 .firstOrNull()
+            // If progressMap is empty but watchedEpisodes has data (batch mark),
+            // use the highest watched episode as latestSeriesProgress stand-in.
+            val effectiveLatestProgress = latestSeriesProgress ?: run {
+                if (watchedEpisodes.isEmpty()) null
+                else {
+                    val watchedWithTimestamps = watchedItemsPreferences
+                        .getWatchedEpisodesWithTimestamps(_effectiveContentId.value)
+                        .first()
+                    val highest = watchedWithTimestamps.entries
+                        .maxWithOrNull(compareBy<Map.Entry<Pair<Int, Int>, Long>> { it.value }
+                            .thenBy { it.key.first }
+                            .thenBy { it.key.second })
+                    highest?.let { (key, watchedAt) ->
+                        val (s, e) = key
+                        episodePool.firstOrNull { it.season == s && it.episode == e }?.let { video ->
+                            WatchProgress(
+                                contentId = _effectiveContentId.value,
+                                contentType = "series",
+                                name = "",
+                                poster = null, backdrop = null, logo = null,
+                                videoId = video.id,
+                                season = video.season,
+                                episode = video.episode,
+                                episodeTitle = video.title,
+                                position = 1L, duration = 1L,
+                                lastWatched = watchedAt,
+                                progressPercent = 100f
+                            )
+                        }
+                    }
+                }
+            }
             val defaultEpisode = findPreferredDefaultEpisode(meta)?.takeIf { preferred ->
                 episodePool.any { it.id == preferred.id }
             }
 
             val nextToWatch = buildNextToWatchFromLatestProgress(
-                latestProgress = latestSeriesProgress,
+                latestProgress = effectiveLatestProgress,
                 episodes = episodePool,
                 fallbackProgressMap = progressMap,
+                watchedEpisodes = watchedEpisodes,
                 metaId = meta.id,
                 defaultEpisode = defaultEpisode
             )
@@ -1545,6 +1579,7 @@ class MetaDetailsViewModel @Inject constructor(
         latestProgress: WatchProgress?,
         episodes: List<Video>,
         fallbackProgressMap: Map<Pair<Int, Int>, WatchProgress>,
+        watchedEpisodes: Set<Pair<Int, Int>> = emptySet(),
         metaId: String,
         defaultEpisode: Video? = null
     ): NextToWatch {
@@ -1608,7 +1643,13 @@ class MetaDetailsViewModel @Inject constructor(
                 } else if (progress.isCompleted()) {
                     continue
                 }
-            } else {
+            }
+            // Check watchedEpisodes — covers both batch marks and episodes
+            // that haven't propagated to episodeProgressMap yet.
+            if (progress == null && (season to ep) in watchedEpisodes) {
+                continue
+            }
+            if (progress == null) {
                 if (nextUnwatchedEpisode == null) {
                     nextUnwatchedEpisode = episode
                 }
