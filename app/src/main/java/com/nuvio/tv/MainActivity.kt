@@ -635,6 +635,7 @@ private fun LegacySidebarScaffold(
 
     val closedDrawerWidth = if (sidebarCollapsed) 0.dp else 72.dp
     val openDrawerWidth = 196.dp
+    val openDrawerItemWidth = 148.dp
 
     val focusManager = LocalFocusManager.current
     val isRtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
@@ -701,7 +702,7 @@ private fun LegacySidebarScaffold(
                         }
                 ) {
                     val isExpanded = drawerValue == DrawerValue.Open
-                    val itemWidth = if (isExpanded) 156.dp else 48.dp
+                    val itemWidth = if (isExpanded) openDrawerItemWidth else 48.dp
 
                     if (isExpanded) {
                         Column(
@@ -774,7 +775,7 @@ private fun LegacySidebarScaffold(
                             .offset(y = 28.dp)
                             .fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
-                        horizontalAlignment = Alignment.Start
+                        horizontalAlignment = if (isExpanded) Alignment.CenterHorizontally else Alignment.Start
                     ) {
                         drawerItems.forEach { item ->
                             LegacySidebarButton(
