@@ -49,7 +49,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-private const val STARTUP_SUBTITLE_PREFETCH_TIMEOUT_MS = 10_000L
+private const val STARTUP_SUBTITLE_PREFETCH_TIMEOUT_MS = 20_000L
 private const val MPV_AFR_SETTLE_DELAY_MS = 2_000L
 
 internal data class StartupSubtitlePreparation(
