@@ -354,8 +354,14 @@ class CatalogOrderViewModel @Inject constructor(
                 ) {
                     insertPos++
                 }
-                result.add(insertPos, key)
-                // Don't increment i - re-check this position
+                if (insertPos == i) {
+                    // Would re-insert at same position — skip to avoid infinite loop
+                    result.add(i, key)
+                    i++
+                } else {
+                    result.add(insertPos, key)
+                    // Don't increment i - re-check this position
+                }
             } else {
                 i++
             }

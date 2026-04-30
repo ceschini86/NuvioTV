@@ -358,7 +358,14 @@ private fun normalizeCollectionBoundaries(
             ) {
                 insertPos++
             }
-            result.add(insertPos, key)
+            if (insertPos == i) {
+                // Would re-insert at same position — skip to avoid infinite loop
+                result.add(i, key)
+                i++
+            } else {
+                result.add(insertPos, key)
+                // Don't increment i — check the new element at position i
+            }
         } else {
             i++
         }
