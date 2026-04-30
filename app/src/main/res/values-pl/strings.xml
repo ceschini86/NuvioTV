@@ -634,6 +634,8 @@
     <!-- CatalogOrderScreen -->
     <string name="catalog_order_title">Zmień kolejność katalogów</string>
     <string name="catalog_order_subtitle">Kontroluje kolejność wierszy katalogów na ekranie głównym.</string>
+    <string name="catalog_order_follow_addons">Zachowaj kolejność dodatków</string>
+    <string name="catalog_order_follow_addons_desc">Katalogi ułożone według kolejności z manifestów dodatków. Kolekcje nadal można przesuwać między dodatkami.</string>
     <string name="catalog_order_empty">Brak dostępnych katalogów.</string>
     <string name="catalog_order_disabled_on_home">Wyłączony na ekranie głównym</string>
     <string name="catalog_order_enable">Włącz</string>
