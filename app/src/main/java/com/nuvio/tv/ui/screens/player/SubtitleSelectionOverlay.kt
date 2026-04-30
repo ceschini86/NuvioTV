@@ -121,6 +121,13 @@ internal fun SubtitleSelectionOverlay(
     val sessionSelectedAddonSubtitle = remember(visible) { selectedAddonSubtitle?.copy() }
     val sessionInstalledSubtitleAddonOrder = remember(visible) { installedSubtitleAddonOrder.toList() }
     val sessionIsLoadingAddons = remember(visible) { isLoadingAddons }
+    val sessionSelectedSubtitleLanguageKey = remember(visible) {
+        selectedSubtitleLanguageKey(
+            internalTracks = sessionInternalTracks,
+            selectedInternalIndex = sessionSelectedInternalIndex,
+            selectedAddonSubtitle = sessionSelectedAddonSubtitle
+        )
+    }
     val languageItems = remember(visible) {
         buildSubtitleLanguageRailItems(
             internalTracks = sessionInternalTracks,
@@ -128,14 +135,8 @@ internal fun SubtitleSelectionOverlay(
             preferredLanguage = sessionPreferredLanguage,
             secondaryPreferredLanguage = sessionSecondaryPreferredLanguage,
             showOnlyPreferredLanguages = sessionShowOnlyPreferredLanguages,
+            currentLanguageKey = sessionSelectedSubtitleLanguageKey,
             noneLabel = noneLabel
-        )
-    }
-    val sessionSelectedSubtitleLanguageKey = remember(visible) {
-        selectedSubtitleLanguageKey(
-            internalTracks = sessionInternalTracks,
-            selectedInternalIndex = sessionSelectedInternalIndex,
-            selectedAddonSubtitle = sessionSelectedAddonSubtitle
         )
     }
     val sessionInitialLanguageKey = remember(visible, languageItems, sessionSelectedSubtitleLanguageKey) {
@@ -1673,6 +1674,7 @@ private fun buildSubtitleLanguageRailItems(
     preferredLanguage: String,
     secondaryPreferredLanguage: String?,
     showOnlyPreferredLanguages: Boolean,
+    currentLanguageKey: String,
     noneLabel: String
 ): List<SubtitleLanguageRailItem> {
     val counts = linkedMapOf<String, Int>()
@@ -1692,7 +1694,9 @@ private fun buildSubtitleLanguageRailItems(
 
     val languageEntries = if (showOnlyPreferredLanguages) {
         val preferredKeys = preferredOrder.toSet()
-        counts.entries.filter { entry -> entry.key in preferredKeys }
+        counts.entries.filter { entry ->
+            entry.key in preferredKeys || entry.key == currentLanguageKey
+        }
     } else {
         counts.entries
     }

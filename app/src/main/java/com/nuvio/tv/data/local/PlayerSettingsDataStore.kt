@@ -122,7 +122,7 @@ data class SubtitleStyleSettings(
     val preferredLanguage: String = "en",
     val secondaryPreferredLanguage: String? = null,
     val showOnlyPreferredLanguages: Boolean = false,
-    val size: Int = 120, // Percentage (50-200)
+    val size: Int = 100, // Percentage (50-200)
     val verticalOffset: Int = 5, // Percentage from bottom (-20 to 50)
     val bold: Boolean = false,
     val textColor: Int = Color.White.toArgb(),
