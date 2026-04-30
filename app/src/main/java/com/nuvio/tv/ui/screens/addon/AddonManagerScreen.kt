@@ -127,6 +127,18 @@ fun AddonManagerScreen(
         stringResource(R.string.addon_qr_scan_instruction)
     }
 
+    val defaultRefreshAddonsSubtitle = "Pull latest addon changes for current profile."
+    var refreshAddonsSubtitle by remember {
+        mutableStateOf(defaultRefreshAddonsSubtitle)
+    }
+
+    LaunchedEffect(refreshAddonsSubtitle) {
+        if (refreshAddonsSubtitle != defaultRefreshAddonsSubtitle) {
+            delay(5_000)
+            refreshAddonsSubtitle = defaultRefreshAddonsSubtitle
+        }
+    }
+
     // When isEditing changes to true, focus the text field and show keyboard
     LaunchedEffect(isEditing) {
         if (isEditing) {
@@ -350,7 +362,13 @@ fun AddonManagerScreen(
             }
 
             item {
-                RefreshAddonsEntryCard(onClick = viewModel::requestAddonSyncNow)
+                RefreshAddonsEntryCard(
+                    subtitle = refreshAddonsSubtitle,
+                    onClick = {
+                        viewModel.requestAddonSyncNow()
+                        refreshAddonsSubtitle = "Addons refreshed just now."
+                    }
+                )
             }
 
             item {
@@ -667,7 +685,10 @@ private fun CollectionsEntryCard(onClick: () -> Unit) {
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun RefreshAddonsEntryCard(onClick: () -> Unit) {
+private fun RefreshAddonsEntryCard(
+    subtitle: String,
+    onClick: () -> Unit
+) {
     var isFocused by remember { mutableStateOf(false) }
 
     Surface(
@@ -710,7 +731,7 @@ private fun RefreshAddonsEntryCard(onClick: () -> Unit) {
                         color = NuvioColors.TextPrimary
                     )
                     Text(
-                        text = "Pull latest addon changes for current profile.",
+                        text = subtitle,
                         style = MaterialTheme.typography.bodySmall,
                         color = NuvioColors.TextSecondary
                     )
