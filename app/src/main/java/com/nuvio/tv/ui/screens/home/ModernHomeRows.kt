@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@file:OptIn(ExperimentalFoundationApi::class)
 
 package com.nuvio.tv.ui.screens.home
 
@@ -6,6 +6,7 @@ import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -50,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -71,12 +73,17 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.tv.material3.Border
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.Glow
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
@@ -96,6 +103,7 @@ import com.nuvio.tv.ui.components.rememberArtworkBackedCardGlow
 import com.nuvio.tv.ui.components.rememberPlaceholderShimmerOffsetState
 import com.nuvio.tv.LocalSidebarExpanded
 import com.nuvio.tv.ui.theme.NuvioColors
+import com.nuvio.tv.ui.theme.ThemeColors
 import kotlin.math.abs
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -103,7 +111,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 private const val MODERN_HORIZONTAL_FOCUS_DEBOUNCE_MS = 140L
 private const val POSTER_PREFETCH_DISTANCE = 8
 
-internal val LocalVerticalRowsScrolling = androidx.compose.runtime.compositionLocalOf { false }
+internal val LocalVerticalRowsScrolling = compositionLocalOf { false }
 
 /**
  * True while the user is actively "fast-scrolling" — i.e. holding DPAD_LEFT/RIGHT or
@@ -114,7 +122,7 @@ internal val LocalVerticalRowsScrolling = androidx.compose.runtime.compositionLo
  * the user releases the key. Defaults to `false`, so any card used outside a modern
  * home row keeps its normal focus visuals.
  */
-internal val LocalFastScrollActive = androidx.compose.runtime.compositionLocalOf { false }
+internal val LocalFastScrollActive = compositionLocalOf { false }
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -1021,7 +1029,7 @@ private fun ModernCarouselCard(
     val backgroundCardColor = NuvioColors.BackgroundCard
     val focusRingColor = NuvioColors.FocusRing
     val titleMedium = MaterialTheme.typography.titleMedium
-    val backgroundPainter = remember(backgroundCardColor) { androidx.compose.ui.graphics.painter.ColorPainter(backgroundCardColor) }
+    val backgroundPainter = remember(backgroundCardColor) { ColorPainter(backgroundCardColor) }
     val focusedBorder = remember(cardShape, focusRingColor) {
         Border(
             border = BorderStroke(2.dp, focusRingColor),
@@ -1042,7 +1050,7 @@ private fun ModernCarouselCard(
         )
     }
     val effectiveFocusedBorder = if (isFastScrolling) transparentFocusBorder else focusedBorder
-    val noFocusGlow = remember { CardDefaults.glow(focusedGlow = androidx.tv.material3.Glow.None) }
+    val noFocusGlow = remember { CardDefaults.glow(focusedGlow = Glow.None) }
     val cardGlow = when (payload) {
         is ModernPayload.CollectionFolder -> rememberArtworkBackedCardGlow(
             imageUrl = imageUrl,
@@ -1202,22 +1210,22 @@ private fun ModernCarouselCard(
                 }
 
                 if (isWatched) {
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = stringResource(R.string.episodes_cd_watched),
-                        tint = Color.White,
+                    Box(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(end = 8.dp, top = 8.dp)
                             .zIndex(2f)
                             .size(21.dp)
-                            .drawBehind {
-                                drawCircle(
-                                    color = androidx.compose.ui.graphics.Color.Black,
-                                    radius = size.minDimension / 2f + 1.5f
-                                )
-                            }
-                    )
+                            .shadow(10.dp, shape = CircleShape)
+                            .background(NuvioColors.Secondary, CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            tint = if (NuvioColors.Secondary == ThemeColors.White.secondary) Color.Black else Color.White,
+                            contentDescription = stringResource(R.string.episodes_cd_watched),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
         }

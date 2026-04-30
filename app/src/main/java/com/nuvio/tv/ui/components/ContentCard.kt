@@ -29,9 +29,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -66,6 +69,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.CachePolicy
 import coil3.request.crossfade
+import com.nuvio.tv.ui.theme.ThemeColors
 import kotlinx.coroutines.delay
 
 /**
@@ -500,22 +504,22 @@ fun ContentCard(
                 }
 
                 if (isWatched) {
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = stringResource(R.string.episodes_cd_watched),
-                        tint = Color.White,
+                    Box(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(end = 8.dp, top = 8.dp)
                             .zIndex(2f)
                             .size(21.dp)
-                            .drawBehind {
-                                drawCircle(
-                                    color = androidx.compose.ui.graphics.Color.Black,
-                                    radius = size.minDimension / 2f + 1.5f
-                                )
-                            }
-                    )
+                            .shadow(10.dp, shape = CircleShape)
+                            .background(NuvioColors.Secondary, CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            tint = if (NuvioColors.Secondary == ThemeColors.White.secondary) Color.Black else Color.White,
+                            contentDescription = stringResource(R.string.episodes_cd_watched),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
         }
