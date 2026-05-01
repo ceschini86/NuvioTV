@@ -127,7 +127,7 @@ fun AddonManagerScreen(
         stringResource(R.string.addon_qr_scan_instruction)
     }
 
-    val defaultRefreshAddonsSubtitle = "Pull latest addon changes for current profile."
+    val defaultRefreshAddonsSubtitle = "Pull latest addon changes for current profile"
     var refreshAddonsSubtitle by remember {
         mutableStateOf(defaultRefreshAddonsSubtitle)
     }
@@ -366,7 +366,7 @@ fun AddonManagerScreen(
                     subtitle = refreshAddonsSubtitle,
                     onClick = {
                         viewModel.requestAddonSyncNow()
-                        refreshAddonsSubtitle = "Addons refreshed just now."
+                        refreshAddonsSubtitle = "Addons refreshed just now"
                     }
                 )
             }
