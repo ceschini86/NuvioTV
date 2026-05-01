@@ -105,7 +105,10 @@ import com.nuvio.tv.LocalSidebarExpanded
 import com.nuvio.tv.ui.theme.NuvioColors
 import com.nuvio.tv.ui.theme.ThemeColors
 import kotlin.math.abs
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import com.nuvio.tv.core.ui.ScrollStateRegistry
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 private const val MODERN_HORIZONTAL_FOCUS_DEBOUNCE_MS = 140L
@@ -253,10 +256,8 @@ private fun ModernCatalogRowItem(
         }
     }
 
-    val suppressCardExpansionForHeroTrailer =
-        effectiveAutoplayEnabled &&
-            trailerPlaybackTarget == FocusedPosterTrailerPlaybackTarget.HERO_MEDIA
-    val effectiveBackdropExpanded = isBackdropExpanded && !suppressCardExpansionForHeroTrailer
+    val isCatalog = payload is ModernPayload.Catalog
+    val effectiveBackdropExpanded = isBackdropExpanded && !isCatalog
     val isSidebarExpanded = LocalSidebarExpanded.current
     val playTrailerInExpandedCard =
         effectiveAutoplayEnabled &&
@@ -640,65 +641,70 @@ internal fun ModernRowSection(
             }
             // Prefetch initial visible + ahead items immediately when row appears
             val items = currentRowState.value.items
-            for (i in 0 until minOf(POSTER_PREFETCH_DISTANCE, items.size)) {
-                val item = items.getOrNull(i) ?: continue
-                val (wPx, hPx) = when (item.payload) {
-                    is ModernPayload.Catalog -> {
-                        val metrics = item.catalogCardMetrics(
-                            useLandscapePosters = useLandscapePosters,
-                            portraitCardWidth = portraitCatalogCardWidth,
-                            portraitCardHeight = portraitCatalogCardHeight,
-                            landscapeCardWidth = landscapeCatalogCardWidth,
-                            landscapeCardHeight = landscapeCatalogCardHeight
-                        )
-                        with(density) { metrics.width.roundToPx() } to with(density) { metrics.height.roundToPx() }
+            withContext(Dispatchers.IO) {
+                for (i in 0 until minOf(POSTER_PREFETCH_DISTANCE, items.size)) {
+                    val item = items.getOrNull(i) ?: continue
+                    val (wPx, hPx) = when (item.payload) {
+                        is ModernPayload.Catalog -> {
+                            val metrics = item.catalogCardMetrics(
+                                useLandscapePosters = useLandscapePosters,
+                                portraitCardWidth = portraitCatalogCardWidth,
+                                portraitCardHeight = portraitCatalogCardHeight,
+                                landscapeCardWidth = landscapeCatalogCardWidth,
+                                landscapeCardHeight = landscapeCatalogCardHeight
+                            )
+                            with(density) { metrics.width.roundToPx() } to with(density) { metrics.height.roundToPx() }
+                        }
+                        is ModernPayload.CollectionFolder -> {
+                            val metrics = item.catalogCardMetrics(
+                                useLandscapePosters = useLandscapePosters,
+                                portraitCardWidth = portraitCatalogCardWidth,
+                                portraitCardHeight = portraitCatalogCardHeight,
+                                landscapeCardWidth = landscapeCatalogCardWidth,
+                                landscapeCardHeight = landscapeCatalogCardHeight
+                            )
+                            with(density) { metrics.width.roundToPx() } to with(density) { metrics.height.roundToPx() }
+                        }
+                        is ModernPayload.ContinueWatching -> cwWidthPx to cwHeightPx
                     }
-                    is ModernPayload.CollectionFolder -> {
-                        val metrics = item.catalogCardMetrics(
-                            useLandscapePosters = useLandscapePosters,
-                            portraitCardWidth = portraitCatalogCardWidth,
-                            portraitCardHeight = portraitCatalogCardHeight,
-                            landscapeCardWidth = landscapeCatalogCardWidth,
-                            landscapeCardHeight = landscapeCatalogCardHeight
-                        )
-                        with(density) { metrics.width.roundToPx() } to with(density) { metrics.height.roundToPx() }
-                    }
-                    is ModernPayload.ContinueWatching -> cwWidthPx to cwHeightPx
+                    enqueueIfNeeded(item, wPx, hPx)
                 }
-                enqueueIfNeeded(item, wPx, hPx)
             }
+
             snapshotFlow {
                 rowListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
             }
                 .distinctUntilChanged()
                 .collect { lastVisibleIndex ->
                     val currentItems = currentRowState.value.items
-                    for (i in (lastVisibleIndex + 1)..(lastVisibleIndex + POSTER_PREFETCH_DISTANCE)) {
-                        val item = currentItems.getOrNull(i) ?: continue
-                        val (wPx, hPx) = when (item.payload) {
-                            is ModernPayload.Catalog -> {
-                                val metrics = item.catalogCardMetrics(
-                                    useLandscapePosters = useLandscapePosters,
-                                    portraitCardWidth = portraitCatalogCardWidth,
-                                    portraitCardHeight = portraitCatalogCardHeight,
-                                    landscapeCardWidth = landscapeCatalogCardWidth,
-                                    landscapeCardHeight = landscapeCatalogCardHeight
-                                )
-                                with(density) { metrics.width.roundToPx() } to with(density) { metrics.height.roundToPx() }
+                    withContext(Dispatchers.IO) {
+                        for (i in (lastVisibleIndex + 1)..(lastVisibleIndex + POSTER_PREFETCH_DISTANCE)) {
+                            val item = currentItems.getOrNull(i) ?: continue
+                            val (wPx, hPx) = when (item.payload) {
+                                is ModernPayload.Catalog -> {
+                                    val metrics = item.catalogCardMetrics(
+                                        useLandscapePosters = useLandscapePosters,
+                                        portraitCardWidth = portraitCatalogCardWidth,
+                                        portraitCardHeight = portraitCatalogCardHeight,
+                                        landscapeCardWidth = landscapeCatalogCardWidth,
+                                        landscapeCardHeight = landscapeCatalogCardHeight
+                                    )
+                                    with(density) { metrics.width.roundToPx() } to with(density) { metrics.height.roundToPx() }
+                                }
+                                is ModernPayload.CollectionFolder -> {
+                                    val metrics = item.catalogCardMetrics(
+                                        useLandscapePosters = useLandscapePosters,
+                                        portraitCardWidth = portraitCatalogCardWidth,
+                                        portraitCardHeight = portraitCatalogCardHeight,
+                                        landscapeCardWidth = landscapeCatalogCardWidth,
+                                        landscapeCardHeight = landscapeCatalogCardHeight
+                                    )
+                                    with(density) { metrics.width.roundToPx() } to with(density) { metrics.height.roundToPx() }
+                                }
+                                is ModernPayload.ContinueWatching -> cwWidthPx to cwHeightPx
                             }
-                            is ModernPayload.CollectionFolder -> {
-                                val metrics = item.catalogCardMetrics(
-                                    useLandscapePosters = useLandscapePosters,
-                                    portraitCardWidth = portraitCatalogCardWidth,
-                                    portraitCardHeight = portraitCatalogCardHeight,
-                                    landscapeCardWidth = landscapeCatalogCardWidth,
-                                    landscapeCardHeight = landscapeCatalogCardHeight
-                                )
-                                with(density) { metrics.width.roundToPx() } to with(density) { metrics.height.roundToPx() }
-                            }
-                            is ModernPayload.ContinueWatching -> cwWidthPx to cwHeightPx
+                            enqueueIfNeeded(item, wPx, hPx)
                         }
-                        enqueueIfNeeded(item, wPx, hPx)
                     }
                 }
         }
@@ -969,7 +975,17 @@ private fun ModernCarouselCard(
     val requestHeightPx = remember(cardHeight, density) {
         with(density) { cardHeight.roundToPx() }
     }
-    val imageModel = remember(context, imageUrl, requestWidthPx, requestHeightPx) {
+    var reloadNonce by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        snapshotFlow { ScrollStateRegistry.isScrolling }
+            .collect { scrolling ->
+                if (!scrolling) {
+                    reloadNonce++
+                }
+            }
+    }
+
+    val imageModel = remember(context, imageUrl, requestWidthPx, requestHeightPx, reloadNonce) {
         imageUrl?.let {
             ImageRequest.Builder(context)
                 .data(it)
@@ -987,7 +1003,7 @@ private fun ModernCarouselCard(
         with(density) { (maxRequestCardWidth * 0.62f).roundToPx() }
     }
 
-    val logoModel = remember(context, effectiveLogoUrl, maxLogoWidthPx, logoHeightPx) {
+    val logoModel = remember(context, effectiveLogoUrl, maxLogoWidthPx, logoHeightPx, reloadNonce) {
         effectiveLogoUrl?.let {
             ImageRequest.Builder(context)
                 .data(it)
@@ -999,27 +1015,7 @@ private fun ModernCarouselCard(
     }
     var landscapeLogoLoadFailed by remember(effectiveLogoUrl) { mutableStateOf(false) }
     val shouldPlayTrailerInCard = playTrailerInExpandedCard && !trailerPreviewUrl.isNullOrBlank()
-    val isVerticalRowsScrolling = LocalVerticalRowsScrolling.current
 
-    // Coil 3's AsyncImage is skippable — it compares ImageRequest structurally and won't
-    // re-trigger a failed memory-only request when policies change. We solve this by
-    // building a restricted request during scroll and using Compose's `key()` on the
-    // scroll state around AsyncImage so that stopping the scroll destroys the old
-    // (memory-only) AsyncImage and creates a fresh one with the full request.
-    val scrollAwareImageModel = if (!isVerticalRowsScrolling || imageModel == null) {
-        imageModel
-    } else {
-        remember(imageModel) {
-            (imageModel as? ImageRequest)?.newBuilder()
-                ?.memoryCachePolicy(CachePolicy.ENABLED)
-                ?.diskCachePolicy(CachePolicy.DISABLED)
-                ?.networkCachePolicy(CachePolicy.DISABLED)
-                ?.build()
-                ?: imageModel
-        }
-    }
-    // When true, wrap AsyncImage in key(scrollPhaseKey) to force re-creation on scroll stop.
-    val scrollPhaseKey = isVerticalRowsScrolling
     val hasImage = !imageUrl.isNullOrBlank()
     val hasLandscapeLogo =
         (useLandscapeOverlayTreatment || isBackdropExpanded) &&
@@ -1153,9 +1149,9 @@ private fun ModernCarouselCard(
                                 .placeholderCardShimmer(effectivePlaceholderShimmerOffsetState)
                         )
                     } else if (hasImage) {
-                        key(scrollPhaseKey) {
+                        key(reloadNonce) {
                             AsyncImage(
-                                model = scrollAwareImageModel,
+                                model = imageModel,
                                 contentDescription = item.title,
                                 modifier = Modifier.fillMaxSize(),
                                 placeholder = backgroundPainter,
@@ -1169,16 +1165,18 @@ private fun ModernCarouselCard(
                     }
 
                     if (shouldPlayTrailerInCard) {
-                        TrailerPlayer(
-                            trailerUrl = trailerPreviewUrl,
-                            trailerAudioUrl = trailerPreviewAudioUrl,
-                            isPlaying = true,
-                            onEnded = onTrailerEnded,
-                            muted = focusedPosterBackdropTrailerMuted,
-                            cropToFill = true,
-                            overscanZoom = MODERN_TRAILER_OVERSCAN_ZOOM,
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        key(trailerPreviewUrl) {
+                            TrailerPlayer(
+                                trailerUrl = trailerPreviewUrl,
+                                trailerAudioUrl = trailerPreviewAudioUrl,
+                                isPlaying = true,
+                                onEnded = onTrailerEnded,
+                                muted = focusedPosterBackdropTrailerMuted,
+                                cropToFill = true,
+                                overscanZoom = MODERN_TRAILER_OVERSCAN_ZOOM,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                     }
                 }
 

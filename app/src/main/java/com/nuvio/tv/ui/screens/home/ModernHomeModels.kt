@@ -170,7 +170,6 @@ internal data class ModernCollectionRowBuildCacheEntry(
     val source: Collection,
     val mappedRow: HeroCarouselRow
 )
-
 @Stable
 internal class ModernHomeUiCaches {
     val focusedItemByRow = mutableMapOf<String, Int>()
