@@ -316,8 +316,11 @@ interface TraktApi {
         @Path("id") id: String,
         @Path("list_id") listId: String,
         @Path("type") type: String,
+        @Query("extended") extended: String = "full,images",
         @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 100
+        @Query("limit") limit: Int = 100,
+        @Query("sort_by") sortBy: String? = null,
+        @Query("sort_how") sortHow: String? = null
     ): Response<List<TraktListItemDto>>
 
     @POST("users/{id}/lists/{list_id}/items")
@@ -340,6 +343,17 @@ interface TraktApi {
     suspend fun getWatchlist(
         @Header("Authorization") authorization: String,
         @Path("type") type: String,
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 100
+    ): Response<List<TraktListItemDto>>
+
+    @GET("users/{id}/watchlist/{type}/{sort}")
+    suspend fun getUserWatchlist(
+        @Header("Authorization") authorization: String,
+        @Path("id") id: String,
+        @Path("type") type: String,
+        @Path("sort") sort: String = "rank",
+        @Query("extended") extended: String = "full,images",
         @Query("page") page: Int = 1,
         @Query("limit") limit: Int = 100
     ): Response<List<TraktListItemDto>>

@@ -48,7 +48,8 @@ class TraktPublicListSourceResolverTest {
         coEvery { api.getPublicList(null, "weekend", "full,images") } returns Response.success(
             TraktListSummaryDto(
                 name = "Weekend",
-                ids = TraktListIdsDto(trakt = 88L, slug = "weekend")
+                ids = TraktListIdsDto(trakt = 88L, slug = "weekend"),
+                images = TraktListImagesDto(posters = listOf("media.trakt.tv/images/lists/000/000/088/posters/medium/poster.jpg.webp"))
             )
         )
         val resolver = resolver(api, authenticated = true)
@@ -57,6 +58,7 @@ class TraktPublicListSourceResolverTest {
 
         assertEquals("Weekend", metadata.title)
         assertEquals(88L, metadata.traktListId)
+        assertEquals("https://media.trakt.tv/images/lists/000/000/088/posters/medium/poster.jpg.webp", metadata.coverImageUrl)
     }
 
     @Test
@@ -86,9 +88,9 @@ class TraktPublicListSourceResolverTest {
                         released = "2024-01-01",
                         rating = 7.8,
                         images = TraktImagesDto(
-                            poster = listOf("https://image.example/poster.jpg"),
-                            fanart = listOf("https://image.example/fanart.jpg"),
-                            logo = listOf("https://image.example/logo.png")
+                            poster = listOf("media.trakt.tv/images/movies/000/000/009/posters/medium/poster.jpg.webp"),
+                            fanart = listOf("media.trakt.tv/images/movies/000/000/009/fanarts/medium/fanart.jpg.webp"),
+                            logo = listOf("media.trakt.tv/images/movies/000/000/009/logos/medium/logo.png.webp")
                         )
                     )
                 )
@@ -111,7 +113,9 @@ class TraktPublicListSourceResolverTest {
         assertTrue(result.data.hasMore)
         assertEquals("tt1234567", result.data.items.single().id)
         assertEquals("movie", result.data.items.single().apiType)
-        assertEquals("https://image.example/poster.jpg", result.data.items.single().poster)
+        assertEquals("https://media.trakt.tv/images/movies/000/000/009/posters/medium/poster.jpg.webp", result.data.items.single().poster)
+        assertEquals("https://media.trakt.tv/images/movies/000/000/009/fanarts/medium/fanart.jpg.webp", result.data.items.single().background)
+        assertEquals("https://media.trakt.tv/images/movies/000/000/009/logos/medium/logo.png.webp", result.data.items.single().logo)
     }
 
     @Test
@@ -141,8 +145,8 @@ class TraktPublicListSourceResolverTest {
                         firstAired = "2023-02-01",
                         rating = 8.2,
                         images = TraktImagesDto(
-                            poster = listOf("https://image.example/show-poster.jpg"),
-                            fanart = listOf("https://image.example/show-fanart.jpg")
+                            poster = listOf("//media.trakt.tv/images/shows/000/000/008/posters/medium/poster.jpg.webp"),
+                            fanart = listOf("//media.trakt.tv/images/shows/000/000/008/fanarts/medium/fanart.jpg.webp")
                         )
                     )
                 )
@@ -164,7 +168,7 @@ class TraktPublicListSourceResolverTest {
         assertEquals("series", result.data.rawType)
         assertEquals("tmdb:70", result.data.items.single().id)
         assertEquals("series", result.data.items.single().apiType)
-        assertEquals("https://image.example/show-poster.jpg", result.data.items.single().poster)
+        assertEquals("https://media.trakt.tv/images/shows/000/000/008/posters/medium/poster.jpg.webp", result.data.items.single().poster)
     }
 
     @Test
@@ -208,7 +212,7 @@ class TraktPublicListSourceResolverTest {
                         itemCount = 25,
                         ids = TraktListIdsDto(trakt = 21L, slug = "trending"),
                         user = TraktUserDto(username = "curator"),
-                        images = TraktListImagesDto(posters = listOf("https://image.example/trending.jpg"))
+                        images = TraktListImagesDto(posters = listOf("media.trakt.tv/images/lists/000/000/021/posters/medium/trending.jpg.webp"))
                     )
                 )
             )
@@ -237,7 +241,7 @@ class TraktPublicListSourceResolverTest {
         assertTrue(trending.subtitle.contains("25 items"))
         assertTrue(trending.subtitle.contains("10 likes"))
         assertTrue(trending.subtitle.contains("4 comments"))
-        assertEquals("https://image.example/trending.jpg", trending.coverImageUrl)
+        assertEquals("https://media.trakt.tv/images/lists/000/000/021/posters/medium/trending.jpg.webp", trending.coverImageUrl)
         assertEquals(22L, popular.traktListId)
         assertEquals("Popular", popular.title)
         assertTrue(popular.subtitle.contains("30 likes"))
