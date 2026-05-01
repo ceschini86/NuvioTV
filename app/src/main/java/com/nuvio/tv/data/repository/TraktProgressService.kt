@@ -131,7 +131,8 @@ class TraktProgressService @Inject constructor(
 
     private data class EpisodeMetadata(
         val title: String?,
-        val thumbnail: String?
+        val thumbnail: String?,
+        val runtimeMs: Long = 0L
     )
 
     private data class ContentMetadata(
@@ -139,7 +140,8 @@ class TraktProgressService @Inject constructor(
         val poster: String?,
         val backdrop: String?,
         val logo: String?,
-        val episodes: Map<Pair<Int, Int>, EpisodeMetadata>
+        val episodes: Map<Pair<Int, Int>, EpisodeMetadata>,
+        val runtimeMs: Long = 0L
     )
 
     private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
@@ -2388,12 +2390,20 @@ class TraktProgressService @Inject constructor(
             ?: metadata.backdrop
             ?: episodeMeta?.thumbnail
 
+        val episodeRuntimeMs = episodeMeta?.runtimeMs ?: 0L
+        val runtimeMs = episodeRuntimeMs.takeIf { it > 0 } ?: metadata.runtimeMs
+
         return progress.copy(
             name = if (shouldOverrideName) metadata.name ?: progress.name else progress.name,
             poster = progress.poster ?: metadata.poster,
             backdrop = backdrop,
             logo = progress.logo ?: metadata.logo,
-            episodeTitle = progress.episodeTitle ?: episodeMeta?.title
+            episodeTitle = progress.episodeTitle ?: episodeMeta?.title,
+            // Addon metadata is authoritative for runtime; prefer it over stored duration so
+            // stale cached values (e.g. from before runtime hydration was added) are overwritten.
+            duration = if (runtimeMs > 0) runtimeMs
+                       else if (progress.duration > 0) progress.duration
+                       else progress.duration
         )
     }
 
@@ -2451,11 +2461,15 @@ class TraktProgressService @Inject constructor(
         uniqueByContent.values.forEach { progress ->
             val contentId = progress.contentId
             if (contentId.isBlank()) return@forEach
-            if (metadataState.value.containsKey(contentId)) return@forEach
+            // Only skip if we already have a metadata entry with runtime populated.
+            // Entries with runtimeMs == 0 are stale (fetched before runtime support) and must be re-fetched.
+            val cached = metadataState.value[contentId]
+            if (cached != null && (cached.runtimeMs > 0 || cached.episodes.values.any { it.runtimeMs > 0 })) return@forEach
 
             scope.launch {
                 val shouldFetch = metadataMutex.withLock {
-                    if (metadataState.value.containsKey(contentId)) return@withLock false
+                    val lockedCached = metadataState.value[contentId]
+                    if (lockedCached != null && (lockedCached.runtimeMs > 0 || lockedCached.episodes.values.any { it.runtimeMs > 0 })) return@withLock false
                     if (inFlightMetadataKeys.contains(contentId)) return@withLock false
                     inFlightMetadataKeys.add(contentId)
                     true
@@ -2516,20 +2530,36 @@ class TraktProgressService @Inject constructor(
                         val episode = video.episode ?: return@mapNotNull null
                         (season to episode) to EpisodeMetadata(
                             title = video.title,
-                            thumbnail = video.thumbnail
+                            thumbnail = video.thumbnail,
+                            runtimeMs = (video.runtime ?: 0).toLong() * 60_000L
                         )
                     }
                     .toMap()
 
+                val addonBackdrop = meta.backdropUrl
+                val addonPoster = meta.poster
+                // Fall back to TMDB when addon returns no backdrop/poster
+                val tmdbImages = if (addonBackdrop == null && addonPoster == null
+                    && contentId.startsWith("tt")
+                ) {
+                    tmdbService.fetchImdbImages(contentId, contentType)
+                } else null
+
                 return ContentMetadata(
                     name = meta.name,
-                    poster = meta.poster,
-                    backdrop = meta.background,
+                    poster = addonPoster ?: tmdbImages?.posterUrl,
+                    backdrop = addonBackdrop ?: tmdbImages?.backdropUrl,
                     logo = meta.logo,
-                    episodes = episodes
+                    episodes = episodes,
+                    runtimeMs = parseRuntimeToMs(meta.runtime)
                 )
             }
         }
         return null
+    }
+
+    private fun parseRuntimeToMs(raw: String?): Long {
+        val minutes = raw?.trim()?.toLongOrNull() ?: return 0L
+        return minutes * 60_000L
     }
 }
