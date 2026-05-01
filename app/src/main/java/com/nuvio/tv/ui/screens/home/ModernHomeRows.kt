@@ -256,8 +256,11 @@ private fun ModernCatalogRowItem(
         }
     }
 
-    val isCatalog = payload is ModernPayload.Catalog
-    val effectiveBackdropExpanded = isBackdropExpanded && !isCatalog
+    val suppressCardExpansionForHeroTrailer =
+        effectiveAutoplayEnabled &&
+                trailerPlaybackTarget == FocusedPosterTrailerPlaybackTarget.HERO_MEDIA
+    val effectiveBackdropExpanded = isBackdropExpanded && !suppressCardExpansionForHeroTrailer
+
     val isSidebarExpanded = LocalSidebarExpanded.current
     val playTrailerInExpandedCard =
         effectiveAutoplayEnabled &&
