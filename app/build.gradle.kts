@@ -259,6 +259,7 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material:material-icons-extended")
     implementation(libs.androidx.tv.material)
+    implementation(libs.androidx.tvprovider)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation("androidx.activity:activity-compose:1.11.0")
 

@@ -325,7 +325,21 @@ class WatchProgressPreferences @Inject constructor(
     ) {
         progressList.forEach { progress ->
             val key = createKey(progress)
-            map[key] = progress
+            val existing = map[key]
+            // Preserve display metadata (poster, backdrop, logo, name) from the existing
+            // entry when the incoming save has null values — prevents a mid-playback
+            // position update from wiping artwork that was saved on first play.
+            map[key] = if (existing != null) {
+                progress.copy(
+                    name = progress.name.takeIf { it.isNotBlank() } ?: existing.name,
+                    poster = progress.poster ?: existing.poster,
+                    backdrop = progress.backdrop ?: existing.backdrop,
+                    logo = progress.logo ?: existing.logo,
+                    episodeTitle = progress.episodeTitle ?: existing.episodeTitle,
+                )
+            } else {
+                progress
+            }
 
             // Remove legacy series-level mirror key if this is an episode entry.
             // Mirror keys caused race conditions with stale progress data.

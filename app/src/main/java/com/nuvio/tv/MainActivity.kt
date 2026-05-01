@@ -235,6 +235,10 @@ class MainActivity : ComponentActivity() {
             com.nuvio.tv.core.player.DisplayCapabilities.logSummary(snapshot)
         }
 
+        // Extract extras set by the Continue Watching launcher channel preview programs.
+        val launchContentId = intent?.getStringExtra("contentId")
+        val launchContentType = intent?.getStringExtra("contentType")
+
         setContent {
             var hasSelectedProfileThisSession by rememberSaveable { mutableStateOf(false) }
             var onboardingCompletedThisSession by remember { mutableStateOf(false) }
@@ -441,6 +445,18 @@ class MainActivity : ComponentActivity() {
 
                     LaunchedEffect(actualRoute) {
                         optimisticRoute = null
+                    }
+
+                    // Navigate to content when launched from the Continue Watching channel row.
+                    LaunchedEffect(navController) {
+                        if (launchContentId != null && launchContentType != null && layoutChosen) {
+                            navController.navigate(
+                                Screen.Detail.createRoute(
+                                    itemId = launchContentId,
+                                    itemType = launchContentType
+                                )
+                            )
+                        }
                     }
 
                     val view = LocalView.current

@@ -265,4 +265,29 @@ class TmdbService @Inject constructor(
     fun cachedTmdbId(imdbId: String): Int? = imdbToTmdbCache[imdbId]
 
     fun apiKey(): String = TMDB_API_KEY
+
+    /**
+     * Fetches backdrop and poster URLs from TMDB for the given IMDB ID.
+     * Returns null if the IMDB ID doesn't start with "tt" or if TMDB has no data.
+     * Results are NOT cached here — callers should persist what they need.
+     */
+    suspend fun fetchImdbImages(imdbId: String, mediaType: String): TmdbImages? =
+        withContext(Dispatchers.IO) {
+            if (!imdbId.startsWith("tt")) return@withContext null
+            val tmdbId = imdbToTmdb(imdbId, mediaType) ?: return@withContext null
+            runCatching {
+                val isMovie = normalizeMediaType(mediaType) == "movie"
+                val response = if (isMovie)
+                    tmdbApi.getMovieDetails(tmdbId, TMDB_API_KEY)
+                else
+                    tmdbApi.getTvDetails(tmdbId, TMDB_API_KEY)
+                val body = response.body() ?: return@runCatching null
+                TmdbImages(
+                    backdropUrl = body.backdropPath?.let { "https://image.tmdb.org/t/p/w1280$it" },
+                    posterUrl = body.posterPath?.let { "https://image.tmdb.org/t/p/w500$it" }
+                )
+            }.getOrNull()
+        }
 }
+
+data class TmdbImages(val backdropUrl: String?, val posterUrl: String?)
