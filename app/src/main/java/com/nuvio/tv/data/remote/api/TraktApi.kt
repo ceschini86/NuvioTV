@@ -17,6 +17,7 @@ import com.nuvio.tv.data.remote.dto.trakt.TraktListItemsMutationResponseDto
 import com.nuvio.tv.data.remote.dto.trakt.TraktListSummaryDto
 import com.nuvio.tv.data.remote.dto.trakt.TraktMovieDto
 import com.nuvio.tv.data.remote.dto.trakt.TraktPlaybackItemDto
+import com.nuvio.tv.data.remote.dto.trakt.TraktProminentListDto
 import com.nuvio.tv.data.remote.dto.trakt.TraktReorderListsRequestDto
 import com.nuvio.tv.data.remote.dto.trakt.TraktReorderListsResponseDto
 import com.nuvio.tv.data.remote.dto.trakt.TraktRefreshTokenRequestDto
@@ -217,6 +218,50 @@ interface TraktApi {
         @Path("id") id: String,
         @Query("type") type: String
     ): Response<List<TraktSearchResultDto>>
+
+    @GET("search/list")
+    suspend fun searchLists(
+        @Header("Authorization") authorization: String? = null,
+        @Query("query") query: String,
+        @Query("extended") extended: String = "full,images",
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 20
+    ): Response<List<TraktSearchResultDto>>
+
+    @GET("lists/trending")
+    suspend fun getTrendingLists(
+        @Header("Authorization") authorization: String? = null,
+        @Query("extended") extended: String = "full,images",
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 20
+    ): Response<List<TraktProminentListDto>>
+
+    @GET("lists/popular")
+    suspend fun getPopularLists(
+        @Header("Authorization") authorization: String? = null,
+        @Query("extended") extended: String = "full,images",
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 20
+    ): Response<List<TraktProminentListDto>>
+
+    @GET("lists/{id}")
+    suspend fun getPublicList(
+        @Header("Authorization") authorization: String? = null,
+        @Path("id") id: String,
+        @Query("extended") extended: String = "full,images"
+    ): Response<TraktListSummaryDto>
+
+    @GET("lists/{id}/items/{type}")
+    suspend fun getPublicListItems(
+        @Header("Authorization") authorization: String? = null,
+        @Path("id") id: String,
+        @Path("type") type: String,
+        @Query("extended") extended: String = "full,images",
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 50,
+        @Query("sort_by") sortBy: String? = null,
+        @Query("sort_how") sortHow: String? = null
+    ): Response<List<TraktListItemDto>>
 
     @DELETE("sync/playback/{id}")
     suspend fun deletePlayback(
