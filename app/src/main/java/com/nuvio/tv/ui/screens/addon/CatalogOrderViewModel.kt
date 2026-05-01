@@ -334,36 +334,33 @@ class CatalogOrderViewModel @Inject constructor(
         availableMap: Map<String, CatalogOrderEntry>
     ): List<String> {
         val result = order.toMutableList()
-        var i = 0
-        while (i < result.size) {
-            val key = result[i]
-            if (!key.startsWith("collection_")) {
-                i++
-                continue
-            }
-            // Check if this collection is between catalogs of the same addon
-            val prevAddon = findAddonNameBefore(result, i, availableMap)
-            val nextAddon = findAddonNameAfter(result, i, availableMap)
-            if (prevAddon != null && nextAddon != null && prevAddon == nextAddon) {
-                // Collection is mid-block. Move it after the end of this addon block.
-                result.removeAt(i)
-                var insertPos = i
-                while (insertPos < result.size &&
-                    !result[insertPos].startsWith("collection_") &&
-                    availableMap[result[insertPos]]?.addonName == prevAddon
-                ) {
-                    insertPos++
+        var changed = true
+        while (changed) {
+            changed = false
+            var i = 0
+            while (i < result.size) {
+                val key = result[i]
+                if (!key.startsWith("collection_")) {
+                    i++
+                    continue
                 }
-                if (insertPos == i) {
-                    // Would re-insert at same position — skip to avoid infinite loop
-                    result.add(i, key)
+                val prevAddon = findAddonNameBefore(result, i, availableMap)
+                val nextAddon = findAddonNameAfter(result, i, availableMap)
+                if (prevAddon != null && nextAddon != null && prevAddon == nextAddon) {
+                    result.removeAt(i)
+                    var insertPos = i
+                    while (insertPos < result.size &&
+                        !result[insertPos].startsWith("collection_") &&
+                        availableMap[result[insertPos]]?.addonName == prevAddon
+                    ) {
+                        insertPos++
+                    }
+                    result.add(insertPos, key)
+                    if (insertPos != i) changed = true
                     i++
                 } else {
-                    result.add(insertPos, key)
-                    // Don't increment i - re-check this position
+                    i++
                 }
-            } else {
-                i++
             }
         }
         return result

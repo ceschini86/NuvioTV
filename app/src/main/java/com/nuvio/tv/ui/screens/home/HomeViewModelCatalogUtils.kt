@@ -339,35 +339,34 @@ private fun normalizeCollectionBoundaries(
     addonKeyToOwner: Map<String, String>
 ): List<String> {
     val result = order.toMutableList()
-    var i = 0
-    while (i < result.size) {
-        val key = result[i]
-        if (!key.startsWith("collection_")) {
-            i++
-            continue
-        }
-        val prevOwner = findOwnerBefore(result, i, addonKeyToOwner)
-        val nextOwner = findOwnerAfter(result, i, addonKeyToOwner)
-        if (prevOwner != null && nextOwner != null && prevOwner == nextOwner) {
-            // Collection is mid-block, push to end of this addon block
-            result.removeAt(i)
-            var insertPos = i
-            while (insertPos < result.size &&
-                !result[insertPos].startsWith("collection_") &&
-                addonKeyToOwner[result[insertPos]] == prevOwner
-            ) {
-                insertPos++
+    var changed = true
+    while (changed) {
+        changed = false
+        var i = 0
+        while (i < result.size) {
+            val key = result[i]
+            if (!key.startsWith("collection_")) {
+                i++
+                continue
             }
-            if (insertPos == i) {
-                // Would re-insert at same position — skip to avoid infinite loop
-                result.add(i, key)
+            val prevOwner = findOwnerBefore(result, i, addonKeyToOwner)
+            val nextOwner = findOwnerAfter(result, i, addonKeyToOwner)
+            if (prevOwner != null && nextOwner != null && prevOwner == nextOwner) {
+                // Collection is mid-block, push to end of this addon block
+                result.removeAt(i)
+                var insertPos = i
+                while (insertPos < result.size &&
+                    !result[insertPos].startsWith("collection_") &&
+                    addonKeyToOwner[result[insertPos]] == prevOwner
+                ) {
+                    insertPos++
+                }
+                result.add(insertPos, key)
+                if (insertPos != i) changed = true
                 i++
             } else {
-                result.add(insertPos, key)
-                // Don't increment i — check the new element at position i
+                i++
             }
-        } else {
-            i++
         }
     }
     return result
