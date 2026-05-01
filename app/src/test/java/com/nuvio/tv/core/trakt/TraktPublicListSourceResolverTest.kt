@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import okhttp3.Headers.Companion.headersOf
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import retrofit2.Response
@@ -240,7 +241,7 @@ class TraktPublicListSourceResolverTest {
         assertEquals("Trending", trending.title)
         assertTrue(trending.subtitle.contains("25 items"))
         assertTrue(trending.subtitle.contains("10 likes"))
-        assertTrue(trending.subtitle.contains("4 comments"))
+        assertFalse(trending.subtitle.contains("comments"))
         assertEquals("https://media.trakt.tv/images/lists/000/000/021/posters/medium/trending.jpg.webp", trending.coverImageUrl)
         assertEquals(22L, popular.traktListId)
         assertEquals("Popular", popular.title)

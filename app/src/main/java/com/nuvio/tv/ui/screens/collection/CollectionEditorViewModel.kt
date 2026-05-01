@@ -64,7 +64,7 @@ data class CollectionEditorUiState(
     val traktInput: String = "",
     val traktTitleInput: String = "",
     val traktMediaType: TmdbCollectionMediaType = TmdbCollectionMediaType.MOVIE,
-    val traktMediaBoth: Boolean = false,
+    val traktMediaBoth: Boolean = true,
     val traktSortBy: String = "rank",
     val traktSortHow: String = "asc",
     val traktSearchResults: List<TraktPublicListSearchResult> = emptyList(),
@@ -454,7 +454,7 @@ class CollectionEditorViewModel @Inject constructor(
                 traktInput = "",
                 traktTitleInput = "",
                 traktMediaType = TmdbCollectionMediaType.MOVIE,
-                traktMediaBoth = false,
+                traktMediaBoth = true,
                 traktSortBy = "rank",
                 traktSortHow = "asc",
                 traktSearchResults = emptyList(),
@@ -490,7 +490,7 @@ class CollectionEditorViewModel @Inject constructor(
     }
 
     fun setTraktInput(value: String) {
-        _uiState.update { it.copy(traktInput = value) }
+        _uiState.update { it.copy(traktInput = value, traktSearchError = null) }
     }
 
     fun setTraktTitleInput(value: String) {
@@ -516,13 +516,34 @@ class CollectionEditorViewModel @Inject constructor(
     fun searchTraktLists() {
         val state = _uiState.value
         val query = state.traktInput.trim()
-        if (query.isBlank()) return
+        if (query.isBlank()) {
+            _uiState.update { it.copy(traktSearchError = "Enter a Trakt list name, URL, or ID") }
+            return
+        }
         viewModelScope.launch {
-            val results = runCatching { traktPublicListSourceResolver.searchPublicLists(query) }
+            _uiState.update { it.copy(traktSearchError = null) }
+            val results = if (query.isTraktListIdentifierInput()) {
+                runCatching {
+                    val metadata = traktPublicListSourceResolver.listImportMetadata(query)
+                    val id = metadata.traktListId ?: error("Could not load Trakt list")
+                    listOf(
+                        TraktPublicListSearchResult(
+                            traktListId = id,
+                            title = metadata.title ?: "Trakt List $id",
+                            subtitle = "Resolved Trakt list",
+                            coverImageUrl = metadata.coverImageUrl
+                        )
+                    )
+                }
+            } else {
+                runCatching { traktPublicListSourceResolver.searchPublicLists(query) }
+            }
             _uiState.update {
+                val mapped = results.getOrDefault(emptyList())
                 it.copy(
-                    traktSearchResults = results.getOrDefault(emptyList()),
+                    traktSearchResults = mapped,
                     traktSearchError = results.exceptionOrNull()?.message
+                        ?: if (mapped.isEmpty()) "No Trakt lists found" else null
                 )
             }
         }
@@ -1105,4 +1126,11 @@ class CollectionEditorViewModel @Inject constructor(
         }
     }
 
+}
+
+private fun String.isTraktListIdentifierInput(): Boolean {
+    val normalized = trim()
+    return normalized.toLongOrNull() != null ||
+        normalized.contains("trakt.tv/lists/", ignoreCase = true) ||
+        Regex("""trakt\.tv/users/[^/]+/lists/""", RegexOption.IGNORE_CASE).containsMatchIn(normalized)
 }

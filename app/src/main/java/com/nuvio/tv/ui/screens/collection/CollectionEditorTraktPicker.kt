@@ -131,7 +131,7 @@ private fun TraktSourceForm(
             label = stringResource(R.string.collections_editor_trakt_list),
             value = uiState.traktInput,
             onValueChange = onInputChange,
-            placeholder = "https://trakt.tv/lists/123456 or 123456"
+            placeholder = "Search title, Trakt URL, or list ID"
         )
         TraktLabeledField(
             label = stringResource(R.string.collections_editor_tmdb_display_title),
