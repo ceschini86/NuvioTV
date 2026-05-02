@@ -291,6 +291,7 @@ internal fun PlayerRuntimeController.initializePlayer(
                     .setRenderersFactory(renderersFactory)
                     .setLoadControl(loadControl)
                     .setReleaseTimeoutMs(3000)
+                    .setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF)
                     .build()
             }
 
@@ -301,6 +302,7 @@ internal fun PlayerRuntimeController.initializePlayer(
                     .setTrackSelector(trackSelector!!)
                     .setMediaSourceFactory(DefaultMediaSourceFactory(playerDataSourceFactory, extractorsFactory))
                     .setReleaseTimeoutMs(3000)
+                    .setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF)
                     .buildWithAssSupportCompat(
                         context = context,
                         renderType = libassRenderType,
