@@ -726,6 +726,18 @@ class MetaDetailsViewModel @Inject constructor(
         // Fire all independent async jobs immediately — they run in parallel.
         loadMoreLikeThisAsync(meta)
         val enriched = enrichMeta(meta)
+
+        // Pre-compute nextToWatch before applyMeta so the PlayButton text is stable
+        // from the first composition — prevents focus invalidation from late recomposition.
+        val progressMap = watchProgressRepository
+            .getAllEpisodeProgress(_effectiveContentId.value)
+            .first()
+        val watchedEpisodes = watchedItemsPreferences
+            .getWatchedEpisodesForContent(_effectiveContentId.value)
+            .first()
+        val precomputedNextToWatch = computeNextToWatch(enriched, progressMap, watchedEpisodes)
+        updateNextToWatch(precomputedNextToWatch)
+
         applyMeta(enriched)
         // Episode ratings and MDBList are independent — launch both without waiting.
         loadEpisodeRatingsAsync(enriched)
@@ -1468,111 +1480,111 @@ class MetaDetailsViewModel @Inject constructor(
         val meta = _uiState.value.meta ?: return
         val progressMap = _uiState.value.episodeProgressMap
         val watchedEpisodes = _uiState.value.watchedEpisodes
-        val isSeries = meta.apiType in listOf("series", "tv")
         nextToWatchJob?.cancel()
 
         nextToWatchJob = viewModelScope.launch {
-            if (!isSeries) {
-                // For movies, check if there's an in-progress watch
-                val progress = watchProgressRepository.getProgress(_effectiveContentId.value).first()
-                val nextToWatch = if (progress != null && shouldResumeProgress(progress)) {
-                    NextToWatch(
-                        watchProgress = progress,
-                        isResume = true,
-                        nextVideoId = meta.id,
-                        nextSeason = null,
-                        nextEpisode = null,
-                        displayText = context.getString(R.string.detail_btn_resume)
-                    )
-                } else {
-                    NextToWatch(
-                        watchProgress = null,
-                        isResume = false,
-                        nextVideoId = meta.id,
-                        nextSeason = null,
-                        nextEpisode = null,
-                        displayText = context.getString(R.string.detail_btn_play)
-                    )
-                }
-                updateNextToWatch(nextToWatch)
-                return@launch
-            }
+            val nextToWatch = computeNextToWatch(meta, progressMap, watchedEpisodes)
+            updateNextToWatch(nextToWatch)
+        }
+    }
 
-            val allEpisodes = meta.videos
-                .filter { it.season != null && it.episode != null }
-                .filter { it.available != false }
-                .sortedWith(compareBy({ it.season }, { it.episode }))
+    private suspend fun computeNextToWatch(
+        meta: Meta,
+        progressMap: Map<Pair<Int, Int>, WatchProgress> = emptyMap(),
+        watchedEpisodes: Set<Pair<Int, Int>> = emptySet()
+    ): NextToWatch {
+        val isSeries = meta.apiType in listOf("series", "tv")
 
-            if (allEpisodes.isEmpty()) {
-                updateNextToWatch(
-                    NextToWatch(
-                        watchProgress = null,
-                        isResume = false,
-                        nextVideoId = meta.id,
-                        nextSeason = null,
-                        nextEpisode = null,
-                        displayText = context.getString(R.string.detail_btn_play)
-                    )
+        if (!isSeries) {
+            val progress = watchProgressRepository.getProgress(_effectiveContentId.value).first()
+            return if (progress != null && shouldResumeProgress(progress)) {
+                NextToWatch(
+                    watchProgress = progress,
+                    isResume = true,
+                    nextVideoId = meta.id,
+                    nextSeason = null,
+                    nextEpisode = null,
+                    displayText = context.getString(R.string.detail_btn_resume)
                 )
-                return@launch
-            }
-
-            val nonSpecialEpisodes = allEpisodes.filter { (it.season ?: 0) > 0 }
-            val episodePool = if (nonSpecialEpisodes.isNotEmpty()) nonSpecialEpisodes else allEpisodes
-            val latestSeriesProgress = progressMap.values
-                .sortedWith(
-                    compareByDescending<WatchProgress> { it.lastWatched }
-                        .thenByDescending { it.season ?: 0 }
-                        .thenByDescending { it.episode ?: 0 }
+            } else {
+                NextToWatch(
+                    watchProgress = null,
+                    isResume = false,
+                    nextVideoId = meta.id,
+                    nextSeason = null,
+                    nextEpisode = null,
+                    displayText = context.getString(R.string.detail_btn_play)
                 )
-                .firstOrNull()
-            // If progressMap is empty but watchedEpisodes has data (batch mark),
-            // use the highest watched episode as latestSeriesProgress stand-in.
-            val effectiveLatestProgress = latestSeriesProgress ?: run {
-                if (watchedEpisodes.isEmpty()) null
-                else {
-                    val watchedWithTimestamps = watchedItemsPreferences
-                        .getWatchedEpisodesWithTimestamps(_effectiveContentId.value)
-                        .first()
-                    val highest = watchedWithTimestamps.entries
-                        .maxWithOrNull(compareBy<Map.Entry<Pair<Int, Int>, Long>> { it.value }
-                            .thenBy { it.key.first }
-                            .thenBy { it.key.second })
-                    highest?.let { (key, watchedAt) ->
-                        val (s, e) = key
-                        episodePool.firstOrNull { it.season == s && it.episode == e }?.let { video ->
-                            WatchProgress(
-                                contentId = _effectiveContentId.value,
-                                contentType = "series",
-                                name = "",
-                                poster = null, backdrop = null, logo = null,
-                                videoId = video.id,
-                                season = video.season,
-                                episode = video.episode,
-                                episodeTitle = video.title,
-                                position = 1L, duration = 1L,
-                                lastWatched = watchedAt,
-                                progressPercent = 100f
-                            )
-                        }
+            }
+        }
+
+        val allEpisodes = meta.videos
+            .filter { it.season != null && it.episode != null }
+            .filter { it.available != false }
+            .sortedWith(compareBy({ it.season }, { it.episode }))
+
+        if (allEpisodes.isEmpty()) {
+            return NextToWatch(
+                watchProgress = null,
+                isResume = false,
+                nextVideoId = meta.id,
+                nextSeason = null,
+                nextEpisode = null,
+                displayText = context.getString(R.string.detail_btn_play)
+            )
+        }
+
+        val nonSpecialEpisodes = allEpisodes.filter { (it.season ?: 0) > 0 }
+        val episodePool = if (nonSpecialEpisodes.isNotEmpty()) nonSpecialEpisodes else allEpisodes
+        val latestSeriesProgress = progressMap.values
+            .sortedWith(
+                compareByDescending<WatchProgress> { it.lastWatched }
+                    .thenByDescending { it.season ?: 0 }
+                    .thenByDescending { it.episode ?: 0 }
+            )
+            .firstOrNull()
+        val effectiveLatestProgress = latestSeriesProgress ?: run {
+            if (watchedEpisodes.isEmpty()) null
+            else {
+                val watchedWithTimestamps = watchedItemsPreferences
+                    .getWatchedEpisodesWithTimestamps(_effectiveContentId.value)
+                    .first()
+                val highest = watchedWithTimestamps.entries
+                    .maxWithOrNull(compareBy<Map.Entry<Pair<Int, Int>, Long>> { it.value }
+                        .thenBy { it.key.first }
+                        .thenBy { it.key.second })
+                highest?.let { (key, watchedAt) ->
+                    val (s, e) = key
+                    episodePool.firstOrNull { it.season == s && it.episode == e }?.let { video ->
+                        WatchProgress(
+                            contentId = _effectiveContentId.value,
+                            contentType = "series",
+                            name = "",
+                            poster = null, backdrop = null, logo = null,
+                            videoId = video.id,
+                            season = video.season,
+                            episode = video.episode,
+                            episodeTitle = video.title,
+                            position = 1L, duration = 1L,
+                            lastWatched = watchedAt,
+                            progressPercent = 100f
+                        )
                     }
                 }
             }
-            val defaultEpisode = findPreferredDefaultEpisode(meta)?.takeIf { preferred ->
-                episodePool.any { it.id == preferred.id }
-            }
-
-            val nextToWatch = buildNextToWatchFromLatestProgress(
-                latestProgress = effectiveLatestProgress,
-                episodes = episodePool,
-                fallbackProgressMap = progressMap,
-                watchedEpisodes = watchedEpisodes,
-                metaId = meta.id,
-                defaultEpisode = defaultEpisode
-            )
-
-            updateNextToWatch(nextToWatch)
         }
+        val defaultEpisode = findPreferredDefaultEpisode(meta)?.takeIf { preferred ->
+            episodePool.any { it.id == preferred.id }
+        }
+
+        return buildNextToWatchFromLatestProgress(
+            latestProgress = effectiveLatestProgress,
+            episodes = episodePool,
+            fallbackProgressMap = progressMap,
+            watchedEpisodes = watchedEpisodes,
+            metaId = meta.id,
+            defaultEpisode = defaultEpisode
+        )
     }
 
     private fun buildNextToWatchFromLatestProgress(

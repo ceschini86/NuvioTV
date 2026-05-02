@@ -511,7 +511,7 @@ fun ContentCard(
                             .padding(end = 8.dp, top = 8.dp)
                             .zIndex(2f)
                             .size(21.dp)
-                            .shadow(10.dp, shape = CircleShape)
+                            .shadow(10.dp, shape = CircleShape, spotColor = Color.Transparent)
                             .background(NuvioColors.Secondary, CircleShape)
                     ) {
                         Icon(
