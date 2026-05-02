@@ -478,6 +478,15 @@ internal fun PlayerRuntimeController.setPlaybackPaused(paused: Boolean) {
     }
 }
 
+internal fun PlayerRuntimeController.pauseForStillWatchingPrompt() {
+    setPlaybackPaused(true)
+    if (isUsingMpvEngine()) {
+        stopProgressUpdates()
+        stopWatchProgressSaving()
+        emitStopScrobbleForCurrentProgress()
+    }
+}
+
 internal fun PlayerRuntimeController.keepMpvPlayingIfNeeded(wasPlaying: Boolean) {
     if (!wasPlaying || !isUsingMpvEngine()) return
     scope.launch {
