@@ -358,7 +358,10 @@ class WatchProgressRepositoryImpl @Inject constructor(
                 } else {
                     // Use watched items (fully synced with pagination) to build seeds
                     // instead of watch progress (limited to 1000 entries).
-                    watchedItemsPreferences.allItems.map { items ->
+                    combine(
+                        watchedItemsPreferences.allItems,
+                        traktSettingsDataStore.nextUpFromFurthestEpisode
+                    ) { items, useFurthest ->
                         items
                             .filter { item ->
                                 (item.contentType.equals("series", ignoreCase = true) ||
@@ -371,9 +374,15 @@ class WatchProgressRepositoryImpl @Inject constructor(
                             .groupBy { it.contentId }
                             .mapNotNull { (_, episodes) ->
                                 val latest = episodes.maxWithOrNull(
-                                    compareBy<WatchedItem> { it.watchedAt }
-                                        .thenBy { it.season ?: 0 }
-                                        .thenBy { it.episode ?: 0 }
+                                    if (useFurthest) {
+                                        compareBy<WatchedItem> { it.season ?: 0 }
+                                            .thenBy { it.episode ?: 0 }
+                                            .thenBy { it.watchedAt }
+                                    } else {
+                                        compareBy<WatchedItem> { it.watchedAt }
+                                            .thenBy { it.season ?: 0 }
+                                            .thenBy { it.episode ?: 0 }
+                                    }
                                 ) ?: return@mapNotNull null
                                 WatchProgress(
                                     contentId = latest.contentId,
@@ -805,6 +814,18 @@ class WatchProgressRepositoryImpl @Inject constructor(
             )
             optimisticContinueWatchingUpdates.tryEmit(completed)
             traktProgressService.applyOptimisticProgress(completed)
+            // Save to local stores first so Nuvio Sync has the data even if Trakt fails.
+            watchProgressPreferences.markAsCompleted(progress)
+            watchedItemsPreferences.markAsWatched(
+                WatchedItem(
+                    contentId = progress.contentId,
+                    contentType = progress.contentType,
+                    title = progress.name,
+                    season = progress.season,
+                    episode = progress.episode,
+                    watchedAt = now
+                )
+            )
             runCatching {
                 traktProgressService.markAsWatched(
                     progress = completed,
@@ -819,17 +840,6 @@ class WatchProgressRepositoryImpl @Inject constructor(
                 )
                 throw it
             }
-            watchProgressPreferences.markAsCompleted(progress)
-            watchedItemsPreferences.markAsWatched(
-                WatchedItem(
-                    contentId = progress.contentId,
-                    contentType = progress.contentType,
-                    title = progress.name,
-                    season = progress.season,
-                    episode = progress.episode,
-                    watchedAt = System.currentTimeMillis()
-                )
-            )
             // Mirror to Nuvio Sync so data is ready if user switches source later.
             triggerRemoteSync()
             triggerWatchedItemsSync()

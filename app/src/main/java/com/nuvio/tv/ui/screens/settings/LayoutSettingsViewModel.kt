@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.data.local.LayoutPreferenceDataStore
+import com.nuvio.tv.data.local.TraktSettingsDataStore
 import com.nuvio.tv.domain.model.FocusedPosterTrailerPlaybackTarget
 import com.nuvio.tv.domain.model.HomeLayout
 import com.nuvio.tv.domain.repository.AddonRepository
@@ -46,7 +47,8 @@ data class LayoutSettingsUiState(
     val detailPageTrailerButtonEnabled: Boolean = false,
     val preferExternalMetaAddonDetail: Boolean = false,
     val hideUnreleasedContent: Boolean = false,
-    val showFullReleaseDate: Boolean = true
+    val showFullReleaseDate: Boolean = true,
+    val nextUpFromFurthestEpisode: Boolean = true
 )
 
 data class CatalogInfo(
@@ -84,12 +86,14 @@ sealed class LayoutSettingsEvent {
     data class SetPreferExternalMetaAddonDetail(val enabled: Boolean) : LayoutSettingsEvent()
     data class SetHideUnreleasedContent(val enabled: Boolean) : LayoutSettingsEvent()
     data class SetShowFullReleaseDate(val enabled: Boolean) : LayoutSettingsEvent()
+    data class SetNextUpFromFurthestEpisode(val enabled: Boolean) : LayoutSettingsEvent()
     data object ResetPosterCardStyle : LayoutSettingsEvent()
 }
 
 @HiltViewModel
 class LayoutSettingsViewModel @Inject constructor(
     private val layoutPreferenceDataStore: LayoutPreferenceDataStore,
+    private val traktSettingsDataStore: TraktSettingsDataStore,
     private val addonRepository: AddonRepository,
     private val metaRepository: com.nuvio.tv.domain.repository.MetaRepository
 ) : ViewModel() {
@@ -247,6 +251,11 @@ class LayoutSettingsViewModel @Inject constructor(
                 updateUiStateIfChanged { it.copy(showFullReleaseDate = enabled) }
             }
         }
+        viewModelScope.launch {
+            traktSettingsDataStore.nextUpFromFurthestEpisode.distinctUntilChanged().collectLatest { enabled ->
+                updateUiStateIfChanged { it.copy(nextUpFromFurthestEpisode = enabled) }
+            }
+        }
         loadAvailableCatalogs()
     }
 
@@ -279,6 +288,7 @@ class LayoutSettingsViewModel @Inject constructor(
             is LayoutSettingsEvent.SetPreferExternalMetaAddonDetail -> setPreferExternalMetaAddonDetail(event.enabled)
             is LayoutSettingsEvent.SetHideUnreleasedContent -> setHideUnreleasedContent(event.enabled)
             is LayoutSettingsEvent.SetShowFullReleaseDate -> setShowFullReleaseDate(event.enabled)
+            is LayoutSettingsEvent.SetNextUpFromFurthestEpisode -> setNextUpFromFurthestEpisode(event.enabled)
             LayoutSettingsEvent.ResetPosterCardStyle -> resetPosterCardStyle()
         }
     }
@@ -469,6 +479,13 @@ class LayoutSettingsViewModel @Inject constructor(
         if (_uiState.value.showFullReleaseDate == enabled) return
         viewModelScope.launch {
             layoutPreferenceDataStore.setShowFullReleaseDate(enabled)
+        }
+    }
+
+    private fun setNextUpFromFurthestEpisode(enabled: Boolean) {
+        if (_uiState.value.nextUpFromFurthestEpisode == enabled) return
+        viewModelScope.launch {
+            traktSettingsDataStore.setNextUpFromFurthestEpisode(enabled)
         }
     }
 

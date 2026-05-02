@@ -379,6 +379,8 @@
     <string name="layout_blur_unwatched_sub">Rozmyj miniatury odcinków do czasu obejrzenia, aby uniknąć spoilerów.</string>
     <string name="layout_blur_cw_next_up">Rozmyj nieobejrzane w Kontynuuj oglądanie</string>
     <string name="layout_blur_cw_next_up_sub">Rozmyj miniatury następnych odcinków w sekcji Kontynuuj oglądanie</string>
+    <string name="layout_next_up_furthest_episode">Następny z najdalszego odcinka</string>
+    <string name="layout_next_up_furthest_episode_sub">Pokazuj następny odcinek na podstawie najdalszego obejrzanego. Wyłącz przy ponownym oglądaniu, aby używać ostatnio obejrzanego odcinka.</string>
     <string name="layout_trailer_button">Pokaż przycisk zwiastuna</string>
     <string name="layout_trailer_button_sub">Pokaż przycisk zwiastuna na stronie szczegółów (tylko gdy zwiastun jest dostępny).</string>
     <string name="layout_prefer_external_meta">Preferuj metadane z zewnętrznego dodatku</string>

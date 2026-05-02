@@ -1222,8 +1222,9 @@ class TraktProgressService @Inject constructor(
             }
 
             val items = response.body().orEmpty()
+            val useFurthestEpisode = traktSettingsDataStore.nextUpFromFurthestEpisode.first()
             val watchedShowSeeds = items
-                .mapNotNull(::mapWatchedShowSeed)
+                .mapNotNull { mapWatchedShowSeed(it, useFurthestEpisode) }
                 .sortedByDescending { it.lastWatched }
 
             // Build per-show watched episodes map from the same response.
@@ -1295,7 +1296,7 @@ class TraktProgressService @Inject constructor(
         }
     }
 
-    private fun mapWatchedShowSeed(item: TraktWatchedShowItemDto): WatchProgress? {
+    private fun mapWatchedShowSeed(item: TraktWatchedShowItemDto, useFurthestEpisode: Boolean): WatchProgress? {
         val show = item.show ?: return null
         val contentId = normalizeContentId(show.ids)
         if (contentId.isBlank()) return null
@@ -1318,11 +1319,19 @@ class TraktProgressService @Inject constructor(
                     }
             }
             .maxWithOrNull(
-                compareBy<Triple<Int, Int, Long>>(
-                    { it.third },
-                    { it.first },
-                    { it.second }
-                )
+                if (useFurthestEpisode) {
+                    compareBy<Triple<Int, Int, Long>>(
+                        { it.first },
+                        { it.second },
+                        { it.third }
+                    )
+                } else {
+                    compareBy<Triple<Int, Int, Long>>(
+                        { it.third },
+                        { it.first },
+                        { it.second }
+                    )
+                }
             ) ?: return null
 
         val season = furthestEpisode.first

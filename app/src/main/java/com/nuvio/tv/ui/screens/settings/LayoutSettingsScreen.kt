@@ -416,6 +416,17 @@ fun LayoutSettingsContent(
                         },
                         onFocused = { focusedSection = LayoutSettingsSection.HOME_CONTENT }
                     )
+                    CompactToggleRow(
+                        title = stringResource(R.string.layout_next_up_furthest_episode),
+                        subtitle = stringResource(R.string.layout_next_up_furthest_episode_sub),
+                        checked = uiState.nextUpFromFurthestEpisode,
+                        onToggle = {
+                            viewModel.onEvent(
+                                LayoutSettingsEvent.SetNextUpFromFurthestEpisode(!uiState.nextUpFromFurthestEpisode)
+                            )
+                        },
+                        onFocused = { focusedSection = LayoutSettingsSection.HOME_CONTENT }
+                    )
                 }
             }
 

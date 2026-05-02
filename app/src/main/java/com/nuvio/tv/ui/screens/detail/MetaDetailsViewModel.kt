@@ -1546,11 +1546,18 @@ class MetaDetailsViewModel @Inject constructor(
 
         val nonSpecialEpisodes = allEpisodes.filter { (it.season ?: 0) > 0 }
         val episodePool = if (nonSpecialEpisodes.isNotEmpty()) nonSpecialEpisodes else allEpisodes
+        val useFurthestEpisode = traktSettingsDataStore.nextUpFromFurthestEpisode.first()
         val latestSeriesProgress = progressMap.values
             .sortedWith(
-                compareByDescending<WatchProgress> { it.lastWatched }
-                    .thenByDescending { it.season ?: 0 }
-                    .thenByDescending { it.episode ?: 0 }
+                if (useFurthestEpisode) {
+                    compareByDescending<WatchProgress> { it.season ?: 0 }
+                        .thenByDescending { it.episode ?: 0 }
+                        .thenByDescending { it.lastWatched }
+                } else {
+                    compareByDescending<WatchProgress> { it.lastWatched }
+                        .thenByDescending { it.season ?: 0 }
+                        .thenByDescending { it.episode ?: 0 }
+                }
             )
             .firstOrNull()
         val effectiveLatestProgress = latestSeriesProgress ?: run {
