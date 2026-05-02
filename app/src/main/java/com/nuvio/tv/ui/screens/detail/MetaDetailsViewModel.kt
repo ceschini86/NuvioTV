@@ -1587,11 +1587,6 @@ class MetaDetailsViewModel @Inject constructor(
             episodePool.any { it.id == preferred.id }
         }
 
-        Log.d("NextToWatch", "computeNextToWatch: contentId=${meta.id} " +
-            "progressMap=${progressMap.size} watchedEpisodes=${watchedEpisodes.size} " +
-            "latestProgress=S${effectiveLatestProgress?.season}E${effectiveLatestProgress?.episode} " +
-            "episodePool=${episodePool.size} defaultEpisode=S${defaultEpisode?.season}E${defaultEpisode?.episode}")
-
         return buildNextToWatchFromLatestProgress(
             latestProgress = effectiveLatestProgress,
             episodes = episodePool,

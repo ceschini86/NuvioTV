@@ -1733,7 +1733,6 @@ class TraktProgressService @Inject constructor(
         }
         val resolvedSeason = resolvedEpisode?.season ?: season
         val resolvedNumber = resolvedEpisode?.episode ?: number
-        Log.d(TAG, "mapEpisodeHistoryItem: contentId=$contentId trakt=S${season}E${number} title=${episode.title} -> addon=S${resolvedSeason}E${resolvedNumber} (remapped=${resolvedEpisode != null})")
         val videoId = resolveEpisodeVideoId(contentId, resolvedSeason, resolvedNumber)
 
         return WatchProgress(
