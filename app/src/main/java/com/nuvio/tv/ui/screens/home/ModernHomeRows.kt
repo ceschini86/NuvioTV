@@ -409,7 +409,7 @@ internal fun ModernRowSection(
         val rowTitleStyle = remember(titleMediumStyle) {
             titleMediumStyle.copy(fontWeight = FontWeight.SemiBold)
         }
-        val rowTitle = remember(row.title) { row.title }
+        val rowTitle = row.title
         val textColor = remember { NuvioColors.TextPrimary }
         val textModifier = remember(rowTitleBottom) {
             Modifier.padding(start = 52.dp, bottom = rowTitleBottom)
