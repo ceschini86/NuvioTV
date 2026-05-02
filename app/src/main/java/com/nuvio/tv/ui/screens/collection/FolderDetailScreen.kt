@@ -428,10 +428,6 @@ private fun TabbedGridContent(
                         posterCardStyle = posterCardStyle,
                         focusRequester = focusReq,
                         isWatched = isItemWatched(item),
-                        focusedPosterBackdropExpandEnabled = uiState.focusedPosterBackdropExpandEnabled,
-                        focusedPosterBackdropExpandDelaySeconds = uiState.focusedPosterBackdropExpandDelaySeconds,
-                        focusedPosterBackdropTrailerEnabled = uiState.focusedPosterBackdropTrailerEnabled,
-                        focusedPosterBackdropTrailerMuted = uiState.focusedPosterBackdropTrailerMuted,
                         onFocus = { _ -> lastFocusedItemKey = itemKey },
                         onClick = {
                             onNavigateToDetail(
