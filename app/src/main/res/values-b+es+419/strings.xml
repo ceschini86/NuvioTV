@@ -154,7 +154,6 @@
     <string name="episodes_play">Reproducir</string>
     <string name="play_manually">Reproducir manualmente</string>
     <string name="episodes_season_actions">Acciones de la temporada</string>
-    <string name="episodes_season_actions">Acciones de la temporada</string>
 
     <!-- MetaDetailsViewModel -->
     <string name="detail_added_to_library">Agregado a la biblioteca</string>
