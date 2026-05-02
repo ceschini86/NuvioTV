@@ -108,7 +108,7 @@ import kotlin.math.abs
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import com.nuvio.tv.core.ui.ScrollStateRegistry
+
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 private const val MODERN_HORIZONTAL_FOCUS_DEBOUNCE_MS = 140L
@@ -978,17 +978,8 @@ private fun ModernCarouselCard(
     val requestHeightPx = remember(cardHeight, density) {
         with(density) { cardHeight.roundToPx() }
     }
-    var reloadNonce by remember { mutableIntStateOf(0) }
-    LaunchedEffect(Unit) {
-        snapshotFlow { ScrollStateRegistry.isScrolling }
-            .collect { scrolling ->
-                if (!scrolling) {
-                    reloadNonce++
-                }
-            }
-    }
 
-    val imageModel = remember(context, imageUrl, requestWidthPx, requestHeightPx, reloadNonce) {
+    val imageModel = remember(context, imageUrl, requestWidthPx, requestHeightPx) {
         imageUrl?.let {
             ImageRequest.Builder(context)
                 .data(it)
@@ -1006,7 +997,7 @@ private fun ModernCarouselCard(
         with(density) { (maxRequestCardWidth * 0.62f).roundToPx() }
     }
 
-    val logoModel = remember(context, effectiveLogoUrl, maxLogoWidthPx, logoHeightPx, reloadNonce) {
+    val logoModel = remember(context, effectiveLogoUrl, maxLogoWidthPx, logoHeightPx) {
         effectiveLogoUrl?.let {
             ImageRequest.Builder(context)
                 .data(it)
@@ -1018,6 +1009,27 @@ private fun ModernCarouselCard(
     }
     var landscapeLogoLoadFailed by remember(effectiveLogoUrl) { mutableStateOf(false) }
     val shouldPlayTrailerInCard = playTrailerInExpandedCard && !trailerPreviewUrl.isNullOrBlank()
+    val isVerticalRowsScrolling = LocalVerticalRowsScrolling.current
+
+    // Coil 3's AsyncImage is skippable — it compares ImageRequest structurally and won't
+    // re-trigger a failed memory-only request when policies change. We solve this by
+    // building a restricted request during scroll and using Compose's `key()` on the
+    // scroll state around AsyncImage so that stopping the scroll destroys the old
+    // (memory-only) AsyncImage and creates a fresh one with the full request.
+    val scrollAwareImageModel = if (!isVerticalRowsScrolling || imageModel == null) {
+        imageModel
+    } else {
+        remember(imageModel) {
+            (imageModel as? ImageRequest)?.newBuilder()
+                ?.memoryCachePolicy(CachePolicy.ENABLED)
+                ?.diskCachePolicy(CachePolicy.DISABLED)
+                ?.networkCachePolicy(CachePolicy.DISABLED)
+                ?.build()
+                ?: imageModel
+        }
+    }
+    // When true, wrap AsyncImage in key(scrollPhaseKey) to force re-creation on scroll stop.
+    val scrollPhaseKey = isVerticalRowsScrolling
 
     val hasImage = !imageUrl.isNullOrBlank()
     val hasLandscapeLogo =
@@ -1153,9 +1165,9 @@ private fun ModernCarouselCard(
                                 .placeholderCardShimmer(effectivePlaceholderShimmerOffsetState)
                         )
                     } else if (hasImage) {
-                        key(reloadNonce) {
+                        key(scrollPhaseKey) {
                             AsyncImage(
-                                model = imageModel,
+                                model = scrollAwareImageModel,
                                 contentDescription = item.title,
                                 modifier = Modifier.fillMaxSize(),
                                 placeholder = backgroundPainter,

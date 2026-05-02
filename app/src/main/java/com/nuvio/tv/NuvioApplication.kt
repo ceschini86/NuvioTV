@@ -14,7 +14,7 @@ import coil3.request.crossfade
 import coil3.request.allowHardware
 import coil3.request.allowRgb565
 import coil3.bitmapFactoryMaxParallelism
-import com.nuvio.tv.core.image.ScrollAwareImageInterceptor
+
 import okio.Path.Companion.toOkioPath
 import com.nuvio.tv.core.runtime.PluginRuntimeHooks
 import com.nuvio.tv.core.sync.StartupSyncService
@@ -73,7 +73,6 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
     override fun newImageLoader(context: android.content.Context): ImageLoader {
         return ImageLoader.Builder(this)
             .components {
-                add(ScrollAwareImageInterceptor())
                 if (Build.VERSION.SDK_INT >= 28) {
                     add(AnimatedImageDecoder.Factory())
                 } else {

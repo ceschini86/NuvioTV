@@ -69,7 +69,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.metrics.performance.PerformanceMetricsState
-import com.nuvio.tv.core.ui.ScrollStateRegistry
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import coil3.request.CachePolicy
