@@ -115,12 +115,23 @@ fun HomeScreen(
     // Stable lambdas — captured via rememberUpdatedState so they never cause
     // downstream recomposition when uiState changes.
     val latestMovieWatchedStatus by rememberUpdatedState(uiState.movieWatchedStatus)
-    val latestPosterOptionsTarget by rememberUpdatedState(posterOptionsTarget)
-    val isCatalogItemWatched: (MetaPreview) -> Boolean = remember(Unit) {
+    val isCatalogItemWatched: (MetaPreview) -> Boolean = remember(latestMovieWatchedStatus) {
         { item -> latestMovieWatchedStatus[homeItemStatusKey(item.id, item.apiType)] == true }
     }
-    val onCatalogItemLongPress: (MetaPreview, String) -> Unit = remember(Unit) {
+    val onCatalogItemLongPress: (MetaPreview, String) -> Unit = remember {
         { item, addonBaseUrl -> posterOptionsTarget = HomePosterOptionsTarget(item, addonBaseUrl) }
+    }
+
+    val onNavigateToDetailStable = remember(onNavigateToDetail) { onNavigateToDetail }
+    val onContinueWatchingClickStable = remember(onContinueWatchingClick) { onContinueWatchingClick }
+    val onContinueWatchingStartFromBeginningStable = remember(onContinueWatchingStartFromBeginning) { onContinueWatchingStartFromBeginning }
+    val onContinueWatchingPlayManuallyStable = remember(onContinueWatchingPlayManually) { onContinueWatchingPlayManually }
+    val onNavigateToCatalogSeeAllStable = remember(onNavigateToCatalogSeeAll) { onNavigateToCatalogSeeAll }
+    val onNavigateToFolderDetailStable = remember(onNavigateToFolderDetail) { onNavigateToFolderDetail }
+    val onRemoveContinueWatchingStable = remember(viewModel) {
+        { contentId: String, season: Int?, episode: Int?, isNextUp: Boolean ->
+            viewModel.onEvent(HomeEvent.OnRemoveContinueWatching(contentId, season, episode, isNextUp))
+        }
     }
 
     LaunchedEffect(
@@ -329,13 +340,13 @@ fun HomeScreen(
                                 viewModel = viewModel,
                                 uiState = uiState,
                                 posterCardStyle = posterCardStyle,
-                                onNavigateToDetail = onNavigateToDetail,
-                                onContinueWatchingClick = onContinueWatchingClick,
-                                onContinueWatchingStartFromBeginning = onContinueWatchingStartFromBeginning,
-                                onContinueWatchingPlayManually = onContinueWatchingPlayManually,
+                                onNavigateToDetail = onNavigateToDetailStable,
+                                onContinueWatchingClick = onContinueWatchingClickStable,
+                                onContinueWatchingStartFromBeginning = onContinueWatchingStartFromBeginningStable,
+                                onContinueWatchingPlayManually = onContinueWatchingPlayManuallyStable,
                                 showContinueWatchingManualPlayOption = effectiveAutoplayEnabled,
-                                onNavigateToCatalogSeeAll = onNavigateToCatalogSeeAll,
-                                onNavigateToFolderDetail = onNavigateToFolderDetail,
+                                onNavigateToCatalogSeeAll = onNavigateToCatalogSeeAllStable,
+                                onNavigateToFolderDetail = onNavigateToFolderDetailStable,
                                 isCatalogItemWatched = isCatalogItemWatched,
                                 onCatalogItemLongPress = onCatalogItemLongPress
                             )
@@ -344,13 +355,13 @@ fun HomeScreen(
                                 viewModel = viewModel,
                                 uiState = uiState,
                                 posterCardStyle = posterCardStyle,
-                                onNavigateToDetail = onNavigateToDetail,
-                                onContinueWatchingClick = onContinueWatchingClick,
-                                onContinueWatchingStartFromBeginning = onContinueWatchingStartFromBeginning,
-                                onContinueWatchingPlayManually = onContinueWatchingPlayManually,
+                                onNavigateToDetail = onNavigateToDetailStable,
+                                onContinueWatchingClick = onContinueWatchingClickStable,
+                                onContinueWatchingStartFromBeginning = onContinueWatchingStartFromBeginningStable,
+                                onContinueWatchingPlayManually = onContinueWatchingPlayManuallyStable,
                                 showContinueWatchingManualPlayOption = effectiveAutoplayEnabled,
-                                onNavigateToCatalogSeeAll = onNavigateToCatalogSeeAll,
-                                onNavigateToFolderDetail = onNavigateToFolderDetail,
+                                onNavigateToCatalogSeeAll = onNavigateToCatalogSeeAllStable,
+                                onNavigateToFolderDetail = onNavigateToFolderDetailStable,
                                 isCatalogItemWatched = isCatalogItemWatched,
                                 onCatalogItemLongPress = onCatalogItemLongPress
                             )
@@ -358,12 +369,12 @@ fun HomeScreen(
                             HomeLayout.MODERN -> ModernHomeRoute(
                                 viewModel = viewModel,
                                 uiState = uiState,
-                                onNavigateToDetail = onNavigateToDetail,
-                                onContinueWatchingClick = onContinueWatchingClick,
-                                onContinueWatchingStartFromBeginning = onContinueWatchingStartFromBeginning,
-                                onContinueWatchingPlayManually = onContinueWatchingPlayManually,
+                                onNavigateToDetail = onNavigateToDetailStable,
+                                onContinueWatchingClick = onContinueWatchingClickStable,
+                                onContinueWatchingStartFromBeginning = onContinueWatchingStartFromBeginningStable,
+                                onContinueWatchingPlayManually = onContinueWatchingPlayManuallyStable,
                                 showContinueWatchingManualPlayOption = effectiveAutoplayEnabled,
-                                onNavigateToFolderDetail = onNavigateToFolderDetail,
+                                onNavigateToFolderDetail = onNavigateToFolderDetailStable,
                                 isCatalogItemWatched = isCatalogItemWatched,
                                 onCatalogItemLongPress = onCatalogItemLongPress
                             )

@@ -115,7 +115,8 @@ fun ModernHomeContent(
 ) {
     val onRowItemFocusedPassedDown = rememberUpdatedState(onRowItemFocusedCallback)
     val defaultBringIntoViewSpec = LocalBringIntoViewSpec.current
-    val isSidebarExpanded = LocalSidebarExpanded.current
+    val sidebarExpanded = LocalSidebarExpanded.current
+    val isSidebarExpanded = remember(sidebarExpanded) { derivedStateOf { sidebarExpanded } }
     val lifecycleOwner = LocalLifecycleOwner.current
     val useLandscapePosters = uiState.modernLandscapePostersEnabled
     val fullScreenBackdrop = uiState.modernHeroFullScreenBackdropEnabled
@@ -596,7 +597,7 @@ fun ModernHomeContent(
         ) {
             derivedStateOf {
                 effectiveAutoplayEnabled &&
-                    !isSidebarExpanded &&
+                    !isSidebarExpanded.value &&
                     !isVerticalRowsScrolling &&
                     trailerPlaybackTarget == FocusedPosterTrailerPlaybackTarget.HERO_MEDIA &&
                     !heroTrailerUrlsState.value.first.isNullOrBlank()
@@ -610,7 +611,7 @@ fun ModernHomeContent(
             isSidebarExpanded
         ) {
             derivedStateOf {
-                !isSidebarExpanded &&
+                !isSidebarExpanded.value &&
                     !isVerticalRowsScrolling &&
                     !collectionHeroVideoUrl.isNullOrBlank() &&
                     collectionHeroVideoPlaybackKey != null &&
