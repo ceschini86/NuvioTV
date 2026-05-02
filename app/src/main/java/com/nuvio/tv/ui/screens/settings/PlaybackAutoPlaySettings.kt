@@ -27,10 +27,12 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -85,6 +87,8 @@ internal fun LazyListScope.autoPlaySettingsItems(
     onSetNextEpisodeThresholdMinutesBeforeEnd: (Float) -> Unit,
     onSetStreamAutoPlayTimeoutSeconds: (Int) -> Unit,
     onSetReuseLastLinkEnabled: (Boolean) -> Unit,
+    onSetStillWatchingEnabled: (Boolean) -> Unit,
+    onSetStillWatchingEpisodeThreshold: (Int) -> Unit,
     onItemFocused: () -> Unit = {}
 ) {
     val effectiveAutoPlaySource = if (
@@ -164,6 +168,37 @@ internal fun LazyListScope.autoPlaySettingsItems(
             onCheckedChange = onSetStreamAutoPlayNextEpisodeEnabled,
             onFocused = onItemFocused
         )
+    }
+
+    if (playerSettings.streamAutoPlayNextEpisodeEnabled) {
+        item(key = "still_watching_enabled") {
+            ToggleSettingsItem(
+                icon = Icons.Default.Visibility,
+                title = stringResource(R.string.still_watching_setting_title),
+                subtitle = stringResource(R.string.still_watching_setting_sub),
+                isChecked = playerSettings.stillWatchingEnabled,
+                onCheckedChange = onSetStillWatchingEnabled,
+                onFocused = onItemFocused
+            )
+        }
+
+        if (playerSettings.stillWatchingEnabled) {
+            item(key = "still_watching_threshold") {
+                val threshold = playerSettings.stillWatchingEpisodeThreshold
+                SliderSettingsItem(
+                    icon = Icons.Default.Repeat,
+                    title = stringResource(R.string.still_watching_threshold_title),
+                    subtitle = stringResource(R.string.still_watching_threshold_sub),
+                    value = threshold,
+                    valueText = "$threshold",
+                    minValue = 2,
+                    maxValue = 5,
+                    step = 1,
+                    onValueChange = { onSetStillWatchingEpisodeThreshold(it) },
+                    onFocused = onItemFocused
+                )
+            }
+        }
     }
 
     item(key = "autoplay_next_episode_prefer_binge_group") {

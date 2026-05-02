@@ -129,6 +129,8 @@ internal fun PlaybackSettingsSections(
     onSetNextEpisodeThresholdMinutesBeforeEnd: (Float) -> Unit,
     onSetStreamAutoPlayTimeoutSeconds: (Int) -> Unit,
     onSetReuseLastLinkEnabled: (Boolean) -> Unit,
+    onSetStillWatchingEnabled: (Boolean) -> Unit,
+    onSetStillWatchingEpisodeThreshold: (Int) -> Unit,
     onSetShowPlayerLoadingStatus: (Boolean) -> Unit,
     onSetLoadingOverlayEnabled: (Boolean) -> Unit,
     onSetPauseOverlayEnabled: (Boolean) -> Unit,
@@ -492,6 +494,8 @@ internal fun PlaybackSettingsSections(
                 onSetNextEpisodeThresholdMinutesBeforeEnd = onSetNextEpisodeThresholdMinutesBeforeEnd,
                 onSetStreamAutoPlayTimeoutSeconds = onSetStreamAutoPlayTimeoutSeconds,
                 onSetReuseLastLinkEnabled = onSetReuseLastLinkEnabled,
+                onSetStillWatchingEnabled = onSetStillWatchingEnabled,
+                onSetStillWatchingEpisodeThreshold = onSetStillWatchingEpisodeThreshold,
                 onItemFocused = { focusedSection = PlaybackSection.STREAM_SELECTION }
             )
 
