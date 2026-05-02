@@ -470,6 +470,24 @@ class WatchProgressRepositoryImpl @Inject constructor(
         return optimisticContinueWatchingUpdates
     }
 
+    override suspend fun remapEpisodeSeed(progress: WatchProgress): WatchProgress {
+        val s = progress.season ?: return progress
+        val e = progress.episode ?: return progress
+        return traktProgressService.remapEpisodeSeedToAddon(
+            contentId = progress.contentId,
+            contentType = progress.contentType,
+            season = s,
+            episode = e,
+            episodeTitle = progress.episodeTitle
+        )?.let { remapped ->
+            progress.copy(
+                season = remapped.season,
+                episode = remapped.episode,
+                videoId = remapped.videoId ?: progress.videoId
+            )
+        } ?: progress
+    }
+
     @OptIn(FlowPreview::class)
     override fun observeWatchedMovieIds(): Flow<Set<String>> {
         return useTraktProgressFlow()

@@ -440,6 +440,9 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
 
                 debug.markPhase("render-in-progress")
                 // Render in-progress items + cached next-up immediately
+                val currentSeedByContentId = nextUpSeeds
+                    .filter { it.season != null && it.episode != null }
+                    .associateBy({ it.contentId }, { (it.season!! to it.episode!!) })
                 val cachedNextUpItems = cachedNextUp.mapNotNull { cached ->
                     // Skip if this show is already in-progress (suppression)
                     if (inProgressOnly.any { it.progress.contentId == cached.contentId }) return@mapNotNull null
@@ -450,6 +453,13 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                     // Drop if the series no longer has any watched-episode seeds
                     // (e.g. user unmarked all episodes as watched).
                     if (!seedsNotYetLoaded && cached.contentId !in activeSeedContentIds) return@mapNotNull null
+                    val currentSeed = currentSeedByContentId[cached.contentId]
+                    if (currentSeed != null && cached.seedSeason != null && cached.seedEpisode != null) {
+                        val (curSeason, curEpisode) = currentSeed
+                        val seedAdvanced = curSeason > cached.seedSeason ||
+                            (curSeason == cached.seedSeason && curEpisode > cached.seedEpisode)
+                        if (seedAdvanced) return@mapNotNull null
+                    }
                     ContinueWatchingItem.NextUp(
                         info = NextUpInfo(
                             contentId = cached.contentId,
@@ -954,6 +964,7 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                 val freshContentIds = allNextUpItems.map { it.info.contentId }.toSet()
                 val retainedFromCache = cachedNextUpItems.filter {
                     it.info.contentId !in freshContentIds &&
+                        it.info.contentId !in rejectedByFreshPipeline &&
                         nextUpDismissKey(it.info.contentId, it.info.seedSeason, it.info.seedEpisode) !in dismissedNextUp
                 }
                 val finalNextUpItems = allNextUpItems + retainedFromCache
@@ -1342,8 +1353,11 @@ private suspend fun HomeViewModel.buildLightweightNextUpItems(
         launch(Dispatchers.IO) {
             lookupSemaphore.withPermit {
                 processedContentIds.add(progress.contentId)
+                // Remap seed from Trakt numbering to addon numbering (for anime).
+                // Done here (after filters) so only ~5-10 seeds are remapped, not all 189.
+                val remappedProgress = watchProgressRepository.remapEpisodeSeed(progress)
                 val nextUp = buildNextUpItem(
-                    progress = progress,
+                    progress = remappedProgress,
                     showUnairedNextUp = showUnairedNextUp,
                     debug = debug
                 ) ?: run {
@@ -1987,7 +2001,7 @@ private suspend fun HomeViewModel.resolveMetaForProgress(
             for (candidateId in idCandidates) {
                 attempts += 1
                 val attemptStartedAtMs = SystemClock.elapsedRealtime()
-                val result = withTimeoutOrNull(2_500L) {
+                val result = withTimeoutOrNull(6_000L) {
                     if (useAllAddons) {
                         metaRepository.getMetaFromAllAddons(
                             type = type,

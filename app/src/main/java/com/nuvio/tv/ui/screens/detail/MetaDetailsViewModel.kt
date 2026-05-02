@@ -698,12 +698,22 @@ class MetaDetailsViewModel @Inject constructor(
         val episodesForSeason = getEpisodesForSeason(meta.videos, selectedSeason)
 
         _uiState.update {
+            // If nextToWatch already set a season (from pre-computed remap), prefer it
+            // over the default season selection.
+            val effectiveSeason = it.nextToWatch?.nextSeason
+                ?.takeIf { s -> s in seasons }
+                ?: selectedSeason
+            val effectiveEpisodes = if (effectiveSeason != selectedSeason) {
+                getEpisodesForSeason(meta.videos, effectiveSeason)
+            } else {
+                episodesForSeason
+            }
             it.copy(
                 isLoading = false,
                 meta = meta,
                 seasons = seasons,
-                selectedSeason = selectedSeason,
-                episodesForSeason = episodesForSeason,
+                selectedSeason = effectiveSeason,
+                episodesForSeason = effectiveEpisodes,
                 error = null,
                 commentsEpisodeTarget = null,
                 shouldShowCommentsSection = traktCommentsEnabled && traktAuthenticated && supportsComments(meta)
@@ -1576,6 +1586,11 @@ class MetaDetailsViewModel @Inject constructor(
         val defaultEpisode = findPreferredDefaultEpisode(meta)?.takeIf { preferred ->
             episodePool.any { it.id == preferred.id }
         }
+
+        Log.d("NextToWatch", "computeNextToWatch: contentId=${meta.id} " +
+            "progressMap=${progressMap.size} watchedEpisodes=${watchedEpisodes.size} " +
+            "latestProgress=S${effectiveLatestProgress?.season}E${effectiveLatestProgress?.episode} " +
+            "episodePool=${episodePool.size} defaultEpisode=S${defaultEpisode?.season}E${defaultEpisode?.episode}")
 
         return buildNextToWatchFromLatestProgress(
             latestProgress = effectiveLatestProgress,

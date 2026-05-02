@@ -1319,9 +1319,9 @@ class TraktProgressService @Inject constructor(
             }
             .maxWithOrNull(
                 compareBy<Triple<Int, Int, Long>>(
+                    { it.third },
                     { it.first },
-                    { it.second },
-                    { it.third }
+                    { it.second }
                 )
             ) ?: return null
 
@@ -1733,6 +1733,7 @@ class TraktProgressService @Inject constructor(
         }
         val resolvedSeason = resolvedEpisode?.season ?: season
         val resolvedNumber = resolvedEpisode?.episode ?: number
+        Log.d(TAG, "mapEpisodeHistoryItem: contentId=$contentId trakt=S${season}E${number} title=${episode.title} -> addon=S${resolvedSeason}E${resolvedNumber} (remapped=${resolvedEpisode != null})")
         val videoId = resolveEpisodeVideoId(contentId, resolvedSeason, resolvedNumber)
 
         return WatchProgress(
@@ -1966,6 +1967,16 @@ class TraktProgressService @Inject constructor(
                     source = WatchProgress.SOURCE_TRAKT_SHOW_PROGRESS
                 )
             }
+    }
+
+    internal suspend fun remapEpisodeSeedToAddon(
+        contentId: String,
+        contentType: String,
+        season: Int,
+        episode: Int,
+        episodeTitle: String?
+    ): EpisodeMappingEntry? {
+        return resolveAddonEpisodeProgress(contentId, season, episode, episodeTitle)
     }
 
     private suspend fun resolveAddonEpisodeProgress(
