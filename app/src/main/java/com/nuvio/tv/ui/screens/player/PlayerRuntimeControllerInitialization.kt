@@ -338,6 +338,7 @@ internal fun PlayerRuntimeController.initializePlayer(
                     if (canAdvertiseSession()) {
                         currentMediaSession = MediaSession.Builder(context, this).build()
                     }
+                    updateMediaSessionMetadata()
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
@@ -361,7 +362,8 @@ internal fun PlayerRuntimeController.initializePlayer(
                         filename = currentFilename,
                         responseHeaders = currentStreamResponseHeaders,
                         mimeTypeOverride = currentStreamMimeType,
-                        audioDelayUsProvider = audioDelayUs::get
+                        audioDelayUsProvider = audioDelayUs::get,
+                        mediaMetadata = buildMediaSessionMetadata()
                     )
                 )
                 if (showLoadingStatus) _uiState.update { it.copy(loadingMessage = context.getString(R.string.player_loading_starting)) }

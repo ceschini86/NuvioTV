@@ -70,11 +70,16 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.CachePolicy
 import coil3.request.crossfade
-import com.nuvio.tv.ui.util.rememberScrollAwareReloadNonce
 import com.nuvio.tv.ui.util.recompositionHighlighter
 import com.nuvio.tv.ui.screens.home.LocalFastScrollActive
 import com.nuvio.tv.ui.theme.ThemeColors
 import kotlinx.coroutines.delay
+
+/**
+ * When true, vertical scrolling is in progress and image loading should be
+ * restricted to memory cache only (no disk / network) to keep the scroll smooth.
+ */
+val LocalVerticalScrollSuppressImages = androidx.compose.runtime.compositionLocalOf { false }
 
 
 private const val BACKDROP_ASPECT_RATIO = 16f / 9f
@@ -240,14 +245,12 @@ fun ContentCard(
             with(density) { baseCardHeight.roundToPx() }
         }
 
-        val reloadNonce = rememberScrollAwareReloadNonce()
-
         val imageUrl = if (focusedPosterBackdropExpandEnabled && isBackdropExpanded) {
             item.backdropUrl ?: item.poster
         } else {
             item.poster
         }
-        val imageModel = remember(imageUrl, requestWidthPx, requestHeightPx, reloadNonce) {
+        val imageModel = remember(imageUrl, requestWidthPx, requestHeightPx) {
             ImageRequest.Builder(context)
                 .data(imageUrl)
                 .crossfade(true)
@@ -255,10 +258,25 @@ fun ContentCard(
                 .size(width = requestWidthPx, height = requestHeightPx)
                 .build()
         }
+        // Coil 3's skippable AsyncImage makes the memory-only-during-scroll hack incompatible.
+        val isSuppressingImages = LocalVerticalScrollSuppressImages.current
+        val scrollAwareImageModel = if (!isSuppressingImages || imageModel == null) {
+            imageModel
+        } else {
+            remember(imageModel) {
+                (imageModel as? ImageRequest)?.newBuilder()
+                    ?.memoryCachePolicy(CachePolicy.ENABLED)
+                    ?.diskCachePolicy(CachePolicy.DISABLED)
+                    ?.networkCachePolicy(CachePolicy.DISABLED)
+                    ?.build()
+                    ?: imageModel
+            }
+        }
+        val scrollPhaseKey = isSuppressingImages
         val logoRequestHeightPx = remember(density) {
             with(density) { 48.dp.roundToPx() }
         }
-        val logoModel = remember(item.logo, requestWidthPx, logoRequestHeightPx, reloadNonce) {
+        val logoModel = remember(item.logo, requestWidthPx, logoRequestHeightPx) {
             item.logo?.let { logoUrl ->
                 ImageRequest.Builder(context)
                     .data(logoUrl)
@@ -377,9 +395,9 @@ fun ContentCard(
                             )
                     )
                 } else if (!imageUrl.isNullOrBlank()) {
-                    key(reloadNonce) {
+                    key(scrollPhaseKey) {
                         AsyncImage(
-                            model = imageModel,
+                            model = scrollAwareImageModel,
                             contentDescription = item.name,
                             modifier = Modifier.fillMaxSize(),
                             placeholder = backgroundPainter,
@@ -500,7 +518,7 @@ fun ContentCard(
                             .padding(end = 8.dp, top = 8.dp)
                             .zIndex(2f)
                             .size(21.dp)
-                            .shadow(10.dp, shape = CircleShape)
+                            .shadow(10.dp, shape = CircleShape, spotColor = Color.Transparent)
                             .background(NuvioColors.Secondary, CircleShape)
                     ) {
                         Icon(

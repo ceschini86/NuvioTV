@@ -41,7 +41,32 @@ import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.metrics.performance.PerformanceMetricsState
-import com.nuvio.tv.core.ui.ScrollStateRegistry
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import coil3.request.CachePolicy
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
+import com.nuvio.tv.R
+import androidx.tv.material3.Border
+import androidx.tv.material3.Card
+import androidx.tv.material3.CardDefaults
+import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.Icon
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import coil3.compose.AsyncImage
+import coil3.imageLoader
+import coil3.memory.MemoryCache
+import coil3.request.ImageRequest
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import com.nuvio.tv.domain.model.FocusedPosterTrailerPlaybackTarget
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.ui.components.LoadingIndicator
@@ -50,10 +75,8 @@ import com.nuvio.tv.LocalSidebarExpanded
 import com.nuvio.tv.LocalContentFocusRequester
 import com.nuvio.tv.ui.theme.NuvioColors
 import com.nuvio.tv.ui.util.asStable
-import com.nuvio.tv.ui.util.ScrollStateRegistrySync
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.tv.material3.MaterialTheme
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -648,22 +671,12 @@ fun ModernHomeContent(
             }
         }
         var stableHeroSceneState by remember { mutableStateOf(liveHeroSceneState.value) }
-        var isScrollingForHeroState by remember { mutableStateOf(false) }
-        LaunchedEffect(Unit) {
-            snapshotFlow { ScrollStateRegistry.isScrolling }
-                .distinctUntilChanged()
-                .collect { scrolling ->
-                    if (scrolling) delay(64)
-                    isScrollingForHeroState = scrolling
-                }
-        }
-
-        LaunchedEffect(liveHeroSceneState.value, isScrollingForHeroState) {
-            if (!isScrollingForHeroState || stableHeroSceneState.preview == null) {
+        LaunchedEffect(liveHeroSceneState, isVerticalRowsScrolling) {
+            if (!isVerticalRowsScrolling || stableHeroSceneState.preview == null) {
                 stableHeroSceneState = liveHeroSceneState.value
             }
         }
-        val heroSceneState = if (isScrollingForHeroState) stableHeroSceneState else liveHeroSceneState.value
+        val heroSceneState = if (isVerticalRowsScrolling) stableHeroSceneState else liveHeroSceneState.value
 
         LaunchedEffect(heroSceneState.heroBackdrop) {
             HeroBackdropState.update(heroSceneState.heroBackdrop)
