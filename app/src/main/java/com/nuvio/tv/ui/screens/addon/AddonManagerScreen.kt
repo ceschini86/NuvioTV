@@ -72,6 +72,7 @@ import androidx.compose.ui.window.PopupProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.tv.material3.Border
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
@@ -613,7 +614,7 @@ private fun CatalogOrderEntryCard(onClick: () -> Unit) {
                 }
             }
             Icon(
-                imageVector = Icons.Default.ArrowForward,
+                imageVector = Icons.Default.ChevronRight,
                 contentDescription = null,
                 modifier = Modifier.size(20.dp),
                 tint = NuvioColors.TextSecondary
@@ -674,7 +675,7 @@ private fun CollectionsEntryCard(onClick: () -> Unit) {
                 }
             }
             Icon(
-                imageVector = Icons.Default.ArrowForward,
+                imageVector = Icons.Default.ChevronRight,
                 contentDescription = null,
                 modifier = Modifier.size(20.dp),
                 tint = NuvioColors.TextSecondary
