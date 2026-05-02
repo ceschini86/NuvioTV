@@ -102,10 +102,8 @@ import com.nuvio.tv.ui.components.placeholderCardShimmer
 import com.nuvio.tv.ui.components.rememberArtworkBackedCardGlow
 import com.nuvio.tv.ui.components.rememberPlaceholderShimmerOffsetState
 import com.nuvio.tv.LocalSidebarExpanded
-import com.nuvio.tv.core.ui.ScrollStateRegistry
 import com.nuvio.tv.ui.theme.NuvioColors
 import com.nuvio.tv.ui.theme.ThemeColors
-import com.nuvio.tv.ui.util.ScrollStateRegistrySync
 import kotlin.math.abs
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
@@ -351,6 +349,7 @@ private fun ModernCatalogRowItem(
 internal fun ModernRowSection(
     row: HeroCarouselRow,
     isActiveRow: () -> Boolean,
+    isVerticalRowsScrolling: Boolean,
     rowTitleBottom: Dp,
     defaultBringIntoViewSpec: BringIntoViewSpec,
     focusStateCatalogRowScrollIndex: Int,
@@ -431,7 +430,6 @@ internal fun ModernRowSection(
                 prefetchStrategy = LazyListPrefetchStrategy(nestedPrefetchItemCount = 4)
             )
         }
-        ScrollStateRegistrySync(rowListState)
 
         // When fresh data prepends new items to a row the user hasn't
         // scrolled, snap back to position 0 so the newest content is visible.
@@ -595,6 +593,7 @@ internal fun ModernRowSection(
         LaunchedEffect(
             row.key,
             isActiveRow,
+            isVerticalRowsScrolling,
             rowItemCount,
             portraitCatalogCardWidth,
             portraitCatalogCardHeight,
@@ -603,7 +602,7 @@ internal fun ModernRowSection(
             continueWatchingCardWidth,
             continueWatchingCardHeight
         ) {
-            if (!isActiveRow() || ScrollStateRegistry.isScrolling) return@LaunchedEffect
+            if (!isActiveRow() || isVerticalRowsScrolling) return@LaunchedEffect
             delay(150) // Wait before spamming image requests to survive rapid vertical D-pad scrolls!
             val cwWidthPx = with(density) { continueWatchingCardWidth.roundToPx() }
             val cwHeightPx = with(density) { continueWatchingCardHeight.roundToPx() }

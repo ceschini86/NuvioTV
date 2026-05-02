@@ -74,7 +74,6 @@ import coil3.request.transformations
 import coil3.request.crossfade
 import kotlin.math.roundToInt
 import java.util.concurrent.TimeUnit
-import com.nuvio.tv.ui.util.rememberScrollAwareReloadNonce
 import com.nuvio.tv.ui.util.recompositionHighlighter
 import com.nuvio.tv.ui.util.localizeEpisodeTitle
 
@@ -364,7 +363,6 @@ fun ContinueWatchingCard(
     // Reset fallback state when the item changes
     LaunchedEffect(imageModel) { usesFallbackImage = false }
 
-    val reloadNonce = rememberScrollAwareReloadNonce()
     val effectiveImageModel = if (usesFallbackImage) fallbackImageModel else imageModel
     val titleText = remember(progress, nextUp) { progress?.name ?: nextUp?.name.orEmpty() }
     val context = LocalContext.current
@@ -384,7 +382,7 @@ fun ContinueWatchingCard(
         with(density) { imageHeight.roundToPx() }
     }
     val shouldBlur = blurUnwatchedEpisodes && nextUp != null
-    val imageRequest = remember(effectiveImageModel, requestWidthPx, requestHeightPx, shouldBlur, reloadNonce) {
+    val imageRequest = remember(effectiveImageModel, requestWidthPx, requestHeightPx, shouldBlur) {
         ImageRequest.Builder(context)
             .data(effectiveImageModel)
             .crossfade(true)

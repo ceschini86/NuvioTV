@@ -840,6 +840,7 @@ fun ModernHomeContent(
             focusedHeroMediaNonce = focusedHeroMediaNonce,
             onFocusedHeroMediaNonceChange = onFocusedHeroMediaNonceChangeLambda,
             onExpansionInteractionNonceChange = onExpansionInteractionNonceChangeLambda,
+            isVerticalRowsScrolling = isVerticalRowsScrolling,
             modifier = Modifier.align(Alignment.BottomStart)
         )
     }

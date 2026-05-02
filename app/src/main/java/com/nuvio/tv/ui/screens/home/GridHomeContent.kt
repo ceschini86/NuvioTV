@@ -38,7 +38,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import com.nuvio.tv.ui.util.ScrollStateRegistrySync
 import com.nuvio.tv.ui.util.dpadRepeatThrottle
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -98,7 +97,6 @@ fun GridHomeContent(
         initialFirstVisibleItemIndex = gridFocusState.verticalScrollIndex,
         initialFirstVisibleItemScrollOffset = gridFocusState.verticalScrollOffset
     )
-    ScrollStateRegistrySync(gridState)
     val focusRequesters = remember { mutableMapOf<String, FocusRequester>() }
     var lastFocusedGridItemKey by remember { mutableStateOf(gridFocusState.focusedItemKey) }
 

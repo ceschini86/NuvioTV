@@ -67,7 +67,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
-import com.nuvio.tv.ui.util.ScrollStateRegistrySync
 import com.nuvio.tv.ui.util.recompositionHighlighter
 import com.nuvio.tv.ui.util.dpadRepeatThrottle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -516,7 +515,6 @@ fun SearchScreen(
             }
         } else {
             val listState = rememberLazyListState()
-            ScrollStateRegistrySync(listState)
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()

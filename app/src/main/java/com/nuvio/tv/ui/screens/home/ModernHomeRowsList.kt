@@ -41,7 +41,6 @@ import coil3.memory.MemoryCache
 import coil3.request.ImageRequest
 import com.nuvio.tv.domain.model.FocusedPosterTrailerPlaybackTarget
 import com.nuvio.tv.domain.model.MetaPreview
-import com.nuvio.tv.ui.util.ScrollStateRegistrySync
 import com.nuvio.tv.ui.util.StableList
 import com.nuvio.tv.ui.util.StableMap
 import com.nuvio.tv.ui.util.dpadVerticalFastScroll
@@ -60,6 +59,7 @@ import kotlinx.coroutines.withContext
 )
 @Composable
 internal fun ModernHomeRowsList(
+    isVerticalRowsScrolling: Boolean,
     carouselRows: StableList<HeroCarouselRow>,
     verticalRowListState: LazyListState,
     uiCaches: ModernHomeUiCaches,
@@ -127,8 +127,6 @@ internal fun ModernHomeRowsList(
     val density = LocalDensity.current
     val context = LocalContext.current
     val verticalPrefetchImageLoader = context.imageLoader
-
-    ScrollStateRegistrySync(verticalRowListState)
 
     LaunchedEffect(verticalPrefetchImageLoader, density) {
         val prefetchAheadRows = 3
@@ -357,7 +355,8 @@ internal fun ModernHomeRowsList(
                     onNavigateToFolderDetail = onNavigateToFolderDetail,
                     onLoadMoreCatalog = onLoadMoreCatalog,
                     onBackdropInteraction = onBackdropInteraction,
-                    onExpandedCatalogFocusKeyChange = onExpandedCatalogFocusKeyChange
+                    onExpandedCatalogFocusKeyChange = onExpandedCatalogFocusKeyChange,
+                    isVerticalRowsScrolling = isVerticalRowsScrolling
                 )
             }
         }
