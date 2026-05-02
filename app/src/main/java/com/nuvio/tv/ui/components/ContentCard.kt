@@ -70,17 +70,12 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.CachePolicy
 import coil3.request.crossfade
-import com.nuvio.tv.core.ui.ScrollStateRegistry
-import androidx.compose.runtime.snapshotFlow
+import com.nuvio.tv.ui.util.rememberScrollAwareReloadNonce
+import com.nuvio.tv.ui.util.recompositionHighlighter
 import com.nuvio.tv.ui.screens.home.LocalFastScrollActive
 import com.nuvio.tv.ui.theme.ThemeColors
 import kotlinx.coroutines.delay
 
-/**
- * When true, vertical scrolling is in progress and image loading should be
- * restricted to memory cache only (no disk / network) to keep the scroll smooth.
- */
-val LocalVerticalScrollSuppressImages = androidx.compose.runtime.compositionLocalOf { false }
 
 private const val BACKDROP_ASPECT_RATIO = 16f / 9f
 private const val TRAILER_PREVIEW_REQUEST_FOCUS_DEBOUNCE_MS = 140L
@@ -218,7 +213,7 @@ fun ContentCard(
                         }
                     }
                     ?.let { add(it) }
-                item.imdbRating?.let { add(String.format("%.1f", it)) }
+                item.imdbRating?.let { add(String.format(java.util.Locale.US, "%.1f", it)) }
             }
         }
     } else {
@@ -226,7 +221,9 @@ fun ContentCard(
     }
 
     Column(
-        modifier = modifier.width(animatedCardWidth)
+        modifier = modifier
+            .width(animatedCardWidth)
+            .recompositionHighlighter()
     ) {
         val context = LocalContext.current
         val density = LocalDensity.current
@@ -243,15 +240,7 @@ fun ContentCard(
             with(density) { baseCardHeight.roundToPx() }
         }
 
-        var reloadNonce by remember { mutableIntStateOf(0) }
-        LaunchedEffect(Unit) {
-            snapshotFlow { ScrollStateRegistry.isScrolling }
-                .collect { scrolling ->
-                    if (!scrolling) {
-                        reloadNonce++
-                    }
-                }
-        }
+        val reloadNonce = rememberScrollAwareReloadNonce()
 
         val imageUrl = if (focusedPosterBackdropExpandEnabled && isBackdropExpanded) {
             item.backdropUrl ?: item.poster
@@ -581,9 +570,8 @@ fun ContentCard(
 }
 
 private fun shouldResetBackdropTimer(nativeEvent: AndroidKeyEvent): Boolean {
-    if (nativeEvent.action != AndroidKeyEvent.ACTION_DOWN) return false
-
-    return when (nativeEvent.keyCode) {
+    val key = nativeEvent.keyCode
+    return when (key) {
         AndroidKeyEvent.KEYCODE_DPAD_UP,
         AndroidKeyEvent.KEYCODE_DPAD_DOWN,
         AndroidKeyEvent.KEYCODE_DPAD_LEFT,

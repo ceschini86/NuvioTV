@@ -332,6 +332,18 @@ fun AdvancedSettingsContent(
                         )
                     }
                 )
+                SettingsToggleRow(
+                    title = stringResource(R.string.advanced_compose_highlighter),
+                    subtitle = stringResource(R.string.advanced_compose_highlighter_subtitle),
+                    checked = uiState.composeHighlighterEnabled,
+                    onToggle = {
+                        viewModel.onEvent(
+                            AdvancedSettingsEvent.SetComposeHighlighterEnabled(
+                                !uiState.composeHighlighterEnabled
+                            )
+                        )
+                    }
+                )
                 val profileManager = remember {
                     dagger.hilt.android.EntryPointAccessors.fromApplication(
                         context.applicationContext,

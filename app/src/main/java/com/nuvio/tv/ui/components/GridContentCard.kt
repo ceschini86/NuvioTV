@@ -49,6 +49,8 @@ import androidx.tv.material3.Text
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.ui.theme.NuvioColors
 import androidx.compose.ui.platform.LocalContext
+import com.nuvio.tv.ui.util.rememberScrollAwareReloadNonce
+import com.nuvio.tv.ui.util.recompositionHighlighter
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
@@ -76,10 +78,13 @@ fun GridContentCard(
     val requestHeightPx = remember(density, posterCardStyle.height) { with(density) { posterCardStyle.height.roundToPx() } }
     var isFocused by remember { mutableStateOf(false) }
     var longPressTriggered by remember { mutableStateOf(false) }
+    val reloadNonce = rememberScrollAwareReloadNonce()
 
 
     Column(
-        modifier = modifier.width(posterCardStyle.width)
+        modifier = modifier
+            .width(posterCardStyle.width)
+            .recompositionHighlighter()
     ) {
         Card(
             onClick = {
@@ -159,7 +164,7 @@ fun GridContentCard(
                 val context = LocalContext.current
                 val bgCardColor = NuvioColors.BackgroundCard
                 val bgPainter = remember(bgCardColor) { androidx.compose.ui.graphics.painter.ColorPainter(bgCardColor) }
-                val imageModel = remember(item.poster, requestWidthPx, requestHeightPx) {
+                val imageModel = remember(item.poster, requestWidthPx, requestHeightPx, reloadNonce) {
                     ImageRequest.Builder(context)
                         .data(item.poster)
                         .crossfade(imageCrossfade)

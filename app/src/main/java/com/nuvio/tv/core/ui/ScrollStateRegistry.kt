@@ -1,19 +1,34 @@
 package com.nuvio.tv.core.ui
 
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 
 /**
  * A global singleton to track the scrolling state of the application.
- * This allows performance-critical components like image loaders to
- * adjust their behavior (e.g., memory-only loads) without being part
- * of the Compose composition tree, avoiding expensive recompositions.
+ * Uses a reference counter to handle multiple simultaneous scrollable containers
+ * (e.g., vertical list + horizontal rows) without state fighting.
  */
 object ScrollStateRegistry {
+    private var activeScrollCount by mutableIntStateOf(0)
+
     /**
-     * True if any primary scrollable container (like the home grid) is currently scrolling.
-     * Uses Compose State so it can be observed in leaf-level LaunchEffects for zero-jank reloads.
+     * True if any primary scrollable container is currently scrolling.
      */
-    var isScrolling by mutableStateOf(false)
+    val isScrolling by derivedStateOf { activeScrollCount > 0 }
+
+    /**
+     * Reports that a container has started scrolling.
+     */
+    fun reportScrollStarted() {
+        activeScrollCount++
+    }
+
+    /**
+     * Reports that a container has stopped scrolling.
+     */
+    fun reportScrollStopped() {
+        activeScrollCount = (activeScrollCount - 1).coerceAtLeast(0)
+    }
 }

@@ -58,6 +58,7 @@ import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import com.nuvio.tv.ui.util.rememberScrollAwareReloadNonce
 import coil3.compose.AsyncImage
 import com.nuvio.tv.domain.model.Collection
 import com.nuvio.tv.domain.model.CollectionFolder
@@ -226,6 +227,8 @@ private fun FolderCard(
         enabled = collection.focusGlowEnabled
     )
 
+    val reloadNonce = rememberScrollAwareReloadNonce()
+
     Card(
         onClick = onClick,
         modifier = modifier
@@ -253,8 +256,15 @@ private fun FolderCard(
         Box(modifier = Modifier.fillMaxSize()) {
             val activeImageUrl = collectionFolderCardImageUrl(folder, isFocused)
             if (!activeImageUrl.isNullOrBlank()) {
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val request = remember(activeImageUrl, reloadNonce) {
+                    coil3.request.ImageRequest.Builder(context)
+                        .data(activeImageUrl)
+                        .memoryCacheKey("${activeImageUrl}_folder")
+                        .build()
+                }
                 AsyncImage(
-                    model = activeImageUrl,
+                    model = request,
                     contentDescription = folder.title,
                     modifier = Modifier
                         .fillMaxSize()
