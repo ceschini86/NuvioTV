@@ -73,6 +73,7 @@ class TraktProgressService @Inject constructor(
     private val metaRepository: MetaRepository,
     private val tmdbService: com.nuvio.tv.core.tmdb.TmdbService,
     private val traktSettingsDataStore: TraktSettingsDataStore,
+    private val layoutPreferenceDataStore: com.nuvio.tv.data.local.LayoutPreferenceDataStore,
     private val traktEpisodeMappingService: TraktEpisodeMappingService,
     private val profileManager: ProfileManager
 ) {
@@ -1222,7 +1223,7 @@ class TraktProgressService @Inject constructor(
             }
 
             val items = response.body().orEmpty()
-            val useFurthestEpisode = traktSettingsDataStore.nextUpFromFurthestEpisode.first()
+            val useFurthestEpisode = layoutPreferenceDataStore.nextUpFromFurthestEpisode.first()
             val watchedShowSeeds = items
                 .mapNotNull { mapWatchedShowSeed(it, useFurthestEpisode) }
                 .sortedByDescending { it.lastWatched }

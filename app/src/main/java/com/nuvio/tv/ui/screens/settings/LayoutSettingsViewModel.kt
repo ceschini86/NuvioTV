@@ -44,11 +44,13 @@ data class LayoutSettingsUiState(
     val posterCardCornerRadiusDp: Int = 12,
     val blurUnwatchedEpisodes: Boolean = false,
     val blurContinueWatchingNextUp: Boolean = false,
+    val useEpisodeThumbnailsInCw: Boolean = true,
     val detailPageTrailerButtonEnabled: Boolean = false,
     val preferExternalMetaAddonDetail: Boolean = false,
     val hideUnreleasedContent: Boolean = false,
     val showFullReleaseDate: Boolean = true,
-    val nextUpFromFurthestEpisode: Boolean = true
+    val nextUpFromFurthestEpisode: Boolean = true,
+    val showUnairedNextUp: Boolean = true
 )
 
 data class CatalogInfo(
@@ -82,11 +84,13 @@ sealed class LayoutSettingsEvent {
     data class SetPosterCardCornerRadius(val cornerRadiusDp: Int) : LayoutSettingsEvent()
     data class SetBlurUnwatchedEpisodes(val enabled: Boolean) : LayoutSettingsEvent()
     data class SetBlurContinueWatchingNextUp(val enabled: Boolean) : LayoutSettingsEvent()
+    data class SetUseEpisodeThumbnailsInCw(val enabled: Boolean) : LayoutSettingsEvent()
     data class SetDetailPageTrailerButtonEnabled(val enabled: Boolean) : LayoutSettingsEvent()
     data class SetPreferExternalMetaAddonDetail(val enabled: Boolean) : LayoutSettingsEvent()
     data class SetHideUnreleasedContent(val enabled: Boolean) : LayoutSettingsEvent()
     data class SetShowFullReleaseDate(val enabled: Boolean) : LayoutSettingsEvent()
     data class SetNextUpFromFurthestEpisode(val enabled: Boolean) : LayoutSettingsEvent()
+    data class SetShowUnairedNextUp(val enabled: Boolean) : LayoutSettingsEvent()
     data object ResetPosterCardStyle : LayoutSettingsEvent()
 }
 
@@ -232,6 +236,11 @@ class LayoutSettingsViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
+            layoutPreferenceDataStore.useEpisodeThumbnailsInCw.distinctUntilChanged().collectLatest { enabled ->
+                updateUiStateIfChanged { it.copy(useEpisodeThumbnailsInCw = enabled) }
+            }
+        }
+        viewModelScope.launch {
             layoutPreferenceDataStore.detailPageTrailerButtonEnabled.distinctUntilChanged().collectLatest { enabled ->
                 updateUiStateIfChanged { it.copy(detailPageTrailerButtonEnabled = enabled) }
             }
@@ -252,8 +261,13 @@ class LayoutSettingsViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            traktSettingsDataStore.nextUpFromFurthestEpisode.distinctUntilChanged().collectLatest { enabled ->
+            layoutPreferenceDataStore.nextUpFromFurthestEpisode.distinctUntilChanged().collectLatest { enabled ->
                 updateUiStateIfChanged { it.copy(nextUpFromFurthestEpisode = enabled) }
+            }
+        }
+        viewModelScope.launch {
+            layoutPreferenceDataStore.showUnairedNextUp.distinctUntilChanged().collectLatest { enabled ->
+                updateUiStateIfChanged { it.copy(showUnairedNextUp = enabled) }
             }
         }
         loadAvailableCatalogs()
@@ -284,11 +298,13 @@ class LayoutSettingsViewModel @Inject constructor(
             is LayoutSettingsEvent.SetPosterCardCornerRadius -> setPosterCardCornerRadius(event.cornerRadiusDp)
             is LayoutSettingsEvent.SetBlurUnwatchedEpisodes -> setBlurUnwatchedEpisodes(event.enabled)
             is LayoutSettingsEvent.SetBlurContinueWatchingNextUp -> setBlurContinueWatchingNextUp(event.enabled)
+            is LayoutSettingsEvent.SetUseEpisodeThumbnailsInCw -> setUseEpisodeThumbnailsInCw(event.enabled)
             is LayoutSettingsEvent.SetDetailPageTrailerButtonEnabled -> setDetailPageTrailerButtonEnabled(event.enabled)
             is LayoutSettingsEvent.SetPreferExternalMetaAddonDetail -> setPreferExternalMetaAddonDetail(event.enabled)
             is LayoutSettingsEvent.SetHideUnreleasedContent -> setHideUnreleasedContent(event.enabled)
             is LayoutSettingsEvent.SetShowFullReleaseDate -> setShowFullReleaseDate(event.enabled)
             is LayoutSettingsEvent.SetNextUpFromFurthestEpisode -> setNextUpFromFurthestEpisode(event.enabled)
+            is LayoutSettingsEvent.SetShowUnairedNextUp -> setShowUnairedNextUp(event.enabled)
             LayoutSettingsEvent.ResetPosterCardStyle -> resetPosterCardStyle()
         }
     }
@@ -460,6 +476,13 @@ class LayoutSettingsViewModel @Inject constructor(
         }
     }
 
+    private fun setUseEpisodeThumbnailsInCw(enabled: Boolean) {
+        if (_uiState.value.useEpisodeThumbnailsInCw == enabled) return
+        viewModelScope.launch {
+            layoutPreferenceDataStore.setUseEpisodeThumbnailsInCw(enabled)
+        }
+    }
+
     private fun setPreferExternalMetaAddonDetail(enabled: Boolean) {
         if (_uiState.value.preferExternalMetaAddonDetail == enabled) return
         viewModelScope.launch {
@@ -485,7 +508,14 @@ class LayoutSettingsViewModel @Inject constructor(
     private fun setNextUpFromFurthestEpisode(enabled: Boolean) {
         if (_uiState.value.nextUpFromFurthestEpisode == enabled) return
         viewModelScope.launch {
-            traktSettingsDataStore.setNextUpFromFurthestEpisode(enabled)
+            layoutPreferenceDataStore.setNextUpFromFurthestEpisode(enabled)
+        }
+    }
+
+    private fun setShowUnairedNextUp(enabled: Boolean) {
+        if (_uiState.value.showUnairedNextUp == enabled) return
+        viewModelScope.launch {
+            layoutPreferenceDataStore.setShowUnairedNextUp(enabled)
         }
     }
 

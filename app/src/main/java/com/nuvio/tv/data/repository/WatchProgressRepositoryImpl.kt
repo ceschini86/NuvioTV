@@ -48,6 +48,7 @@ class WatchProgressRepositoryImpl @Inject constructor(
     private val watchProgressPreferences: WatchProgressPreferences,
     private val traktAuthDataStore: TraktAuthDataStore,
     private val traktSettingsDataStore: TraktSettingsDataStore,
+    private val layoutPreferenceDataStore: com.nuvio.tv.data.local.LayoutPreferenceDataStore,
     private val traktProgressService: TraktProgressService,
     private val watchProgressSyncService: WatchProgressSyncService,
     private val watchedItemsPreferences: WatchedItemsPreferences,
@@ -360,7 +361,7 @@ class WatchProgressRepositoryImpl @Inject constructor(
                     // instead of watch progress (limited to 1000 entries).
                     combine(
                         watchedItemsPreferences.allItems,
-                        traktSettingsDataStore.nextUpFromFurthestEpisode
+                        layoutPreferenceDataStore.nextUpFromFurthestEpisode
                     ) { items, useFurthest ->
                         items
                             .filter { item ->

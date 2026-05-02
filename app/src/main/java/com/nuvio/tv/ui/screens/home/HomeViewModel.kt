@@ -347,6 +347,26 @@ class HomeViewModel @Inject constructor(
                     _uiState.update { it.copy(blurUnwatchedEpisodes = enabled) }
                 }
         }
+        viewModelScope.launch {
+            layoutPreferenceDataStore.useEpisodeThumbnailsInCw
+                .distinctUntilChanged()
+                .collect { enabled ->
+                    _uiState.update { it.copy(useEpisodeThumbnailsInCw = enabled) }
+                }
+        }
+        // When "next up from furthest episode" changes, clear CW caches and retrigger pipeline
+        viewModelScope.launch {
+            var initial = true
+            layoutPreferenceDataStore.nextUpFromFurthestEpisode
+                .distinctUntilChanged()
+                .collect {
+                    if (initial) {
+                        initial = false
+                        return@collect
+                    }
+                    clearAllCwInMemoryCaches()
+                }
+        }
     }
 
     private fun observeMemoryOnlyVerticalScroll() {

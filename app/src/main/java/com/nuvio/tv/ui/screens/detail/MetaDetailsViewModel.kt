@@ -447,6 +447,14 @@ class MetaDetailsViewModel @Inject constructor(
                 calculateNextToWatch()
             }
         }
+        // Re-calculate next-to-watch when "furthest episode" preference changes
+        viewModelScope.launch {
+            layoutPreferenceDataStore.nextUpFromFurthestEpisode
+                .distinctUntilChanged()
+                .collectLatest {
+                    calculateNextToWatch()
+                }
+        }
     }
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -1546,20 +1554,49 @@ class MetaDetailsViewModel @Inject constructor(
 
         val nonSpecialEpisodes = allEpisodes.filter { (it.season ?: 0) > 0 }
         val episodePool = if (nonSpecialEpisodes.isNotEmpty()) nonSpecialEpisodes else allEpisodes
-        val useFurthestEpisode = traktSettingsDataStore.nextUpFromFurthestEpisode.first()
-        val latestSeriesProgress = progressMap.values
-            .sortedWith(
-                if (useFurthestEpisode) {
-                    compareByDescending<WatchProgress> { it.season ?: 0 }
-                        .thenByDescending { it.episode ?: 0 }
-                        .thenByDescending { it.lastWatched }
-                } else {
+        val useFurthestEpisode = layoutPreferenceDataStore.nextUpFromFurthestEpisode.first()
+        val latestSeriesProgress = if (useFurthestEpisode) {
+            // When using furthest episode mode, consider both progressMap entries
+            // AND watchedEpisodes (batch marks) to find the furthest watched episode.
+            val furthestFromProgress = progressMap.values
+                .filter { it.isCompleted() || shouldResumeProgress(it) }
+                .maxWithOrNull(
+                    compareBy<WatchProgress> { it.season ?: 0 }
+                        .thenBy { it.episode ?: 0 }
+                )
+            val furthestFromWatched = watchedEpisodes
+                .maxWithOrNull(compareBy<Pair<Int, Int>> { it.first }.thenBy { it.second })
+                ?.let { (s, e) ->
+                    // Only use watchedEpisodes entry if it's further than progressMap
+                    val progressFurthest = furthestFromProgress?.let { (it.season ?: 0) to (it.episode ?: 0) }
+                    if (progressFurthest == null || s > progressFurthest.first || (s == progressFurthest.first && e > progressFurthest.second)) {
+                        episodePool.firstOrNull { it.season == s && it.episode == e }?.let { video ->
+                            WatchProgress(
+                                contentId = _effectiveContentId.value,
+                                contentType = "series",
+                                name = "",
+                                poster = null, backdrop = null, logo = null,
+                                videoId = video.id,
+                                season = video.season,
+                                episode = video.episode,
+                                episodeTitle = video.title,
+                                position = 1L, duration = 1L,
+                                lastWatched = System.currentTimeMillis(),
+                                progressPercent = 100f
+                            )
+                        }
+                    } else null
+                }
+            furthestFromWatched ?: furthestFromProgress
+        } else {
+            progressMap.values
+                .sortedWith(
                     compareByDescending<WatchProgress> { it.lastWatched }
                         .thenByDescending { it.season ?: 0 }
                         .thenByDescending { it.episode ?: 0 }
-                }
-            )
-            .firstOrNull()
+                )
+                .firstOrNull()
+        }
         val effectiveLatestProgress = latestSeriesProgress ?: run {
             if (watchedEpisodes.isEmpty()) null
             else {
@@ -1600,7 +1637,8 @@ class MetaDetailsViewModel @Inject constructor(
             fallbackProgressMap = progressMap,
             watchedEpisodes = watchedEpisodes,
             metaId = meta.id,
-            defaultEpisode = defaultEpisode
+            defaultEpisode = defaultEpisode,
+            isRewatchMode = !useFurthestEpisode
         )
     }
 
@@ -1610,7 +1648,8 @@ class MetaDetailsViewModel @Inject constructor(
         fallbackProgressMap: Map<Pair<Int, Int>, WatchProgress>,
         watchedEpisodes: Set<Pair<Int, Int>> = emptySet(),
         metaId: String,
-        defaultEpisode: Video? = null
+        defaultEpisode: Video? = null,
+        isRewatchMode: Boolean = false
     ): NextToWatch {
         if (episodes.isEmpty()) {
             return NextToWatch(
@@ -1641,16 +1680,39 @@ class MetaDetailsViewModel @Inject constructor(
             }
 
             if (latestProgress.isCompleted() && matchedIndex >= 0) {
-                val next = episodes.getOrNull(matchedIndex + 1)
-                if (next != null) {
-                    return NextToWatch(
-                        watchProgress = null,
-                        isResume = false,
-                        nextVideoId = next.id,
-                        nextSeason = next.season,
-                        nextEpisode = next.episode,
-                        displayText = context.getString(R.string.detail_btn_next_episode, next.season, next.episode)
-                    )
+                if (isRewatchMode) {
+                    // In rewatch mode, simply take the next episode regardless of watched state
+                    val next = episodes.getOrNull(matchedIndex + 1)
+                    if (next != null) {
+                        return NextToWatch(
+                            watchProgress = null,
+                            isResume = false,
+                            nextVideoId = next.id,
+                            nextSeason = next.season,
+                            nextEpisode = next.episode,
+                            displayText = context.getString(R.string.detail_btn_next_episode, next.season, next.episode)
+                        )
+                    }
+                } else {
+                    // Normal mode: skip already watched episodes
+                    val nextUnwatched = episodes.subList(matchedIndex + 1, episodes.size)
+                        .firstOrNull { candidate ->
+                            val s = candidate.season ?: return@firstOrNull true
+                            val e = candidate.episode ?: return@firstOrNull true
+                            val progress = fallbackProgressMap[s to e]
+                            val isWatched = progress?.isCompleted() == true || (s to e) in watchedEpisodes
+                            !isWatched
+                        }
+                    if (nextUnwatched != null) {
+                        return NextToWatch(
+                            watchProgress = null,
+                            isResume = false,
+                            nextVideoId = nextUnwatched.id,
+                            nextSeason = nextUnwatched.season,
+                            nextEpisode = nextUnwatched.episode,
+                            displayText = context.getString(R.string.detail_btn_next_episode, nextUnwatched.season, nextUnwatched.episode)
+                        )
+                    }
                 }
             }
         }
