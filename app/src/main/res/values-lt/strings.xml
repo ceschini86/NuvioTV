@@ -787,7 +787,7 @@ Klaida: Bandomoji simuliuojama klaida — tai nėra tikras gedimas. Šaltinis gr
     <string name="pause_back_to_details">Grįžti į informaciją</string>
     <string name="pause_as_character">kaip %1$s</string>
 
-    <!-- NextEpisodeCardOverlay -->
+    <!-- PostPlayOverlay -->
     <string name="next_episode_label">Kita serija</string>
     <string name="next_episode_finding_source">Ieškoma šaltinio…</string>
     <string name="next_episode_playing_via">Bus atkurta per %1$s po %2$ds</string>

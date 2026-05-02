@@ -1202,7 +1202,7 @@
     <string name="pause_back_to_details">Retour aux détails</string>
     <string name="pause_as_character">dans le rôle de %1$s</string>
 
-    <!-- NextEpisodeCardOverlay -->
+    <!-- PostPlayOverlay -->
     <string name="next_episode_label">Épisode suivant</string>
     <string name="next_episode_finding_source">Recherche de la source…</string>
     <string name="next_episode_playing_via">Lecture via %1$s dans %2$ds</string>

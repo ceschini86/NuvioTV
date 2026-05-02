@@ -1034,7 +1034,7 @@
     <string name="pause_back_to_details">Nazad na detalje</string>
     <string name="pause_as_character">kao %1$s</string>
 
-    <!-- NextEpisodeCardOverlay -->
+    <!-- PostPlayOverlay -->
     <string name="next_episode_label">Sljedeća Epizoda</string>
     <string name="next_episode_finding_source">Traženje izvora…</string>
     <string name="next_episode_playing_via">Pokretanje preko %1$s za %2$ds</string>

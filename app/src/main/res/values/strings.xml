@@ -1263,13 +1263,21 @@
     <string name="pause_back_to_details">Back to details</string>
     <string name="pause_as_character">as %1$s</string>
 
-    <!-- NextEpisodeCardOverlay -->
+    <!-- PostPlayOverlay -->
     <string name="next_episode_label">Next Episode</string>
     <string name="next_episode_finding_source">Finding source…</string>
     <string name="next_episode_playing_via">Playing via %1$s in %2$ds</string>
     <string name="next_episode_play">Play</string>
     <string name="next_episode_unaired">Unaired</string>
     <string name="next_episode_not_aired_yet">Next episode hasn\'t aired yet</string>
+    <string name="still_watching_title">Are you still watching?</string>
+    <string name="still_watching_continue">Play</string>
+    <string name="still_watching_exit">Exit</string>
+    <string name="still_watching_countdown">Stopping in %1$d</string>
+    <string name="still_watching_setting_title">Are You Still Watching?</string>
+    <string name="still_watching_setting_sub">Prompt after consecutive auto-played episodes.</string>
+    <string name="still_watching_threshold_title">Episode Threshold</string>
+    <string name="still_watching_threshold_sub">Number of auto-played episodes before prompting.</string>
     <string name="skip_intro">Skip Intro</string>
     <string name="skip_ending">Skip Ending</string>
     <string name="skip_recap">Skip Recap</string>
