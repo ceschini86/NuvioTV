@@ -115,7 +115,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.debounce
 
 private const val MODERN_HORIZONTAL_FOCUS_DEBOUNCE_MS = 140L
-private const val POSTER_PREFETCH_DISTANCE = 8
+private const val POSTER_PREFETCH_DISTANCE = 4
 
 internal val LocalVerticalRowsScrolling = compositionLocalOf { false }
 

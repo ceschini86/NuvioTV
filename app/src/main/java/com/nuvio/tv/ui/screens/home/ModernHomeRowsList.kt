@@ -130,7 +130,7 @@ internal fun ModernHomeRowsList(
 
     LaunchedEffect(verticalPrefetchImageLoader, density) {
         val prefetchAheadRows = 3
-        val prefetchItemsPerRow = 8
+        val prefetchItemsPerRow = 4
         snapshotFlow {
             verticalRowListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
         }
@@ -284,8 +284,8 @@ internal fun ModernHomeRowsList(
                             onHeroFocusSettleDelayChange(
                                 if (lastHeroNavigationAtMs.value != 0L &&
                                     timeSinceLastHeroNav in 1 until 130L // MODERN_HERO_RAPID_NAV_THRESHOLD_MS
-                                ) 170L // MODERN_HERO_RAPID_NAV_SETTLE_MS
-                                else 90L // MODERN_HERO_FOCUS_DEBOUNCE_MS
+                                ) 320L // MODERN_HERO_RAPID_NAV_SETTLE_MS
+                                else 250L // MODERN_HERO_FOCUS_DEBOUNCE_MS
                             )
                             onLastHeroNavigationAtMsChange(now)
                             onActiveRowKeyChange(rowKey)
