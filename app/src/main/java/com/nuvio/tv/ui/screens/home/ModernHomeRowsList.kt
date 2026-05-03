@@ -16,7 +16,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -169,6 +168,7 @@ internal fun ModernHomeRowsList(
     }
 
     val latestOnRequestLazyCatalogLoad = rememberUpdatedState(onRequestLazyCatalogLoad)
+    val latestCarouselRowsForLazy = rememberUpdatedState(carouselRows)
     LaunchedEffect(verticalRowListState) {
         val prefetchAheadForLazy = 2
         snapshotFlow {
@@ -181,8 +181,9 @@ internal fun ModernHomeRowsList(
             if (scrolling || lastVisible < 0) return@collect
             delay(150)
             if (verticalRowListState.isScrollInProgress) return@collect
+            val rows = latestCarouselRowsForLazy.value
             for (idx in firstVisible.coerceAtLeast(0)..(lastVisible + prefetchAheadForLazy)) {
-                val row = carouselRows.list.getOrNull(idx) ?: continue
+                val row = rows.list.getOrNull(idx) ?: continue
                 if (row.isLoading && row.items.list.firstOrNull()?.key?.startsWith("placeholder_") == true) {
                     latestOnRequestLazyCatalogLoad.value(row.key)
                 }
@@ -190,15 +191,14 @@ internal fun ModernHomeRowsList(
         }
     }
 
-    val focusRestorerRequester by remember(carouselRows, uiCaches, activeRowKey.value) {
-        derivedStateOf {
+    val focusRestorerRequester = remember(carouselRows, uiCaches, activeRowKey) {
+        {
             val rowKey = activeRowKey.value
             if (rowKey != null) {
                 val row = carouselRows.list.firstOrNull { it.key == rowKey }
-                val rowListState = uiCaches.rowListStates[rowKey]
-                val firstVisibleIndex = rowListState?.firstVisibleItemIndex ?: 0
-                val safeIndex = firstVisibleIndex.coerceIn(0, ((row?.items?.list?.size ?: 1) - 1).coerceAtLeast(0))
-                val stableKey = "${rowKey}_$safeIndex"
+                val savedIdx = (uiCaches.focusedItemByRow[rowKey] ?: 0)
+                    .coerceIn(0, ((row?.items?.list?.size ?: 1) - 1).coerceAtLeast(0))
+                val stableKey = "${rowKey}_$savedIdx"
                 uiCaches.itemFocusRequesters[rowKey]?.get(stableKey) ?: FocusRequester.Default
             } else FocusRequester.Default
         }
@@ -220,7 +220,7 @@ internal fun ModernHomeRowsList(
                 .clipToBounds()
                 .graphicsLayer { alpha = trailerContentAlpha() }
                 .focusRequester(contentFocusRequester)
-                .focusRestorer(focusRestorerRequester)
+                .focusRestorer { focusRestorerRequester() }
                 .dpadVerticalFastScroll(
                     scrollableState = verticalRowListState,
                     onFastScrollingChanged = onFastScrollingChanged,
@@ -283,9 +283,9 @@ internal fun ModernHomeRowsList(
                             val timeSinceLastHeroNav = now - lastHeroNavigationAtMs.value
                             onHeroFocusSettleDelayChange(
                                 if (lastHeroNavigationAtMs.value != 0L &&
-                                    timeSinceLastHeroNav in 1 until 140L // MODERN_HERO_RAPID_NAV_THRESHOLD_MS
-                                ) 320L // MODERN_HERO_RAPID_NAV_SETTLE_MS
-                                else 250L // MODERN_HERO_FOCUS_DEBOUNCE_MS
+                                    timeSinceLastHeroNav in 1 until 130L // MODERN_HERO_RAPID_NAV_THRESHOLD_MS
+                                ) 170L // MODERN_HERO_RAPID_NAV_SETTLE_MS
+                                else 90L // MODERN_HERO_FOCUS_DEBOUNCE_MS
                             )
                             onLastHeroNavigationAtMsChange(now)
                             onActiveRowKeyChange(rowKey)

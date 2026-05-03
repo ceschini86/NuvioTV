@@ -750,9 +750,6 @@ internal fun ModernRowSection(
         }
 
         CompositionLocalProvider(LocalBringIntoViewSpec provides horizontalBringIntoViewSpec) {
-            val initialIdx = remember(rowKey) { focusedItemByRow[rowKey] ?: 0 }
-            val restoreStableKey = "${row.key}_$initialIdx"
-            val restoreFocusRequester = uiCaches.requesterFor(rowKey, restoreStableKey)
             val usesPlaceholderShimmer = row.isLoading &&
                 row.items.list.firstOrNull()?.imageUrl?.startsWith("placeholder://") == true
             val placeholderShimmerOffsetState = if (usesPlaceholderShimmer) {
@@ -765,7 +762,11 @@ internal fun ModernRowSection(
                 state = rowListState,
                 modifier = Modifier
                     .recompositionHighlighter()
-                    .focusRestorer(restoreFocusRequester)
+                    .focusRestorer {
+                        val savedIdx = (focusedItemByRow[rowKey] ?: 0)
+                            .coerceIn(0, (row.items.list.size - 1).coerceAtLeast(0))
+                        uiCaches.requesterFor(rowKey, "${row.key}_$savedIdx")
+                    }
                     .focusGroup()
                     .then(
                         if (row.isLoading) {
