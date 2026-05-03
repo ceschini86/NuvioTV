@@ -192,7 +192,7 @@ internal fun LazyListScope.autoPlaySettingsItems(
                     value = threshold,
                     valueText = "$threshold",
                     minValue = 2,
-                    maxValue = 5,
+                    maxValue = 6,
                     step = 1,
                     onValueChange = { onSetStillWatchingEpisodeThreshold(it) },
                     onFocused = onItemFocused
