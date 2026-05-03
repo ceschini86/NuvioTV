@@ -298,6 +298,9 @@ internal fun ModernHomeRowsList(
                             if (lastFocusedContinueWatchingIndex.value != index) {
                                 onLastFocusedContinueWatchingIndexChange(index)
                             }
+                            if (focusedCatalogSelection.value != null) {
+                                onFocusedCatalogSelectionChange(null)
+                            }
                         }
                         onRowItemFocusedInternal(rowKey, index, isContinueWatchingRow)
                     }
