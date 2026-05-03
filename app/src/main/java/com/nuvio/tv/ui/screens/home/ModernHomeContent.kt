@@ -672,12 +672,11 @@ fun ModernHomeContent(
             }
         }
         var stableHeroSceneState by remember { mutableStateOf(liveHeroSceneState.value) }
-        LaunchedEffect(liveHeroSceneState, isVerticalRowsScrolling) {
-            if (!isVerticalRowsScrolling || stableHeroSceneState.preview == null) {
-                stableHeroSceneState = liveHeroSceneState.value
-            }
+        val currentLiveHero = liveHeroSceneState.value
+        if (!isVerticalRowsScrolling || stableHeroSceneState.preview == null) {
+            stableHeroSceneState = currentLiveHero
         }
-        val heroSceneState = if (isVerticalRowsScrolling) stableHeroSceneState else liveHeroSceneState.value
+        val heroSceneState = if (isVerticalRowsScrolling) stableHeroSceneState else currentLiveHero
 
         LaunchedEffect(heroSceneState.heroBackdrop) {
             HeroBackdropState.update(heroSceneState.heroBackdrop)
