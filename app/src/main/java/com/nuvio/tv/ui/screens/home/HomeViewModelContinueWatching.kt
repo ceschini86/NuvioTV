@@ -31,7 +31,6 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -278,7 +277,6 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                 watchedItemsVersion = watchedItemsSize
             )
         }.debounce(CW_PROGRESS_DEBOUNCE_MS).collectLatest { snapshot ->
-            withContext(Dispatchers.Default) {
             val debug = CwDebugSession()
             try {
                 debug.markPhase("filter-snapshot")
@@ -1092,7 +1090,6 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                 debug.logSummary(cancelled = true)
                 throw cancelled
             }
-            } // withContext(Dispatchers.Default)
         }
     }
 }
