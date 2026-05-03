@@ -460,7 +460,11 @@ class TraktProgressService @Inject constructor(
             hiddenProgressShowIds
         ) { seeds, _ ->
             seeds.filter { !isShowHiddenFromProgress(it.contentId) }
-        }.distinctUntilChanged()
+        }
+            .onStart {
+                scope.launch { getWatchedShowSeedsSnapshot(forceRefresh = false) }
+            }
+            .distinctUntilChanged()
     }
 
     /**

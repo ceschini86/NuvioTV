@@ -44,6 +44,11 @@ interface WatchProgressRepository {
     fun observeNextUpSeeds(): Flow<List<WatchProgress>>
 
     /**
+     * Emits true when the remote progress source has completed its initial load.
+     */
+    fun observeRemoteProgressLoaded(): Flow<Boolean>
+
+    /**
      * Emits immediate optimistic updates that should patch Continue Watching
      * without waiting for the regular progress flows to settle.
      */
