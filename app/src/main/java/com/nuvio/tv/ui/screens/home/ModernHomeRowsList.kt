@@ -131,8 +131,8 @@ internal fun ModernHomeRowsList(
     val highlighterEnabled = LocalRecompositionHighlighterEnabled.current
 
     LaunchedEffect(verticalPrefetchImageLoader, density) {
-        val prefetchAheadRows = 3
-        val prefetchItemsPerRow = 4
+        val prefetchAheadRows = 1
+        val prefetchItemsPerRow = 3
         snapshotFlow {
             verticalRowListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
         }
@@ -172,7 +172,7 @@ internal fun ModernHomeRowsList(
     val latestOnRequestLazyCatalogLoad = rememberUpdatedState(onRequestLazyCatalogLoad)
     val latestCarouselRowsForLazy = rememberUpdatedState(carouselRows)
     LaunchedEffect(verticalRowListState) {
-        val prefetchAheadForLazy = 2
+        val prefetchAheadForLazy = 1
         snapshotFlow {
             val scrolling = verticalRowListState.isScrollInProgress
             val info = verticalRowListState.layoutInfo
@@ -286,8 +286,8 @@ internal fun ModernHomeRowsList(
                             onHeroFocusSettleDelayChange(
                                 if (lastHeroNavigationAtMs.value != 0L &&
                                     timeSinceLastHeroNav in 1 until 130L // MODERN_HERO_RAPID_NAV_THRESHOLD_MS
-                                ) 320L // MODERN_HERO_RAPID_NAV_SETTLE_MS
-                                else 250L // MODERN_HERO_FOCUS_DEBOUNCE_MS
+                                ) 400L // MODERN_HERO_RAPID_NAV_SETTLE_MS
+                                else 450L // MODERN_HERO_FOCUS_DEBOUNCE_MS
                             )
                             onLastHeroNavigationAtMsChange(now)
                             onActiveRowKeyChange(rowKey)

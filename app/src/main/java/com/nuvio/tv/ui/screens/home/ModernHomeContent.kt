@@ -800,7 +800,9 @@ fun ModernHomeContent(
                 onRowItemFocusedPassedDown.value.invoke(rowKey, index, isCw)
             }
         }
-        val stableTrailerContentAlphaLambda = remember { { trailerContentAlpha } }
+        val stableTrailerContentAlphaLambda = remember(trailerContentAlpha) { { trailerContentAlpha } }
+        val stableExpandedTrailerPreviewUrl = remember(heroTrailerUrlsState) { { heroTrailerUrlsState.value.first } }
+        val stableExpandedTrailerPreviewAudioUrl = remember(heroTrailerUrlsState) { { heroTrailerUrlsState.value.second } }
 
         ModernHomeRowsList(
             carouselRows = carouselRows,
@@ -840,8 +842,8 @@ fun ModernHomeContent(
             effectiveAutoplayEnabled = effectiveAutoplayEnabled,
             trailerPlaybackTarget = trailerPlaybackTarget,
             expandedCatalogFocusKey = expandedCatalogFocusKey,
-            expandedTrailerPreviewUrl = { heroTrailerUrlsState.value.first },
-            expandedTrailerPreviewAudioUrl = { heroTrailerUrlsState.value.second },
+            expandedTrailerPreviewUrl = stableExpandedTrailerPreviewUrl,
+            expandedTrailerPreviewAudioUrl = stableExpandedTrailerPreviewAudioUrl,
             portraitCatalogCardWidth = portraitCatalogCardWidth,
             portraitCatalogCardHeight = portraitCatalogCardHeight,
             landscapeCatalogCardWidth = landscapeCatalogCardWidth,
