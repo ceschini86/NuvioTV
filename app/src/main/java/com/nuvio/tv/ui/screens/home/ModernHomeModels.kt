@@ -162,6 +162,7 @@ internal data class ModernCatalogRowBuildCacheEntry(
     val source: CatalogRow,
     val useLandscapePosters: Boolean,
     val showCatalogTypeSuffix: Boolean,
+    val localeTag: String,
     val mappedRow: HeroCarouselRow
 )
 

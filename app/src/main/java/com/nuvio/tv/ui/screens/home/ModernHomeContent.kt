@@ -247,6 +247,17 @@ fun ModernHomeContent(
     val itemFocusRequesters = uiCaches.itemFocusRequesters
     val rowListStates = uiCaches.rowListStates
     val loadMoreRequestedTotals = uiCaches.loadMoreRequestedTotals
+
+    if (focusedItemByRow.isEmpty() && focusState.hasSavedFocus) {
+        val savedRowKey = when {
+            focusState.focusedRowIndex == -1 -> MODERN_CONTINUE_WATCHING_ROW_KEY
+            focusState.focusedRowIndex >= 0 -> rowKeyByGlobalRowIndex[focusState.focusedRowIndex]
+            else -> null
+        }
+        if (savedRowKey != null) {
+            focusedItemByRow[savedRowKey] = focusState.focusedItemIndex.coerceAtLeast(0)
+        }
+    }
     // Holder for hot-path focus tracking — lambdas read through reference, no stale closure
     val focusHolder = remember {
         object {
@@ -541,8 +552,11 @@ fun ModernHomeContent(
             val row = latestActiveRow
             val focusedRowIndex = row?.globalRowIndex ?: 0
             val catalogRowScrollStates = latestCarouselRows
-                .filter { it.globalRowIndex >= 0 }
-                .associate { rowState -> rowState.key to (focusedItemByRow[rowState.key] ?: 0) }
+                .associate { rowState ->
+                    val scrollIndex = rowListStates[rowState.key]?.firstVisibleItemIndex
+                        ?: (focusedItemByRow[rowState.key] ?: 0)
+                    rowState.key to scrollIndex
+                }
 
             onSaveFocusState(
                 latestVerticalRowListState.firstVisibleItemIndex,
@@ -756,9 +770,11 @@ fun ModernHomeContent(
         val rowsViewportHeight = maxHeight * rowsViewportHeightFraction
         val localDensity = LocalDensity.current
         val rowTitleLineHeight = MaterialTheme.typography.titleMedium.lineHeight
-        val rowTitleHeight = with(localDensity) {
-            runCatching { rowTitleLineHeight.toDp() }
-                .getOrDefault(24.dp)
+        val rowTitleHeight = remember(rowTitleLineHeight, localDensity) {
+            with(localDensity) {
+                runCatching { rowTitleLineHeight.toDp() }
+                    .getOrDefault(24.dp)
+            }
         }
         val heroBackdropHeight = (maxHeight - rowsViewportHeight + rowTitleHeight + rowTitleBottom)
             .coerceAtMost(maxHeight)

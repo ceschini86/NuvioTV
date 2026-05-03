@@ -1433,12 +1433,36 @@ private suspend fun HomeViewModel.enrichVisibleContinueWatchingItems(
         .sortedBy { it.first }
         .map { it.second }
 
-    if (enrichedItems == finalItems) return@coroutineScope false
+    // Re-sort if any sortTimestamp changed during enrichment (e.g. release alert
+    // detected after TMDB provided a more accurate release date).
+    val sortChanged = enrichedItems.zip(finalItems).any { (enriched, original) ->
+        val enrichedTs = when (enriched) {
+            is ContinueWatchingItem.InProgress -> enriched.progress.lastWatched
+            is ContinueWatchingItem.NextUp -> enriched.info.sortTimestamp
+        }
+        val originalTs = when (original) {
+            is ContinueWatchingItem.InProgress -> original.progress.lastWatched
+            is ContinueWatchingItem.NextUp -> original.info.sortTimestamp
+        }
+        enrichedTs != originalTs
+    }
+    val sortedEnrichedItems = if (sortChanged) {
+        enrichedItems.sortedByDescending { item ->
+            when (item) {
+                is ContinueWatchingItem.InProgress -> item.progress.lastWatched
+                is ContinueWatchingItem.NextUp -> item.info.sortTimestamp
+            }
+        }
+    } else {
+        enrichedItems
+    }
+
+    if (sortedEnrichedItems == finalItems) return@coroutineScope false
 
     // Save enriched next-up info to in-memory overlay so the next CW cycle's
     // cached/partial/normal emissions use enriched data from the start,
     // preventing title/thumbnail flickering between addon and TMDB values.
-    enrichedItems.forEach { item ->
+    sortedEnrichedItems.forEach { item ->
         when (item) {
             is ContinueWatchingItem.NextUp -> {
                 cwEnrichedNextUpOverlay[item.info.contentId] = item.info
@@ -1450,15 +1474,15 @@ private suspend fun HomeViewModel.enrichVisibleContinueWatchingItems(
     }
 
     _uiState.update { state ->
-        if (state.continueWatchingItems == enrichedItems) {
+        if (state.continueWatchingItems == sortedEnrichedItems) {
             state
         } else {
-            state.copy(continueWatchingItems = enrichedItems)
+            state.copy(continueWatchingItems = sortedEnrichedItems)
         }
     }
     persistLocalContinueWatchingMetadata(
         originalItems = finalItems,
-        enrichedItems = enrichedItems
+        enrichedItems = sortedEnrichedItems
     )
     true
 }
@@ -1757,7 +1781,7 @@ private suspend fun HomeViewModel.enrichNextUpItem(
         imdbRating = if (settings.useBasicInfo) tmdbData?.rating?.toFloat() ?: meta.imdbRating ?: item.info.imdbRating else meta.imdbRating ?: item.info.imdbRating,
         genres = meta.genres.take(3).ifEmpty { item.info.genres },
         releaseInfo = meta.releaseInfo?.takeIf { it.isNotBlank() } ?: item.info.releaseInfo,
-        sortTimestamp = item.info.sortTimestamp,
+        sortTimestamp = releaseState.sortTimestamp,
         releaseTimestamp = releaseState.releaseTimestamp,
         isReleaseAlert = releaseState.isReleaseAlert,
         isNewSeasonRelease = releaseState.isNewSeasonRelease,
@@ -2351,11 +2375,13 @@ private fun HomeViewModel.applyContinueWatchingEnrichmentOverlay(
     items: List<ContinueWatchingItem>
 ): List<ContinueWatchingItem> {
     if (cwEnrichedNextUpOverlay.isEmpty() && cwEnrichedInProgressOverlay.isEmpty()) return items
-    return items.map { item ->
+    var sortChanged = false
+    val mapped = items.map { item ->
         when (item) {
             is ContinueWatchingItem.NextUp -> {
                 val overlay = cwEnrichedNextUpOverlay[item.info.contentId] ?: return@map item
                 if (overlay.season != item.info.season || overlay.episode != item.info.episode) return@map item
+                if (overlay.sortTimestamp != item.info.sortTimestamp) sortChanged = true
                 item.copy(info = item.info.copy(
                     name = overlay.name.takeIf { it.isNotBlank() } ?: item.info.name,
                     episodeTitle = overlay.episodeTitle ?: item.info.episodeTitle,
@@ -2367,6 +2393,7 @@ private fun HomeViewModel.applyContinueWatchingEnrichmentOverlay(
                     imdbRating = overlay.imdbRating ?: item.info.imdbRating,
                     genres = overlay.genres.ifEmpty { item.info.genres },
                     releaseInfo = overlay.releaseInfo ?: item.info.releaseInfo,
+                    sortTimestamp = overlay.sortTimestamp,
                     isReleaseAlert = overlay.isReleaseAlert,
                     isNewSeasonRelease = overlay.isNewSeasonRelease,
                     releaseTimestamp = overlay.releaseTimestamp ?: item.info.releaseTimestamp,
@@ -2393,6 +2420,17 @@ private fun HomeViewModel.applyContinueWatchingEnrichmentOverlay(
                 )
             }
         }
+    }
+    // Re-sort if any sortTimestamp was updated by the overlay to maintain correct order.
+    return if (sortChanged) {
+        mapped.sortedByDescending { item ->
+            when (item) {
+                is ContinueWatchingItem.InProgress -> item.progress.lastWatched
+                is ContinueWatchingItem.NextUp -> item.info.sortTimestamp
+            }
+        }
+    } else {
+        mapped
     }
 }
 

@@ -5,6 +5,7 @@ import android.os.SystemClock
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nuvio.tv.LocaleCache
 import com.nuvio.tv.core.player.StreamAutoPlayPolicy
 import com.nuvio.tv.core.tmdb.TmdbMetadataService
 import com.nuvio.tv.core.tmdb.TmdbService
@@ -109,6 +110,15 @@ class HomeViewModel @Inject constructor(
 
     private val _scrollToTopTrigger = MutableStateFlow(0)
     val scrollToTopTrigger: StateFlow<Int> = _scrollToTopTrigger.asStateFlow()
+
+    internal val _currentLocaleTag = MutableStateFlow(LocaleCache.localeTag)
+
+    fun notifyLocaleChanged() {
+        val tag = LocaleCache.localeTag
+        if (_currentLocaleTag.value != tag) {
+            _currentLocaleTag.value = tag
+        }
+    }
 
     fun requestScrollToTop() {
         clearFocusState()

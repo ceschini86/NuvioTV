@@ -57,10 +57,13 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
+import com.nuvio.tv.LocaleCache
 import com.nuvio.tv.R
 import com.nuvio.tv.core.build.AppFeaturePolicy
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.util.Locale
 import javax.inject.Inject
 
 private const val TAG = "MetaDetailsViewModel"
@@ -95,6 +98,16 @@ class MetaDetailsViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(MetaDetailsUiState())
     val uiState: StateFlow<MetaDetailsUiState> = _uiState.asStateFlow()
+
+    private val localizedContext: Context
+        get() {
+            val tag = LocaleCache.localeTag.takeIf { it != LocaleCache.UNSET && it.isNotEmpty() }
+                ?: return context
+            val locale = Locale.forLanguageTag(tag)
+            val config = Configuration(context.resources.configuration)
+            config.setLocale(locale)
+            return context.createConfigurationContext(config)
+        }
     val effectiveAutoplayEnabled = playerSettingsDataStore.playerSettings
         .map(StreamAutoPlayPolicy::isEffectivelyEnabled)
         .distinctUntilChanged()
@@ -844,7 +857,7 @@ class MetaDetailsViewModel @Inject constructor(
                             commentsPageCount = 0,
                             isCommentsLoading = false,
                             isCommentsLoadingMore = false,
-                            commentsError = context.getString(R.string.detail_comments_error),
+                            commentsError = localizedContext.getString(R.string.detail_comments_error),
                             shouldShowCommentsSection = true
                         )
                     }
@@ -1148,7 +1161,7 @@ class MetaDetailsViewModel @Inject constructor(
                             state.copy(
                                 episodeImdbRatings = emptyMap(),
                                 isEpisodeRatingsLoading = false,
-                                episodeRatingsError = context.getString(R.string.ratings_unavailable)
+                                episodeRatingsError = localizedContext.getString(R.string.ratings_unavailable)
                             )
                         }
                     }
@@ -1182,7 +1195,7 @@ class MetaDetailsViewModel @Inject constructor(
                         state.copy(
                             episodeImdbRatings = emptyMap(),
                             isEpisodeRatingsLoading = false,
-                            episodeRatingsError = context.getString(R.string.ratings_load_error)
+                            episodeRatingsError = localizedContext.getString(R.string.ratings_load_error)
                         )
                     }
                 }
@@ -1522,7 +1535,7 @@ class MetaDetailsViewModel @Inject constructor(
                     nextVideoId = meta.id,
                     nextSeason = null,
                     nextEpisode = null,
-                    displayText = context.getString(R.string.detail_btn_resume)
+                    displayText = localizedContext.getString(R.string.detail_btn_resume)
                 )
             } else {
                 NextToWatch(
@@ -1531,7 +1544,7 @@ class MetaDetailsViewModel @Inject constructor(
                     nextVideoId = meta.id,
                     nextSeason = null,
                     nextEpisode = null,
-                    displayText = context.getString(R.string.detail_btn_play)
+                    displayText = localizedContext.getString(R.string.detail_btn_play)
                 )
             }
         }
@@ -1548,7 +1561,7 @@ class MetaDetailsViewModel @Inject constructor(
                 nextVideoId = meta.id,
                 nextSeason = null,
                 nextEpisode = null,
-                displayText = context.getString(R.string.detail_btn_play)
+                displayText = localizedContext.getString(R.string.detail_btn_play)
             )
         }
 
@@ -1658,7 +1671,7 @@ class MetaDetailsViewModel @Inject constructor(
                 nextVideoId = metaId,
                 nextSeason = null,
                 nextEpisode = null,
-                displayText = context.getString(R.string.detail_btn_play)
+                displayText = localizedContext.getString(R.string.detail_btn_play)
             )
         }
 
@@ -1675,7 +1688,7 @@ class MetaDetailsViewModel @Inject constructor(
                     nextVideoId = matchedEpisode?.id ?: latestProgress.videoId,
                     nextSeason = season,
                     nextEpisode = episode,
-                    displayText = context.getString(R.string.detail_btn_resume_episode, season, episode)
+                    displayText = localizedContext.getString(R.string.detail_btn_resume_episode, season, episode)
                 )
             }
 
@@ -1690,7 +1703,7 @@ class MetaDetailsViewModel @Inject constructor(
                             nextVideoId = next.id,
                             nextSeason = next.season,
                             nextEpisode = next.episode,
-                            displayText = context.getString(R.string.detail_btn_next_episode, next.season, next.episode)
+                            displayText = localizedContext.getString(R.string.detail_btn_next_episode, next.season, next.episode)
                         )
                     }
                 } else {
@@ -1710,7 +1723,7 @@ class MetaDetailsViewModel @Inject constructor(
                             nextVideoId = nextUnwatched.id,
                             nextSeason = nextUnwatched.season,
                             nextEpisode = nextUnwatched.episode,
-                            displayText = context.getString(R.string.detail_btn_next_episode, nextUnwatched.season, nextUnwatched.episode)
+                            displayText = localizedContext.getString(R.string.detail_btn_next_episode, nextUnwatched.season, nextUnwatched.episode)
                         )
                     }
                 }
@@ -1758,7 +1771,7 @@ class MetaDetailsViewModel @Inject constructor(
                     nextVideoId = resumeEpisode.id,
                     nextSeason = resumeEpisode.season,
                     nextEpisode = resumeEpisode.episode,
-                    displayText = context.getString(R.string.detail_btn_resume_episode, resumeEpisode.season, resumeEpisode.episode)
+                    displayText = localizedContext.getString(R.string.detail_btn_resume_episode, resumeEpisode.season, resumeEpisode.episode)
                 )
             }
             nextUnwatchedEpisode != null -> {
@@ -1773,9 +1786,9 @@ class MetaDetailsViewModel @Inject constructor(
                     nextSeason = s,
                     nextEpisode = e,
                     displayText = if (hasWatchedSomething) {
-                        context.getString(R.string.detail_btn_next_episode, s, e)
+                        localizedContext.getString(R.string.detail_btn_next_episode, s, e)
                     } else {
-                        context.getString(R.string.detail_btn_play_episode, s, e)
+                        localizedContext.getString(R.string.detail_btn_play_episode, s, e)
                     }
                 )
             }
@@ -1788,9 +1801,9 @@ class MetaDetailsViewModel @Inject constructor(
                     nextSeason = firstEpisode?.season,
                     nextEpisode = firstEpisode?.episode,
                     displayText = if (firstEpisode != null) {
-                        context.getString(R.string.detail_btn_play_episode, firstEpisode.season, firstEpisode.episode)
+                        localizedContext.getString(R.string.detail_btn_play_episode, firstEpisode.season, firstEpisode.episode)
                     } else {
-                        context.getString(R.string.detail_btn_play)
+                        localizedContext.getString(R.string.detail_btn_play)
                     }
                 )
             }
@@ -1822,9 +1835,9 @@ class MetaDetailsViewModel @Inject constructor(
             runCatching {
                 libraryRepository.toggleDefault(input)
                 val message = if (wasInLibrary || wasInWatchlist) {
-                    context.getString(R.string.detail_removed_from_library)
+                    localizedContext.getString(R.string.detail_removed_from_library)
                 } else {
-                    context.getString(R.string.detail_added_to_library)
+                    localizedContext.getString(R.string.detail_added_to_library)
                 }
                 showMessage(message)
             }.onFailure { error ->
@@ -1896,7 +1909,7 @@ class MetaDetailsViewModel @Inject constructor(
                         pickerError = null
                     )
                 }
-                showMessage(context.getString(R.string.detail_lists_updated))
+                showMessage(localizedContext.getString(R.string.detail_lists_updated))
             }.onFailure { error ->
                 _uiState.update {
                     it.copy(
@@ -1929,10 +1942,10 @@ class MetaDetailsViewModel @Inject constructor(
             runCatching {
                 if (_uiState.value.isMovieWatched) {
                     watchProgressRepository.removeFromHistory(_effectiveContentId.value, videoId = resolveFallbackVideoId())
-                    showMessage(context.getString(R.string.detail_movie_marked_unwatched))
+                    showMessage(localizedContext.getString(R.string.detail_movie_marked_unwatched))
                 } else {
                     watchProgressRepository.markAsCompleted(buildCompletedMovieProgress(meta))
-                    showMessage(context.getString(R.string.detail_movie_marked_watched))
+                    showMessage(localizedContext.getString(R.string.detail_movie_marked_watched))
                 }
             }.onFailure { error ->
                 showMessage(
@@ -1961,10 +1974,10 @@ class MetaDetailsViewModel @Inject constructor(
             runCatching {
                 if (isWatched) {
                     watchProgressRepository.removeFromHistory(_effectiveContentId.value, videoId = video.id, season = season, episode = episode)
-                    showMessage(context.getString(R.string.detail_episode_marked_unwatched))
+                    showMessage(localizedContext.getString(R.string.detail_episode_marked_unwatched))
                 } else {
                     watchProgressRepository.markAsCompleted(buildCompletedEpisodeProgress(meta, video))
-                    showMessage(context.getString(R.string.detail_episode_marked_watched))
+                    showMessage(localizedContext.getString(R.string.detail_episode_marked_watched))
                 }
             }.onFailure { error ->
                 showMessage(
@@ -2015,7 +2028,7 @@ class MetaDetailsViewModel @Inject constructor(
                 !isWatched
             }
             if (unwatched.isEmpty()) {
-                showMessage(context.getString(R.string.detail_all_episodes_watched))
+                showMessage(localizedContext.getString(R.string.detail_all_episodes_watched))
                 return@launch
             }
 
@@ -2034,7 +2047,7 @@ class MetaDetailsViewModel @Inject constructor(
             _uiState.update {
                 it.copy(episodeWatchedPendingKeys = it.episodeWatchedPendingKeys - pendingKeys)
             }
-            showMessage(context.getString(R.string.detail_marked_episodes_watched, unwatched.size))
+            showMessage(localizedContext.getString(R.string.detail_marked_episodes_watched, unwatched.size))
         }
     }
 
@@ -2054,7 +2067,7 @@ class MetaDetailsViewModel @Inject constructor(
                     || _uiState.value.watchedEpisodes.contains(s to e)
             }
             if (watched.isEmpty()) {
-                showMessage(context.getString(R.string.detail_no_watched_episodes))
+                showMessage(localizedContext.getString(R.string.detail_no_watched_episodes))
                 return@launch
             }
 
@@ -2077,7 +2090,7 @@ class MetaDetailsViewModel @Inject constructor(
             _uiState.update {
                 it.copy(episodeWatchedPendingKeys = it.episodeWatchedPendingKeys - pendingKeys)
             }
-            showMessage(context.getString(R.string.detail_marked_episodes_unwatched, watched.size))
+            showMessage(localizedContext.getString(R.string.detail_marked_episodes_unwatched, watched.size))
         }
     }
 
@@ -2104,7 +2117,7 @@ class MetaDetailsViewModel @Inject constructor(
                 !isWatched
             }
             if (unwatched.isEmpty()) {
-                showMessage(context.getString(R.string.detail_all_previous_watched))
+                showMessage(localizedContext.getString(R.string.detail_all_previous_watched))
                 return@launch
             }
 
@@ -2123,7 +2136,7 @@ class MetaDetailsViewModel @Inject constructor(
             _uiState.update {
                 it.copy(episodeWatchedPendingKeys = it.episodeWatchedPendingKeys - pendingKeys)
             }
-            showMessage(context.getString(R.string.detail_marked_previous_watched, unwatched.size))
+            showMessage(localizedContext.getString(R.string.detail_marked_previous_watched, unwatched.size))
         }
     }
 
@@ -2404,7 +2417,7 @@ class MetaDetailsViewModel @Inject constructor(
                     isSharedTrailerLoading = false,
                     sharedTrailerUrl = null,
                     sharedTrailerAudioUrl = null,
-                    sharedTrailerErrorMessage = context.getString(R.string.detail_trailer_error),
+                    sharedTrailerErrorMessage = localizedContext.getString(R.string.detail_trailer_error),
                     selectedSharedTrailer = trailer
                 )
             }
@@ -2458,7 +2471,7 @@ class MetaDetailsViewModel @Inject constructor(
                         sharedTrailerUrl = source?.videoUrl,
                         sharedTrailerAudioUrl = source?.audioUrl,
                         sharedTrailerErrorMessage = if (source == null) {
-                            context.getString(R.string.detail_trailer_error)
+                            localizedContext.getString(R.string.detail_trailer_error)
                         } else {
                             null
                         }
