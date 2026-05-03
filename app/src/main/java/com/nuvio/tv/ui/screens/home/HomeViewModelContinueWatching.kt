@@ -60,6 +60,7 @@ private data class ContinueWatchingSettingsSnapshot(
     val nextUpSeeds: List<WatchProgress>,
     val daysCap: Int,
     val dismissedNextUp: Set<String>,
+    val showUnairedNextUp: Boolean,
     val nextUpFromFurthestEpisode: Boolean,
     val watchedItemsVersion: Int,  // triggers re-evaluation when watched items change
     val hasLoadedRemoteProgress: Boolean
