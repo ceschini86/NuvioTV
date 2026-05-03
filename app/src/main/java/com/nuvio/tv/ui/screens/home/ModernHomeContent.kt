@@ -825,6 +825,7 @@ fun ModernHomeContent(
             continueWatchingCardWidth = continueWatchingCardWidth,
             continueWatchingCardHeight = continueWatchingCardHeight,
             blurUnwatchedEpisodes = uiState.blurUnwatchedEpisodes,
+            useEpisodeThumbnails = uiState.useEpisodeThumbnailsInCw,
             pendingRowFocusKey = pendingRowFocusKey,
             pendingRowFocusIndex = pendingRowFocusIndex,
             pendingRowFocusNonce = pendingRowFocusNonce,

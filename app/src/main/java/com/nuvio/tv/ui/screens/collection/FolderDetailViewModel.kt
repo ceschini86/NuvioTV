@@ -361,7 +361,8 @@ class FolderDetailViewModel @Inject constructor(
                         continueWatchingItems = emptyList(),
                         useLandscapePosters = s.modernLandscapePostersEnabled,
                         showCatalogTypeSuffix = s.catalogTypeSuffixEnabled,
-                        showFullReleaseDate = s.showFullReleaseDate
+                        showFullReleaseDate = s.showFullReleaseDate,
+                        localeTag = com.nuvio.tv.LocaleCache.localeTag
                     ),
                     cache = modernCarouselRowBuildCache,
                     context = appContext

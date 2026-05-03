@@ -333,7 +333,8 @@ fun GridHomeContent(
                                     val isNextUp = item is ContinueWatchingItem.NextUp
                                     onRemoveContinueWatching(contentId, season, episode, isNextUp)
                                 },
-                                blurUnwatchedEpisodes = uiState.blurUnwatchedEpisodes
+                                blurUnwatchedEpisodes = uiState.blurUnwatchedEpisodes,
+                                useEpisodeThumbnails = uiState.useEpisodeThumbnailsInCw
                             )
                         }
 
@@ -418,34 +419,47 @@ fun GridHomeContent(
                     is GridItem.CollectionHeader -> {
                         if (!continueWatchingInserted && continueWatchingItems.isNotEmpty()) {
                             continueWatchingInserted = true
-                            GridContinueWatchingSection(
-                                modifier = Modifier.fillMaxWidth(),
-                                fullWidth = gridWidth,
-                                items = continueWatchingItems,
-                                focusedItemIndex = if (shouldRequestInitialFocus && !hasHero) 0 else -1,
-                                onItemClick = onContinueWatchingClick,
-                                onStartFromBeginning = onContinueWatchingStartFromBeginning,
-                                showManualPlayOption = showContinueWatchingManualPlayOption,
-                                onPlayManually = onContinueWatchingPlayManually,
-                                onDetailsClick = { item ->
-                                    onNavigateToDetail(
-                                        when (item) { is ContinueWatchingItem.InProgress -> item.progress.contentId; is ContinueWatchingItem.NextUp -> item.info.contentId },
-                                        when (item) { is ContinueWatchingItem.InProgress -> item.progress.contentType; is ContinueWatchingItem.NextUp -> item.info.contentType },
-                                        ""
-                                    )
-                                },
-                                onRemoveItem = { item ->
-                                    onRemoveContinueWatching(
-                                        when (item) { is ContinueWatchingItem.InProgress -> item.progress.contentId; is ContinueWatchingItem.NextUp -> item.info.contentId },
-                                        when (item) { is ContinueWatchingItem.InProgress -> item.progress.season; is ContinueWatchingItem.NextUp -> item.info.seedSeason },
-                                        when (item) { is ContinueWatchingItem.InProgress -> item.progress.episode; is ContinueWatchingItem.NextUp -> item.info.seedEpisode },
-                                        item is ContinueWatchingItem.NextUp
-                                    )
-                                },
-                                blurUnwatchedEpisodes = uiState.blurUnwatchedEpisodes
-                            )
+                            item(
+                                key = "continue_watching_before_col",
+                                span = { GridItemSpan(maxLineSpan) },
+                                contentType = "continue_watching"
+                            ) {
+                                GridContinueWatchingSection(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    fullWidth = gridWidth,
+                                    items = continueWatchingItems,
+                                    focusedItemIndex = if (shouldRequestInitialFocus && !hasHero) 0 else -1,
+                                    onItemClick = { onContinueWatchingClick(it) },
+                                    onStartFromBeginning = onContinueWatchingStartFromBeginning,
+                                    showManualPlayOption = showContinueWatchingManualPlayOption,
+                                    onPlayManually = onContinueWatchingPlayManually,
+                                    onDetailsClick = { item ->
+                                        onNavigateToDetail(
+                                            when (item) { is ContinueWatchingItem.InProgress -> item.progress.contentId; is ContinueWatchingItem.NextUp -> item.info.contentId },
+                                            when (item) { is ContinueWatchingItem.InProgress -> item.progress.contentType; is ContinueWatchingItem.NextUp -> item.info.contentType },
+                                            ""
+                                        )
+                                    },
+                                    onRemoveItem = { item ->
+                                        onRemoveContinueWatching(
+                                            when (item) { is ContinueWatchingItem.InProgress -> item.progress.contentId; is ContinueWatchingItem.NextUp -> item.info.contentId },
+                                            when (item) { is ContinueWatchingItem.InProgress -> item.progress.season; is ContinueWatchingItem.NextUp -> item.info.seedSeason },
+                                            when (item) { is ContinueWatchingItem.InProgress -> item.progress.episode; is ContinueWatchingItem.NextUp -> item.info.seedEpisode },
+                                            item is ContinueWatchingItem.NextUp
+                                        )
+                                    },
+                                    blurUnwatchedEpisodes = uiState.blurUnwatchedEpisodes,
+                                    useEpisodeThumbnails = uiState.useEpisodeThumbnailsInCw
+                                )
+                            }
                         }
-                        SectionDivider(catalogName = gridItem.title)
+                        item(
+                            key = "col_header_${gridItem.collectionId}",
+                            span = { GridItemSpan(maxLineSpan) },
+                            contentType = "collection_header"
+                        ) {
+                            SectionDivider(catalogName = gridItem.title)
+                        }
                     }
 
                     is GridItem.CollectionFolder -> {
@@ -508,7 +522,8 @@ fun GridHomeContent(
                             val isNextUp = item is ContinueWatchingItem.NextUp
                             onRemoveContinueWatching(contentId, season, episode, isNextUp)
                         },
-                        blurUnwatchedEpisodes = uiState.blurUnwatchedEpisodes
+                        blurUnwatchedEpisodes = uiState.blurUnwatchedEpisodes,
+                        useEpisodeThumbnails = uiState.useEpisodeThumbnailsInCw
                     )
                 }
             }
