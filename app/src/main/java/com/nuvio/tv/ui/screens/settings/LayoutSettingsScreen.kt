@@ -58,6 +58,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.core.build.AppFeaturePolicy
 import com.nuvio.tv.domain.model.ContinueWatchingSortMode
+import com.nuvio.tv.domain.model.DiscoverLocation
 import com.nuvio.tv.domain.model.FocusedPosterTrailerPlaybackTarget
 import com.nuvio.tv.domain.model.HomeLayout
 import com.nuvio.tv.ui.components.ClassicLayoutPreview
@@ -350,6 +351,14 @@ fun LayoutSettingsContent(
                             onFocused = { focusedSection = LayoutSettingsSection.HOME_CONTENT }
                         )
                     }
+                    DiscoverLocationRow(
+                        selectedLocation = uiState.discoverLocation,
+                        rememberedLocation = uiState.lastNonOffDiscoverLocation,
+                        onLocationSelected = { location ->
+                            viewModel.onEvent(LayoutSettingsEvent.SetDiscoverLocation(location))
+                        },
+                        onFocused = { focusedSection = LayoutSettingsSection.HOME_CONTENT }
+                    )
                     if (uiState.selectedLayout != HomeLayout.MODERN) {
                         CompactToggleRow(
                             title = stringResource(R.string.layout_show_hero),
@@ -363,17 +372,6 @@ fun LayoutSettingsContent(
                             onFocused = { focusedSection = LayoutSettingsSection.HOME_CONTENT }
                         )
                     }
-                    CompactToggleRow(
-                        title = stringResource(R.string.layout_show_discover),
-                        subtitle = stringResource(R.string.layout_show_discover_sub),
-                        checked = uiState.searchDiscoverEnabled,
-                        onToggle = {
-                            viewModel.onEvent(
-                                LayoutSettingsEvent.SetSearchDiscoverEnabled(!uiState.searchDiscoverEnabled)
-                            )
-                        },
-                        onFocused = { focusedSection = LayoutSettingsSection.HOME_CONTENT }
-                    )
                     if (uiState.selectedLayout != HomeLayout.MODERN) {
                         CompactToggleRow(
                             title = stringResource(R.string.layout_poster_labels),
@@ -901,6 +899,49 @@ private fun ModernTrailerPlaybackTargetRow(
                 onFocused = onFocused
             )
         }
+    }
+}
+
+@Composable
+private fun DiscoverLocationRow(
+    selectedLocation: DiscoverLocation,
+    rememberedLocation: DiscoverLocation,
+    onLocationSelected: (DiscoverLocation) -> Unit,
+    onFocused: () -> Unit
+) {
+    val sectionEnabled = selectedLocation != DiscoverLocation.OFF
+    val pinnedToSidebar = selectedLocation == DiscoverLocation.IN_SIDEBAR
+    CompactToggleRow(
+        title = stringResource(R.string.layout_show_discover),
+        subtitle = stringResource(R.string.layout_show_discover_sub),
+        checked = sectionEnabled,
+        onToggle = {
+            onLocationSelected(
+                when (selectedLocation) {
+                    DiscoverLocation.OFF -> rememberedLocation
+                    DiscoverLocation.IN_SEARCH,
+                    DiscoverLocation.IN_SIDEBAR -> DiscoverLocation.OFF
+                }
+            )
+        },
+        onFocused = onFocused
+    )
+    if (sectionEnabled) {
+        CompactToggleRow(
+            title = stringResource(R.string.layout_discover_pin_to_sidebar),
+            subtitle = stringResource(R.string.layout_discover_pin_to_sidebar_sub),
+            checked = pinnedToSidebar,
+            onToggle = {
+                onLocationSelected(
+                    when (selectedLocation) {
+                        DiscoverLocation.IN_SIDEBAR -> DiscoverLocation.IN_SEARCH
+                        DiscoverLocation.IN_SEARCH -> DiscoverLocation.IN_SIDEBAR
+                        DiscoverLocation.OFF -> error("unreachable: OFF excluded by sectionEnabled")
+                    }
+                )
+            },
+            onFocused = onFocused
+        )
     }
 }
 
