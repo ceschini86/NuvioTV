@@ -756,9 +756,11 @@ fun ModernHomeContent(
         val rowsViewportHeight = maxHeight * rowsViewportHeightFraction
         val localDensity = LocalDensity.current
         val rowTitleLineHeight = MaterialTheme.typography.titleMedium.lineHeight
-        val rowTitleHeight = with(localDensity) {
-            runCatching { rowTitleLineHeight.toDp() }
-                .getOrDefault(24.dp)
+        val rowTitleHeight = remember(rowTitleLineHeight, localDensity) {
+            with(localDensity) {
+                runCatching { rowTitleLineHeight.toDp() }
+                    .getOrDefault(24.dp)
+            }
         }
         val heroBackdropHeight = (maxHeight - rowsViewportHeight + rowTitleHeight + rowTitleBottom)
             .coerceAtMost(maxHeight)
