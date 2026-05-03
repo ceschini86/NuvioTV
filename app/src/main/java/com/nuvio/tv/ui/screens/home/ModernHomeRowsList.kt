@@ -43,6 +43,7 @@ import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.ui.util.StableList
 import com.nuvio.tv.ui.util.StableMap
 import com.nuvio.tv.ui.util.dpadVerticalFastScroll
+import com.nuvio.tv.ui.util.LocalRecompositionHighlighterEnabled
 import com.nuvio.tv.ui.util.recompositionHighlighter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -127,6 +128,7 @@ internal fun ModernHomeRowsList(
     val density = LocalDensity.current
     val context = LocalContext.current
     val verticalPrefetchImageLoader = context.imageLoader
+    val highlighterEnabled = LocalRecompositionHighlighterEnabled.current
 
     LaunchedEffect(verticalPrefetchImageLoader, density) {
         val prefetchAheadRows = 3
@@ -214,7 +216,7 @@ internal fun ModernHomeRowsList(
             state = verticalRowListState,
             modifier = modifier
                 .fillMaxWidth()
-                .recompositionHighlighter()
+                .then(if (highlighterEnabled) Modifier.recompositionHighlighter() else Modifier)
                 .height(rowsViewportHeight)
                 .padding(bottom = catalogBottomPadding)
                 .clipToBounds()

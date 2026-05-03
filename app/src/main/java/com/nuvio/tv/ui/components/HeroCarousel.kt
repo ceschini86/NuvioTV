@@ -60,6 +60,8 @@ import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.ui.theme.NuvioColors
+import com.nuvio.tv.ui.util.LocalRecompositionHighlighterEnabled
+import com.nuvio.tv.ui.util.recompositionHighlighter
 import kotlinx.coroutines.delay
 
 private const val AUTO_ADVANCE_INTERVAL_MS = 10000L
@@ -192,6 +194,7 @@ fun HeroCarousel(
 private fun HeroCarouselSlide(
     item: MetaPreview
 ) {
+    val highlighterEnabled = LocalRecompositionHighlighterEnabled.current
     val context = LocalContext.current
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
@@ -249,7 +252,7 @@ private fun HeroCarouselSlide(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .recompositionHighlighter()
+            .then(if (highlighterEnabled) Modifier.recompositionHighlighter() else Modifier)
     ) {
         // Background image
         AsyncImage(

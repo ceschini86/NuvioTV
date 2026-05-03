@@ -108,6 +108,7 @@ import kotlin.math.abs
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import com.nuvio.tv.ui.util.LocalRecompositionHighlighterEnabled
 import com.nuvio.tv.ui.util.recompositionHighlighter
 import com.nuvio.tv.ui.util.StableMap
 import com.nuvio.tv.ui.util.asStable
@@ -393,6 +394,7 @@ internal fun ModernRowSection(
     onBackdropInteraction: () -> Unit,
     onExpandedCatalogFocusKeyChange: (String?) -> Unit
 ) {
+    val highlighterEnabled = LocalRecompositionHighlighterEnabled.current
     val focusedItemByRow = uiCaches.focusedItemByRow
     val itemFocusRequesters = uiCaches.itemFocusRequesters
     val rowListStates = uiCaches.rowListStates
@@ -761,7 +763,7 @@ internal fun ModernRowSection(
             LazyRow(
                 state = rowListState,
                 modifier = Modifier
-                    .recompositionHighlighter()
+                    .then(if (highlighterEnabled) Modifier.recompositionHighlighter() else Modifier)
                     .focusRestorer {
                         val savedIdx = (focusedItemByRow[rowKey] ?: 0)
                             .coerceIn(0, (row.items.list.size - 1).coerceAtLeast(0))
@@ -912,6 +914,7 @@ private fun ModernCarouselCard(
     onTrailerEnded: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val highlighterEnabled = LocalRecompositionHighlighterEnabled.current
     val cardShape = remember(cardCornerRadius) { RoundedCornerShape(cardCornerRadius) }
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -1095,7 +1098,7 @@ private fun ModernCarouselCard(
     Column(
         modifier = modifier
             .width(animatedCardWidth)
-            .recompositionHighlighter(),
+            .then(if (highlighterEnabled) Modifier.recompositionHighlighter() else Modifier),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Card(

@@ -13,7 +13,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -74,7 +73,9 @@ import com.nuvio.tv.ui.components.ContinueWatchingOptionsDialog
 import com.nuvio.tv.LocalSidebarExpanded
 import com.nuvio.tv.LocalContentFocusRequester
 import com.nuvio.tv.ui.theme.NuvioColors
+import com.nuvio.tv.ui.util.LocalRecompositionHighlighterEnabled
 import com.nuvio.tv.ui.util.asStable
+import com.nuvio.tv.ui.util.recompositionHighlighter
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalDensity
@@ -503,7 +504,11 @@ fun ModernHomeContent(
     val continueWatchingCardWidth = portraitBaseWidth * 1.24f * continueWatchingScale
     val continueWatchingCardHeight = continueWatchingCardWidth / 1.77f
 
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+    val localConfiguration = LocalConfiguration.current
+    val screenWidth = localConfiguration.screenWidthDp.dp
+    val screenHeight = localConfiguration.screenHeightDp.dp
+
+    Box(modifier = Modifier.fillMaxSize()) {
         val posterCardCornerRadius = remember(uiState.posterCardCornerRadiusDp) { uiState.posterCardCornerRadiusDp.dp }
         val rowHorizontalPadding = 52.dp
 
@@ -699,7 +704,7 @@ fun ModernHomeContent(
 
         val localDensity = LocalDensity.current
         val rowsViewportHeightFraction = if (useLandscapePosters) 0.49f else 0.52f
-        val rowsViewportHeight = maxHeight * rowsViewportHeightFraction
+        val rowsViewportHeight = screenHeight * rowsViewportHeightFraction
         val rowTitleLineHeight = MaterialTheme.typography.titleMedium.lineHeight
         val rowTitleHeight = remember(rowTitleLineHeight, localDensity) {
             with(localDensity) {
@@ -707,7 +712,7 @@ fun ModernHomeContent(
                     .getOrDefault(24.dp)
             }
         }
-        val heroBackdropHeight = (maxHeight - rowsViewportHeight + rowTitleHeight + 14.dp).coerceAtMost(maxHeight)
+        val heroBackdropHeight = (screenHeight - rowsViewportHeight + rowTitleHeight + 14.dp).coerceAtMost(screenHeight)
         val verticalRowBringIntoViewSpec = remember(localDensity, defaultBringIntoViewSpec) {
             val topInsetPx = with(localDensity) { MODERN_ROW_HEADER_FOCUS_INSET.toPx() }
             @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
@@ -716,57 +721,59 @@ fun ModernHomeContent(
                 override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float = offset - topInsetPx
             }
         }
-        val bgColor = NuvioColors.Background
         val contentFocusRequester = LocalContentFocusRequester.current
-        val heroMediaWidthPx = remember(maxWidth, localDensity, fullScreenBackdrop) {
+        val heroMediaWidthPx = remember(screenWidth, localDensity, fullScreenBackdrop) {
             with(localDensity) {
-                if (fullScreenBackdrop) maxWidth.roundToPx()
-                else (maxWidth * MODERN_HERO_MEDIA_WIDTH_FRACTION).roundToPx()
+                if (fullScreenBackdrop) screenWidth.roundToPx()
+                else (screenWidth * MODERN_HERO_MEDIA_WIDTH_FRACTION).roundToPx()
             }
         }
-        val heroMediaHeightPx = remember(heroBackdropHeight, maxHeight, localDensity, fullScreenBackdrop) {
+        val heroMediaHeightPx = remember(heroBackdropHeight, screenHeight, localDensity, fullScreenBackdrop) {
             with(localDensity) {
-                if (fullScreenBackdrop) maxHeight.roundToPx()
+                if (fullScreenBackdrop) screenHeight.roundToPx()
                 else heroBackdropHeight.roundToPx()
             }
         }
 
-        val heroMediaModifier = remember(heroBackdropHeight, maxHeight, fullScreenBackdrop) {
+        val heroMediaModifier = remember(heroBackdropHeight, screenHeight, fullScreenBackdrop) {
             if (fullScreenBackdrop) {
-                Modifier.align(Alignment.TopStart).fillMaxWidth().height(maxHeight)
+                Modifier.align(Alignment.TopStart).fillMaxWidth().height(screenHeight)
             } else {
                 Modifier.align(Alignment.TopEnd).offset(x = 56.dp).fillMaxWidth(MODERN_HERO_MEDIA_WIDTH_FRACTION).height(heroBackdropHeight)
             }
         }
 
-        ModernHeroScene(
-            state = heroSceneState,
-            bgColor = bgColor,
+        ModernHeroSection(
+            heroSceneState = heroSceneState,
+            heroMediaWidthPx = heroMediaWidthPx,
+            heroMediaHeightPx = heroMediaHeightPx,
             modifier = heroMediaModifier,
-            requestWidthPx = heroMediaWidthPx,
-            requestHeightPx = heroMediaHeightPx,
-            onTrailerEnded = {
-                val playbackKey = collectionHeroVideoPlaybackKey
-                if (shouldPlayCollectionHeroVideoState.value && playbackKey != null) endedCollectionHeroVideoPlaybackKey = playbackKey
-                else expandedCatalogFocusKey.value = null
+            onTrailerEnded = remember {
+                {
+                    if (shouldPlayCollectionHeroVideoState.value && collectionHeroVideoPlaybackKey != null) {
+                        endedCollectionHeroVideoPlaybackKey = collectionHeroVideoPlaybackKey
+                    } else {
+                        expandedCatalogFocusKey.value = null
+                    }
+                }
             },
-            onFirstFrameRendered = { heroTrailerFirstFrameRendered = true },
+            onFirstFrameRendered = { heroTrailerFirstFrameRendered = true }
         )
+
         val trailerContentAlpha by animateFloatAsState(
             targetValue = if (fullScreenBackdrop && shouldPlayCatalogHeroTrailerState.value && heroTrailerFirstFrameRendered) 0f else 1f,
             animationSpec = tween(durationMillis = 480),
             label = "trailerContentFade"
         )
 
-        HeroTitleBlock(
-            preview = heroSceneState.preview,
-            enrichmentActive = heroSceneState.enrichmentActive,
-            portraitMode = !useLandscapePosters,
-            trailerPlaying = heroSceneState.fullScreenBackdrop && shouldPlayCatalogHeroTrailerState.value && heroSceneState.trailerFirstFrameRendered,
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = rowHorizontalPadding, end = 48.dp, bottom = 0.dp + rowsViewportHeight + 16.dp)
-                .fillMaxWidth(MODERN_HERO_TEXT_WIDTH_FRACTION)
+        HeroInfoSection(
+            heroSceneState = heroSceneState,
+            useLandscapePosters = useLandscapePosters,
+            shouldPlayCatalogHeroTrailerState = shouldPlayCatalogHeroTrailerState.value,
+            heroTrailerFirstFrameRendered = heroTrailerFirstFrameRendered,
+            rowsViewportHeight = rowsViewportHeight,
+            rowHorizontalPadding = rowHorizontalPadding,
+            modifier = Modifier.align(Alignment.BottomStart)
         )
 
         val onActiveRowKeyChangeLambda = remember { { key: String? -> focusHolder.activeRowKey = key; activeRowKey.value = key } }
@@ -898,4 +905,48 @@ fun ModernHomeContent(
             }
         )
     }
+}
+@Composable
+private fun ModernHeroSection(
+    heroSceneState: ModernHeroSceneState,
+    heroMediaWidthPx: Int,
+    heroMediaHeightPx: Int,
+    modifier: Modifier,
+    onTrailerEnded: () -> Unit,
+    onFirstFrameRendered: () -> Unit
+) {
+    val highlighterEnabled = LocalRecompositionHighlighterEnabled.current
+    val bgColor = NuvioColors.Background
+    ModernHeroScene(
+        state = heroSceneState,
+        bgColor = bgColor,
+        modifier = modifier.then(if (highlighterEnabled) Modifier.recompositionHighlighter() else Modifier),
+        requestWidthPx = heroMediaWidthPx,
+        requestHeightPx = heroMediaHeightPx,
+        onTrailerEnded = onTrailerEnded,
+        onFirstFrameRendered = onFirstFrameRendered,
+    )
+}
+
+@Composable
+private fun HeroInfoSection(
+    heroSceneState: ModernHeroSceneState,
+    useLandscapePosters: Boolean,
+    shouldPlayCatalogHeroTrailerState: Boolean,
+    heroTrailerFirstFrameRendered: Boolean,
+    rowsViewportHeight: Dp,
+    rowHorizontalPadding: Dp,
+    modifier: Modifier = Modifier
+) {
+    val highlighterEnabled = LocalRecompositionHighlighterEnabled.current
+    HeroTitleBlock(
+        preview = heroSceneState.preview,
+        enrichmentActive = heroSceneState.enrichmentActive,
+        portraitMode = !useLandscapePosters,
+        trailerPlaying = heroSceneState.fullScreenBackdrop && shouldPlayCatalogHeroTrailerState && heroTrailerFirstFrameRendered,
+        modifier = modifier
+            .then(if (highlighterEnabled) Modifier.recompositionHighlighter() else Modifier)
+            .padding(start = rowHorizontalPadding, end = 48.dp, bottom = 0.dp + rowsViewportHeight + 16.dp)
+            .fillMaxWidth(MODERN_HERO_TEXT_WIDTH_FRACTION)
+    )
 }
