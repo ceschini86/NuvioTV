@@ -2,6 +2,7 @@ package com.nuvio.tv.ui.screens.home
 
 import android.util.Log
 import androidx.lifecycle.viewModelScope
+import com.nuvio.tv.LocaleCache
 import com.nuvio.tv.core.build.AppFeaturePolicy
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.tmdb.TmdbEnrichment
@@ -235,15 +236,15 @@ internal fun HomeViewModel.observeLayoutPreferencesPipeline() {
 @OptIn(FlowPreview::class)
 internal fun HomeViewModel.observeModernHomePresentationPipeline() {
     viewModelScope.launch {
-        uiState
-            .map { state ->
+        combine(uiState, _currentLocaleTag) { state, localeTag ->
                 ModernHomePresentationInput(
                     homeRows = state.homeRows,
                     catalogRows = state.catalogRows,
                     continueWatchingItems = state.continueWatchingItems,
                     useLandscapePosters = state.modernLandscapePostersEnabled,
                     showCatalogTypeSuffix = state.catalogTypeSuffixEnabled,
-                    showFullReleaseDate = state.showFullReleaseDate
+                    showFullReleaseDate = state.showFullReleaseDate,
+                    localeTag = localeTag
                 )
             }
             // Compare by row structure only (keys + item counts), not by
@@ -256,6 +257,7 @@ internal fun HomeViewModel.observeModernHomePresentationPipeline() {
                     && old.useLandscapePosters == new.useLandscapePosters
                     && old.showCatalogTypeSuffix == new.showCatalogTypeSuffix
                     && old.showFullReleaseDate == new.showFullReleaseDate
+                    && old.localeTag == new.localeTag
                     && old.catalogRows.size == new.catalogRows.size
             }
             .debounce(80)
