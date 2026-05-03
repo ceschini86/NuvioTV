@@ -16,6 +16,7 @@ import com.nuvio.tv.core.sync.homeCollectionKey
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.Collection
 import com.nuvio.tv.domain.model.ContinueWatchingSortMode
+import com.nuvio.tv.domain.model.DiscoverLocation
 import com.nuvio.tv.domain.model.FocusedPosterTrailerPlaybackTarget
 import com.nuvio.tv.domain.model.HomeLayout
 import kotlinx.coroutines.flow.Flow
@@ -57,7 +58,6 @@ class LayoutPreferenceDataStore @Inject constructor(
     private val modernSidebarBlurEnabledKey = booleanPreferencesKey("modern_sidebar_blur_enabled")
     private val modernLandscapePostersEnabledKey = booleanPreferencesKey("modern_landscape_posters_enabled")
     private val heroSectionEnabledKey = booleanPreferencesKey("hero_section_enabled")
-    private val searchDiscoverEnabledKey = booleanPreferencesKey("search_discover_enabled")
     private val posterLabelsEnabledKey = booleanPreferencesKey("poster_labels_enabled")
     private val catalogAddonNameEnabledKey = booleanPreferencesKey("catalog_addon_name_enabled")
     private val catalogTypeSuffixEnabledKey = booleanPreferencesKey("catalog_type_suffix_enabled")
@@ -180,8 +180,20 @@ class LayoutPreferenceDataStore @Inject constructor(
         prefs[heroSectionEnabledKey] ?: true
     }
 
-    val searchDiscoverEnabled: Flow<Boolean> = profileFlow { prefs ->
-        prefs[searchDiscoverEnabledKey] ?: true
+    val discoverLocation: Flow<DiscoverLocation> = profileFlow { prefs ->
+        val stored = prefs[discoverLocationKey] ?: DiscoverLocation.IN_SEARCH.name
+        runCatching { DiscoverLocation.valueOf(stored) }
+            .getOrDefault(DiscoverLocation.IN_SEARCH)
+    }
+
+    val lastNonOffDiscoverLocation: Flow<DiscoverLocation> = profileFlow { prefs ->
+        val stored = prefs[lastNonOffDiscoverLocationKey]
+            ?.takeIf { it != DiscoverLocation.OFF.name }
+        val fallback = prefs[discoverLocationKey]
+            ?.takeIf { it != DiscoverLocation.OFF.name }
+        val source = stored ?: fallback ?: DiscoverLocation.IN_SEARCH.name
+        runCatching { DiscoverLocation.valueOf(source) }
+            .getOrDefault(DiscoverLocation.IN_SEARCH)
     }
 
     val posterLabelsEnabled: Flow<Boolean> = profileFlow { prefs ->
@@ -427,9 +439,13 @@ class LayoutPreferenceDataStore @Inject constructor(
         }
     }
 
-    suspend fun setSearchDiscoverEnabled(enabled: Boolean) {
+    suspend fun setDiscoverLocation(location: DiscoverLocation) {
         store().edit { prefs ->
-            prefs[searchDiscoverEnabledKey] = enabled
+            prefs[discoverLocationKey] = location.name
+            if (location != DiscoverLocation.OFF) {
+                prefs[lastNonOffDiscoverLocationKey] = location.name
+            }
+            prefs.remove(legacySearchDiscoverEnabledKey)
         }
     }
 
@@ -673,3 +689,7 @@ class LayoutPreferenceDataStore @Inject constructor(
         )
     }
 }
+
+internal val legacySearchDiscoverEnabledKey = booleanPreferencesKey("search_discover_enabled")
+internal val discoverLocationKey = stringPreferencesKey("discover_location")
+internal val lastNonOffDiscoverLocationKey = stringPreferencesKey("last_non_off_discover_location")
