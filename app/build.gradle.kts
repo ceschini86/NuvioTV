@@ -158,6 +158,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            buildConfigField("boolean", "IS_DEBUG_BUILD", "true")
             applicationIdSuffix = ".debug"
             matchingFallbacks += "release"
         }

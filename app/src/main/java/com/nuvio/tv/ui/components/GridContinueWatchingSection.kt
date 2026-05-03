@@ -54,7 +54,7 @@ fun GridContinueWatchingSection(
     if (items.isEmpty()) return
     var optionsItem by remember { mutableStateOf<ContinueWatchingItem?>(null) }
     val focusRequesters = remember(items.size) { List(items.size) { FocusRequester() } }
-    var lastFocusedIndex by remember { mutableIntStateOf(-1) }
+    val lastFocusedIndex = remember { mutableIntStateOf(-1) }
     var lastRequestedFocusIndex by remember { mutableIntStateOf(-1) }
     var pendingFocusIndex by remember { mutableStateOf<Int?>(null) }
 
@@ -99,8 +99,8 @@ fun GridContinueWatchingSection(
                         Modifier.fillMaxWidth()
                 )
                 .focusRestorer {
-                    val idx = if (lastFocusedIndex >= 0 && lastFocusedIndex < focusRequesters.size)
-                        lastFocusedIndex else 0
+                    val idx = if (lastFocusedIndex.intValue >= 0 && lastFocusedIndex.intValue < focusRequesters.size)
+                        lastFocusedIndex.intValue else 0
                     focusRequesters.getOrNull(idx) ?: FocusRequester.Default
                 },
             contentPadding = PaddingValues(horizontal = 36.dp, vertical = 0.dp),
@@ -131,8 +131,8 @@ fun GridContinueWatchingSection(
                     useEpisodeThumbnails = useEpisodeThumbnails,
                     modifier = focusModifier
                         .onFocusChanged { focusState ->
-                            if (focusState.isFocused && lastFocusedIndex != index) {
-                                lastFocusedIndex = index
+                            if (focusState.isFocused && lastFocusedIndex.intValue != index) {
+                                lastFocusedIndex.intValue = index
                             }
                         },
                     cardWidth = 220.dp,
@@ -148,7 +148,7 @@ fun GridContinueWatchingSection(
             item = menuItem,
             onDismiss = { optionsItem = null },
             onRemove = {
-                val targetIndex = if (items.size <= 1) null else minOf(lastFocusedIndex, items.size - 2)
+                val targetIndex = if (items.size <= 1) null else minOf(lastFocusedIndex.intValue, items.size - 2)
                 pendingFocusIndex = targetIndex
                 onRemoveItem(menuItem)
                 optionsItem = null

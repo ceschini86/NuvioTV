@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import com.nuvio.tv.ui.util.recompositionHighlighter
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
@@ -199,6 +200,7 @@ private fun HeroCarouselSlide(
     }
     val requestHeightPx = remember(density) { with(density) { 400.dp.roundToPx() } }
     val logoRequestHeightPx = remember(density) { with(density) { 80.dp.roundToPx() } }
+
     val backdropUrl = item.backdropUrl
     val backgroundModel = remember(context, backdropUrl, requestWidthPx, requestHeightPx) {
         ImageRequest.Builder(context)
@@ -245,7 +247,9 @@ private fun HeroCarouselSlide(
     }
 
     Box(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier
+            .fillMaxSize()
+            .recompositionHighlighter()
     ) {
         // Background image
         AsyncImage(
