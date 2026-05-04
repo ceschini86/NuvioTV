@@ -28,6 +28,9 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -130,6 +133,8 @@ internal fun ModernHomeRowsList(
     val latestOnActiveRowKeyChange = rememberUpdatedState(onActiveRowKeyChange)
     val latestOnActiveItemIndexChange = rememberUpdatedState(onActiveItemIndexChange)
 
+    val rowFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
+
     val density = LocalDensity.current
     val context = LocalContext.current
     val verticalPrefetchImageLoader = context.imageLoader
@@ -198,11 +203,9 @@ internal fun ModernHomeRowsList(
         }
     }
 
-    val focusRestorerRequester = remember(carouselRows, activeRowKey) {
+    val focusRestorerRequester = remember(activeRowKey) {
         {
-            // With the new self-claiming ID-based focus system, focusRestorer
-            // should focus the entire group and let the target item claim it.
-            FocusRequester.Default
+            activeRowKey.value?.let { rowFocusRequesters[it] } ?: FocusRequester.Default
         }
     }
 
@@ -282,9 +285,9 @@ internal fun ModernHomeRowsList(
                 }
                 val stableOnRowItemFocused = remember {
                     { rowKey: String, index: Int, isContinueWatchingRow: Boolean ->
-                        val isRowEntering = activeRowKey.value != rowKey
                         val rowBecameActive = activeRowKey.value != rowKey
                         val itemChanged = activeItemIndex.value != index
+                        
                         if (rowBecameActive || itemChanged) {
                             val now = System.currentTimeMillis()
                             val timeSinceLastHeroNav = now - lastHeroNavigationAtMs.value
@@ -298,11 +301,12 @@ internal fun ModernHomeRowsList(
                             onActiveRowKeyChange(rowKey)
                             onActiveItemIndexChange(index)
                         }
-                        if (!isRowEntering) {
-                            if (focusedItemByRow[rowKey] != index) {
-                                focusedItemByRow[rowKey] = index
-                            }
+
+                        // Always keep the focusedItemByRow map in sync for ALL rows
+                        if (focusedItemByRow[rowKey] != index) {
+                            focusedItemByRow[rowKey] = index
                         }
+
                         if (isContinueWatchingRow) {
                             if (lastFocusedContinueWatchingIndex.value != index) {
                                 onLastFocusedContinueWatchingIndexChange(index)
@@ -331,6 +335,7 @@ internal fun ModernHomeRowsList(
                 ModernRowSection(
                     row = row,
                     isActiveRow = isActiveRowLambda,
+                    rowFocusRequester = rowFocusRequesters.getOrPut(row.key) { FocusRequester() },
                     rowTitleBottom = 14.dp, // rowTitleBottom
                     defaultBringIntoViewSpec = defaultBringIntoViewSpec,
                     focusStateCatalogRowScrollIndex = focusState.catalogRowScrollStates[row.key] ?: 0,

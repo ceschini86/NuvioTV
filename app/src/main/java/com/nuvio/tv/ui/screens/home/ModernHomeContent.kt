@@ -48,6 +48,7 @@ import coil3.request.CachePolicy
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
+import kotlin.math.abs
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
@@ -458,6 +459,13 @@ fun ModernHomeContent(
         onDispose {
             val row = latestActiveRow
             val focusedRowKey = row?.key
+            // Only save focus state if home screen actually had focus (focusedRowKey is not null)
+            // This prevents saving invalid state like row -1 when sidebar was open
+            if (focusedRowKey == null) {
+                // Home screen didn't have focus, don't overwrite the saved state
+                return@onDispose
+            }
+            
             val focusedRowIndex = focusedRowKey?.let { latestRowIndexByKey.value.map[it] } ?: -1
             val focusedItemIndex = activeItemIndex.intValue
             
@@ -787,7 +795,13 @@ fun ModernHomeContent(
                 @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
                 object : BringIntoViewSpec {
                     override val scrollAnimationSpec: AnimationSpec<Float> = defaultBringIntoViewSpec.scrollAnimationSpec
-                    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float = offset - topInsetPx
+                    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+                        // Relaxed vertical scroll: only scroll if the leading edge of the row header
+                        // is not at the target inset.
+                        val currentLeadingEdge = offset
+                        if (abs(currentLeadingEdge - topInsetPx) < 1f) return 0f
+                        return currentLeadingEdge - topInsetPx
+                    }
                 }
             }
             val contentFocusRequester = LocalContentFocusRequester.current
@@ -895,6 +909,9 @@ fun ModernHomeContent(
             val stableTrailerPreviewUrls = remember(trailerPreviewUrls) { trailerPreviewUrls.asStable() }
             val stableTrailerPreviewAudioUrls = remember(trailerPreviewAudioUrls) { trailerPreviewAudioUrls.asStable() }
 
+            val isVerticalRowsScrollingLambda = remember(verticalRowListState) {
+                { verticalRowListState.isScrollInProgress }
+            }
             ModernHomeRowsList(
                 carouselRows = carouselRows,
                 verticalRowListState = verticalRowListState,
@@ -961,7 +978,7 @@ fun ModernHomeContent(
                 focusedHeroMediaNonce = focusedHeroMediaNonce,
                 onFocusedHeroMediaNonceChange = onFocusedHeroMediaNonceChangeLambda,
                 onExpansionInteractionNonceChange = onExpansionInteractionNonceChangeLambda,
-                isVerticalRowsScrolling = { verticalRowListState.isScrollInProgress },
+                isVerticalRowsScrolling = isVerticalRowsScrollingLambda,
                 modifier = Modifier.align(Alignment.BottomStart)
             )
         }

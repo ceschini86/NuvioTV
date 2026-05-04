@@ -150,7 +150,7 @@ private fun ModernContinueWatchingRowItem(
     val item = payload.item
     val onClick = remember(item) { { onContinueWatchingClick(item) } }
     val onLongPress = remember(item) { { onShowOptions(item) } }
-    var focusEventId by remember { mutableStateOf(0) }
+    var focusEventId by remember { mutableIntStateOf(0) }
     var isCardFocused by remember { mutableStateOf(false) }
     val latestOnFocused by rememberUpdatedState(onFocused)
 
@@ -243,7 +243,7 @@ private fun ModernCatalogRowItem(
     val enrichedLogoUrl = enrichedMeta?.logo
     val enrichedBackdropUrl = enrichedMeta?.backdropUrl
 
-    var focusEventId by remember(focusKey) { mutableStateOf(0) }
+    var focusEventId by remember(focusKey) { mutableIntStateOf(0) }
     var isCardFocused by remember(focusKey) { mutableStateOf(false) }
     val latestOnFocused by rememberUpdatedState(onFocused)
     val latestOnItemFocus by rememberUpdatedState(onItemFocus)
@@ -389,6 +389,7 @@ private fun ModernCatalogRowItem(
 internal fun ModernRowSection(
     row: HeroCarouselRow,
     isActiveRow: () -> Boolean,
+    rowFocusRequester: FocusRequester,
     isVerticalRowsScrolling: () -> Boolean,
     rowTitleBottom: Dp,
     defaultBringIntoViewSpec: BringIntoViewSpec,
@@ -701,8 +702,16 @@ internal fun ModernRowSection(
                     val childSize = abs(size)
                     val childSmallerThanParent = childSize <= containerSize
                     val initialTarget = parentStartOffsetPx.toFloat()
-                    val spaceAvailable = containerSize - initialTarget
+                    
+                    // Relaxed horizontal scroll: if the item is already sufficiently visible
+                    // (at or near the leading edge), don't trigger a scroll just because it expanded.
+                    if (childSmallerThanParent) {
+                        if (offset >= initialTarget && offset + childSize <= containerSize) {
+                            return 0f
+                        }
+                    }
 
+                    val spaceAvailable = containerSize - initialTarget
                     val targetForLeadingEdge =
                         if (childSmallerThanParent && spaceAvailable < childSize) {
                             containerSize - childSize
@@ -710,7 +719,10 @@ internal fun ModernRowSection(
                             initialTarget
                         }
 
-                    return offset - targetForLeadingEdge
+                    val distance = offset - targetForLeadingEdge
+                    // If we're already very close to the target, don't jitter
+                    if (abs(distance) < 1f) return 0f
+                    return distance
                 }
             }
         }
@@ -728,6 +740,7 @@ internal fun ModernRowSection(
                 state = rowListState,
                 modifier = Modifier
                     .then(if (highlighterEnabled) Modifier.recompositionHighlighter() else Modifier)
+                    .focusRequester(rowFocusRequester)
                     .focusRestorer {
                         // In the ID-based system, the target item will self-claim focus.
                         FocusRequester.Default
@@ -765,9 +778,20 @@ internal fun ModernRowSection(
                         }
                     }
 
-                    val isTargetItem = remember(isActiveRow(), pendingRowFocusKey.value, pendingRowFocusIndex.value, row.key, index) {
-                        val isPending = pendingRowFocusKey.value == row.key && (pendingRowFocusIndex.value ?: 0) == index
-                        val isCurrent = isActiveRow() && (focusedItemByRow[row.key] ?: 0) == index
+                    val isTargetItem = remember(
+                        isActiveRow(),
+                        pendingRowFocusKey.value,
+                        pendingRowFocusIndex.value,
+                        row.key,
+                        index,
+                        isVerticalRowsScrolling
+                    ) {
+                        val isPending = pendingRowFocusKey.value == row.key && 
+                            (pendingRowFocusIndex.value ?: 0) == index &&
+                            !isVerticalRowsScrolling()  // Don't focus pending items while vertical scrolling
+                        val isCurrent = isActiveRow() && 
+                            (focusedItemByRow[row.key] ?: 0) == index &&
+                            !isVerticalRowsScrolling()  // Don't change focus during vertical scroll
                         isPending || isCurrent
                     }
 
@@ -811,6 +835,7 @@ internal fun ModernRowSection(
                                 expandedFocusKey
                             ) {
                                 {
+                                    // Don't expand while row is actively scrolling to prevent focus-driven horizontal movement
                                     effectiveExpandEnabled && !isRowScrollingState.value &&
                                         expandedCatalogFocusKey.value == expandedFocusKey
                                 }
