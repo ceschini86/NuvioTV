@@ -16,13 +16,16 @@ import com.nuvio.tv.ui.util.localizeEpisodeTitle
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.R
 import com.nuvio.tv.ui.components.formatContinueWatchingProgressLabel
+import com.nuvio.tv.ui.util.StableList
+import com.nuvio.tv.ui.util.StableMap
+import com.nuvio.tv.ui.util.StableSet
+import com.nuvio.tv.ui.util.asStable
 
 internal val YEAR_REGEX = Regex("""\b(19|20)\d{2}\b""")
-internal val YEAR_RANGE_REGEX = Regex("""^((19|20)\d{2})\s*[-–]\s*((19|20)\d{2})?$""")
 internal const val MODERN_HERO_TEXT_WIDTH_FRACTION = 0.42f
 internal const val MODERN_HERO_MEDIA_WIDTH_FRACTION = 0.72f
 internal const val MODERN_TRAILER_OVERSCAN_ZOOM = 1.35f
-internal const val MODERN_HERO_FOCUS_DEBOUNCE_MS = 90L
+internal const val MODERN_HERO_FOCUS_DEBOUNCE_MS = 250L
 internal val MODERN_ROW_HEADER_FOCUS_INSET = 40.dp
 internal const val MODERN_CONTINUE_WATCHING_ROW_KEY = "continue_watching"
 internal val MODERN_LANDSCAPE_LOGO_GRADIENT = Brush.verticalGradient(
@@ -109,7 +112,7 @@ data class HeroCarouselRow(
     val key: String,
     val title: String,
     val globalRowIndex: Int,
-    val items: List<ModernCarouselItem>,
+    val items: StableList<ModernCarouselItem>,
     val catalogId: String? = null,
     val addonId: String? = null,
     val apiType: String? = null,
@@ -120,28 +123,28 @@ data class HeroCarouselRow(
 
 @Immutable
 data class CarouselRowLookups(
-    val rowIndexByKey: Map<String, Int>,
-    val rowByKey: Map<String, HeroCarouselRow>,
-    val rowKeyByGlobalRowIndex: Map<Int, String>,
-    val firstHeroPreviewByRow: Map<String, HeroPreview>,
-    val fallbackBackdropByRow: Map<String, String>,
-    val activeRowKeys: Set<String>,
-    val activeItemKeysByRow: Map<String, Set<String>>,
-    val activeCatalogItemIds: Set<String>
+    val rowIndexByKey: StableMap<String, Int>,
+    val rowByKey: StableMap<String, HeroCarouselRow>,
+    val rowKeyByGlobalRowIndex: StableMap<Int, String>,
+    val firstHeroPreviewByRow: StableMap<String, HeroPreview>,
+    val fallbackBackdropByRow: StableMap<String, String>,
+    val activeRowKeys: StableSet<String>,
+    val activeItemKeysByRow: StableMap<String, Set<String>>,
+    val activeCatalogItemIds: StableSet<String>
 )
 
 @Immutable
 data class ModernHomePresentationState(
-    val rows: List<HeroCarouselRow> = emptyList(),
+    val rows: StableList<HeroCarouselRow> = StableList(),
     val lookups: CarouselRowLookups = CarouselRowLookups(
-        rowIndexByKey = emptyMap(),
-        rowByKey = emptyMap(),
-        rowKeyByGlobalRowIndex = emptyMap(),
-        firstHeroPreviewByRow = emptyMap(),
-        fallbackBackdropByRow = emptyMap(),
-        activeRowKeys = emptySet(),
-        activeItemKeysByRow = emptyMap(),
-        activeCatalogItemIds = emptySet()
+        rowIndexByKey = StableMap(),
+        rowByKey = StableMap(),
+        rowKeyByGlobalRowIndex = StableMap(),
+        firstHeroPreviewByRow = StableMap(),
+        fallbackBackdropByRow = StableMap(),
+        activeRowKeys = StableSet(),
+        activeItemKeysByRow = StableMap(),
+        activeCatalogItemIds = StableSet()
     )
 )
 
@@ -163,6 +166,7 @@ internal data class ModernCatalogRowBuildCacheEntry(
     val source: CatalogRow,
     val useLandscapePosters: Boolean,
     val showCatalogTypeSuffix: Boolean,
+    val localeTag: String,
     val mappedRow: HeroCarouselRow
 )
 
@@ -170,7 +174,6 @@ internal data class ModernCollectionRowBuildCacheEntry(
     val source: Collection,
     val mappedRow: HeroCarouselRow
 )
-
 @Stable
 internal class ModernHomeUiCaches {
     val focusedItemByRow = mutableMapOf<String, Int>()
@@ -584,15 +587,7 @@ internal fun extractYear(releaseInfo: String?): String? {
 
 internal fun extractYearOrRange(releaseInfo: String?): String? {
     if (releaseInfo.isNullOrBlank()) return null
-    val trimmed = releaseInfo.trim()
-    val match = YEAR_RANGE_REGEX.find(trimmed)
-    if (match != null) {
-        val startYear = match.groupValues[1]
-        val endYear = match.groupValues[3]
-        // "2022-2025" → "2022–2025", but "2024-" → "2024"
-        return if (endYear.isNotBlank()) "$startYear–$endYear" else startYear
-    }
-    return YEAR_REGEX.find(trimmed)?.value
+    return releaseInfo.trim()
 }
 
 @Volatile

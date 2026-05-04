@@ -52,6 +52,7 @@ import androidx.tv.material3.Text
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.ui.theme.NuvioColors
 import androidx.compose.ui.platform.LocalContext
+import com.nuvio.tv.ui.util.recompositionHighlighter
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
@@ -82,7 +83,9 @@ fun GridContentCard(
 
 
     Column(
-        modifier = modifier.width(posterCardStyle.width)
+        modifier = modifier
+            .width(posterCardStyle.width)
+            .recompositionHighlighter()
     ) {
         Card(
             onClick = {
@@ -221,7 +224,7 @@ fun GridContentCard(
                             .padding(end = 8.dp, top = 8.dp)
                             .zIndex(2f)
                             .size(21.dp)
-                            .shadow(10.dp, shape = CircleShape)
+                            .shadow(10.dp, shape = CircleShape, spotColor = Color.Transparent)
                             .background(NuvioColors.Secondary, CircleShape)
                     ) {
                         Icon(

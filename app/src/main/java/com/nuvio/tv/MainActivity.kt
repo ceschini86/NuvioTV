@@ -131,6 +131,7 @@ import com.nuvio.tv.ui.screens.profile.ProfileSelectionScreen
 import com.nuvio.tv.ui.theme.NuvioColors
 import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.LocalFastHorizontalNavigationEnabled
+import com.nuvio.tv.ui.util.LocalRecompositionHighlighterEnabled
 import com.nuvio.tv.updater.UpdateViewModel
 import com.nuvio.tv.updater.ui.UpdatePromptDialog
 import dagger.hilt.android.AndroidEntryPoint
@@ -166,7 +167,8 @@ private data class MainUiPrefs(
     val modernSidebarEnabled: Boolean = false,
     val modernSidebarBlurPref: Boolean = false,
     val smoothBringIntoViewEnabled: Boolean = true,
-    val fastHorizontalNavigationEnabled: Boolean = false
+    val fastHorizontalNavigationEnabled: Boolean = false,
+    val composeHighlighterEnabled: Boolean = false
 )
 
 @AndroidEntryPoint
@@ -206,8 +208,8 @@ class MainActivity : ComponentActivity() {
 
     @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalFoundationApi::class)
     override fun attachBaseContext(newBase: Context) {
-        val tag = newBase.getSharedPreferences("app_locale", Context.MODE_PRIVATE)
-            .getString("locale_tag", null)
+        val tag = LocaleCache.localeTag.takeIf { it != LocaleCache.UNSET }
+
         if (!tag.isNullOrEmpty()) {
             val locale = Locale.forLanguageTag(tag)
             Locale.setDefault(locale)
@@ -215,9 +217,9 @@ class MainActivity : ComponentActivity() {
             config.setLocale(locale)
             super.attachBaseContext(newBase.createConfigurationContext(config))
         } else {
-            val systemLocale = ConfigurationCompat.getLocales(newBase.resources.configuration)[0]
-                ?: Locale.getDefault(Locale.Category.DISPLAY)
-            Locale.setDefault(systemLocale)
+            // Cache not ready yet (very early cold start) — use system locale
+            // The IO coroutine in Application.onCreate will finish before any activity
+            // is usually created, but if not, we just use system locale until next launch
             super.attachBaseContext(newBase)
         }
     }
@@ -324,6 +326,8 @@ class MainActivity : ComponentActivity() {
                     prefs.copy(smoothBringIntoViewEnabled = smoothBringIntoViewEnabled)
                 }.combine(layoutPreferenceDataStore.fastHorizontalNavigationEnabled) { prefs, fastHorizontalNavigationEnabled ->
                     prefs.copy(fastHorizontalNavigationEnabled = fastHorizontalNavigationEnabled)
+                }.combine(layoutPreferenceDataStore.composeHighlighterEnabled) { prefs, composeHighlighterEnabled ->
+                    prefs.copy(composeHighlighterEnabled = composeHighlighterEnabled)
                 }
             }
             val mainUiPrefs by mainUiPrefsFlow.collectAsState(initial = MainUiPrefs(hasChosenLayout = null))
@@ -342,7 +346,8 @@ class MainActivity : ComponentActivity() {
                 }
                 CompositionLocalProvider(
                     LocalBringIntoViewSpec provides bringIntoViewSpec,
-                    LocalFastHorizontalNavigationEnabled provides mainUiPrefs.fastHorizontalNavigationEnabled
+                    LocalFastHorizontalNavigationEnabled provides mainUiPrefs.fastHorizontalNavigationEnabled,
+                    LocalRecompositionHighlighterEnabled provides mainUiPrefs.composeHighlighterEnabled
                 ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -1515,4 +1520,10 @@ private fun rememberRawSvgPainter(rawIconRes: Int): Painter {
             .size(sizePx)
             .build()
     )
+}
+
+object LocaleCache {
+    const val UNSET = "__UNSET__"
+    @Volatile
+    var localeTag: String = UNSET
 }
