@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.media3.common.Player
 import com.nuvio.tv.R
 import com.nuvio.tv.data.local.SubtitleStyleSettings
+import com.nuvio.tv.data.repository.SkipInterval
 import com.nuvio.tv.data.repository.TraktScrobbleItem
 import com.nuvio.tv.data.repository.extractYear
 import com.nuvio.tv.data.repository.parseContentIds
@@ -30,6 +31,23 @@ internal fun PlayerRuntimeController.applyAudioDelay(
     if (persistForCurrentRoute) {
         persistAudioDelayForCurrentRoute(clampedDelayMs)
     }
+}
+
+internal fun PlayerRuntimeController.skipActiveInterval(): Boolean {
+    return skipInterval(_uiState.value.activeSkipInterval ?: return false)
+}
+
+internal fun PlayerRuntimeController.skipInterval(interval: SkipInterval): Boolean {
+    val duration = currentPlaybackDurationMs().takeIf { it > 0 } ?: Long.MAX_VALUE
+    val seekMs = if (interval.endTime == Double.MAX_VALUE) {
+        duration
+    } else {
+        (interval.endTime * 1000).toLong()
+    }
+    seekPlaybackTo(seekMs.coerceAtMost(duration))
+    scheduleProgressSyncAfterSeek()
+    _uiState.update { it.copy(activeSkipInterval = null, skipIntervalDismissed = true) }
+    return true
 }
 
 internal fun PlayerRuntimeController.applyAudioAmplification(db: Int) {
@@ -1001,14 +1019,7 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             cancelPauseOverlay()
         }
         PlayerEvent.OnSkipIntro -> {
-            _uiState.value.activeSkipInterval?.let { interval ->
-                val duration = currentPlaybackDurationMs().takeIf { it > 0 } ?: Long.MAX_VALUE
-                val seekMs = if (interval.endTime == Double.MAX_VALUE) duration
-                             else (interval.endTime * 1000).toLong()
-                seekPlaybackTo(seekMs.coerceAtMost(duration))
-                scheduleProgressSyncAfterSeek()
-                _uiState.update { it.copy(activeSkipInterval = null, skipIntervalDismissed = true) }
-            }
+            skipActiveInterval()
         }
         PlayerEvent.OnDismissSkipIntro -> {
             _uiState.update { it.copy(skipIntervalDismissed = true) }

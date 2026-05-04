@@ -395,6 +395,14 @@
     <string name="playback_osd_clock">OSD Clock</string>
     <string name="playback_skip_intro">Skip Intro</string>
     <string name="playback_skip_intro_sub">Use introdb.app to detect intros and recaps.</string>
+    <string name="playback_auto_skip_segments">Automatic Skipping</string>
+    <string name="playback_auto_skip_segments_sub">Choose which segments skip automatically.</string>
+    <string name="auto_skip_intro">Intro / Opening</string>
+    <string name="auto_skip_intro_sub">Skip intros and anime openings automatically.</string>
+    <string name="auto_skip_recap">Recap</string>
+    <string name="auto_skip_recap_sub">Skip recap segments automatically.</string>
+    <string name="auto_skip_outro">Outro / Ending</string>
+    <string name="auto_skip_outro_sub">Skip outros and anime endings automatically.</string>
     <string name="playback_auto_frame_rate">Auto Frame Rate &amp; Resolution</string>
     <string name="playback_section_player">Player &amp; Stream Selection</string>
     <string name="playback_section_player_desc">Player preference, auto-play, and source filtering.</string>
