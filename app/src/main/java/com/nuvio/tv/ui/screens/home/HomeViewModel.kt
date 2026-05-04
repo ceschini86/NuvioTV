@@ -41,6 +41,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -683,24 +684,49 @@ class HomeViewModel @Inject constructor(
     fun saveFocusState(
         verticalScrollIndex: Int,
         verticalScrollOffset: Int,
-        focusedRowIndex: Int,
-        focusedItemIndex: Int,
-        catalogRowScrollStates: Map<String, Int>
+        focusedRowKey: String?,
+        focusedItemKeyByRow: Map<String, String>,
+        catalogRowScrollStates: Map<String, Int>,
+        focusedRowIndex: Int = 0,
+        focusedItemIndex: Int = 0
     ) {
         if (suppressFocusSave) {
             suppressFocusSave = false
             return
         }
-        val nextState = HomeScreenFocusState(
+        val nextState = _focusState.value.copy(
             verticalScrollIndex = verticalScrollIndex,
             verticalScrollOffset = verticalScrollOffset,
+            focusedRowKey = focusedRowKey,
+            focusedItemKeyByRow = focusedItemKeyByRow,
+            catalogRowScrollStates = catalogRowScrollStates,
             focusedRowIndex = focusedRowIndex,
             focusedItemIndex = focusedItemIndex,
-            catalogRowScrollStates = catalogRowScrollStates,
             hasSavedFocus = true
         )
         if (_focusState.value == nextState) return
         _focusState.value = nextState
+    }
+
+    /**
+     * Updates the stable focus target for a specific row.
+     */
+    fun updateFocusedItemKey(rowKey: String, itemKey: String) {
+        _focusState.update { state ->
+            val nextMap = state.focusedItemKeyByRow.toMutableMap()
+            if (nextMap[rowKey] == itemKey) return@update state
+            nextMap[rowKey] = itemKey
+            state.copy(focusedItemKeyByRow = nextMap)
+        }
+    }
+
+    /**
+     * Updates the currently focused row key.
+     */
+    fun updateFocusedRowKey(rowKey: String?) {
+        _focusState.update { state ->
+            if (state.focusedRowKey == rowKey) state else state.copy(focusedRowKey = rowKey)
+        }
     }
 
     /**

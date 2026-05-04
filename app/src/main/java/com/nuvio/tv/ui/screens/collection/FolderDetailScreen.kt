@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -62,6 +63,7 @@ import com.nuvio.tv.ui.screens.home.ClassicHomeContent
 import com.nuvio.tv.ui.screens.home.ContinueWatchingItem
 import com.nuvio.tv.ui.screens.home.GridHomeContent
 import com.nuvio.tv.ui.screens.home.HomeScreenFocusState
+import com.nuvio.tv.ui.screens.home.key
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.ui.screens.home.ModernHomeContent
 import com.nuvio.tv.ui.theme.NuvioColors
@@ -112,7 +114,9 @@ fun FolderDetailScreen(
             enrichedPreviews = enrichedPreviews,
             onNavigateToDetail = onNavigateToDetail,
             onLoadMoreCatalog = viewModel::loadMoreForCatalog,
-            onSaveFocusState = viewModel::saveFollowLayoutFocusState,
+            onSaveFocusState = { vi, vo, rk, ikm, m, ri, ii ->
+                viewModel.saveFollowLayoutFocusState(vi, vo, rk, ikm, m, ri, ii)
+            },
             onSaveGridFocusState = viewModel::saveFollowLayoutGridFocusState,
             onItemFocus = viewModel::onItemFocused,
             trailerPreviewUrls = trailerPreviewUrls,
@@ -154,7 +158,9 @@ fun FolderDetailScreen(
                         onNavigateToDetail = onNavigateToDetail,
                         isItemWatched = isItemWatched,
                         onLoadMoreCatalog = viewModel::loadMoreForCatalog,
-                        onSaveFocusState = viewModel::saveRowsFocusState,
+                        onSaveFocusState = { vi, vo, rk, ikm, m, ri, ii ->
+                            viewModel.saveRowsFocusState(vi, vo, rk, ikm, m, ri, ii)
+                        },
                         onItemFocus = viewModel::onItemFocused,
                         onItemLongPress = { item, addonBaseUrl ->
                             viewModel.posterOptions.show(item, addonBaseUrl)
@@ -468,7 +474,7 @@ private fun RowsContent(
     focusState: HomeScreenFocusState,
     onNavigateToDetail: (String, String, String) -> Unit,
     onLoadMoreCatalog: (String, String, String) -> Unit = { _, _, _ -> },
-    onSaveFocusState: (Int, Int, Int, Int, Map<String, Int>) -> Unit,
+    onSaveFocusState: (Int, Int, String?, Map<String, String>, Map<String, Int>, Int, Int) -> Unit,
     isItemWatched: (MetaPreview) -> Boolean = { false },
     onItemFocus: (MetaPreview) -> Unit = {},
     onItemLongPress: (MetaPreview, String) -> Unit = { _, _ -> }
@@ -480,18 +486,54 @@ private fun RowsContent(
     )
     val rowStates = remember { mutableMapOf<String, LazyListState>() }
     val rowFocusedItemIndex = remember { mutableMapOf<String, Int>() }
-    val currentFocusedRowIndex = remember { intArrayOf(focusState.focusedRowIndex) }
-    val currentFocusedItemIndex = remember { intArrayOf(focusState.focusedItemIndex) }
+    val focusedItemByRow = remember { mutableStateMapOf<String, Int>() }
+    val currentFocusedRowKey = remember { mutableStateOf(focusState.focusedRowKey) }
 
     DisposableEffect(Unit) {
         onDispose {
+            val focusedRowKey = currentFocusedRowKey.value
+            val itemKeys = mutableMapOf<String, String>()
+            sourceTabs.forEach { tab ->
+                val row = tab.catalogRow
+                if (row != null) {
+                    val rowKey = row.key()
+                    val focusedIdx = rowFocusedItemIndex[rowKey] ?: 0
+                    val itemId = row.items.getOrNull(focusedIdx)?.id ?: ""
+                    itemKeys[rowKey] = itemId
+                }
+            }
+
             onSaveFocusState(
                 columnListState.firstVisibleItemIndex,
                 columnListState.firstVisibleItemScrollOffset,
-                currentFocusedRowIndex[0],
-                currentFocusedItemIndex[0],
-                rowStates.mapValues { it.value.firstVisibleItemIndex }
+                focusedRowKey,
+                itemKeys,
+                rowStates.mapValues { it.value.firstVisibleItemIndex },
+                -1, // rowIndex
+                0   // itemIndex
             )
+        }
+    }
+
+    LaunchedEffect(focusState.hasSavedFocus) {
+        if (focusState.hasSavedFocus && focusedItemByRow.isEmpty()) {
+            val savedRowKey = focusState.focusedRowKey
+            if (savedRowKey != null) {
+                val savedItemKey = focusState.focusedItemKeyByRow[savedRowKey]
+                sourceTabs.forEach { tab ->
+                    val row = tab.catalogRow
+                    if (row != null) {
+                        val rowKey = row.key()
+                        if (rowKey == savedRowKey) {
+                            val itemIdx = if (savedItemKey != null) {
+                                row.items.indexOfFirst { it.id == savedItemKey }.coerceAtLeast(0)
+                            } else 0
+                            focusedItemByRow[savedRowKey] = itemIdx
+                            rowFocusedItemIndex[savedRowKey] = itemIdx
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -608,8 +650,7 @@ private fun RowsContent(
                             },
                             restorerFocusedIndex = -1,
                             onItemFocused = { itemIndex ->
-                                currentFocusedRowIndex[0] = index
-                                currentFocusedItemIndex[0] = itemIndex
+                                currentFocusedRowKey.value = rowKey
                                 rowFocusedItemIndex[rowKey] = itemIndex
                             }
                         )
@@ -628,7 +669,7 @@ private fun FollowLayoutContent(
     enrichedPreviews: Map<String, MetaPreview> = emptyMap(),
     onNavigateToDetail: (String, String, String) -> Unit,
     onLoadMoreCatalog: (String, String, String) -> Unit = { _, _, _ -> },
-    onSaveFocusState: (Int, Int, Int, Int, Map<String, Int>) -> Unit,
+    onSaveFocusState: (Int, Int, String?, Map<String, String>, Map<String, Int>, Int, Int) -> Unit,
     onSaveGridFocusState: (Int, Int, String?) -> Unit,
     onItemFocus: (MetaPreview) -> Unit = {},
     trailerPreviewUrls: Map<String, String> = emptyMap(),

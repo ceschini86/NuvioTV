@@ -62,7 +62,9 @@ internal fun ModernHomeRowsList(
     isVerticalRowsScrolling: () -> Boolean,
     carouselRows: StableList<HeroCarouselRow>,
     verticalRowListState: LazyListState,
-    uiCaches: ModernHomeUiCaches,
+    focusedItemByRow: MutableMap<String, Int>,
+    rowListStates: MutableMap<String, LazyListState>,
+    loadMoreRequestedTotals: MutableMap<String, Int>,
     focusState: HomeScreenFocusState,
     activeRowKey: State<String?>,
     activeItemIndex: State<Int>,
@@ -125,6 +127,9 @@ internal fun ModernHomeRowsList(
     onExpansionInteractionNonceChange: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val latestOnActiveRowKeyChange = rememberUpdatedState(onActiveRowKeyChange)
+    val latestOnActiveItemIndexChange = rememberUpdatedState(onActiveItemIndexChange)
+
     val density = LocalDensity.current
     val context = LocalContext.current
     val verticalPrefetchImageLoader = context.imageLoader
@@ -193,16 +198,11 @@ internal fun ModernHomeRowsList(
         }
     }
 
-    val focusRestorerRequester = remember(carouselRows, uiCaches, activeRowKey) {
+    val focusRestorerRequester = remember(carouselRows, activeRowKey) {
         {
-            val rowKey = activeRowKey.value
-            if (rowKey != null) {
-                val row = carouselRows.list.firstOrNull { it.key == rowKey }
-                val savedIdx = (uiCaches.focusedItemByRow[rowKey] ?: 0)
-                    .coerceIn(0, ((row?.items?.list?.size ?: 1) - 1).coerceAtLeast(0))
-                val stableKey = "${rowKey}_$savedIdx"
-                uiCaches.itemFocusRequesters[rowKey]?.get(stableKey) ?: FocusRequester.Default
-            } else FocusRequester.Default
+            // With the new self-claiming ID-based focus system, focusRestorer
+            // should focus the entire group and let the target item claim it.
+            FocusRequester.Default
         }
     }
 
@@ -258,10 +258,14 @@ internal fun ModernHomeRowsList(
                         val targetRow = carouselRows.list.getOrNull(targetRowIndex)
                         if (targetRow == null) null
                         else {
-                            val savedIdx = (uiCaches.focusedItemByRow[targetRow.key] ?: 0)
+                            val savedIdx = (focusedItemByRow[targetRow.key] ?: 0)
                                 .coerceIn(0, (targetRow.items.list.size - 1).coerceAtLeast(0))
-                            val targetStableKey = "${targetRow.key}_$savedIdx"
-                            uiCaches.requesterFor(targetRow.key, targetStableKey)
+                            latestOnActiveRowKeyChange.value(targetRow.key)
+                            latestOnActiveItemIndexChange.value(savedIdx)
+
+                            val targetItemKey = targetRow.items.list.getOrNull(savedIdx)?.key
+                                ?: "${targetRow.key}_$savedIdx"
+                            targetItemKey
                         }
                     },
                 ),
@@ -278,6 +282,7 @@ internal fun ModernHomeRowsList(
                 }
                 val stableOnRowItemFocused = remember {
                     { rowKey: String, index: Int, isContinueWatchingRow: Boolean ->
+                        val isRowEntering = activeRowKey.value != rowKey
                         val rowBecameActive = activeRowKey.value != rowKey
                         val itemChanged = activeItemIndex.value != index
                         if (rowBecameActive || itemChanged) {
@@ -293,8 +298,10 @@ internal fun ModernHomeRowsList(
                             onActiveRowKeyChange(rowKey)
                             onActiveItemIndexChange(index)
                         }
-                        if (uiCaches.focusedItemByRow[rowKey] != index) {
-                            uiCaches.focusedItemByRow[rowKey] = index
+                        if (!isRowEntering) {
+                            if (focusedItemByRow[rowKey] != index) {
+                                focusedItemByRow[rowKey] = index
+                            }
                         }
                         if (isContinueWatchingRow) {
                             if (lastFocusedContinueWatchingIndex.value != index) {
@@ -327,7 +334,9 @@ internal fun ModernHomeRowsList(
                     rowTitleBottom = 14.dp, // rowTitleBottom
                     defaultBringIntoViewSpec = defaultBringIntoViewSpec,
                     focusStateCatalogRowScrollIndex = focusState.catalogRowScrollStates[row.key] ?: 0,
-                    uiCaches = uiCaches,
+                    focusedItemByRow = focusedItemByRow,
+                    rowListStates = rowListStates,
+                    loadMoreRequestedTotals = loadMoreRequestedTotals,
                     pendingRowFocusKey = pendingRowFocusKey,
                     pendingRowFocusIndex = pendingRowFocusIndex,
                     pendingRowFocusNonce = pendingRowFocusNonce,

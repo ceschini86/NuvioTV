@@ -80,7 +80,7 @@ fun ClassicHomeContent(
     onRequestTrailerPreview: (MetaPreview) -> Unit,
     onItemFocus: (MetaPreview) -> Unit = {},
     catalogSeeAllLabel: String? = null,
-    onSaveFocusState: (Int, Int, Int, Int, Map<String, Int>) -> Unit,
+    onSaveFocusState: (Int, Int, String?, Map<String, String>, Map<String, Int>, Int, Int) -> Unit,
     scrollToTopTrigger: Int = 0,
     onRequestLazyCatalogLoad: (String) -> Unit = {}
 ) {
@@ -201,9 +201,11 @@ fun ClassicHomeContent(
             onSaveFocusState(
                 columnListState.firstVisibleItemIndex,
                 columnListState.firstVisibleItemScrollOffset,
+                currentFocusSnapshot.rowKey,
+                emptyMap(), // Classic doesn't use ID-based restoration for inner rows yet
+                focusState.catalogRowScrollStates + rowStates.mapValues { it.value.firstVisibleItemIndex },
                 currentFocusSnapshot.rowIndex,
-                currentFocusSnapshot.itemIndex,
-                focusState.catalogRowScrollStates + rowStates.mapValues { it.value.firstVisibleItemIndex }
+                currentFocusSnapshot.itemIndex
             )
         }
     }
@@ -365,9 +367,12 @@ fun ClassicHomeContent(
                         rowEntryFocusRequesters.containsKey(k) -> rowEntryFocusRequesters[k]
                         else -> null
                     }
-                    if (target == null) null
+                    val requester = if (target == null) null
                     else requesterForKey(target.key as? String)
                         ?: visibleItems.firstNotNullOfOrNull { requesterForKey(it.key as? String) }
+
+                    runCatching { requester?.requestFocus() }
+                    null // Classic uses imperative requestFocus for now
                 },
             ),
         contentPadding = PaddingValues(top = if (heroVisible) 0.dp else 24.dp, bottom = 24.dp),

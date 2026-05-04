@@ -144,13 +144,13 @@ internal suspend fun HomeViewModel.loadAllCatalogsPipeline(
     val isReload = _uiState.value.catalogRows.isNotEmpty() || _uiState.value.homeRows.isNotEmpty()
     if (!isReload) {
         _uiState.update { it.copy(isLoading = true, error = null, installedAddonsCount = addons.size) }
+        synchronized(catalogStateLock) {
+            catalogOrder.clear()
+        }
+        clearCatalogData()
     } else {
         _uiState.update { it.copy(error = null, installedAddonsCount = addons.size) }
     }
-    synchronized(catalogStateLock) {
-        catalogOrder.clear()
-    }
-    clearCatalogData()
     posterStatusReconcileJob?.cancel()
     reconcilePosterStatusObserversPipeline(emptyList())
     _fullCatalogRows.value = emptyList()

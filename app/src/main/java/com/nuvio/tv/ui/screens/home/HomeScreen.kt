@@ -501,8 +501,8 @@ private fun ClassicHomeRoute(
         onItemFocus = { item ->
             viewModel.onItemFocus(item)
         },
-        onSaveFocusState = { vi, vo, ri, ii, m ->
-            viewModel.saveFocusState(vi, vo, ri, ii, m)
+        onSaveFocusState = { vi, vo, rk, ikm, m, ri, ii ->
+            viewModel.saveFocusState(vi, vo, rk, ikm, m, ri, ii)
         },
         onRequestLazyCatalogLoad = remember(viewModel) {
             { catalogKey: String -> viewModel.requestLazyCatalogLoad(catalogKey) }
@@ -587,8 +587,8 @@ private fun ModernHomeRoute(
         }
     }
     val saveModernFocusState = remember(viewModel) {
-        { vi: Int, vo: Int, ri: Int, ii: Int, m: Map<String, Int> ->
-            viewModel.saveFocusState(vi, vo, ri, ii, m)
+        { vi: Int, vo: Int, rk: String?, ikm: Map<String, String>, m: Map<String, Int>, ri: Int, ii: Int ->
+            viewModel.saveFocusState(vi, vo, rk, ikm, m, ri, ii)
         }
     }
     val preloadAdjacentItem = remember(viewModel) {

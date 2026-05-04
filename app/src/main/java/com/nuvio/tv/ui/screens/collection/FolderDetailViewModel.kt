@@ -637,16 +637,20 @@ class FolderDetailViewModel @Inject constructor(
     fun saveRowsFocusState(
         verticalScrollIndex: Int,
         verticalScrollOffset: Int,
-        focusedRowIndex: Int,
-        focusedItemIndex: Int,
-        catalogRowScrollStates: Map<String, Int>
+        focusedRowKey: String?,
+        focusedItemKeyByRow: Map<String, String>,
+        catalogRowScrollStates: Map<String, Int>,
+        focusedRowIndex: Int = 0,
+        focusedItemIndex: Int = 0
     ) {
         val nextState = com.nuvio.tv.ui.screens.home.HomeScreenFocusState(
             verticalScrollIndex = verticalScrollIndex,
             verticalScrollOffset = verticalScrollOffset,
+            focusedRowKey = focusedRowKey,
+            focusedItemKeyByRow = focusedItemKeyByRow,
+            catalogRowScrollStates = catalogRowScrollStates,
             focusedRowIndex = focusedRowIndex,
             focusedItemIndex = focusedItemIndex,
-            catalogRowScrollStates = catalogRowScrollStates,
             hasSavedFocus = true
         )
         if (_rowsFocusState.value != nextState) {
@@ -657,16 +661,20 @@ class FolderDetailViewModel @Inject constructor(
     fun saveFollowLayoutFocusState(
         verticalScrollIndex: Int,
         verticalScrollOffset: Int,
-        focusedRowIndex: Int,
-        focusedItemIndex: Int,
-        catalogRowScrollStates: Map<String, Int>
+        focusedRowKey: String?,
+        focusedItemKeyByRow: Map<String, String>,
+        catalogRowScrollStates: Map<String, Int>,
+        focusedRowIndex: Int = 0,
+        focusedItemIndex: Int = 0
     ) {
         val nextState = com.nuvio.tv.ui.screens.home.HomeScreenFocusState(
             verticalScrollIndex = verticalScrollIndex,
             verticalScrollOffset = verticalScrollOffset,
+            focusedRowKey = focusedRowKey,
+            focusedItemKeyByRow = focusedItemKeyByRow,
+            catalogRowScrollStates = catalogRowScrollStates,
             focusedRowIndex = focusedRowIndex,
             focusedItemIndex = focusedItemIndex,
-            catalogRowScrollStates = catalogRowScrollStates,
             hasSavedFocus = true
         )
         if (_followLayoutFocusState.value != nextState) {

@@ -57,7 +57,7 @@ private enum class FastScrollMode { None, Vertical }
  *   frame-driven coroutine that drags the list at constant velocity while
  *   focus stays frozen on the originating card. On release (ACTION_UP), or
  *   when the list hits its edge, or after [endTimeoutMs] of silence, the
- *   drag ends and [resolveVerticalLanding] is asked for the [FocusRequester]
+ *   drag ends and [resolveVerticalLanding] is asked for the target ID
  *   to hand focus to.
  * - DPAD_LEFT / DPAD_RIGHT repeats tear down any in-flight vertical drag
  *   and then fall through to a chained [dpadRepeatThrottle] (installed
@@ -79,8 +79,8 @@ private enum class FastScrollMode { None, Vertical }
  * @param scrollableState           list / grid state to drag on vertical repeat
  * @param resolveVerticalLanding    invoked on drag end with the direction
  *                                  (`-1` = up, `+1` = down). Return the
- *                                  [FocusRequester] that should receive
- *                                  focus, or `null` to leave focus alone.
+ *                                  target ID that should receive focus,
+ *                                  or `null` to leave focus alone.
  * @param onFastScrollingChanged    observer for the vertical-drag flag
  * @param shouldHaltForward         optional downward halt guard, see above
  * @param horizontalGateMs          min interval between horizontal repeats
@@ -91,7 +91,7 @@ private enum class FastScrollMode { None, Vertical }
  */
 fun Modifier.dpadVerticalFastScroll(
     scrollableState: ScrollableState,
-    resolveVerticalLanding: (sign: Int) -> FocusRequester?,
+    resolveVerticalLanding: (sign: Int) -> String?,
     onFastScrollingChanged: (Boolean) -> Unit = {},
     shouldHaltForward: () -> Boolean = { false },
     horizontalGateMs: Long = 80L,
@@ -139,8 +139,9 @@ fun Modifier.dpadVerticalFastScroll(
             endTimerRef.getAndSet(null)?.cancel()
             setActive(false)
             if (mode == FastScrollMode.Vertical) {
-                val sign = if (direction == 0) 1 else direction
-                resolveVerticalLanding(sign)?.let { runCatching { it.requestFocus() } }
+                // Landing now happens via state updates in resolveVerticalLanding,
+                // which should trigger self-claiming focus in the items.
+                resolveVerticalLanding(if (direction == 0) 1 else direction)
             }
         }
 
