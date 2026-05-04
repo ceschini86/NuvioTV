@@ -114,15 +114,17 @@ class AndroidTvChannelManager @Inject constructor(
                 val values = buildProgramValues(progress, channelId, index, key)
                 val existingRow = existing[key]
                 if (existingRow != null) {
-                    context.contentResolver.update(
-                        TvContractCompat.buildPreviewProgramUri(existingRow), values, null, null
+                    // Delete + re-insert instead of UPDATE: launchers (e.g. Projectivy) only
+                    // re-render tiles when a new row ID appears; UPDATE to an existing row is
+                    // typically ignored by the launcher's display cache.
+                    context.contentResolver.delete(
+                        TvContractCompat.buildPreviewProgramUri(existingRow), null, null
                     )
-                } else {
-                    context.contentResolver.insert(
-                        TvContractCompat.PreviewPrograms.CONTENT_URI, values
-                    )
-                    Log.d(TAG, "Inserted program key=$key")
                 }
+                context.contentResolver.insert(
+                    TvContractCompat.PreviewPrograms.CONTENT_URI, values
+                )
+                Log.d(TAG, "${if (existingRow != null) "Refreshed" else "Inserted"} program key=$key pos=${values.getAsInteger("last_playback_position_millis")} dur=${values.getAsInteger("duration_millis")} pct=${progress.progressPercent}")
             }
         }.onFailure { Log.w(TAG, "reconcile failed", it) }
     }
@@ -219,12 +221,6 @@ class AndroidTvChannelManager @Inject constructor(
                 (progress.progressPercent?.let { it / 100f * progress.duration }?.toLong() ?: 0L).toInt()
             }
             builder.setLastPlaybackPositionMillis(positionMs)
-        } else if (progress.progressPercent != null && progress.progressPercent > 0f && progress.progressPercent < 100f) {
-            // Fallback for items not yet hydrated with actual runtime.
-            val estimatedDurationMs = 60 * 60 * 1000
-            val estimatedPositionMs = (progress.progressPercent / 100f * estimatedDurationMs).toInt()
-            builder.setDurationMillis(estimatedDurationMs)
-            builder.setLastPlaybackPositionMillis(estimatedPositionMs)
         }
 
         if (type == TvContractCompat.PreviewPrograms.TYPE_TV_EPISODE) {
@@ -244,6 +240,12 @@ class AndroidTvChannelManager @Inject constructor(
             }
             if (progress.logo.isNullOrBlank()) {
                 it.putNull(TvContractCompat.PreviewPrograms.COLUMN_LOGO_URI)
+            }
+            // Clear duration/position when unknown so stale values (e.g. previous 1hr fallback)
+            // don't persist across UPDATE cycles.
+            if (progress.duration <= 0) {
+                it.putNull("duration_millis")
+                it.putNull("last_playback_position_millis")
             }
         }
     }

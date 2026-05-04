@@ -2558,12 +2558,21 @@ class TraktProgressService @Inject constructor(
 
                 val addonBackdrop = meta.backdropUrl
                 val addonPoster = meta.poster
-                // Fall back to TMDB when addon returns no backdrop/poster
-                val tmdbImages = if (addonBackdrop == null && addonPoster == null
-                    && contentId.startsWith("tt")
-                ) {
+                val addonRuntimeMs = parseRuntimeToMs(meta.runtime)
+
+                // Fall back to TMDB when addon returns no backdrop/poster, or no runtime for a
+                // movie (Trakt API never stores playback duration, so runtime is the only way to
+                // show a progress bar for Trakt-sourced movies).
+                val needsTmdb = contentId.startsWith("tt") &&
+                    ((addonBackdrop == null && addonPoster == null) ||
+                     (addonRuntimeMs == 0L && type == "movie"))
+                val tmdbImages = if (needsTmdb) {
                     tmdbService.fetchImdbImages(contentId, contentType)
                 } else null
+
+                val runtimeMs = addonRuntimeMs.takeIf { it > 0 }
+                    ?: tmdbImages?.runtimeMinutes?.let { it.toLong() * 60_000L }
+                    ?: 0L
 
                 return ContentMetadata(
                     name = meta.name,
@@ -2571,7 +2580,7 @@ class TraktProgressService @Inject constructor(
                     backdrop = addonBackdrop ?: tmdbImages?.backdropUrl,
                     logo = meta.logo,
                     episodes = episodes,
-                    runtimeMs = parseRuntimeToMs(meta.runtime)
+                    runtimeMs = runtimeMs
                 )
             }
         }

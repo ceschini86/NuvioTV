@@ -1,7 +1,9 @@
 package com.nuvio.tv.core.sync.androidtv
 
+import android.content.Context
 import android.util.Log
 import com.nuvio.tv.domain.repository.WatchProgressRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -25,6 +27,7 @@ private const val MAX_CHANNEL_ROWS = 20
  */
 @Singleton
 class AndroidTvChannelSyncService @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val manager: AndroidTvChannelManager,
     private val watchProgressRepository: WatchProgressRepository,
 ) {
@@ -36,6 +39,7 @@ class AndroidTvChannelSyncService @Inject constructor(
             Log.d(TAG, "Non-leanback device; channel sync skipped")
             return
         }
+        TvChannelRefreshJobService.schedulePeriodic(context)
         scope.launch {
             watchProgressRepository.continueWatching
                 // Skip the leading empty emitted by traktAllProgressFlow's onStart; any
@@ -45,7 +49,7 @@ class AndroidTvChannelSyncService @Inject constructor(
                 // No distinctUntilChanged — reconcile on every emission so metadata-enriched
                 // artwork and new Trakt entries appear as soon as the Flow re-emits.
                 .collect { items ->
-                    Log.d(TAG, "Reconciling ${items.size} in-progress items")
+                    Log.d(TAG, "Reconciling ${items.size} items: ${items.take(5).map { "${it.contentId} pct=${it.progressPercent} pos=${it.position} dur=${it.duration}" }}")
                     manager.reconcile(items.take(MAX_CHANNEL_ROWS))
                 }
         }

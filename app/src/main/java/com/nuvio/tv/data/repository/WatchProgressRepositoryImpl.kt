@@ -63,6 +63,7 @@ class WatchProgressRepositoryImpl @Inject constructor(
     companion object {
         private const val TAG = "WatchProgressRepo"
         private const val OPTIMISTIC_NEXT_UP_SEED_WINDOW_MS = 3 * 60_000L
+        private const val NUVIO_SYNC_PERIODIC_INTERVAL_MS = 5 * 60_000L
     }
 
     private data class EpisodeMetadata(
@@ -96,6 +97,24 @@ class WatchProgressRepositoryImpl @Inject constructor(
     private val metadataMutex = Mutex()
     private val inFlightMetadataKeys = mutableSetOf<String>()
     private val metadataHydrationLimit = 30
+
+    init {
+        // Nuvio Sync has no recurring remote pull after startup; add one so watch progress
+        // written on other devices (phone → TV) appears without requiring an app restart.
+        syncScope.launch {
+            while (true) {
+                delay(NUVIO_SYNC_PERIODIC_INTERVAL_MS)
+                if (useTraktProgressFlow().first()) continue
+                if (isSyncingFromRemote || !hasCompletedInitialPull || !authManager.isAuthenticated) continue
+                watchProgressSyncService.pullFromRemote()
+                    .onSuccess { entries ->
+                        watchProgressPreferences.mergeRemoteEntries(entries.toMap())
+                        Log.d(TAG, "Periodic Nuvio Sync pull: merged ${entries.size} entries")
+                    }
+                    .onFailure { Log.w(TAG, "Periodic Nuvio Sync pull failed", it) }
+            }
+        }
+    }
 
     private fun triggerRemoteSync() {
         if (isSyncingFromRemote) return

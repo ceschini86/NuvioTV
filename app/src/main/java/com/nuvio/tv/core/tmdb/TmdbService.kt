@@ -284,10 +284,11 @@ class TmdbService @Inject constructor(
                 val body = response.body() ?: return@runCatching null
                 TmdbImages(
                     backdropUrl = body.backdropPath?.let { "https://image.tmdb.org/t/p/w1280$it" },
-                    posterUrl = body.posterPath?.let { "https://image.tmdb.org/t/p/w500$it" }
+                    posterUrl = body.posterPath?.let { "https://image.tmdb.org/t/p/w500$it" },
+                    runtimeMinutes = body.runtime
                 )
             }.getOrNull()
         }
 }
 
-data class TmdbImages(val backdropUrl: String?, val posterUrl: String?)
+data class TmdbImages(val backdropUrl: String?, val posterUrl: String?, val runtimeMinutes: Int? = null)
