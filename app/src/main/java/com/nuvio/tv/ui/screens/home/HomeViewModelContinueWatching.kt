@@ -242,7 +242,7 @@ private class CwDebugSession {
 
 @OptIn(kotlinx.coroutines.FlowPreview::class)
 internal fun HomeViewModel.loadContinueWatchingPipeline() {
-    viewModelScope.launch {
+    viewModelScope.launch(Dispatchers.IO) {
         combine(
             combine(
                 watchProgressRepository.allProgress,
