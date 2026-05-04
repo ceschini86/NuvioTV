@@ -823,16 +823,22 @@ fun ModernHomeContent(
         val shouldPlayTrailerLambda = remember { { shouldPlayCatalogHeroTrailerUpdated } }
         val heroTrailerRenderedLambda = remember { { heroTrailerFirstFrameRenderedUpdated } }
 
-        val heroInfoSectionModifier = remember { Modifier.align(Alignment.BottomStart) }
+        val heroMetadataModifier = remember(rowHorizontalPadding, rowsViewportHeight) {
+            Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = rowHorizontalPadding, end = 48.dp, bottom = 0.dp + rowsViewportHeight + 16.dp)
+                .fillMaxWidth(MODERN_HERO_TEXT_WIDTH_FRACTION)
+        }
 
-        HeroInfoSection(
-            heroSceneState = heroSceneStateLambda,
-            useLandscapePosters = useLandscapePosters,
-            shouldPlayCatalogHeroTrailerState = shouldPlayTrailerLambda,
-            heroTrailerFirstFrameRendered = heroTrailerRenderedLambda,
-            rowsViewportHeight = rowsViewportHeight,
-            rowHorizontalPadding = rowHorizontalPadding,
-            modifier = heroInfoSectionModifier
+        HeroTitleBlock(
+            previewProvider = { heroSceneStateLambda().preview },
+            enrichmentActive = { heroSceneStateLambda().enrichmentActive },
+            portraitMode = !useLandscapePosters,
+            trailerPlaying = {
+                val state = heroSceneStateLambda()
+                state.fullScreenBackdrop && shouldPlayTrailerLambda() && heroTrailerRenderedLambda()
+            },
+            modifier = heroMetadataModifier
         )
 
         val onActiveRowKeyChangeLambda = remember { { key: String? -> focusHolder.activeRowKey = key; activeRowKey.value = key } }
@@ -991,31 +997,5 @@ private fun ModernHeroSection(
         requestHeightPx = heroMediaHeightPx,
         onTrailerEnded = onTrailerEnded,
         onFirstFrameRendered = onFirstFrameRendered,
-    )
-}
-
-@Composable
-private fun HeroInfoSection(
-    heroSceneState: () -> ModernHeroSceneState,
-    useLandscapePosters: Boolean,
-    shouldPlayCatalogHeroTrailerState: () -> Boolean,
-    heroTrailerFirstFrameRendered: () -> Boolean,
-    rowsViewportHeight: Dp,
-    rowHorizontalPadding: Dp,
-    modifier: Modifier = Modifier
-) {
-    val highlighterEnabled = LocalRecompositionHighlighterEnabled.current
-    HeroTitleBlock(
-        previewProvider = { heroSceneState().preview },
-        enrichmentActive = { heroSceneState().enrichmentActive },
-        portraitMode = !useLandscapePosters,
-        trailerPlaying = {
-            val state = heroSceneState()
-            state.fullScreenBackdrop && shouldPlayCatalogHeroTrailerState() && heroTrailerFirstFrameRendered()
-        },
-        modifier = modifier
-            .then(if (highlighterEnabled) Modifier.recompositionHighlighter() else Modifier)
-            .padding(start = rowHorizontalPadding, end = 48.dp, bottom = 0.dp + rowsViewportHeight + 16.dp)
-            .fillMaxWidth(MODERN_HERO_TEXT_WIDTH_FRACTION)
     )
 }
