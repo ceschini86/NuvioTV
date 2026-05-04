@@ -2396,6 +2396,8 @@ private fun HomeViewModel.applyContinueWatchingEnrichmentOverlay(
                     sortTimestamp = overlay.sortTimestamp,
                     isReleaseAlert = overlay.isReleaseAlert,
                     isNewSeasonRelease = overlay.isNewSeasonRelease,
+                    hasAired = overlay.hasAired,
+                    airDateLabel = overlay.airDateLabel ?: item.info.airDateLabel,
                     releaseTimestamp = overlay.releaseTimestamp ?: item.info.releaseTimestamp,
                     contentLanguage = overlay.contentLanguage ?: item.info.contentLanguage
                 ))
