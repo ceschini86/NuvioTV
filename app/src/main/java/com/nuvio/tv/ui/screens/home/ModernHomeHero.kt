@@ -333,17 +333,8 @@ private fun HeroTitleContent(
     val logoMaxWidthPx = remember(density) { with(density) { 220.dp.roundToPx() } }
     val logoHeightPx = remember(density) { with(density) { 100.dp.roundToPx() } }
 
-    var debouncedLogo by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(preview.logo) {
-        if (preview.logo == null) {
-            debouncedLogo = null
-        } else {
-            debouncedLogo = preview.logo
-        }
-    }
-
-    val logoModel = remember(context, debouncedLogo, logoMaxWidthPx, logoHeightPx) {
-        debouncedLogo?.let {
+    val logoModel = remember(context, preview.logo, logoMaxWidthPx, logoHeightPx) {
+        preview.logo?.let {
             ImageRequest.Builder(context)
                 .data(it)
                 .crossfade(true)
@@ -380,8 +371,8 @@ private fun HeroTitleContent(
         modifier = if (highlighterEnabled) Modifier.recompositionHighlighter() else Modifier,
         verticalArrangement = Arrangement.spacedBy(titleSpacing)
     ) {
-        var logoLoadFailed by remember(debouncedLogo) { mutableStateOf(false) }
-        val showLogo = !debouncedLogo.isNullOrBlank() && !logoLoadFailed
+        var logoLoadFailed by remember(preview.logo) { mutableStateOf(false) }
+        val showLogo = !preview.logo.isNullOrBlank() && !logoLoadFailed
         if (showLogo) {
             AsyncImage(
                 model = logoModel,

@@ -709,10 +709,13 @@ fun ModernHomeContent(
             }
         }
 
+        val currentLiveHeroSceneStateUpdated by rememberUpdatedState(liveHeroSceneState.value)
+        val isScrollInProgressUpdated by rememberUpdatedState(verticalRowListState.isScrollInProgress)
+
         val heroSceneStateLambda = remember {
             {
-                val currentLive = liveHeroSceneState.value
-                val isScrolling = verticalRowListState.isScrollInProgress
+                val currentLive = currentLiveHeroSceneStateUpdated
+                val isScrolling = isScrollInProgressUpdated
                 val stable = stableHeroSceneStateRef.value
 
                 if (!isScrolling || stable?.preview == null) {
