@@ -1509,16 +1509,7 @@ internal fun mergeContinueWatchingItems(
 
     val seen = mutableSetOf<String>()
     val result = combined
-        .sortedWith { a, b ->
-            val priorityA = getContinueWatchingPriority(a.second)
-            val priorityB = getContinueWatchingPriority(b.second)
-            
-            when {
-                priorityA != priorityB -> priorityA.compareTo(priorityB)
-                priorityA == 1 -> a.first.compareTo(b.first) // Ascending for Unaired (soonest first)
-                else -> b.first.compareTo(a.first)           // Descending for everything else (newest first)
-            }
-        }
+        .sortedByDescending { it.first }
         .map { it.second }
         .filter { item ->
             val contentId = when (item) {
@@ -1529,19 +1520,6 @@ internal fun mergeContinueWatchingItems(
         }
 
     return result
-}
-
-private fun getContinueWatchingPriority(item: ContinueWatchingItem): Int {
-    return when (item) {
-        is ContinueWatchingItem.InProgress -> 0
-        is ContinueWatchingItem.NextUp -> {
-            if (!item.info.hasAired) {
-                1 // Airs in (pushed to the end)
-            } else {
-                0 // Everything else mixed by timestamp
-            }
-        }
-    }
 }
 
 private suspend fun HomeViewModel.buildNextUpItem(
