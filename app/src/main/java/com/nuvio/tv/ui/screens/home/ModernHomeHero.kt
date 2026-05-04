@@ -140,15 +140,9 @@ internal fun ModernHeroMediaLayer(
             contentDescription = null,
             modifier = Modifier
                 .fillMaxSize()
-                .then(
-                    if (transitionProgressState.value > 0f) {
-                        Modifier.graphicsLayer {
-                            alpha = 1f - transitionProgressState.value
-                        }
-                    } else {
-                        Modifier
-                    }
-                ),
+                .graphicsLayer {
+                    alpha = 1f - transitionProgressState.value
+                },
             contentScale = ContentScale.Crop,
             alignment = Alignment.TopEnd
         )

@@ -262,7 +262,7 @@ internal fun HomeViewModel.observeModernHomePresentationPipeline() {
             }
             .debounce(80)
             .collectLatest { input ->
-                val shouldWarmStart = uiState.value.modernHomePresentation.rows.isEmpty()
+                val shouldWarmStart = uiState.value.modernHomePresentation.rows.list.isEmpty()
                 val visibleCatalogRowCount = input.catalogRows.count { it.items.isNotEmpty() }
                 val warmStartCatalogRowCount = if (input.continueWatchingItems.isNotEmpty()) 2 else 3
 
@@ -480,10 +480,6 @@ internal fun HomeViewModel.onItemFocusPipeline(item: MetaPreview) {
             }
         } finally {
             if (_enrichingItemId.value == item.id) {
-                scheduleUpdateCatalogRows()
-                withContext(Dispatchers.Main) {
-                    delay(250)
-                }
                 setEnrichingItemId(null)
             }
         }

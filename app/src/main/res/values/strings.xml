@@ -318,6 +318,8 @@
     <string name="advanced_nuvio_focus_scroll_subtitle">Use Nuvio\'s custom global focus scroll animation and positioning.</string>
     <string name="advanced_memory_only_vertical_scroll">Memory-only Vertical Scrolling</string>
     <string name="advanced_memory_only_vertical_scroll_subtitle">Skip disk and network image requests while vertically scrolling home rows.</string>
+    <string name="advanced_compose_highlighter">Compose Highlighter</string>
+    <string name="advanced_compose_highlighter_subtitle">Flash borders around recomposing UI elements for performance debugging.</string>
     <string name="advanced_clear_cw_cache">Clear Continue Watching Cache</string>
     <string name="advanced_clear_cw_cache_subtitle">Remove cached thumbnails, titles, and enrichment data for Continue Watching</string>
     <string name="advanced_clear_cw_cache_done">Cache cleared</string>
@@ -393,6 +395,14 @@
     <string name="playback_osd_clock">OSD Clock</string>
     <string name="playback_skip_intro">Skip Intro</string>
     <string name="playback_skip_intro_sub">Use introdb.app to detect intros and recaps.</string>
+    <string name="playback_auto_skip_segments">Automatic Skipping</string>
+    <string name="playback_auto_skip_segments_sub">Choose which segments skip automatically.</string>
+    <string name="auto_skip_intro">Intro / Opening</string>
+    <string name="auto_skip_intro_sub">Skip intros and anime openings automatically.</string>
+    <string name="auto_skip_recap">Recap</string>
+    <string name="auto_skip_recap_sub">Skip recap segments automatically.</string>
+    <string name="auto_skip_outro">Outro / Ending</string>
+    <string name="auto_skip_outro_sub">Skip outros and anime endings automatically.</string>
     <string name="playback_auto_frame_rate">Auto Frame Rate &amp; Resolution</string>
     <string name="playback_section_player">Player &amp; Stream Selection</string>
     <string name="playback_section_player_desc">Player preference, auto-play, and source filtering.</string>
