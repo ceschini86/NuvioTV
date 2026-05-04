@@ -118,7 +118,7 @@ fun TmdbEntityBrowseScreen(
                 1 -> {
                     val errorState = uiState as? TmdbEntityBrowseUiState.Error
                     ErrorState(
-                        message = errorState?.message ?: "Could not load TMDB entity",
+                        message = errorState?.message ?: stringResource(R.string.tmdb_entity_error_load),
                         onRetry = { viewModel.retry() }
                     )
                 }

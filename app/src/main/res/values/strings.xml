@@ -1,7 +1,9 @@
 <resources>
     <string name="app_name">Nuvio</string>
     <string name="type_movie">Movie</string>
+    <string name="type_movies">Movies</string>
     <string name="type_series">Series</string>
+    <string name="type_series_plural">Series</string>
     <string name="type_unknown">Unknown</string>
 
     <!-- WebConfigServers -->
@@ -60,6 +62,38 @@
     <string name="web_import_tab_paste">Paste</string>
     <string name="web_import_tab_file">File</string>
     <string name="web_import_tab_url">URL</string>
+    <string name="web_import_paste_placeholder">Paste collections JSON here...</string>
+    <string name="web_import_file_select">Tap to select a .json file</string>
+    <string name="web_order_send_to_top">Send to top</string>
+    <string name="web_order_send_to_bottom">Send to bottom</string>
+    <string name="web_title_show">Show</string>
+    <string name="web_title_hide">Hide</string>
+    <string name="web_issue_singular">issue</string>
+    <string name="web_issue_plural">issues</string>
+    <string name="web_source_singular">source</string>
+    <string name="web_source_plural">sources</string>
+    <string name="web_source_added">Added</string>
+    <string name="web_no_sources_added">No sources added yet</string>
+    <string name="web_import_select_file_first">Select a file first</string>
+    <string name="web_import_enter_url">Enter a URL</string>
+    <string name="web_import_failed_fetch_url">Failed to fetch URL</string>
+    <string name="web_import_no_json">No JSON provided</string>
+    <string name="web_import_expected_array">Expected a JSON array of collections</string>
+    <string name="web_import_empty_array">Empty array: no collections found</string>
+    <string name="web_import_error_collection_invalid_id">Collection {index}: missing or invalid \"id\"</string>
+    <string name="web_import_error_collection_invalid_title">Collection \"{collection}\": missing or invalid \"title\"</string>
+    <string name="web_import_error_collection_folders_array">Collection \"{collection}\": \"folders\" must be an array</string>
+    <string name="web_import_error_folder_invalid_format">Collection \"{collection}\", folder {index}: invalid format</string>
+    <string name="web_import_error_folder_missing_id">Collection \"{collection}\", folder {index}: missing \"id\"</string>
+    <string name="web_import_error_folder_missing_title">Collection \"{collection}\", folder \"{folder}\": missing \"title\"</string>
+    <string name="web_import_error_sources_array">Collection \"{collection}\", folder \"{folder}\": \"sources\" must be an array</string>
+    <string name="web_import_error_invalid_tile_shape">Collection \"{collection}\", folder \"{folder}\": invalid tileShape \"{shape}\"</string>
+    <string name="web_import_error_source_invalid_format">Collection \"{collection}\", folder \"{folder}\", source {index}: invalid format</string>
+    <string name="web_import_error_source_missing_addon_fields">Collection \"{collection}\", folder \"{folder}\", source {index}: missing required fields (addonId, type, catalogId)</string>
+    <string name="web_import_error_source_missing_tmdb_type">Collection \"{collection}\", folder \"{folder}\", source {index}: missing TMDB source type</string>
+    <string name="web_import_error_source_missing_trakt_id">Collection \"{collection}\", folder \"{folder}\", source {index}: missing Trakt list ID</string>
+    <string name="web_import_success">Imported {count} collection(s). Review and hit Save Changes to apply.</string>
+    <string name="web_import_invalid_json">Invalid JSON</string>
 
     <!-- HomeScreen -->
     <string name="home_no_addons">No addons installed. Add one to get started.</string>
@@ -213,6 +247,17 @@
     <string name="tmdb_entity_rail_popular">Popular</string>
     <string name="tmdb_entity_rail_top_rated">Top Rated</string>
     <string name="tmdb_entity_rail_recent">Recent</string>
+    <string name="tmdb_error_load_source">Could not load TMDB source</string>
+    <string name="tmdb_error_list_not_found">TMDB list not found</string>
+    <string name="tmdb_error_collection_not_found">TMDB collection not found</string>
+    <string name="tmdb_error_company_not_found">TMDB company not found</string>
+    <string name="tmdb_error_network_not_found">TMDB network not found</string>
+    <string name="tmdb_error_person_not_found">TMDB person not found</string>
+    <string name="tmdb_error_missing_list_id">Missing TMDB list ID</string>
+    <string name="tmdb_error_missing_collection_id">Missing TMDB collection ID</string>
+    <string name="tmdb_error_missing_person_id">Missing TMDB person ID</string>
+    <string name="tmdb_error_person_credits_not_found">TMDB person credits not found</string>
+    <string name="tmdb_error_discover_no_data">TMDB discover returned no data</string>
     <string name="tmdb_entity_empty_title">No titles found</string>
     <string name="tmdb_entity_empty_subtitle">TMDB does not currently have browseable titles for this selection.</string>
     <string name="episodes_unavailable">Unavailable</string>
@@ -752,6 +797,8 @@
     <string name="qr_login_approved">Login approved. Finishing sign in…</string>
     <string name="qr_login_pending">Waiting for approval on your phone…</string>
     <string name="qr_login_expired">QR login expired. Generate a new code.</string>
+    <string name="qr_login_preparing">Preparing QR login...</string>
+    <string name="qr_login_device_auth_failed">Failed to authenticate device</string>
     <string name="qr_login_scan_prompt">Scan QR and sign in on your phone</string>
     <string name="qr_login_start_failed">Failed to start QR login</string>
     <string name="qr_login_signing_in">Signing you in…</string>
@@ -943,6 +990,11 @@
     <string name="addon_confirm_no_changes">No visible changes detected</string>
     <string name="addon_confirm_reject">Reject</string>
     <string name="addon_confirm_confirm">Confirm</string>
+    <string name="addon_refresh_action">Refresh Addons</string>
+    <string name="addon_refresh_default_subtitle">Pull latest addon changes for current profile</string>
+    <string name="addon_refresh_done_subtitle">Addons refreshed just now</string>
+    <string name="addon_pending_collections_updated">Collections updated</string>
+    <string name="addon_pending_collections_replace">%1$d collection(s) will replace current collections</string>
 
     <!-- CatalogOrderScreen -->
     <string name="catalog_order_title">Reorder Home Catalogs</string>
@@ -976,6 +1028,7 @@
     <string name="stream_player_picker_title">What player should be used?</string>
     <string name="stream_player_internal">Internal</string>
     <string name="stream_player_external">External</string>
+    <string name="stream_filter_all">All</string>
 
     <!-- PlayerScreen -->
     <string name="player_no_external_player">No external player found</string>
@@ -995,6 +1048,17 @@
     <string name="player_engine_switching_manual_message">Switching to %1$s...</string>
     <string name="playback_show_loading_status">Show loading status</string>
     <string name="playback_show_loading_status_sub">Display step-by-step progress while the player is initializing.</string>
+    <string name="player_sync_line">Sync Line</string>
+    <string name="subtitle_timing_press_sync">Press Sync when you hear a dialog line.</string>
+    <string name="subtitle_timing_sync_button">Sync</string>
+    <string name="subtitle_timing_select_addon_first">Select an addon subtitle track first.</string>
+    <string name="subtitle_auto_sync_select_addon_track">Select an addon subtitle track to use Auto Sync.</string>
+    <string name="subtitle_auto_sync_applied">Sync applied: %1$s</string>
+    <string name="subtitle_timing_loading">Loading subtitle lines…</string>
+    <string name="subtitle_timing_no_lines_found">No subtitle lines were found around this moment.</string>
+    <string name="subtitle_timing_press_back_cancel">Press Back to cancel</string>
+    <string name="subtitle_timing_captured_at">Captured at %1$s</string>
+    <string name="subtitle_timing_capturing">Capturing…</string>
 
     <!-- ParentalGuideOverlay -->
     <string name="parental_nudity">Nudity</string>
@@ -1204,6 +1268,7 @@
     <string name="library_list_delete">Delete</string>
     <string name="library_list_close">Close</string>
     <string name="library_list_name_label">Name</string>
+    <string name="library_error_list_name_required">List name is required</string>
     <string name="library_list_description_label">Description</string>
     <string name="library_list_privacy">Privacy</string>
     <string name="library_delete_title">Delete this list?</string>
@@ -1212,6 +1277,7 @@
     <string name="library_source_local">LOCAL</string>
     <string name="library_source_nuvio">NUVIO</string>
     <string name="library_source_trakt">TRAKT</string>
+    <string name="library_watchlist">Watchlist</string>
     <string name="library_syncing_library">Syncing library\u2026</string>
     <string name="library_type_all">All</string>
     <string name="library_type_items">items</string>
@@ -1296,6 +1362,9 @@
     <string name="plugin_confirm_total">Total repositories: %1$d</string>
     <string name="plugin_confirm_reject">Reject</string>
     <string name="plugin_confirm_confirm">Confirm</string>
+    <string name="plugin_url_or_short_code_placeholder">URL or short code</string>
+    <string name="plugin_diagnostics_collapse">Diagnostics (tap to collapse)</string>
+    <string name="plugin_diagnostics_expand">Diagnostics (tap to expand)</string>
     <string name="plugin_risky_enable_title">Enable provider?</string>
     <string name="plugin_risky_enable_message">%1$s is known to cause crashes on some content. Enable anyway?</string>
     <string name="plugin_risky_enable_cancel">Cancel</string>
@@ -1394,7 +1463,10 @@
     <string name="nav_search">Search</string>
     <string name="nav_library">Library</string>
     <string name="nav_addons">Addons</string>
+    <string name="nav_movies">Movies</string>
+    <string name="nav_series">Series</string>
     <string name="nav_settings">Settings</string>
+    <string name="action_select">Select</string>
     <string name="settings_rounded_ui">Rounded UI</string>
     <string name="cd_expand_sidebar">Expand sidebar</string>
 
@@ -1453,11 +1525,37 @@
     <string name="plugin_error_test">Test failed: %1$s</string>
     <string name="plugin_test_no_results">No results found</string>
     <string name="plugin_test_found_streams">Found %1$d streams</string>
+    <string name="plugin_repo_added_with_providers">Added %1$s with %2$d providers</string>
+    <string name="plugin_repo_removed">Repository removed</string>
+    <string name="plugin_repo_refreshed">Repository refreshed</string>
 
     <!-- Trakt errors -->
     <string name="trakt_error_code_expired">Device code expired. Start again.</string>
     <string name="trakt_error_code_used">Device code already used. Start again.</string>
     <string name="trakt_error_denied">Authorization denied on Trakt.</string>
+    <string name="trakt_error_missing_credentials">Missing TRAKT credentials</string>
+    <string name="trakt_error_network_retry">Network error, please try again</string>
+    <string name="trakt_error_network_will_retry">Network error, will retry</string>
+    <string name="trakt_error_rate_limited_minutes">Trakt is rate limiting requests. Try again in ~%1$d min</string>
+    <string name="trakt_error_failed_start_code">Failed to start Trakt auth (%1$d)</string>
+    <string name="trakt_error_no_active_device_code">No active Trakt device code</string>
+    <string name="trakt_error_invalid_device_code">Invalid device code</string>
+    <string name="trakt_error_token_polling_failed_code">Token polling failed (%1$d)</string>
+    <string name="trakt_error_public_request_failed">Trakt request failed</string>
+    <string name="trakt_error_list_not_found_or_private">Trakt list not found or not public</string>
+    <string name="trakt_error_rate_limit_reached">Trakt rate limit reached</string>
+    <string name="trakt_status_enter_activation_code">Enter code on trakt.tv/activate</string>
+    <string name="trakt_status_syncing">Syncing...</string>
+    <string name="trakt_status_sync_completed">Sync completed</string>
+    <string name="trakt_status_disconnected">Disconnected from Trakt</string>
+    <string name="trakt_status_cw_window_updated">Continue watching window updated</string>
+    <string name="trakt_status_rate_limited_slowing_polling">Rate limited, slowing down polling...</string>
+    <string name="trakt_user_fallback">Trakt user</string>
+    <string name="trakt_error_failed_start">Failed to start Trakt auth</string>
+
+    <!-- General errors -->
+    <string name="error_unknown">Unknown error</string>
+    <string name="addon_error_not_found">Addon not found</string>
 
     <!-- Account errors -->
     <string name="account_error_signin_required">Sign in with an account first.</string>
@@ -1471,6 +1569,7 @@
 
     <!-- Player errors -->
     <string name="player_error_no_stream_url">No stream URL provided</string>
+    <string name="player_error_failed_start_torrent">Failed to start torrent: %1$s</string>
 
     <!-- Playback subtitle settings -->
     <string name="sub_mode_overlay_canvas_sub">HDR support with canvas rendering. May block UI thread.</string>
@@ -1533,6 +1632,7 @@
     <string name="debug_signin_success">Signed in successfully</string>
     <string name="debug_generate_description">Debug-generated %1$s item #%2$d</string>
     <string name="debug_generate_result_failed">Failed: %1$s</string>
+    <string name="debug_generate_library_result_added">Added %1$d items to library</string>
 
     <!-- Collection Management -->
     <string name="collections_header">Collections</string>
@@ -1544,6 +1644,14 @@
     <string name="collections_export_failed">Export failed</string>
     <string name="collections_import_header">Import Collections</string>
     <string name="collections_import_description">Import collections from JSON. Catalogs from addons you don\'t have installed will show a warning.</string>
+    <string name="collections_import_url_placeholder">https://example.com/collections.json</string>
+    <string name="collections_import_failed_fetch_http">Failed to fetch: HTTP %1$d</string>
+    <string name="collections_import_failed_fetch_url">Failed to fetch URL: %1$s</string>
+    <string name="collections_import_paste_json_required">Paste a collections JSON to import</string>
+    <string name="collections_import_no_data">No data to import</string>
+    <string name="collections_import_invalid_or_empty">Invalid format or empty collections</string>
+    <string name="collections_import_file_not_found_downloads">File not found in Downloads.\nExport collections first to create it.</string>
+    <string name="collections_import_failed_read_file">Failed to read file: %1$s</string>
     <string name="collections_cancel">Cancel</string>
     <string name="collections_mode_paste">Paste JSON</string>
     <string name="collections_mode_file">From File</string>
@@ -1574,6 +1682,7 @@
     <string name="collections_editor_show_all_tab_desc">Combine all catalogs into one tab</string>
     <string name="collections_editor_folders">Folders</string>
     <string name="collections_editor_add_folder">Add Folder</string>
+    <string name="collections_editor_new_folder">New Folder</string>
     <string name="collections_editor_edit_folder">Edit Folder</string>
     <string name="collections_editor_folder_title">Folder Title</string>
     <string name="collections_editor_cover">Cover</string>
@@ -1628,6 +1737,19 @@
     <string name="collections_editor_add_source">Add Source</string>
     <string name="collections_editor_save_source">Save Source</string>
     <string name="collections_editor_tmdb_collection">TMDB Collection</string>
+    <string name="collections_editor_tmdb_default_list">TMDB List</string>
+    <string name="collections_editor_tmdb_default_production">TMDB Production</string>
+    <string name="collections_editor_tmdb_default_network">TMDB Network</string>
+    <string name="collections_editor_tmdb_default_discover">TMDB Discover</string>
+    <string name="collections_editor_tmdb_movie_collection">TMDB Movie Collection</string>
+    <string name="collections_editor_tmdb_mode_presets">Presets</string>
+    <string name="collections_editor_tmdb_mode_public_list">Public List</string>
+    <string name="collections_editor_tmdb_mode_production">Production</string>
+    <string name="collections_editor_tmdb_mode_network">Network</string>
+    <string name="collections_editor_tmdb_mode_custom">Custom</string>
+    <string name="collections_editor_tmdb_person_credits">Person Credits</string>
+    <string name="collections_editor_tmdb_director_credits">Director Credits</string>
+    <string name="collections_editor_tmdb_company_fallback">TMDB Company %1$d</string>
     <string name="collections_editor_tmdb_help_presets">Pick a ready-made source. You can edit or remove it after adding.</string>
     <string name="collections_editor_tmdb_help_list">Paste a public TMDB list URL or only the number from the URL.</string>
     <string name="collections_editor_tmdb_help_production">Search by studio name, or paste a TMDB company ID/URL and add it directly.</string>
@@ -1667,8 +1789,62 @@
     <string name="collections_editor_tmdb_networks_helper">For series only. Use network IDs like Netflix 213 or HBO 49.</string>
     <string name="collections_editor_tmdb_year">Year</string>
     <string name="collections_editor_tmdb_year_helper">Use a four-digit year, for example 2024.</string>
+    <string name="collections_editor_sort_original">Original</string>
+    <string name="collections_editor_sort_list_order">List Order</string>
+    <string name="collections_editor_sort_recently_added">Recently Added</string>
+    <string name="collections_editor_sort_title">Title</string>
+    <string name="collections_editor_sort_released">Released</string>
+    <string name="collections_editor_sort_votes">Votes</string>
+    <string name="collections_editor_direction_asc_short">Asc</string>
+    <string name="collections_editor_direction_desc_short">Desc</string>
+    <string name="collections_editor_trakt_movie_list">Trakt Movie List</string>
+    <string name="collections_editor_trakt_series_list">Trakt Series List</string>
+    <string name="collections_editor_trakt_list_with_id">Trakt List %1$d</string>
+    <string name="collections_editor_trakt_public_list">Trakt public list</string>
+    <string name="collections_editor_trakt_items_count">%1$d items</string>
+    <string name="collections_editor_trakt_likes_count">%1$d likes</string>
+    <string name="collections_editor_error_valid_tmdb_id_or_url">Enter a valid TMDB ID or URL</string>
+    <string name="collections_editor_error_load_tmdb_source">Could not load TMDB source</string>
+    <string name="collections_editor_error_trakt_list_id_or_url">Enter a Trakt list ID or URL</string>
+    <string name="collections_editor_error_trakt_list_name_id_or_url">Enter a Trakt list name, URL, or ID</string>
+    <string name="collections_editor_error_load_trakt_list">Could not load Trakt list</string>
+    <string name="collections_editor_error_load_trakt_lists">Could not load Trakt lists</string>
+    <string name="collections_editor_error_search_trakt_lists">Could not search Trakt lists</string>
+    <string name="collections_editor_error_trakt_list_not_found">Trakt list not found</string>
+    <string name="collections_editor_error_trakt_list_missing_numeric_id">Trakt list did not include a numeric ID</string>
+    <string name="collections_editor_tmdb_placeholder_list">https://www.themoviedb.org/list/8504994 or 8504994</string>
+    <string name="collections_editor_tmdb_placeholder_collection">10 for Star Wars Collection</string>
+    <string name="collections_editor_tmdb_placeholder_company">Marvel Studios, 420, or company URL</string>
+    <string name="collections_editor_tmdb_placeholder_network">213 for Netflix, 49 for HBO, 2739 for Disney+</string>
+    <string name="collections_editor_trakt_id_placeholder">https://trakt.tv/lists/123456 or 123456</string>
+    <string name="collections_editor_url_short_placeholder">https://...</string>
+    <string name="collections_editor_tmdb_genres_movie_placeholder">28,12</string>
+    <string name="collections_editor_tmdb_genres_tv_placeholder">18,35</string>
+    <string name="collections_editor_tmdb_date_from_placeholder">2020-01-01</string>
+    <string name="collections_editor_tmdb_date_to_placeholder">2024-12-31</string>
+    <string name="collections_editor_tmdb_rating_min_placeholder">7.0</string>
+    <string name="collections_editor_tmdb_rating_max_placeholder">10</string>
+    <string name="collections_editor_tmdb_votes_min_placeholder">100</string>
+    <string name="collections_editor_tmdb_language_placeholder">en, ko, ja, hi</string>
+    <string name="collections_editor_tmdb_country_placeholder">US, KR, JP, IN</string>
+    <string name="collections_editor_tmdb_year_placeholder">2024</string>
+    <string name="collections_editor_language_english">English</string>
+    <string name="collections_editor_language_korean">Korean</string>
+    <string name="collections_editor_language_japanese">Japanese</string>
+    <string name="collections_editor_language_hindi">Hindi</string>
+    <string name="collections_editor_language_spanish">Spanish</string>
+    <string name="collections_editor_country_us">United States</string>
+    <string name="collections_editor_country_korea">Korea</string>
+    <string name="collections_editor_country_japan">Japan</string>
+    <string name="collections_editor_country_india">India</string>
+    <string name="collections_editor_country_uk">United Kingdom</string>
+    <string name="collections_editor_keyword_superhero">Superhero</string>
+    <string name="collections_editor_keyword_based_on_novel">Based on Novel</string>
+    <string name="collections_editor_keyword_time_travel">Time Travel</string>
+    <string name="collections_editor_keyword_space">Space</string>
     <string name="collections_editor_placeholder_name">Collection name</string>
     <string name="collections_editor_placeholder_backdrop">Backdrop image URL (optional)</string>
+    <string name="collections_editor_placeholder_cover_image">Cover image URL</string>
     <string name="collections_editor_placeholder_folder">Folder name</string>
     <string name="collections_editor_placeholder_gif">Animated GIF URL (plays only while focused)</string>
     <string name="collections_editor_hero_backdrop">Hero Backdrop (Modern Home)</string>
@@ -1677,6 +1853,9 @@
     <string name="collections_editor_placeholder_hero_video">Custom hero video URL (optional)</string>
     <string name="collections_editor_title_logo">Title Logo (Modern Home)</string>
     <string name="collections_editor_placeholder_title_logo">Custom title logo URL (optional)</string>
+    <string name="collections_editor_search_emoji_placeholder">Search emoji...</string>
+    <string name="collections_editor_filter_active_sources_placeholder">Filter active sources...</string>
+    <string name="collections_editor_search_catalogs_placeholder">Search catalogs...</string>
     <string name="collections_editor_genre_filter">Genre Filter</string>
     <string name="collections_editor_choose_genre">Choose</string>
     <string name="collections_editor_select_genre">Select genre</string>
@@ -1687,5 +1866,21 @@
     <string name="collections_card_subtitle">Group catalogs into folders on your home screen</string>
     <string name="collections_tab_all">All</string>
     <string name="collections_tab_combined">Combined</string>
+    <string name="collection_editor_remove_cd">Remove</string>
+    <string name="collection_editor_choice_both">Both</string>
+    <string name="collection_editor_resolved_trakt_list">Resolved Trakt list</string>
+    <string name="collection_editor_trakt_search_placeholder">Search title, Trakt URL, or list ID</string>
+    <string name="collection_editor_trakt_name_placeholder">Weekend Watch, Award Winners</string>
+    <string name="collection_editor_folder_count_one">%1$d item</string>
+    <string name="collection_editor_folder_count_other">%1$d items</string>
+    <string name="collections_editor_tmdb_movie_title_placeholder">Marvel Movies, Netflix Originals, Pixar</string>
+    <string name="collections_editor_tmdb_tv_title_placeholder">Best Action Movies, Korean Dramas, 2024 Animation</string>
+    <string name="collections_editor_tmdb_keywords_placeholder">9715 for superhero</string>
+    <string name="collections_editor_tmdb_companies_placeholder">420 for Marvel Studios</string>
+    <string name="collections_editor_tmdb_networks_placeholder">213 for Netflix</string>
+    <string name="folder_detail_not_found">Folder not found</string>
+    <string name="cast_error_load_details_for">Could not load details for %1$s</string>
+    <string name="tmdb_entity_error_load_named">Could not load %1$s</string>
+    <string name="tmdb_entity_error_load">Could not load TMDB entity</string>
 
 </resources>

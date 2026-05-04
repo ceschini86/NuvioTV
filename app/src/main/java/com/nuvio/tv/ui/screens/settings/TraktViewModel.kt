@@ -90,7 +90,7 @@ class TraktViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     continueWatchingDaysCap = days,
-                    statusMessage = "Continue watching window updated"
+                    statusMessage = context.getString(R.string.trakt_status_cw_window_updated)
                 )
             }
         }
@@ -180,12 +180,13 @@ class TraktViewModel @Inject constructor(
                 if (result.isSuccess) {
                     state.copy(
                         isLoading = false,
-                        statusMessage = "Enter code on trakt.tv/activate"
+                        statusMessage = context.getString(R.string.trakt_status_enter_activation_code)
                     )
                 } else {
                     state.copy(
                         isLoading = false,
-                        errorMessage = result.exceptionOrNull()?.message ?: "Failed to start Trakt auth"
+                        errorMessage = result.exceptionOrNull()?.message
+                            ?: context.getString(R.string.trakt_error_failed_start)
                     )
                 }
             }
@@ -230,7 +231,7 @@ class TraktViewModel @Inject constructor(
                     isPolling = false,
                     isStatsLoading = false,
                     connectedStats = null,
-                    statusMessage = "Disconnected from Trakt"
+                    statusMessage = context.getString(R.string.trakt_status_disconnected)
                 )
             }
         }
@@ -238,7 +239,13 @@ class TraktViewModel @Inject constructor(
 
     fun onSyncNow() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null, statusMessage = "Syncing...") }
+            _uiState.update {
+                it.copy(
+                    isLoading = true,
+                    errorMessage = null,
+                    statusMessage = context.getString(R.string.trakt_status_syncing)
+                )
+            }
             traktProgressService.refreshNow()
             traktAuthService.fetchUserSettings()
             val stats = traktProgressService.getCachedStats(forceRefresh = true)
@@ -247,7 +254,7 @@ class TraktViewModel @Inject constructor(
                     isLoading = false,
                     isStatsLoading = false,
                     connectedStats = stats ?: it.connectedStats,
-                    statusMessage = "Sync completed"
+                    statusMessage = context.getString(R.string.trakt_status_sync_completed)
                 )
             }
         }
@@ -469,7 +476,7 @@ class TraktViewModel @Inject constructor(
                             it.copy(
                                 isPolling = true,
                                 pollIntervalSeconds = poll.pollIntervalSeconds,
-                                statusMessage = "Rate limited, slowing down polling..."
+                                statusMessage = context.getString(R.string.trakt_status_rate_limited_slowing_polling)
                             )
                         }
                     }
@@ -481,7 +488,10 @@ class TraktViewModel @Inject constructor(
                         _uiState.update {
                             it.copy(
                                 isPolling = false,
-                                statusMessage = "Connected as ${poll.username ?: "Trakt user"}",
+                                statusMessage = context.getString(
+                                    R.string.trakt_connected_as,
+                                    poll.username ?: context.getString(R.string.trakt_user_fallback)
+                                ),
                                 errorMessage = null
                             )
                         }

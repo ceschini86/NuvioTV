@@ -203,44 +203,50 @@ fun collectionSourceKey(source: CollectionSource): String {
     }
 }
 
+@Composable
 fun tmdbSourceSubtitle(source: TmdbCollectionSource): String {
     val media = when (source.mediaType) {
-        TmdbCollectionMediaType.MOVIE -> "Movies"
-        TmdbCollectionMediaType.TV -> "Series"
+        TmdbCollectionMediaType.MOVIE -> stringResource(R.string.type_movies)
+        TmdbCollectionMediaType.TV -> stringResource(R.string.type_series_plural)
     }
     val sort = when (source.sortBy) {
-        TmdbCollectionSort.ORIGINAL.value -> "Original"
-        TmdbCollectionSort.POPULAR_DESC.value -> "Popular"
-        TmdbCollectionSort.VOTE_AVERAGE_DESC.value -> "Top Rated"
+        TmdbCollectionSort.ORIGINAL.value -> stringResource(R.string.collections_editor_sort_original)
+        TmdbCollectionSort.POPULAR_DESC.value -> stringResource(R.string.tmdb_entity_rail_popular)
+        TmdbCollectionSort.VOTE_AVERAGE_DESC.value -> stringResource(R.string.tmdb_entity_rail_top_rated)
         TmdbCollectionSort.RELEASE_DATE_DESC.value,
-        TmdbCollectionSort.FIRST_AIR_DATE_DESC.value -> "Recent"
+        TmdbCollectionSort.FIRST_AIR_DATE_DESC.value -> stringResource(R.string.tmdb_entity_rail_recent)
         else -> source.sortBy
     }
     return when (source.sourceType) {
-        TmdbCollectionSourceType.LIST -> "TMDB List"
-        TmdbCollectionSourceType.COLLECTION -> "TMDB Movie Collection"
-        TmdbCollectionSourceType.COMPANY -> listOf("Production", media, sort).joinToString(" • ")
-        TmdbCollectionSourceType.NETWORK -> listOf("Network", "Series", sort).joinToString(" • ")
-        TmdbCollectionSourceType.PERSON -> listOf("Person Credits", media, sort).joinToString(" • ")
-        TmdbCollectionSourceType.DIRECTOR -> listOf("Director Credits", media, sort).joinToString(" • ")
-        TmdbCollectionSourceType.DISCOVER -> listOf("TMDB Discover", media, sort).joinToString(" • ")
+        TmdbCollectionSourceType.LIST -> stringResource(R.string.collections_editor_tmdb_default_list)
+        TmdbCollectionSourceType.COLLECTION -> stringResource(R.string.collections_editor_tmdb_movie_collection)
+        TmdbCollectionSourceType.COMPANY -> listOf(stringResource(R.string.collections_editor_tmdb_mode_production), media, sort).joinToString(" • ")
+        TmdbCollectionSourceType.NETWORK -> listOf(stringResource(R.string.collections_editor_tmdb_mode_network), stringResource(R.string.type_series_plural), sort).joinToString(" • ")
+        TmdbCollectionSourceType.PERSON -> listOf(stringResource(R.string.collections_editor_tmdb_person_credits), media, sort).joinToString(" • ")
+        TmdbCollectionSourceType.DIRECTOR -> listOf(stringResource(R.string.collections_editor_tmdb_director_credits), media, sort).joinToString(" • ")
+        TmdbCollectionSourceType.DISCOVER -> listOf(stringResource(R.string.collections_editor_tmdb_default_discover), media, sort).joinToString(" • ")
     }
 }
 
+@Composable
 fun traktSourceSubtitle(source: TraktCollectionSource): String {
     val media = when (source.mediaType) {
-        TmdbCollectionMediaType.MOVIE -> "Movies"
-        TmdbCollectionMediaType.TV -> "Series"
+        TmdbCollectionMediaType.MOVIE -> stringResource(R.string.type_movies)
+        TmdbCollectionMediaType.TV -> stringResource(R.string.type_series_plural)
     }
     val sort = when (source.sortBy) {
-        "rank" -> "List Order"
-        "added" -> "Recently Added"
-        "title" -> "Title"
-        "released" -> "Released"
-        "popularity" -> "Popular"
-        "votes" -> "Votes"
+        "rank" -> stringResource(R.string.collections_editor_sort_list_order)
+        "added" -> stringResource(R.string.collections_editor_sort_recently_added)
+        "title" -> stringResource(R.string.collections_editor_sort_title)
+        "released" -> stringResource(R.string.collections_editor_sort_released)
+        "popularity" -> stringResource(R.string.tmdb_entity_rail_popular)
+        "votes" -> stringResource(R.string.collections_editor_sort_votes)
         else -> source.sortBy
     }
-    val direction = if (source.sortHow == "desc") "Desc" else "Asc"
-    return listOf("Trakt List", media, "$sort $direction").joinToString(" • ")
+    val direction = if (source.sortHow == "desc") {
+        stringResource(R.string.collections_editor_direction_desc_short)
+    } else {
+        stringResource(R.string.collections_editor_direction_asc_short)
+    }
+    return listOf(stringResource(R.string.collections_editor_trakt_list), media, "$sort $direction").joinToString(" • ")
 }

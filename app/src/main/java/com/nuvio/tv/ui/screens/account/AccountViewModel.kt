@@ -257,7 +257,7 @@ class AccountViewModel @Inject constructor(
                     qrLoginUrl = null,
                     qrLoginNonce = nonce,
                     qrLoginBitmap = null,
-                    qrLoginStatus = "Preparing QR login...",
+                    qrLoginStatus = context.getString(R.string.qr_login_preparing),
                     qrLoginExpiresAtMillis = null
                 )
             }
@@ -266,7 +266,7 @@ class AccountViewModel @Inject constructor(
                     it.copy(
                         isLoading = false,
                         error = userFriendlyError(e),
-                        qrLoginStatus = "Failed to authenticate device"
+                        qrLoginStatus = context.getString(R.string.qr_login_device_auth_failed)
                     )
                 }
                 return@launch

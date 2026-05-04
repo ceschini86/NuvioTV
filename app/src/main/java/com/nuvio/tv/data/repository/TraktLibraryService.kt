@@ -1,5 +1,7 @@
 package com.nuvio.tv.data.repository
 
+import android.content.Context
+import com.nuvio.tv.R
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.trakt.traktBestBackdropUrl
 import com.nuvio.tv.core.trakt.traktBestLogoUrl
@@ -20,6 +22,7 @@ import com.nuvio.tv.domain.model.LibraryListTab
 import com.nuvio.tv.domain.model.ListMembershipChanges
 import com.nuvio.tv.domain.model.ListMembershipSnapshot
 import com.nuvio.tv.domain.model.TraktListPrivacy
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -42,6 +45,7 @@ import retrofit2.Response
 
 @Singleton
 class TraktLibraryService @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val traktApi: TraktApi,
     private val traktAuthService: TraktAuthService,
     private val profileManager: ProfileManager
@@ -457,7 +461,7 @@ class TraktLibraryService @Inject constructor(
             add(
                 LibraryListTab(
                     key = WATCHLIST_KEY,
-                    title = "Watchlist",
+                    title = appContext.getString(R.string.library_watchlist),
                     type = LibraryListTab.Type.WATCHLIST,
                     sortBy = "rank",
                     sortHow = "asc"

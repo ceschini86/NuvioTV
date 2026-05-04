@@ -128,8 +128,9 @@ fun AddonManagerScreen(
         stringResource(R.string.addon_qr_scan_instruction)
     }
 
-    val defaultRefreshAddonsSubtitle = "Pull latest addon changes for current profile"
-    var refreshAddonsSubtitle by remember {
+    val defaultRefreshAddonsSubtitle = stringResource(R.string.addon_refresh_default_subtitle)
+    val refreshedAddonsSubtitle = stringResource(R.string.addon_refresh_done_subtitle)
+    var refreshAddonsSubtitle by remember(defaultRefreshAddonsSubtitle) {
         mutableStateOf(defaultRefreshAddonsSubtitle)
     }
 
@@ -367,7 +368,7 @@ fun AddonManagerScreen(
                     subtitle = refreshAddonsSubtitle,
                     onClick = {
                         viewModel.requestAddonSyncNow()
-                        refreshAddonsSubtitle = "Addons refreshed just now"
+                        refreshAddonsSubtitle = refreshedAddonsSubtitle
                     }
                 )
             }
@@ -727,7 +728,7 @@ private fun RefreshAddonsEntryCard(
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
                     Text(
-                        text = "Refresh Addons",
+                        text = stringResource(R.string.addon_refresh_action),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = NuvioColors.TextPrimary
                     )
@@ -1014,7 +1015,7 @@ private fun ConfirmAddonChangesDialog(
 
                         if (pendingChange.collectionsChanged) {
                             Text(
-                                text = "Collections updated",
+                                text = stringResource(R.string.addon_pending_collections_updated),
                                 style = MaterialTheme.typography.titleSmall,
                                 color = NuvioColors.TextPrimary,
                                 modifier = Modifier
@@ -1022,7 +1023,7 @@ private fun ConfirmAddonChangesDialog(
                                     .padding(bottom = 4.dp)
                             )
                             Text(
-                                text = "${pendingChange.proposedCollectionCount} collection(s) will replace current collections",
+                                text = stringResource(R.string.addon_pending_collections_replace, pendingChange.proposedCollectionCount),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = NuvioColors.TextSecondary,
                                 modifier = Modifier

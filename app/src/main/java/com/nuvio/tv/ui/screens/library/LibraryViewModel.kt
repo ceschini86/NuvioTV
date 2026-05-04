@@ -273,7 +273,7 @@ class LibraryViewModel @Inject constructor(
         val editor = _uiState.value.listEditorState ?: return
         val name = editor.name.trim()
         if (name.isBlank()) {
-            setError("List name is required")
+            setError(context.getString(R.string.library_error_list_name_required))
             return
         }
         if (_uiState.value.pendingOperation) return
