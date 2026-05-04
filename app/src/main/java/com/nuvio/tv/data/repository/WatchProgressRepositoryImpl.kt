@@ -259,6 +259,16 @@ class WatchProgressRepositoryImpl @Inject constructor(
             .distinctUntilChanged()
     }
 
+    override fun observeRemoteProgressLoaded(): Flow<Boolean> {
+        return useTraktProgressFlow().flatMapLatest { useTrakt ->
+            if (useTrakt) {
+                traktProgressService.observeRemoteProgressLoaded()
+            } else {
+                kotlinx.coroutines.flow.flowOf(true)
+            }
+        }.distinctUntilChanged()
+    }
+
     override val allProgress: Flow<List<WatchProgress>>
         get() = useTraktProgressFlow()
             .flatMapLatest { useTraktProgress ->
