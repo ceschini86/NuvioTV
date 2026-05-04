@@ -2258,7 +2258,7 @@ class TraktProgressService @Inject constructor(
         refreshNow()
     }
 
-    private fun buildHistoryAddRequest(
+    private suspend fun buildHistoryAddRequest(
         progress: WatchProgress,
         title: String?,
         year: Int?
@@ -2307,14 +2307,23 @@ class TraktProgressService @Inject constructor(
         }
     }
 
-    private fun resolveHistoryIds(progress: WatchProgress): TraktIdsDto {
-        val contentIds = toTraktIds(parseContentIds(progress.contentId))
+    private suspend fun resolveHistoryIds(progress: WatchProgress): TraktIdsDto {
+        val contentIds = enrichWithImdb(toTraktIds(parseContentIds(progress.contentId)), progress.contentType)
         if (contentIds.hasAnyId()) return contentIds
 
-        val videoIds = toTraktIds(parseContentIds(progress.videoId))
+        val videoIds = enrichWithImdb(toTraktIds(parseContentIds(progress.videoId)), progress.contentType)
         if (videoIds.hasAnyId()) return videoIds
 
         return contentIds
+    }
+
+    // Trakt reliably finds shows/movies by IMDB ID; TMDB links are community-contributed
+    // and often missing for anime. Resolve TMDB → IMDB before sending history requests
+    // so Trakt can match the content even when the TMDB link isn't set up in its DB.
+    private suspend fun enrichWithImdb(ids: TraktIdsDto, contentType: String): TraktIdsDto {
+        if (ids.tmdb == null || !ids.imdb.isNullOrBlank()) return ids
+        val imdb = tmdbService.tmdbToImdb(ids.tmdb, contentType) ?: return ids
+        return ids.copy(imdb = imdb)
     }
 
     private suspend fun attemptEpisodeRemapHistoryAdd(
