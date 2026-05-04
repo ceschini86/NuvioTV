@@ -2383,7 +2383,8 @@ class TraktProgressService @Inject constructor(
             contentType = progress.contentType,
             videoId = progress.videoId,
             season = progress.season,
-            episode = progress.episode
+            episode = progress.episode,
+            episodeTitle = progress.episodeTitle
         )
     }
 
