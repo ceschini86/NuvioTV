@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +39,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -46,8 +48,11 @@ import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.nuvio.tv.ui.util.LocalRecompositionHighlighterEnabled
+import com.nuvio.tv.ui.util.recompositionHighlighter
 import coil3.request.transitionFactory
 import com.nuvio.tv.R
+import kotlinx.coroutines.delay
 import com.nuvio.tv.ui.components.TrailerPlayer
 import com.nuvio.tv.ui.theme.NuvioColors
 import androidx.compose.ui.res.stringResource
@@ -61,7 +66,8 @@ private data class ModernHeroSecondaryMeta(
 
 @Composable
 internal fun ModernHeroScene(
-    state: ModernHeroSceneState,
+    state: () -> ModernHeroSceneState,
+    isFullScreen: () -> Boolean,
     bgColor: Color,
     modifier: Modifier,
     requestWidthPx: Int,
@@ -70,14 +76,14 @@ internal fun ModernHeroScene(
     onFirstFrameRendered: () -> Unit
 ) {
     ModernHeroMediaLayer(
-        heroBackdrop = state.heroBackdrop,
-        enrichmentActive = state.enrichmentActive,
-        shouldPlayHeroTrailer = state.shouldPlayTrailer,
-        heroTrailerFirstFrameRendered = state.trailerFirstFrameRendered,
-        heroTrailerUrl = state.trailerUrl,
-        heroTrailerAudioUrl = state.trailerAudioUrl,
-        heroTrailerPlaybackKey = state.trailerPlaybackKey,
-        muted = state.trailerMuted,
+        heroBackdrop = { state().heroBackdrop },
+        enrichmentActive = { state().enrichmentActive },
+        shouldPlayHeroTrailer = { state().shouldPlayTrailer },
+        heroTrailerFirstFrameRendered = { state().trailerFirstFrameRendered },
+        heroTrailerUrl = { state().trailerUrl },
+        heroTrailerAudioUrl = { state().trailerAudioUrl },
+        heroTrailerPlaybackKey = { state().trailerPlaybackKey },
+        muted = { state().trailerMuted },
         onTrailerEnded = onTrailerEnded,
         onFirstFrameRendered = onFirstFrameRendered,
         modifier = modifier,
@@ -86,38 +92,47 @@ internal fun ModernHeroScene(
     )
     ModernHeroGradientLayer(
         bgColor = bgColor,
-        isFullScreen = state.fullScreenBackdrop,
+        isFullScreen = isFullScreen,
         modifier = modifier
     )
 }
 
 @Composable
 internal fun ModernHeroMediaLayer(
-    heroBackdrop: String?,
-    enrichmentActive: Boolean,
-    shouldPlayHeroTrailer: Boolean,
-    heroTrailerFirstFrameRendered: Boolean,
-    heroTrailerUrl: String?,
-    heroTrailerAudioUrl: String?,
-    heroTrailerPlaybackKey: String?,
-    muted: Boolean,
+    heroBackdrop: () -> String?,
+    enrichmentActive: () -> Boolean,
+    shouldPlayHeroTrailer: () -> Boolean,
+    heroTrailerFirstFrameRendered: () -> Boolean,
+    heroTrailerUrl: () -> String?,
+    heroTrailerAudioUrl: () -> String?,
+    heroTrailerPlaybackKey: () -> String?,
+    muted: () -> Boolean,
     onTrailerEnded: () -> Unit,
     onFirstFrameRendered: () -> Unit,
     modifier: Modifier,
     requestWidthPx: Int,
     requestHeightPx: Int
 ) {
+    val shouldPlay = shouldPlayHeroTrailer()
+    val trailerRendered = heroTrailerFirstFrameRendered()
     val transitionProgressState = animateFloatAsState(
-        targetValue = if (shouldPlayHeroTrailer && heroTrailerFirstFrameRendered) 1f else 0f,
+        targetValue = if (shouldPlay && trailerRendered) 1f else 0f,
         animationSpec = tween(durationMillis = 480),
         label = "heroBackdropTrailerCrossfadeProgress"
     )
     val localContext = LocalContext.current
 
+    val backdropVal = heroBackdrop()
+    val enrichmentActiveVal = enrichmentActive()
     // Freeze the backdrop URL while enrichment is active — only update when enrichment ends
     // so Coil crossfade starts with the final URL, not an intermediate one.
-    var stableBackdrop by remember { mutableStateOf(heroBackdrop) }
-    if (!enrichmentActive) stableBackdrop = heroBackdrop
+    var stableBackdrop by remember { mutableStateOf(backdropVal) }
+    LaunchedEffect(backdropVal, enrichmentActiveVal) {
+        if (!enrichmentActiveVal) {
+            delay(400) // Debounce backdrop load to prevent lag during rapid scroll
+            stableBackdrop = backdropVal
+        }
+    }
     val heroBackdropTransitionFactory = remember { AlwaysCrossfadeTransitionFactory(durationMillis = 400) }
 
     val imageModel = remember(
@@ -147,15 +162,19 @@ internal fun ModernHeroMediaLayer(
             alignment = Alignment.TopEnd
         )
 
-        if (shouldPlayHeroTrailer) {
-            key(heroTrailerPlaybackKey ?: heroTrailerUrl) {
+        if (shouldPlay) {
+            val trailerUrlVal = heroTrailerUrl()
+            val playbackKeyVal = heroTrailerPlaybackKey()
+            val audioUrlVal = heroTrailerAudioUrl()
+            val mutedVal = muted()
+            key(playbackKeyVal ?: trailerUrlVal) {
                 TrailerPlayer(
-                    trailerUrl = heroTrailerUrl,
-                    trailerAudioUrl = heroTrailerAudioUrl,
+                    trailerUrl = trailerUrlVal,
+                    trailerAudioUrl = audioUrlVal,
                     isPlaying = true,
                     onEnded = onTrailerEnded,
                     onFirstFrameRendered = onFirstFrameRendered,
-                    muted = muted,
+                    muted = mutedVal,
                     cropToFill = true,
                     overscanZoom = MODERN_TRAILER_OVERSCAN_ZOOM,
                     modifier = Modifier
@@ -172,15 +191,16 @@ internal fun ModernHeroMediaLayer(
 @Composable
 internal fun ModernHeroGradientLayer(
     bgColor: Color,
-    isFullScreen: Boolean = false,
+    isFullScreen: () -> Boolean,
     modifier: Modifier
 ) {
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     Box(
         modifier = modifier
             .drawWithCache {
-                val horizontalFadeEndX = size.width * if (isFullScreen) 0.65f else 0.45f
-                val colorStops = if (isFullScreen) {
+                val fullScreen = isFullScreen()
+                val horizontalFadeEndX = size.width * if (fullScreen) 0.65f else 0.45f
+                val colorStops = if (fullScreen) {
                     arrayOf(
                         0.0f to bgColor,
                         0.22f to bgColor.copy(alpha = 0.90f),
@@ -211,9 +231,9 @@ internal fun ModernHeroGradientLayer(
                     )
                 }
 
-                val bottomStripStartY = size.height * if (isFullScreen) 0.64f else 0.82f
+                val bottomStripStartY = size.height * if (fullScreen) 0.64f else 0.82f
                 val verticalGradient = Brush.verticalGradient(
-                    colorStops = if (isFullScreen) {
+                    colorStops = if (fullScreen) {
                         arrayOf(
                             0.0f to Color.Transparent,
                             0.30f to bgColor.copy(alpha = 0.35f),
@@ -254,33 +274,50 @@ internal fun ModernHeroGradientLayer(
 
 @Composable
 internal fun HeroTitleBlock(
-    preview: HeroPreview?,
-    enrichmentActive: Boolean = false,
+    previewProvider: () -> HeroPreview?,
+    enrichmentActive: () -> Boolean = { false },
     portraitMode: Boolean,
-    trailerPlaying: Boolean = false,
+    trailerPlaying: () -> Boolean = { false },
     modifier: Modifier = Modifier
 ) {
+    val currentPreview = previewProvider()
+    val isEnriching = enrichmentActive()
+    
     var stablePreview by remember { mutableStateOf<HeroPreview?>(null) }
 
-    if (!enrichmentActive && preview != null) stablePreview = preview
-    if (enrichmentActive) stablePreview = null
+    LaunchedEffect(Unit) {
+        snapshotFlow { Pair(previewProvider(), enrichmentActive()) }.collect { (p, e) ->
+            if (!e && p != null) {
+                if (stablePreview != p) stablePreview = p
+            } else if (e) {
+                if (stablePreview != null) stablePreview = null
+            }
+        }
+    }
 
-    if (stablePreview == null) return
+    val displayPreview = if (!isEnriching && currentPreview != null) currentPreview else stablePreview
+    if (displayPreview == null) return
+    
     Box(
         modifier = modifier,
         contentAlignment = Alignment.BottomStart
     ) {
-        HeroTitleContent(preview = stablePreview!!, portraitMode = portraitMode, trailerPlaying = trailerPlaying)
+        HeroTitleContent(
+            previewProvider = { displayPreview },
+            portraitMode = portraitMode,
+            trailerPlaying = trailerPlaying
+        )
     }
 }
 
 @Composable
 private fun HeroTitleContent(
-    preview: HeroPreview?,
+    previewProvider: () -> HeroPreview?,
     portraitMode: Boolean,
-    trailerPlaying: Boolean = false
+    trailerPlaying: () -> Boolean = { false }
 ) {
-    if (preview == null) return
+    val preview = previewProvider() ?: return
+    val highlighterEnabled = LocalRecompositionHighlighterEnabled.current
     val descriptionMaxLines = 4
     val descriptionScale = if (portraitMode) 0.90f else 1f
     val titleScale = if (portraitMode) 0.92f else 1f
@@ -295,11 +332,21 @@ private fun HeroTitleContent(
     val bodyMedium = MaterialTheme.typography.bodyMedium
     val logoMaxWidthPx = remember(density) { with(density) { 220.dp.roundToPx() } }
     val logoHeightPx = remember(density) { with(density) { 100.dp.roundToPx() } }
-    val logoModel = remember(context, preview.logo, logoMaxWidthPx, logoHeightPx) {
-        preview.logo?.let {
+
+    var debouncedLogo by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(preview.logo) {
+        if (preview.logo == null) {
+            debouncedLogo = null
+        } else {
+            debouncedLogo = preview.logo
+        }
+    }
+
+    val logoModel = remember(context, debouncedLogo, logoMaxWidthPx, logoHeightPx) {
+        debouncedLogo?.let {
             ImageRequest.Builder(context)
                 .data(it)
-                .crossfade(false)
+                .crossfade(true)
                 .size(width = logoMaxWidthPx, height = logoHeightPx)
                 .build()
         }
@@ -310,8 +357,9 @@ private fun HeroTitleContent(
             .build()
     }
 
+    val trailerPlayingValue = trailerPlaying()
     val metaAlpha by animateFloatAsState(
-        targetValue = if (trailerPlaying) 0f else 1f,
+        targetValue = if (trailerPlayingValue) 0f else 1f,
         animationSpec = tween(durationMillis = 480),
         label = "heroMetaFade"
     )
@@ -329,11 +377,11 @@ private fun HeroTitleContent(
     }
 
     Column(
-        modifier = Modifier,
+        modifier = if (highlighterEnabled) Modifier.recompositionHighlighter() else Modifier,
         verticalArrangement = Arrangement.spacedBy(titleSpacing)
     ) {
-        var logoLoadFailed by remember(preview.logo) { mutableStateOf(false) }
-        val showLogo = !preview.logo.isNullOrBlank() && !logoLoadFailed
+        var logoLoadFailed by remember(debouncedLogo) { mutableStateOf(false) }
+        val showLogo = !debouncedLogo.isNullOrBlank() && !logoLoadFailed
         if (showLogo) {
             AsyncImage(
                 model = logoModel,

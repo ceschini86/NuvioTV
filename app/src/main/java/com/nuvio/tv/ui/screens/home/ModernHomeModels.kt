@@ -51,7 +51,7 @@ data class HeroPreview(
     val statusText: String? = null,
     val countryText: String? = null,
     val languageText: String? = null,
-    val genres: List<String>,
+    val genres: StableList<String>,
     val poster: String?,
     val backdrop: String?,
     val imageUrl: String?,
@@ -315,7 +315,7 @@ internal fun buildContinueWatchingItem(
                 yearText = extractYearOrRange(item.releaseInfo),
                 secondaryHighlightText = secondaryHighlightText,
                 imdbText = item.episodeImdbRating?.let { String.format("%.1f", it) },
-                genres = item.genres,
+                genres = item.genres.asStable(),
                 poster = item.progress.poster,
                 backdrop = item.progress.backdrop,
                 imageUrl = if (useLandscapePosters) {
@@ -344,7 +344,7 @@ internal fun buildContinueWatchingItem(
                 yearText = extractYearOrRange(item.info.releaseInfo),
                 secondaryHighlightText = secondaryHighlightText,
                 imdbText = item.info.imdbRating?.let { String.format("%.1f", it) },
-                genres = item.info.genres,
+                genres = item.info.genres.asStable(),
                 poster = item.info.poster,
                 backdrop = item.info.backdrop,
                 imageUrl = if (useLandscapePosters) {
@@ -458,7 +458,7 @@ internal fun buildCatalogItem(
         statusText = item.status,
         countryText = item.country,
         languageText = item.language?.uppercase(),
-        genres = item.genres.take(3),
+        genres = item.genres.take(3).asStable(),
         poster = item.poster,
         backdrop = item.backdropUrl,
         imageUrl = if (useLandscapePosters) {
@@ -518,7 +518,7 @@ internal fun buildCollectionFolderItem(
             contentTypeText = null,
             yearText = null,
             imdbText = null,
-            genres = emptyList(),
+            genres = emptyList<String>().asStable(),
             poster = imageUrl,
             backdrop = heroBackdrop,
             imageUrl = imageUrl

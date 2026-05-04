@@ -229,7 +229,7 @@ internal fun buildModernHomePresentation(
                             heroPreview = HeroPreview(
                                 title = "", logo = null, description = null,
                                 contentTypeText = null, yearText = null, imdbText = null,
-                                genres = emptyList(), poster = null, backdrop = null,
+                                genres = com.nuvio.tv.ui.util.StableList(emptyList()), poster = null, backdrop = null,
                                 imageUrl = "placeholder://empty"
                             ),
                             payload = ModernPayload.Catalog(

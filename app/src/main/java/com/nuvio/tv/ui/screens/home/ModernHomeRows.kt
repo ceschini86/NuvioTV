@@ -201,7 +201,7 @@ private fun ModernCatalogRowItem(
     isBackdropExpanded: () -> Boolean,
     expandedTrailerPreviewUrl: () -> String?,
     expandedTrailerPreviewAudioUrl: () -> String?,
-    isWatched: Boolean,
+    isCatalogItemWatched: (MetaPreview) -> Boolean,
     onFocused: () -> Unit,
     onItemFocus: (MetaPreview) -> Unit,
     onPreloadAdjacentItem: () -> Unit,
@@ -211,8 +211,7 @@ private fun ModernCatalogRowItem(
     onLongPress: () -> Unit,
     onBackdropInteraction: () -> Unit,
     onExpandedCatalogFocusKeyChange: (String?) -> Unit,
-    enrichedLogoUrl: String? = null,
-    enrichedBackdropUrl: String? = null,
+    enrichedPreviews: StableMap<String, MetaPreview>,
     modifier: Modifier = Modifier
 ) {
     val focusKey = when (payload) {
@@ -220,6 +219,17 @@ private fun ModernCatalogRowItem(
         is ModernPayload.CollectionFolder -> payload.focusKey
         is ModernPayload.ContinueWatching -> error("Unsupported payload for ModernCatalogRowItem")
     }
+
+    val metaPreview = item.metaPreview
+    val isWatched by remember {
+        derivedStateOf { metaPreview?.let { isCatalogItemWatched(it) } ?: false }
+    }
+    val enrichedMeta by remember {
+        derivedStateOf { (payload as? ModernPayload.Catalog)?.itemId?.let { enrichedPreviews.map[it] } }
+    }
+    val enrichedLogoUrl = enrichedMeta?.logo
+    val enrichedBackdropUrl = enrichedMeta?.backdropUrl
+
     var focusEventId by remember(focusKey) { mutableStateOf(0) }
     var isCardFocused by remember(focusKey) { mutableStateOf(false) }
     val latestOnFocused by rememberUpdatedState(onFocused)
@@ -266,7 +276,9 @@ private fun ModernCatalogRowItem(
     val suppressCardExpansionForHeroTrailer =
         effectiveAutoplayEnabled &&
                 trailerPlaybackTarget == FocusedPosterTrailerPlaybackTarget.HERO_MEDIA
-    val effectiveBackdropExpanded = isBackdropExpanded() && !suppressCardExpansionForHeroTrailer
+    val effectiveBackdropExpanded by remember {
+        derivedStateOf { isBackdropExpanded() && !suppressCardExpansionForHeroTrailer }
+    }
 
     val isSidebarExpanded = LocalSidebarExpanded.current
     val playTrailerInExpandedCard =
@@ -353,7 +365,7 @@ private fun ModernCatalogRowItem(
 internal fun ModernRowSection(
     row: HeroCarouselRow,
     isActiveRow: () -> Boolean,
-    isVerticalRowsScrolling: Boolean,
+    isVerticalRowsScrolling: () -> Boolean,
     rowTitleBottom: Dp,
     defaultBringIntoViewSpec: BringIntoViewSpec,
     focusStateCatalogRowScrollIndex: Int,
@@ -608,7 +620,7 @@ internal fun ModernRowSection(
             continueWatchingCardWidth,
             continueWatchingCardHeight
         ) {
-            if (!isActiveRow() || isVerticalRowsScrolling) return@LaunchedEffect
+            if (!isActiveRow() || isVerticalRowsScrolling()) return@LaunchedEffect
             delay(150) // Wait before spamming image requests to survive rapid vertical D-pad scrolls!
             val cwWidthPx = with(density) { continueWatchingCardWidth.roundToPx() }
             val cwHeightPx = with(density) { continueWatchingCardHeight.roundToPx() }
@@ -768,7 +780,7 @@ internal fun ModernRowSection(
                     .focusRestorer {
                         val savedIdx = (focusedItemByRow[rowKey] ?: 0)
                             .coerceIn(0, (row.items.list.size - 1).coerceAtLeast(0))
-                        uiCaches.requesterFor(rowKey, "${row.key}_$savedIdx")
+                        uiCaches.requesterFor(rowKey, row.items.list.getOrNull(savedIdx)?.key ?: "${row.key}_$savedIdx")
                     }
                     .focusGroup()
                     .then(
@@ -783,7 +795,7 @@ internal fun ModernRowSection(
             ) {
                 itemsIndexed(
                     items = row.items.list,
-                    key = { index, _ -> "${row.key}_$index" },
+                    key = { _, item -> item.key },
                     contentType = { _, item ->
                         when (val payload = item.payload) {
                             is ModernPayload.ContinueWatching -> "modern_cw_card"
@@ -792,8 +804,7 @@ internal fun ModernRowSection(
                         }
                     }
                 ) { index, item ->
-                    val stableItemKey = "${row.key}_$index"
-                    val requester = uiCaches.requesterFor(row.key, stableItemKey)
+                    val requester = uiCaches.requesterFor(row.key, item.key)
                     val isContinueWatchingRow = row.key == MODERN_CONTINUE_WATCHING_ROW_KEY
                     val onFocused = remember(row.key, index, isContinueWatchingRow) {
                         { onRowItemFocused(row.key, index, isContinueWatchingRow)
@@ -819,7 +830,6 @@ internal fun ModernRowSection(
                         is ModernPayload.CollectionFolder -> {
                             val nextCatalogItem = row.items.list.getOrNull(index + 1)?.metaPreview
                             val metaPreview = item.metaPreview
-                            val isWatched = metaPreview?.let(isCatalogItemWatched) ?: false
                             val onLongPress: () -> Unit = when {
                                 payload is ModernPayload.Catalog && metaPreview != null -> remember(metaPreview, payload.addonBaseUrl) {
                                     {
@@ -852,10 +862,6 @@ internal fun ModernRowSection(
                                 showLabels = showLabels,
                                 placeholderShimmerOffsetState = placeholderShimmerOffsetState,
                                 posterCardCornerRadius = posterCardCornerRadius,
-                                portraitCatalogCardWidth = portraitCatalogCardWidth,
-                                portraitCatalogCardHeight = portraitCatalogCardHeight,
-                                landscapeCatalogCardWidth = landscapeCatalogCardWidth,
-                                landscapeCatalogCardHeight = landscapeCatalogCardHeight,
                                 focusedPosterBackdropTrailerMuted = focusedPosterBackdropTrailerMuted,
                                 effectiveExpandEnabled = effectiveExpandEnabled,
                                 effectiveAutoplayEnabled = effectiveAutoplayEnabled,
@@ -863,7 +869,11 @@ internal fun ModernRowSection(
                                 isBackdropExpanded = isBackdropExpandedLambda,
                                 expandedTrailerPreviewUrl = expandedTrailerPreviewUrl,
                                 expandedTrailerPreviewAudioUrl = expandedTrailerPreviewAudioUrl,
-                                isWatched = isWatched,
+                                portraitCatalogCardWidth = portraitCatalogCardWidth,
+                                portraitCatalogCardHeight = portraitCatalogCardHeight,
+                                landscapeCatalogCardWidth = landscapeCatalogCardWidth,
+                                landscapeCatalogCardHeight = landscapeCatalogCardHeight,
+                                isCatalogItemWatched = isCatalogItemWatched,
                                 onFocused = onFocused,
                                 onItemFocus = onItemFocus,
                                 onPreloadAdjacentItem = remember(nextCatalogItem, onPreloadAdjacentItem) {
@@ -875,8 +885,7 @@ internal fun ModernRowSection(
                                 onLongPress = onLongPress,
                                 onBackdropInteraction = onBackdropInteraction,
                                 onExpandedCatalogFocusKeyChange = onExpandedCatalogFocusKeyChange,
-                                enrichedLogoUrl = (payload as? ModernPayload.Catalog)?.itemId?.let { enrichedPreviews.map[it]?.logo },
-                                enrichedBackdropUrl = (payload as? ModernPayload.Catalog)?.itemId?.let { enrichedPreviews.map[it]?.backdropUrl }
+                                enrichedPreviews = enrichedPreviews
                             )
                         }
                     }

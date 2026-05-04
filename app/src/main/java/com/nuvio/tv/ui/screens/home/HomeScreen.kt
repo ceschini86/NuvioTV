@@ -119,9 +119,8 @@ fun HomeScreen(
 
     // Stable lambdas — captured via rememberUpdatedState so they never cause
     // downstream recomposition when uiState changes.
-    val latestMovieWatchedStatus by rememberUpdatedState(uiState.movieWatchedStatus)
-    val isCatalogItemWatched: (MetaPreview) -> Boolean = remember(latestMovieWatchedStatus) {
-        { item -> latestMovieWatchedStatus[homeItemStatusKey(item.id, item.apiType)] == true }
+    val isCatalogItemWatched: (MetaPreview) -> Boolean = remember(viewModel) {
+        { item -> viewModel.uiState.value.movieWatchedStatus[homeItemStatusKey(item.id, item.apiType)] == true }
     }
     val onCatalogItemLongPress: (MetaPreview, String) -> Unit = remember {
         { item, addonBaseUrl -> posterOptionsTarget = HomePosterOptionsTarget(item, addonBaseUrl) }

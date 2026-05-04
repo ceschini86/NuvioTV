@@ -59,7 +59,7 @@ import kotlinx.coroutines.withContext
 )
 @Composable
 internal fun ModernHomeRowsList(
-    isVerticalRowsScrolling: Boolean,
+    isVerticalRowsScrolling: () -> Boolean,
     carouselRows: StableList<HeroCarouselRow>,
     verticalRowListState: LazyListState,
     uiCaches: ModernHomeUiCaches,
@@ -307,8 +307,19 @@ internal fun ModernHomeRowsList(
                         onRowItemFocusedInternal(rowKey, index, isContinueWatchingRow)
                     }
                 }
-                val isActiveRowLambda = remember(row.key, activeRowKey) {
+                val isActiveRowLambda = remember(row.key) {
                     { row.key == activeRowKey.value }
+                }
+                val stableOnCatalogSelectionFocused = remember {
+                    { selection: FocusedCatalogSelection ->
+                        val isCollectionFolder = selection.payload is ModernPayload.CollectionFolder
+                        if (focusedCatalogSelection.value != selection || isCollectionFolder) {
+                            onFocusedCatalogSelectionChange(selection)
+                            if (isCollectionFolder) {
+                                onFocusedHeroMediaNonceChange(focusedHeroMediaNonce.value + 1)
+                            }
+                        }
+                    }
                 }
                 ModernRowSection(
                     row = row,
@@ -347,17 +358,7 @@ internal fun ModernHomeRowsList(
                     onItemFocus = onItemFocus,
                     onPreloadAdjacentItem = onPreloadAdjacentItem,
                     enrichedPreviews = enrichedPreviews,
-                    onCatalogSelectionFocused = remember(focusedCatalogSelection, focusedHeroMediaNonce) {
-                        { selection ->
-                            val isCollectionFolder = selection.payload is ModernPayload.CollectionFolder
-                            if (focusedCatalogSelection.value != selection || isCollectionFolder) {
-                                onFocusedCatalogSelectionChange(selection)
-                                if (isCollectionFolder) {
-                                    onFocusedHeroMediaNonceChange(focusedHeroMediaNonce.value + 1)
-                                }
-                            }
-                        }
-                    },
+                    onCatalogSelectionFocused = stableOnCatalogSelectionFocused,
                     onNavigateToDetail = onNavigateToDetail,
                     onNavigateToFolderDetail = onNavigateToFolderDetail,
                     onLoadMoreCatalog = onLoadMoreCatalog,
