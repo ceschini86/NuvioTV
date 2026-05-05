@@ -254,6 +254,31 @@ internal fun ModernCarouselItem.catalogCardMetrics(
     }
 }
 
+internal fun ModernCarouselItem.catalogCardRequestMetrics(
+    useLandscapePosters: Boolean,
+    portraitCardWidth: androidx.compose.ui.unit.Dp,
+    portraitCardHeight: androidx.compose.ui.unit.Dp,
+    landscapeCardWidth: androidx.compose.ui.unit.Dp,
+    landscapeCardHeight: androidx.compose.ui.unit.Dp,
+    expandEnabled: Boolean = false
+): ModernCatalogCardMetrics {
+    val base = catalogCardMetrics(
+        useLandscapePosters = useLandscapePosters,
+        portraitCardWidth = portraitCardWidth,
+        portraitCardHeight = portraitCardHeight,
+        landscapeCardWidth = landscapeCardWidth,
+        landscapeCardHeight = landscapeCardHeight
+    )
+    if (!expandEnabled) return base
+
+    val expandedWidth = if (useLandscapePosters && payload !is ModernPayload.CollectionFolder) {
+        base.width
+    } else {
+        base.height * (16f / 9f)
+    }
+    return base.copy(width = maxOf(base.width, expandedWidth))
+}
+
 
 internal fun buildContinueWatchingItem(
     item: ContinueWatchingItem,

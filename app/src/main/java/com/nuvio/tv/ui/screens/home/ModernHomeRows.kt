@@ -5,12 +5,11 @@ package com.nuvio.tv.ui.screens.home
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
@@ -19,25 +18,28 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListPrefetchStrategy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -45,41 +47,31 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.foundation.focusGroup
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.tv.material3.Border
-import androidx.tv.material3.Icon
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -89,9 +81,10 @@ import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import coil3.imageLoader
 import coil3.memory.MemoryCache
-import coil3.request.ImageRequest
 import coil3.request.CachePolicy
+import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.nuvio.tv.LocalSidebarExpanded
 import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.FocusedPosterTrailerPlaybackTarget
 import com.nuvio.tv.domain.model.MetaPreview
@@ -101,23 +94,20 @@ import com.nuvio.tv.ui.components.TrailerPlayer
 import com.nuvio.tv.ui.components.placeholderCardShimmer
 import com.nuvio.tv.ui.components.rememberArtworkBackedCardGlow
 import com.nuvio.tv.ui.components.rememberPlaceholderShimmerOffsetState
-import com.nuvio.tv.LocalSidebarExpanded
 import com.nuvio.tv.ui.theme.NuvioColors
 import com.nuvio.tv.ui.theme.ThemeColors
-import kotlin.math.abs
-import kotlinx.coroutines.withContext
+import com.nuvio.tv.ui.util.StableMap
+import com.nuvio.tv.ui.util.recompositionHighlighter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import com.nuvio.tv.ui.util.recompositionHighlighter
-import com.nuvio.tv.ui.util.StableMap
-import com.nuvio.tv.ui.util.asStable
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.withContext
+import kotlin.math.abs
 
 private const val MODERN_HORIZONTAL_FOCUS_DEBOUNCE_MS = 140L
 private const val POSTER_PREFETCH_DISTANCE = 4
 
-internal val LocalVerticalRowsScrolling = compositionLocalOf { false }
+internal val LocalVerticalRowsScrolling = compositionLocalOf<State<Boolean>> { mutableStateOf(false) }
 
 /**
  * True while the user is actively "fast-scrolling" — i.e. holding DPAD_LEFT/RIGHT or
@@ -351,7 +341,7 @@ private fun ModernCatalogRowItem(
 internal fun ModernRowSection(
     row: HeroCarouselRow,
     isActiveRow: () -> Boolean,
-    isVerticalRowsScrolling: Boolean,
+    isVerticalRowsScrollingState: State<Boolean>,
     rowTitleBottom: Dp,
     defaultBringIntoViewSpec: BringIntoViewSpec,
     focusStateCatalogRowScrollIndex: Int,
@@ -610,7 +600,7 @@ internal fun ModernRowSection(
         LaunchedEffect(
             row.key,
             isActiveRow,
-            isVerticalRowsScrolling,
+            isVerticalRowsScrollingState,
             rowItemCount,
             portraitCatalogCardWidth,
             portraitCatalogCardHeight,
@@ -619,110 +609,80 @@ internal fun ModernRowSection(
             continueWatchingCardWidth,
             continueWatchingCardHeight
         ) {
-            if (!isActiveRow() || isVerticalRowsScrolling) return@LaunchedEffect
-            delay(150) // Wait before spamming image requests to survive rapid vertical D-pad scrolls!
-            val cwWidthPx = with(density) { continueWatchingCardWidth.roundToPx() }
-            val cwHeightPx = with(density) { continueWatchingCardHeight.roundToPx() }
-            fun imageUrlAndKey(item: ModernCarouselItem): Pair<String, String>? {
-                val url = item.imageUrl ?: return null
-                return when (item.payload) {
-                    is ModernPayload.Catalog -> {
-                        val metrics = item.catalogCardMetrics(
-                            useLandscapePosters = useLandscapePosters,
-                            portraitCardWidth = portraitCatalogCardWidth,
-                            portraitCardHeight = portraitCatalogCardHeight,
-                            landscapeCardWidth = landscapeCatalogCardWidth,
-                            landscapeCardHeight = landscapeCatalogCardHeight
-                        )
-                        val widthPx = with(density) { metrics.width.roundToPx() }
-                        val heightPx = with(density) { metrics.height.roundToPx() }
-                        url to "${url}_${widthPx}x${heightPx}"
-                    }
-                    is ModernPayload.CollectionFolder -> {
-                        val metrics = item.catalogCardMetrics(
-                            useLandscapePosters = useLandscapePosters,
-                            portraitCardWidth = portraitCatalogCardWidth,
-                            portraitCardHeight = portraitCatalogCardHeight,
-                            landscapeCardWidth = landscapeCatalogCardWidth,
-                            landscapeCardHeight = landscapeCatalogCardHeight
-                        )
-                        val widthPx = with(density) { metrics.width.roundToPx() }
-                        val heightPx = with(density) { metrics.height.roundToPx() }
-                        url to "${url}_${widthPx}x${heightPx}"
-                    }
-                    is ModernPayload.ContinueWatching -> url to "${url}_${cwWidthPx}x${cwHeightPx}"
-                }
-            }
-            fun enqueueIfNeeded(item: ModernCarouselItem, widthPx: Int, heightPx: Int) {
-                val (url, cacheKey) = imageUrlAndKey(item) ?: return
-                if (imageLoader.memoryCache?.get(MemoryCache.Key(cacheKey)) != null) return
-                imageLoader.enqueue(
-                    ImageRequest.Builder(context)
-                        .data(url)
-                        .memoryCacheKey(cacheKey)
-                        .size(width = widthPx, height = heightPx)
-                        .build()
-                )
-            }
-            // Prefetch initial visible + ahead items immediately when row appears
-            val items = currentRowState.value.items.list
-            withContext(Dispatchers.IO) {
-                for (i in 0 until minOf(POSTER_PREFETCH_DISTANCE, items.size)) {
-                    val item = items.getOrNull(i) ?: continue
-                    val (wPx, hPx) = when (item.payload) {
-                        is ModernPayload.Catalog -> {
-                            val metrics = item.catalogCardMetrics(
-                                useLandscapePosters = useLandscapePosters,
-                                portraitCardWidth = portraitCatalogCardWidth,
-                                portraitCardHeight = portraitCatalogCardHeight,
-                                landscapeCardWidth = landscapeCatalogCardWidth,
-                                landscapeCardHeight = landscapeCatalogCardHeight
-                            )
-                            with(density) { metrics.width.roundToPx() } to with(density) { metrics.height.roundToPx() }
+            snapshotFlow { isVerticalRowsScrollingState.value }
+                .collect { isVerticalScrolling ->
+                    if (!isActiveRow() || isVerticalScrolling) return@collect
+                    delay(150) // Wait before spamming image requests to survive rapid vertical D-pad scrolls!
+                    val cwWidthPx = with(density) { continueWatchingCardWidth.roundToPx() }
+                    val cwHeightPx = with(density) { continueWatchingCardHeight.roundToPx() }
+                    fun imageUrlAndKey(item: ModernCarouselItem): Pair<String, String>? {
+                        val url = item.imageUrl ?: return null
+                        return when (item.payload) {
+                            is ModernPayload.Catalog -> {
+                                val metrics = item.catalogCardRequestMetrics(
+                                    useLandscapePosters = useLandscapePosters,
+                                    portraitCardWidth = portraitCatalogCardWidth,
+                                    portraitCardHeight = portraitCatalogCardHeight,
+                                    landscapeCardWidth = landscapeCatalogCardWidth,
+                                    landscapeCardHeight = landscapeCatalogCardHeight,
+                                    expandEnabled = effectiveExpandEnabled
+                                )
+                                val widthPx = with(density) { metrics.width.roundToPx() }
+                                val heightPx = with(density) { metrics.height.roundToPx() }
+                                url to "${url}_${widthPx}x${heightPx}"
+                            }
+                            is ModernPayload.CollectionFolder -> {
+                                val metrics = item.catalogCardRequestMetrics(
+                                    useLandscapePosters = useLandscapePosters,
+                                    portraitCardWidth = portraitCatalogCardWidth,
+                                    portraitCardHeight = portraitCatalogCardHeight,
+                                    landscapeCardWidth = landscapeCatalogCardWidth,
+                                    landscapeCardHeight = landscapeCatalogCardHeight,
+                                    expandEnabled = effectiveExpandEnabled
+                                )
+                                val widthPx = with(density) { metrics.width.roundToPx() }
+                                val heightPx = with(density) { metrics.height.roundToPx() }
+                                url to "${url}_${widthPx}x${heightPx}"
+                            }
+                            is ModernPayload.ContinueWatching -> url to "${url}_${cwWidthPx}x${cwHeightPx}"
                         }
-                        is ModernPayload.CollectionFolder -> {
-                            val metrics = item.catalogCardMetrics(
-                                useLandscapePosters = useLandscapePosters,
-                                portraitCardWidth = portraitCatalogCardWidth,
-                                portraitCardHeight = portraitCatalogCardHeight,
-                                landscapeCardWidth = landscapeCatalogCardWidth,
-                                landscapeCardHeight = landscapeCatalogCardHeight
-                            )
-                            with(density) { metrics.width.roundToPx() } to with(density) { metrics.height.roundToPx() }
-                        }
-                        is ModernPayload.ContinueWatching -> cwWidthPx to cwHeightPx
                     }
-                    enqueueIfNeeded(item, wPx, hPx)
-                }
-            }
-
-            snapshotFlow {
-                rowListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            }
-                .distinctUntilChanged()
-                .collect { lastVisibleIndex ->
-                    val currentItems = currentRowState.value.items.list
+                    fun enqueueIfNeeded(item: ModernCarouselItem, widthPx: Int, heightPx: Int) {
+                        val (url, cacheKey) = imageUrlAndKey(item) ?: return
+                        if (imageLoader.memoryCache?.get(MemoryCache.Key(cacheKey)) != null) return
+                        imageLoader.enqueue(
+                            ImageRequest.Builder(context)
+                                .data(url)
+                                .memoryCacheKey(cacheKey)
+                                .size(width = widthPx, height = heightPx)
+                                .build()
+                        )
+                    }
+                    // Prefetch initial visible + ahead items immediately when row appears
+                    val items = currentRowState.value.items.list
                     withContext(Dispatchers.IO) {
-                        for (i in (lastVisibleIndex + 1)..(lastVisibleIndex + POSTER_PREFETCH_DISTANCE)) {
-                            val item = currentItems.getOrNull(i) ?: continue
+                        for (i in 0 until minOf(POSTER_PREFETCH_DISTANCE, items.size)) {
+                            val item = items.getOrNull(i) ?: continue
                             val (wPx, hPx) = when (item.payload) {
                                 is ModernPayload.Catalog -> {
-                                    val metrics = item.catalogCardMetrics(
+                                    val metrics = item.catalogCardRequestMetrics(
                                         useLandscapePosters = useLandscapePosters,
                                         portraitCardWidth = portraitCatalogCardWidth,
                                         portraitCardHeight = portraitCatalogCardHeight,
                                         landscapeCardWidth = landscapeCatalogCardWidth,
-                                        landscapeCardHeight = landscapeCatalogCardHeight
+                                        landscapeCardHeight = landscapeCatalogCardHeight,
+                                        expandEnabled = effectiveExpandEnabled
                                     )
                                     with(density) { metrics.width.roundToPx() } to with(density) { metrics.height.roundToPx() }
                                 }
                                 is ModernPayload.CollectionFolder -> {
-                                    val metrics = item.catalogCardMetrics(
+                                    val metrics = item.catalogCardRequestMetrics(
                                         useLandscapePosters = useLandscapePosters,
                                         portraitCardWidth = portraitCatalogCardWidth,
                                         portraitCardHeight = portraitCatalogCardHeight,
                                         landscapeCardWidth = landscapeCatalogCardWidth,
-                                        landscapeCardHeight = landscapeCatalogCardHeight
+                                        landscapeCardHeight = landscapeCatalogCardHeight,
+                                        expandEnabled = effectiveExpandEnabled
                                     )
                                     with(density) { metrics.width.roundToPx() } to with(density) { metrics.height.roundToPx() }
                                 }
@@ -731,6 +691,45 @@ internal fun ModernRowSection(
                             enqueueIfNeeded(item, wPx, hPx)
                         }
                     }
+
+                    snapshotFlow {
+                        rowListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                    }
+                        .distinctUntilChanged()
+                        .collect { lastVisibleIndex ->
+                            val currentItems = currentRowState.value.items.list
+                            withContext(Dispatchers.IO) {
+                                for (i in (lastVisibleIndex + 1)..(lastVisibleIndex + POSTER_PREFETCH_DISTANCE)) {
+                                    val item = currentItems.getOrNull(i) ?: continue
+                                    val (wPx, hPx) = when (item.payload) {
+                                        is ModernPayload.Catalog -> {
+                                            val metrics = item.catalogCardRequestMetrics(
+                                                useLandscapePosters = useLandscapePosters,
+                                                portraitCardWidth = portraitCatalogCardWidth,
+                                                portraitCardHeight = portraitCatalogCardHeight,
+                                                landscapeCardWidth = landscapeCatalogCardWidth,
+                                                landscapeCardHeight = landscapeCatalogCardHeight,
+                                                expandEnabled = effectiveExpandEnabled
+                                            )
+                                            with(density) { metrics.width.roundToPx() } to with(density) { metrics.height.roundToPx() }
+                                        }
+                                        is ModernPayload.CollectionFolder -> {
+                                            val metrics = item.catalogCardRequestMetrics(
+                                                useLandscapePosters = useLandscapePosters,
+                                                portraitCardWidth = portraitCatalogCardWidth,
+                                                portraitCardHeight = portraitCatalogCardHeight,
+                                                landscapeCardWidth = landscapeCatalogCardWidth,
+                                                landscapeCardHeight = landscapeCatalogCardHeight,
+                                                expandEnabled = effectiveExpandEnabled
+                                            )
+                                            with(density) { metrics.width.roundToPx() } to with(density) { metrics.height.roundToPx() }
+                                        }
+                                        is ModernPayload.ContinueWatching -> cwWidthPx to cwHeightPx
+                                    }
+                                    enqueueIfNeeded(item, wPx, hPx)
+                                }
+                            }
+                        }
                 }
         }
 
@@ -775,7 +774,6 @@ internal fun ModernRowSection(
             LazyRow(
                 state = rowListState,
                 modifier = Modifier
-                    .recompositionHighlighter()
                     .focusRestorer {
                         val savedIdx = (focusedItemByRow[rowKey] ?: 0)
                             .coerceIn(0, (row.items.list.size - 1).coerceAtLeast(0))
@@ -853,8 +851,9 @@ internal fun ModernRowSection(
                                 expandedFocusKey
                             ) {
                                 {
-                                    effectiveExpandEnabled && !isRowScrollingState.value &&
-                                        expandedCatalogFocusKey.value == expandedFocusKey
+                                    effectiveExpandEnabled &&
+                                        expandedCatalogFocusKey.value == expandedFocusKey &&
+                                        !isRowScrollingState.value
                                 }
                             }
                             ModernCatalogRowItem(
@@ -974,7 +973,6 @@ private fun ModernCarouselCard(
     }
     val effectiveBackdropUrl = frozenBackdropUrl.value
     var isFocused by remember { mutableStateOf(false) }
-    val payload = item.payload as? ModernPayload.CollectionFolder
     val isCollectionFolder = item.payload is ModernPayload.CollectionFolder
     val baseImageUrl = if (focusedPosterBackdropExpandEnabled && isBackdropExpanded) {
         if (useLandscapeOverlayTreatment) {
@@ -987,11 +985,12 @@ private fun ModernCarouselCard(
     } else {
         item.imageUrl ?: item.heroPreview.poster ?: item.heroPreview.backdrop
     }
+    val payloadAsFolder = item.payload as? ModernPayload.CollectionFolder
     val imageUrl = when {
-        payload == null -> baseImageUrl
-        !payload.focusGifEnabled -> baseImageUrl
-        isFocused -> payload.focusGifUrl ?: baseImageUrl
-        else -> baseImageUrl ?: payload.focusGifUrl
+        payloadAsFolder == null -> baseImageUrl
+        !payloadAsFolder.focusGifEnabled -> baseImageUrl
+        isFocused -> payloadAsFolder.focusGifUrl ?: baseImageUrl
+        else -> baseImageUrl ?: payloadAsFolder.focusGifUrl
     }
     val imageContentScale = when (item.payload) {
         is ModernPayload.CollectionFolder -> ContentScale.FillBounds
@@ -1041,29 +1040,8 @@ private fun ModernCarouselCard(
     }
     var landscapeLogoLoadFailed by remember(effectiveLogoUrl) { mutableStateOf(false) }
     val shouldPlayTrailerInCard = playTrailerInExpandedCard && !trailerPreviewUrl.isNullOrBlank()
-    val isVerticalRowsScrolling = LocalVerticalRowsScrolling.current
+    val isVerticalRowsScrollingState = LocalVerticalRowsScrolling.current
 
-    // Coil 3's AsyncImage is skippable — it compares ImageRequest structurally and won't
-    // re-trigger a failed memory-only request when policies change. We solve this by
-    // building a restricted request during scroll and using Compose's `key()` on the
-    // scroll state around AsyncImage so that stopping the scroll destroys the old
-    // (memory-only) AsyncImage and creates a fresh one with the full request.
-    val scrollAwareImageModel = if (!isVerticalRowsScrolling || imageModel == null) {
-        imageModel
-    } else {
-        remember(imageModel) {
-            (imageModel as? ImageRequest)?.newBuilder()
-                ?.memoryCachePolicy(CachePolicy.ENABLED)
-                ?.diskCachePolicy(CachePolicy.DISABLED)
-                ?.networkCachePolicy(CachePolicy.DISABLED)
-                ?.build()
-                ?: imageModel
-        }
-    }
-    // When true, wrap AsyncImage in key(scrollPhaseKey) to force re-creation on scroll stop.
-    val scrollPhaseKey = isVerticalRowsScrolling
-
-    val hasImage = !imageUrl.isNullOrBlank()
     val hasLandscapeLogo =
         (useLandscapeOverlayTreatment || isBackdropExpanded) &&
             !isCollectionFolder &&
@@ -1073,7 +1051,6 @@ private fun ModernCarouselCard(
     val backgroundCardColor = NuvioColors.BackgroundCard
     val focusRingColor = NuvioColors.FocusRing
     val titleMedium = MaterialTheme.typography.titleMedium
-    val backgroundPainter = remember(backgroundCardColor) { ColorPainter(backgroundCardColor) }
     val focusedBorder = remember(cardShape, focusRingColor) {
         Border(
             border = BorderStroke(2.dp, focusRingColor),
@@ -1095,11 +1072,11 @@ private fun ModernCarouselCard(
     }
     val effectiveFocusedBorder = if (isFastScrolling) transparentFocusBorder else focusedBorder
     val noFocusGlow = remember { CardDefaults.glow(focusedGlow = Glow.None) }
-    val cardGlow = when (payload) {
+    val cardGlow = when (val p = item.payload) {
         is ModernPayload.CollectionFolder -> rememberArtworkBackedCardGlow(
             imageUrl = imageUrl,
-            fallbackSeed = "${item.title}:${payload.collectionTitle}",
-            enabled = payload.focusGlowEnabled
+            fallbackSeed = "${item.title}:${p.collectionTitle}",
+            enabled = p.focusGlowEnabled
         )
         else -> noFocusGlow
     }
@@ -1110,8 +1087,7 @@ private fun ModernCarouselCard(
 
     Column(
         modifier = modifier
-            .width(animatedCardWidth)
-            .recompositionHighlighter(),
+            .width(animatedCardWidth),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Card(
@@ -1186,59 +1162,19 @@ private fun ModernCarouselCard(
                 }
 
                 Box(modifier = mediaLayerModifier) {
-                    val isPlaceholderItem = item.imageUrl?.startsWith("placeholder://") == true
-                    if (isPlaceholderItem) {
-                        // Horizontal sweeping shimmer for placeholder cards
-                        val effectivePlaceholderShimmerOffsetState =
-                            placeholderShimmerOffsetState ?: rememberPlaceholderShimmerOffsetState(
-                                label = "placeholderShimmer"
-                            )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .placeholderCardShimmer(effectivePlaceholderShimmerOffsetState)
-                        )
-                    } else if (hasImage) {
-                        key(scrollPhaseKey) {
-                            AsyncImage(
-                                model = scrollAwareImageModel,
-                                contentDescription = item.title,
-                                modifier = Modifier.fillMaxSize(),
-                                placeholder = backgroundPainter,
-                                error = backgroundPainter,
-                                fallback = backgroundPainter,
-                                contentScale = imageContentScale
-                            )
-                        }
-                    } else {
-                        MonochromePosterPlaceholder()
-                    }
-
-                    val showTrailerPlayer = remember { mutableStateOf(shouldPlayTrailerInCard) }
-                    LaunchedEffect(shouldPlayTrailerInCard) {
-                        if (shouldPlayTrailerInCard) {
-                            showTrailerPlayer.value = true
-                        } else {
-                            // Keep player in hierarchy during collapse to avoid layout thrashing
-                            delay(600)
-                            showTrailerPlayer.value = false
-                        }
-                    }
-
-                    if (showTrailerPlayer.value) {
-                        key(trailerPreviewUrl) {
-                            TrailerPlayer(
-                                trailerUrl = trailerPreviewUrl,
-                                trailerAudioUrl = trailerPreviewAudioUrl,
-                                isPlaying = shouldPlayTrailerInCard,
-                                onEnded = onTrailerEnded,
-                                muted = focusedPosterBackdropTrailerMuted,
-                                cropToFill = true,
-                                overscanZoom = MODERN_TRAILER_OVERSCAN_ZOOM,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-                    }
+                    ModernCardMedia(
+                        isVerticalRowsScrollingState = isVerticalRowsScrollingState,
+                        imageModel = imageModel,
+                        itemTitle = item.title,
+                        imageUrl = item.imageUrl,
+                        imageContentScale = imageContentScale,
+                        placeholderShimmerOffsetState = placeholderShimmerOffsetState,
+                        shouldPlayTrailerInCard = shouldPlayTrailerInCard,
+                        trailerPreviewUrl = trailerPreviewUrl,
+                        trailerPreviewAudioUrl = trailerPreviewAudioUrl,
+                        onTrailerEnded = onTrailerEnded,
+                        focusedPosterBackdropTrailerMuted = focusedPosterBackdropTrailerMuted
+                    )
                 }
 
                 if (hasLandscapeLogo) {
@@ -1278,7 +1214,7 @@ private fun ModernCarouselCard(
                             .shadow(10.dp, shape = CircleShape, spotColor = Color.Transparent)
                             .background(NuvioColors.Secondary, CircleShape)
                     ) {
-                        Icon(
+                        androidx.compose.material3.Icon(
                             imageVector = Icons.Default.Check,
                             tint = if (NuvioColors.Secondary == ThemeColors.White.secondary) Color.Black else Color.White,
                             contentDescription = stringResource(R.string.episodes_cd_watched),
@@ -1313,6 +1249,98 @@ private fun ModernCarouselCard(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ModernCardMedia(
+    isVerticalRowsScrollingState: State<Boolean>,
+    imageModel: Any?,
+    itemTitle: String,
+    imageUrl: String?,
+    imageContentScale: ContentScale,
+    placeholderShimmerOffsetState: State<Float>?,
+    shouldPlayTrailerInCard: Boolean,
+    trailerPreviewUrl: String?,
+    trailerPreviewAudioUrl: String?,
+    onTrailerEnded: () -> Unit,
+    focusedPosterBackdropTrailerMuted: Boolean
+) {
+    val isScrolling = isVerticalRowsScrollingState.value
+    // Coil 3's AsyncImage is skippable — it compares ImageRequest structurally and won't
+    // re-trigger a failed memory-only request when policies change. We solve this by
+    // building a restricted request during scroll and using Compose's `key()` on the
+    // scroll state around AsyncImage so that stopping the scroll destroys the old
+    // (memory-only) AsyncImage and creates a fresh one with the full request.
+    val scrollAwareImageModel = remember(isScrolling, imageModel) {
+        if (!isScrolling || imageModel == null) {
+            imageModel
+        } else {
+            (imageModel as? ImageRequest)?.newBuilder()
+                ?.memoryCachePolicy(CachePolicy.ENABLED)
+                ?.diskCachePolicy(CachePolicy.DISABLED)
+                ?.networkCachePolicy(CachePolicy.DISABLED)
+                ?.build()
+                ?: imageModel
+        }
+    }
+
+    val backgroundCardColor = NuvioColors.BackgroundCard
+    val backgroundPainter = remember(backgroundCardColor) { ColorPainter(backgroundCardColor) }
+    val hasImage = !imageUrl.isNullOrBlank()
+
+    val isPlaceholderItem = imageUrl?.startsWith("placeholder://") == true
+    if (isPlaceholderItem) {
+        // Horizontal sweeping shimmer for placeholder cards
+        val effectivePlaceholderShimmerOffsetState =
+            placeholderShimmerOffsetState ?: rememberPlaceholderShimmerOffsetState(
+                label = "placeholderShimmer"
+            )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .placeholderCardShimmer(effectivePlaceholderShimmerOffsetState)
+        )
+    } else if (hasImage) {
+        key(isScrolling) {
+            AsyncImage(
+                model = scrollAwareImageModel,
+                contentDescription = itemTitle,
+                modifier = Modifier.fillMaxSize(),
+                placeholder = backgroundPainter,
+                error = backgroundPainter,
+                fallback = backgroundPainter,
+                contentScale = imageContentScale
+            )
+        }
+    } else {
+        MonochromePosterPlaceholder()
+    }
+
+    val showTrailerPlayer = remember { mutableStateOf(shouldPlayTrailerInCard) }
+    LaunchedEffect(shouldPlayTrailerInCard) {
+        if (shouldPlayTrailerInCard) {
+            showTrailerPlayer.value = true
+        } else {
+            // Keep player in hierarchy during collapse to avoid layout thrashing
+            delay(600)
+            showTrailerPlayer.value = false
+        }
+    }
+
+    if (showTrailerPlayer.value) {
+        key(trailerPreviewUrl) {
+            TrailerPlayer(
+                trailerUrl = trailerPreviewUrl,
+                trailerAudioUrl = trailerPreviewAudioUrl,
+                isPlaying = shouldPlayTrailerInCard,
+                onEnded = onTrailerEnded,
+                muted = focusedPosterBackdropTrailerMuted,
+                cropToFill = true,
+                overscanZoom = MODERN_TRAILER_OVERSCAN_ZOOM,
+                modifier = Modifier.fillMaxSize()
+            )
         }
     }
 }

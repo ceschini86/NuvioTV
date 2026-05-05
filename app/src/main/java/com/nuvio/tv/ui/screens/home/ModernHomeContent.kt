@@ -170,7 +170,7 @@ fun ModernHomeContent(
         initialFirstVisibleItemIndex = focusState.verticalScrollIndex,
         initialFirstVisibleItemScrollOffset = focusState.verticalScrollOffset
     )
-    val isVerticalRowsScrolling by remember(verticalRowListState) {
+    val isVerticalRowsScrollingState = remember(verticalRowListState) {
         derivedStateOf { verticalRowListState.isScrollInProgress }
     }
 
@@ -182,8 +182,11 @@ fun ModernHomeContent(
 
     val currentView = LocalView.current
     val metricsHolder = PerformanceMetricsState.getHolderForHierarchy(currentView)
-    LaunchedEffect(isVerticalRowsScrolling) {
-        metricsHolder.state?.putState("HomeScrolling", isVerticalRowsScrolling.toString())
+    LaunchedEffect(verticalRowListState) {
+        snapshotFlow { verticalRowListState.isScrollInProgress }
+            .collect { scrolling ->
+                metricsHolder.state?.putState("HomeScrolling", scrolling.toString())
+            }
     }
     LaunchedEffect(enrichingItemId) {
         metricsHolder.state?.putState("HeroEnriching", (enrichingItemId != null).toString())
@@ -241,17 +244,17 @@ fun ModernHomeContent(
         shouldActivateFocusedPosterFlow,
         trailerPlaybackTarget,
         uiState.focusedPosterBackdropExpandDelaySeconds,
-        isVerticalRowsScrolling
+        verticalRowListState
     ) {
         expandedCatalogFocusKey.value = null
         if (!shouldActivateFocusedPosterFlow) return@LaunchedEffect
-        if (isVerticalRowsScrolling) return@LaunchedEffect
+        if (verticalRowListState.isScrollInProgress) return@LaunchedEffect
         val selection = focusedCatalogSelection.value ?: return@LaunchedEffect
         if (selection.payload !is ModernPayload.Catalog) return@LaunchedEffect
         delay(uiState.focusedPosterBackdropExpandDelaySeconds.coerceAtLeast(0) * 1000L)
         if (!lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@LaunchedEffect
         if (shouldActivateFocusedPosterFlow &&
-            !isVerticalRowsScrolling &&
+            !verticalRowListState.isScrollInProgress &&
             focusedCatalogSelection.value?.focusKey == selection.focusKey
         ) {
             expandedCatalogFocusKey.value = selection.focusKey
@@ -261,13 +264,13 @@ fun ModernHomeContent(
     LaunchedEffect(
         focusedCatalogSelection.value?.focusKey,
         effectiveAutoplayEnabled,
-        isVerticalRowsScrolling
+        verticalRowListState
     ) {
         if (!effectiveAutoplayEnabled) {
             lastRequestedTrailerFocusKey = null
             return@LaunchedEffect
         }
-        if (isVerticalRowsScrolling) return@LaunchedEffect
+        if (verticalRowListState.isScrollInProgress) return@LaunchedEffect
         val selection = focusedCatalogSelection.value ?: run {
             lastRequestedTrailerFocusKey = null
             return@LaunchedEffect
@@ -446,12 +449,12 @@ fun ModernHomeContent(
     }
     val latestHeroRow by rememberUpdatedState(activeRow)
     val latestHeroIndex by rememberUpdatedState(clampedActiveItemIndex)
-    LaunchedEffect(activeHeroItemKey, isVerticalRowsScrolling) {
-        if (isVerticalRowsScrolling) return@LaunchedEffect
+    LaunchedEffect(activeHeroItemKey, verticalRowListState) {
+        if (verticalRowListState.isScrollInProgress) return@LaunchedEffect
         val targetHeroKey = activeHeroItemKey ?: return@LaunchedEffect
         val settleDelayMs = heroFocusSettleDelayMs.longValue
         delay(settleDelayMs)
-        if (isVerticalRowsScrolling) return@LaunchedEffect
+        if (verticalRowListState.isScrollInProgress) return@LaunchedEffect
         if (System.currentTimeMillis() - lastHeroNavigationAtMs.longValue < settleDelayMs) return@LaunchedEffect
         val row = latestHeroRow ?: return@LaunchedEffect
         val latestKey = row.items.getOrNull(latestHeroIndex)?.key ?: row.items.firstOrNull()?.key
@@ -604,13 +607,13 @@ fun ModernHomeContent(
             effectiveAutoplayEnabled,
             trailerPlaybackTarget,
             heroTrailerUrlsState,
-            isVerticalRowsScrolling,
+            verticalRowListState,
             isSidebarExpanded
         ) {
             derivedStateOf {
                 effectiveAutoplayEnabled &&
                     !isSidebarExpanded.value &&
-                    !isVerticalRowsScrolling &&
+                    !verticalRowListState.isScrollInProgress &&
                     trailerPlaybackTarget == FocusedPosterTrailerPlaybackTarget.HERO_MEDIA &&
                     !heroTrailerUrlsState.value.first.isNullOrBlank()
             }
@@ -619,12 +622,12 @@ fun ModernHomeContent(
             collectionHeroVideoUrl,
             collectionHeroVideoPlaybackKey,
             endedCollectionHeroVideoPlaybackKey,
-            isVerticalRowsScrolling,
+            verticalRowListState,
             isSidebarExpanded
         ) {
             derivedStateOf {
                 !isSidebarExpanded.value &&
-                    !isVerticalRowsScrolling &&
+                    !verticalRowListState.isScrollInProgress &&
                     !collectionHeroVideoUrl.isNullOrBlank() &&
                     collectionHeroVideoPlaybackKey != null &&
                     endedCollectionHeroVideoPlaybackKey != collectionHeroVideoPlaybackKey
@@ -687,10 +690,10 @@ fun ModernHomeContent(
         }
         val stableHeroSceneState = remember { mutableStateOf(liveHeroSceneState.value) }
         val currentLiveHero = liveHeroSceneState.value
-        if (!isVerticalRowsScrolling || stableHeroSceneState.value.preview == null) {
+        if (!isVerticalRowsScrollingState.value || stableHeroSceneState.value.preview == null) {
             stableHeroSceneState.value = currentLiveHero
         }
-        val heroSceneState = if (isVerticalRowsScrolling) stableHeroSceneState.value else currentLiveHero
+        val heroSceneState = if (isVerticalRowsScrollingState.value) stableHeroSceneState.value else currentLiveHero
 
         LaunchedEffect(heroSceneState.heroBackdrop) {
             HeroBackdropState.update(heroSceneState.heroBackdrop)
@@ -864,7 +867,7 @@ fun ModernHomeContent(
             focusedHeroMediaNonce = focusedHeroMediaNonce,
             onFocusedHeroMediaNonceChange = onFocusedHeroMediaNonceChangeLambda,
             onExpansionInteractionNonceChange = onExpansionInteractionNonceChangeLambda,
-            isVerticalRowsScrolling = isVerticalRowsScrolling,
+            isVerticalRowsScrollingState = isVerticalRowsScrollingState,
             modifier = Modifier.align(Alignment.BottomStart)
         )
     }

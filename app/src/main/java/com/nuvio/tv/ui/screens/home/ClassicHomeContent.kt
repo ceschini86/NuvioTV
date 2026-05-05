@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyListPrefetchStrategy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -316,10 +317,13 @@ fun ClassicHomeContent(
         }
     }
 
+    val isVerticalScrollingState = remember(columnListState) {
+        derivedStateOf { columnListState.isScrollInProgress }
+    }
     CompositionLocalProvider(
         LocalBringIntoViewSpec provides verticalBringIntoViewSpec,
         LocalFastScrollActive provides isFastScrolling,
-        LocalVerticalRowsScrolling provides columnListState.isScrollInProgress
+        LocalVerticalRowsScrolling provides isVerticalScrollingState
     ) {
     Box(modifier = Modifier.fillMaxSize()) {
     ClassicFocusGradientBackdrop(

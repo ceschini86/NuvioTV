@@ -58,7 +58,7 @@ import kotlinx.coroutines.withContext
 )
 @Composable
 internal fun ModernHomeRowsList(
-    isVerticalRowsScrolling: Boolean,
+    isVerticalRowsScrollingState: State<Boolean>,
     carouselRows: StableList<HeroCarouselRow>,
     verticalRowListState: LazyListState,
     uiCaches: ModernHomeUiCaches,
@@ -143,12 +143,13 @@ internal fun ModernHomeRowsList(
                         for (i in 0 until minOf(prefetchItemsPerRow, row.items.list.size)) {
                             val item = row.items.list[i]
                             val url = item.imageUrl ?: continue
-                            val metrics = item.catalogCardMetrics(
+                            val metrics = item.catalogCardRequestMetrics(
                                 useLandscapePosters = useLandscapePosters,
                                 portraitCardWidth = portraitCatalogCardWidth,
                                 portraitCardHeight = portraitCatalogCardHeight,
                                 landscapeCardWidth = landscapeCatalogCardWidth,
-                                landscapeCardHeight = landscapeCatalogCardHeight
+                                landscapeCardHeight = landscapeCatalogCardHeight,
+                                expandEnabled = effectiveExpandEnabled
                             )
                             val wPx = with(density) { metrics.width.roundToPx() }
                             val hPx = with(density) { metrics.height.roundToPx() }
@@ -209,13 +210,12 @@ internal fun ModernHomeRowsList(
     CompositionLocalProvider(
         LocalBringIntoViewSpec provides verticalRowBringIntoViewSpec,
         LocalFastScrollActive provides isFastScrolling.value,
-        LocalVerticalRowsScrolling provides isVerticalRowsScrolling
+        LocalVerticalRowsScrolling provides isVerticalRowsScrollingState
     ) {
         LazyColumn(
             state = verticalRowListState,
             modifier = modifier
                 .fillMaxWidth()
-                .recompositionHighlighter()
                 .height(rowsViewportHeight)
                 .padding(bottom = catalogBottomPadding)
                 .clipToBounds()
@@ -362,7 +362,7 @@ internal fun ModernHomeRowsList(
                     onLoadMoreCatalog = onLoadMoreCatalog,
                     onBackdropInteraction = onBackdropInteraction,
                     onExpandedCatalogFocusKeyChange = onExpandedCatalogFocusKeyChange,
-                    isVerticalRowsScrolling = isVerticalRowsScrolling
+                    isVerticalRowsScrollingState = isVerticalRowsScrollingState
                 )
             }
         }
