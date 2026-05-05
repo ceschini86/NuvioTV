@@ -131,13 +131,13 @@ private fun TraktSourceForm(
             label = stringResource(R.string.collections_editor_trakt_list),
             value = uiState.traktInput,
             onValueChange = onInputChange,
-            placeholder = "Search title, Trakt URL, or list ID"
+            placeholder = stringResource(R.string.collection_editor_trakt_search_placeholder)
         )
         TraktLabeledField(
             label = stringResource(R.string.collections_editor_tmdb_display_title),
             value = uiState.traktTitleInput,
             onValueChange = onTitleChange,
-            placeholder = "Weekend Watch, Award Winners"
+            placeholder = stringResource(R.string.collection_editor_trakt_name_placeholder)
         )
         TraktMediaSortControls(
             mediaType = uiState.traktMediaType,
@@ -206,7 +206,7 @@ private fun TraktMediaSortControls(
                 onClick = { onMediaTypeChange(TmdbCollectionMediaType.TV) }
             )
             TmdbChoiceButton(
-                label = "Both",
+                label = stringResource(R.string.collection_editor_choice_both),
                 selected = bothSelected,
                 onClick = { onBothChange(true) }
             )
@@ -249,13 +249,14 @@ private fun TraktResultCard(result: TraktPublicListSearchResult, onClick: () -> 
     )
 }
 
+@Composable
 private fun traktSortOptions(): List<Pair<String, String>> {
     return listOf(
-        "rank" to "List Order",
-        "added" to "Recently Added",
-        "title" to "Title",
-        "released" to "Released",
-        "popularity" to "Popular",
-        "votes" to "Votes"
+        "rank" to stringResource(R.string.collections_editor_sort_list_order),
+        "added" to stringResource(R.string.collections_editor_sort_recently_added),
+        "title" to stringResource(R.string.collections_editor_sort_title),
+        "released" to stringResource(R.string.collections_editor_sort_released),
+        "popularity" to stringResource(R.string.tmdb_entity_rail_popular),
+        "votes" to stringResource(R.string.collections_editor_sort_votes)
     )
 }

@@ -70,7 +70,10 @@ class DebugSettingsViewModel @Inject constructor(
                         _uiState.update {
                             it.copy(
                                 generateLibraryLoading = false,
-                                generateLibraryResult = "Added ${event.count} items to library"
+                                generateLibraryResult = context.getString(
+                                    R.string.debug_generate_library_result_added,
+                                    event.count
+                                )
                             )
                         }
                     } catch (e: Exception) {

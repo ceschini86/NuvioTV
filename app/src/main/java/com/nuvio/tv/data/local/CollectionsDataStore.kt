@@ -1,9 +1,11 @@
 package com.nuvio.tv.data.local
 
+import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.nuvio.tv.R
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.domain.model.AddonCatalogCollectionSource
 import com.nuvio.tv.domain.model.Collection
@@ -20,6 +22,7 @@ import com.nuvio.tv.domain.model.TmdbCollectionSourceType
 import com.nuvio.tv.domain.model.TraktCollectionSource
 import com.nuvio.tv.domain.model.TraktListSort
 import com.nuvio.tv.domain.model.TraktSortHow
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
@@ -37,6 +40,7 @@ data class ValidationResult(
 
 @Singleton
 class CollectionsDataStore @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val factory: ProfileDataStoreFactory,
     private val profileManager: ProfileManager
 ) {
@@ -49,6 +53,7 @@ class CollectionsDataStore @Inject constructor(
 
     private val gson = Gson()
     private val collectionsKey = stringPreferencesKey("collections_json")
+    private fun string(resId: Int, vararg args: Any): String = appContext.getString(resId, *args)
 
     val collections: Flow<List<Collection>> =
         profileManager.activeProfileId.flatMapLatest { pid ->
@@ -398,7 +403,8 @@ class CollectionsDataStore @Inject constructor(
             "trakt" -> {
                 val id = traktListId?.takeIf { it > 0L } ?: return null
                 TraktCollectionSource(
-                    title = title?.takeIf { it.isNotBlank() } ?: "Trakt List $id",
+                    title = title?.takeIf { it.isNotBlank() }
+                        ?: string(R.string.collections_editor_trakt_list_with_id, id),
                     traktListId = id,
                     mediaType = mediaType?.let { raw ->
                         runCatching { TmdbCollectionMediaType.valueOf(raw.uppercase()) }.getOrNull()

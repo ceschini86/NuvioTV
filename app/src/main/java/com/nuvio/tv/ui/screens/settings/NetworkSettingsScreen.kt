@@ -178,6 +178,7 @@ fun AdvancedSettingsContent(
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val scope = rememberCoroutineScope()
+    val unknownError = stringResource(R.string.error_unknown)
 
     fun runSpeedTest() {
         scope.launch {
@@ -246,7 +247,7 @@ fun AdvancedSettingsContent(
                 testState = NetworkTestState.Done
 
             } catch (e: Exception) {
-                errorMessage = e.localizedMessage ?: "Unknown error"
+                errorMessage = e.localizedMessage ?: unknownError
                 testState = NetworkTestState.Error
             }
         }

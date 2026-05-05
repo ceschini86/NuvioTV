@@ -807,7 +807,7 @@ private fun LegacySidebarScaffold(
                             } else {
                                 Image(
                                     painter = painterResource(id = R.drawable.app_logo_wordmark),
-                                    contentDescription = "NuvioTV",
+                                    contentDescription = stringResource(R.string.app_name),
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(42.dp)

@@ -1,6 +1,7 @@
 package com.nuvio.tv.ui.screens.player
 
 import android.util.Log
+import com.nuvio.tv.R
 import com.nuvio.tv.core.torrent.TorrentState
 import com.nuvio.tv.domain.model.Stream
 import kotlinx.coroutines.CancellationException
@@ -178,7 +179,10 @@ internal fun PlayerRuntimeController.launchTorrentSourceStream(
             Log.e(TAG, "Failed to start torrent stream", e)
             _uiState.update {
                 it.copy(
-                    error = "Failed to start torrent: ${e.message}",
+                    error = context.getString(
+                        R.string.player_error_failed_start_torrent,
+                        e.message ?: context.getString(R.string.error_unknown)
+                    ),
                     showLoadingOverlay = false,
                     loadingProgress = null
                 )

@@ -114,7 +114,11 @@ class PluginViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             isAddingRepo = false,
-                            successMessage = "Added ${repo.name} with ${repo.scraperCount} providers"
+                            successMessage = context.getString(
+                                R.string.plugin_repo_added_with_providers,
+                                repo.name,
+                                repo.scraperCount
+                            )
                         )
                     }
                 },
@@ -134,7 +138,12 @@ class PluginViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             pluginManager.removeRepository(repoId)
-            _uiState.update { it.copy(isLoading = false, successMessage = "Repository removed") }
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    successMessage = context.getString(R.string.plugin_repo_removed)
+                )
+            }
         }
     }
 
@@ -146,7 +155,12 @@ class PluginViewModel @Inject constructor(
 
             result.fold(
                 onSuccess = {
-                    _uiState.update { it.copy(isLoading = false, successMessage = "Repository refreshed") }
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            successMessage = context.getString(R.string.plugin_repo_refreshed)
+                        )
+                    }
                 },
                 onFailure = { e ->
                     _uiState.update {
@@ -217,7 +231,11 @@ class PluginViewModel @Inject constructor(
                             isTesting = false,
                             testResults = results,
                             testDiagnostics = diagnostics,
-                            successMessage = if (results.isEmpty()) "No results found" else "Found ${results.size} streams"
+                            successMessage = if (results.isEmpty()) {
+                                context.getString(R.string.plugin_test_no_results)
+                            } else {
+                                context.getString(R.string.plugin_test_found_streams, results.size)
+                            }
                         )
                     }
                 },
@@ -227,7 +245,10 @@ class PluginViewModel @Inject constructor(
                             isTesting = false,
                             testResults = emptyList(),
                             testDiagnostics = null,
-                            errorMessage = "Test failed: ${e.message}"
+                            errorMessage = context.getString(
+                                R.string.plugin_error_test,
+                                e.message ?: context.getString(R.string.error_unknown)
+                            )
                         )
                     }
                 }

@@ -170,7 +170,7 @@ fun CatalogPickerContent(
                         if (isAdded) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "Remove",
+                                contentDescription = stringResource(R.string.collection_editor_remove_cd),
                                 tint = NuvioColors.TextSecondary
                             )
                         } else {

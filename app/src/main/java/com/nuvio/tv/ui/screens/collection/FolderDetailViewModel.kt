@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nuvio.tv.R
 import com.nuvio.tv.core.build.AppFeaturePolicy
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.tmdb.TmdbCollectionSourceResolver
@@ -245,7 +246,14 @@ class FolderDetailViewModel @Inject constructor(
             }
 
             val tabs = if (showAll) {
-                listOf(FolderTab(label = "All", typeLabel = "Combined", isLoading = true, isAllTab = true)) + sourceTabs
+                listOf(
+                    FolderTab(
+                        label = appContext.getString(com.nuvio.tv.R.string.collections_tab_all),
+                        typeLabel = appContext.getString(com.nuvio.tv.R.string.collections_tab_combined),
+                        isLoading = true,
+                        isAllTab = true
+                    )
+                ) + sourceTabs
             } else {
                 sourceTabs
             }
@@ -436,7 +444,10 @@ class FolderDetailViewModel @Inject constructor(
                 _uiState.update { state ->
                     val tabs = state.tabs.toMutableList()
                     if (tabIndex < tabs.size) {
-                        tabs[tabIndex] = tabs[tabIndex].copy(isLoading = false, error = "Addon not found")
+                        tabs[tabIndex] = tabs[tabIndex].copy(
+                            isLoading = false,
+                            error = appContext.getString(R.string.addon_error_not_found)
+                        )
                     }
                     state.copy(tabs = tabs)
                 }
@@ -814,8 +825,8 @@ class FolderDetailViewModel @Inject constructor(
 
     private fun buildAddonTabLabels(source: AddonCatalogCollectionSource, catalogName: String?): Pair<String, String> {
         val typeLabel = when (source.type.lowercase()) {
-            "movie" -> "Movies"
-            "series" -> "Series"
+            "movie" -> appContext.getString(R.string.type_movies)
+            "series" -> appContext.getString(R.string.type_series_plural)
             else -> source.type.replaceFirstChar { it.uppercase() }
         }
         val baseName = if (!catalogName.isNullOrBlank()) {
@@ -830,20 +841,20 @@ class FolderDetailViewModel @Inject constructor(
 
     private fun buildTmdbTypeLabel(source: TmdbCollectionSource): String {
         return when (source.sourceType.name) {
-            "LIST" -> "TMDB List"
-            "COLLECTION" -> "TMDB Movie Collection"
-            "COMPANY" -> "Production"
-            "NETWORK" -> "Network"
-            "PERSON" -> "Person Credits"
-            "DIRECTOR" -> "Director Credits"
-            else -> "TMDB Discover"
+            "LIST" -> appContext.getString(R.string.collections_editor_tmdb_default_list)
+            "COLLECTION" -> appContext.getString(R.string.collections_editor_tmdb_movie_collection)
+            "COMPANY" -> appContext.getString(R.string.collections_editor_tmdb_mode_production)
+            "NETWORK" -> appContext.getString(R.string.collections_editor_tmdb_mode_network)
+            "PERSON" -> appContext.getString(R.string.collections_editor_tmdb_person_credits)
+            "DIRECTOR" -> appContext.getString(R.string.collections_editor_tmdb_director_credits)
+            else -> appContext.getString(R.string.collections_editor_tmdb_default_discover)
         }
     }
 
     private fun buildTraktTypeLabel(source: TraktCollectionSource): String {
         return when (source.mediaType) {
-            com.nuvio.tv.domain.model.TmdbCollectionMediaType.MOVIE -> "Trakt Movie List"
-            com.nuvio.tv.domain.model.TmdbCollectionMediaType.TV -> "Trakt Series List"
+            com.nuvio.tv.domain.model.TmdbCollectionMediaType.MOVIE -> appContext.getString(R.string.collections_editor_trakt_movie_list)
+            com.nuvio.tv.domain.model.TmdbCollectionMediaType.TV -> appContext.getString(R.string.collections_editor_trakt_series_list)
         }
     }
 

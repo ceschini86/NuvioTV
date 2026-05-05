@@ -382,7 +382,11 @@ fun CollectionEditorScreen(
                     color = NuvioColors.TextPrimary
                 )
                 Text(
-                    text = "${uiState.folders.size} item${if (uiState.folders.size != 1) "s" else ""}",
+                    text = stringResource(
+                        if (uiState.folders.size == 1) R.string.collection_editor_folder_count_one
+                        else R.string.collection_editor_folder_count_other,
+                        uiState.folders.size
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = NuvioColors.TextTertiary
                 )
