@@ -201,6 +201,8 @@ class HomeViewModel @Inject constructor(
     internal val cwEnrichedInProgressOverlay = Collections.synchronizedMap(mutableMapOf<String, ContinueWatchingItem.InProgress>())
     /** Bumped to force the CW pipeline to re-run (e.g. after cache clear). */
     internal val cwPipelineRefreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0)
+    /** Tracks the active CW pipeline coroutine so it can be cancelled on profile switch. */
+    internal var cwPipelineJob: Job? = null
     internal val fullyWatchedSeriesIds get() = watchedSeriesStateHolder
     internal var tmdbEnrichFocusJob: Job? = null
     internal var pendingTmdbEnrichItemId: String? = null
@@ -269,6 +271,9 @@ class HomeViewModel @Inject constructor(
             profileManager.activeProfileId.collect { newId ->
                 if (newId != previousProfileId) {
                     previousProfileId = newId
+                    // Cancel old pipeline — prevents racing writes from stale coroutines.
+                    cwPipelineJob?.cancel()
+                    cwPipelineJob = null
                     // Clear all in-memory CW caches so data from the previous
                     // profile doesn't leak into the new one.
                     cwMetaCache.clear()
@@ -289,6 +294,8 @@ class HomeViewModel @Inject constructor(
                             layoutPreferencesReady = false
                         )
                     }
+                    // Reset so the new profile's pipeline signals first completion correctly.
+                    _initialCwResolved.value = false
                     loadContinueWatching()
                     // Clear watched badges so they don't leak between profiles.
                     watchedSeriesStateHolder.update(emptySet())
