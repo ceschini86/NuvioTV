@@ -113,9 +113,9 @@ private sealed interface ExperienceModeLoadState {
 private fun rememberSettingsSectionSpecs() = listOf(
     SettingsSectionSpec(
         category = SettingsCategory.EXPERIENCE,
-        title = "Experience",
+        title = stringResource(R.string.settings_experience),
         icon = Icons.Default.Tune,
-        subtitle = "Essential or Advanced",
+        subtitle = stringResource(R.string.settings_experience_subtitle),
         destination = SettingsSectionDestination.Inline
     ),
     SettingsSectionSpec(
@@ -236,9 +236,9 @@ fun SettingsScreen(
                 SettingsCategory.DEBUG -> BuildConfig.IS_DEBUG_BUILD && !isEssentialMode
                 SettingsCategory.PROFILES -> isPrimaryProfileActive
                 SettingsCategory.ACCOUNT -> isPrimaryProfileActive
-                SettingsCategory.LAYOUT -> !isEssentialMode
+                SettingsCategory.LAYOUT -> true
                 SettingsCategory.PLUGINS -> AppFeaturePolicy.pluginsEnabled && !isEssentialMode
-                SettingsCategory.INTEGRATION -> !isEssentialMode
+                SettingsCategory.INTEGRATION -> true
                 SettingsCategory.ADVANCED -> true
                 else -> true
             }
@@ -554,20 +554,22 @@ private fun EssentialAdvancedSettingsContent(
     experienceModeViewModel: ExperienceModeSettingsViewModel,
     initialFocusRequester: FocusRequester?
 ) {
+    var showConfirmation by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         SettingsDetailHeader(
             title = stringResource(R.string.settings_advanced),
-            subtitle = "Switch to Advanced for the full settings surface."
+            subtitle = stringResource(R.string.experience_mode_switch_to_advanced_header_subtitle)
         )
         SettingsGroupCard(modifier = Modifier.fillMaxWidth()) {
             SettingsActionRow(
-                title = "Switch to Advanced",
-                subtitle = "Show full layout, plug-in, integration, catalog, collection, debug, and tuning settings.",
-                value = "Advanced",
-                onClick = { experienceModeViewModel.setMode(ExperienceMode.ADVANCED) },
+                title = stringResource(R.string.experience_mode_switch_to_advanced),
+                subtitle = stringResource(R.string.experience_mode_switch_to_advanced_subtitle),
+                value = stringResource(R.string.settings_advanced),
+                onClick = { showConfirmation = true },
                 modifier = if (initialFocusRequester != null) {
                     Modifier.focusRequester(initialFocusRequester)
                 } else {
@@ -575,6 +577,14 @@ private fun EssentialAdvancedSettingsContent(
                 }
             )
         }
+    }
+
+    if (showConfirmation) {
+        ExperienceModeConfirmationDialog(
+            targetMode = ExperienceMode.ADVANCED,
+            onConfirm = { experienceModeViewModel.setMode(ExperienceMode.ADVANCED) },
+            onDismiss = { showConfirmation = false }
+        )
     }
 }
 

@@ -254,6 +254,7 @@ fun AdvancedSettingsContent(
 
     val networkListState = rememberLazyListState()
     val performanceFocusRequester = remember { initialFocusRequester ?: FocusRequester() }
+    var showExperienceModeConfirmation by remember { mutableStateOf(false) }
     Box(modifier = Modifier.fillMaxSize()) {
     LazyColumn(
         state = networkListState,
@@ -282,12 +283,15 @@ fun AdvancedSettingsContent(
         }
 
         item(key = "experience_mode_settings") {
-            SettingsGroupCard(modifier = Modifier.fillMaxWidth(), title = "Experience mode") {
+            SettingsGroupCard(
+                modifier = Modifier.fillMaxWidth(),
+                title = stringResource(R.string.experience_mode_group_title)
+            ) {
                 SettingsActionRow(
-                    title = "Switch to Essential",
-                    subtitle = "Hide advanced setup surfaces without changing your saved values.",
-                    value = "Essential",
-                    onClick = { experienceModeViewModel.setMode(ExperienceMode.ESSENTIAL) }
+                    title = stringResource(R.string.experience_mode_switch_to_essential),
+                    subtitle = stringResource(R.string.experience_mode_switch_to_essential_subtitle),
+                    value = stringResource(R.string.experience_mode_essential),
+                    onClick = { showExperienceModeConfirmation = true }
                 )
             }
         }
@@ -483,6 +487,14 @@ fun AdvancedSettingsContent(
         }
     }
         SettingsVerticalScrollIndicators(state = networkListState)
+    }
+
+    if (showExperienceModeConfirmation) {
+        ExperienceModeConfirmationDialog(
+            targetMode = ExperienceMode.ESSENTIAL,
+            onConfirm = { experienceModeViewModel.setMode(ExperienceMode.ESSENTIAL) },
+            onDismiss = { showExperienceModeConfirmation = false }
+        )
     }
 }
 

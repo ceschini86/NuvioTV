@@ -10,27 +10,24 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VideoSettings
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.tv.material3.Border
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.ClickableSurfaceDefaults
@@ -68,7 +65,18 @@ fun ExperienceModeSelectionScreen(
     viewModel: ExperienceModeSelectionViewModel = hiltViewModel()
 ) {
     val coroutineScope = rememberCoroutineScope()
-    var selectedMode by remember { mutableStateOf(ExperienceMode.ESSENTIAL) }
+    val essentialFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        essentialFocusRequester.requestFocus()
+    }
+
+    fun choose(mode: ExperienceMode) {
+        coroutineScope.launch {
+            viewModel.choose(mode)
+            onContinue(mode)
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -100,38 +108,17 @@ fun ExperienceModeSelectionScreen(
                     title = "Essential",
                     subtitle = "Focused setup, add-ons, playback basics, Trakt, and account settings.",
                     icon = Icons.Default.VideoSettings,
-                    selected = selectedMode == ExperienceMode.ESSENTIAL,
-                    onClick = { selectedMode = ExperienceMode.ESSENTIAL },
-                    modifier = Modifier.weight(1f)
+                    onClick = { choose(ExperienceMode.ESSENTIAL) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(essentialFocusRequester)
                 )
                 ExperienceModeCard(
                     title = "Advanced",
                     subtitle = "Full settings, layout controls, catalog order, collections, plug-ins, and diagnostics.",
                     icon = Icons.Default.Tune,
-                    selected = selectedMode == ExperienceMode.ADVANCED,
-                    onClick = { selectedMode = ExperienceMode.ADVANCED },
+                    onClick = { choose(ExperienceMode.ADVANCED) },
                     modifier = Modifier.weight(1f)
-                )
-            }
-            Spacer(modifier = Modifier.height(30.dp))
-            Button(
-                onClick = {
-                    coroutineScope.launch {
-                        viewModel.choose(selectedMode)
-                        onContinue(selectedMode)
-                    }
-                },
-                colors = ButtonDefaults.colors(
-                    containerColor = NuvioColors.Secondary,
-                    contentColor = NuvioColors.OnSecondary,
-                    focusedContainerColor = NuvioColors.SecondaryVariant,
-                    focusedContentColor = NuvioColors.OnSecondary
-                ),
-                shape = ButtonDefaults.shape(RoundedCornerShape(50))
-            ) {
-                Text(
-                    text = "Continue",
-                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp)
                 )
             }
         }
@@ -144,7 +131,6 @@ private fun ExperienceModeCard(
     title: String,
     subtitle: String,
     icon: ImageVector,
-    selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -152,12 +138,12 @@ private fun ExperienceModeCard(
         onClick = onClick,
         modifier = modifier.height(210.dp),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (selected) NuvioColors.FocusBackground else NuvioColors.BackgroundCard,
+            containerColor = NuvioColors.BackgroundCard,
             focusedContainerColor = NuvioColors.FocusBackground
         ),
         border = ClickableSurfaceDefaults.border(
             border = Border(
-                border = BorderStroke(1.dp, if (selected) NuvioColors.FocusRing else NuvioColors.Border),
+                border = BorderStroke(1.dp, NuvioColors.Border),
                 shape = RoundedCornerShape(12.dp)
             ),
             focusedBorder = Border(
@@ -165,7 +151,8 @@ private fun ExperienceModeCard(
                 shape = RoundedCornerShape(12.dp)
             )
         ),
-        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp))
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
     ) {
         Card(
             onClick = onClick,
@@ -182,7 +169,7 @@ private fun ExperienceModeCard(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = if (selected) NuvioColors.Primary else NuvioColors.TextSecondary
+                    tint = NuvioColors.TextSecondary
                 )
                 Spacer(modifier = Modifier.height(18.dp))
                 Text(

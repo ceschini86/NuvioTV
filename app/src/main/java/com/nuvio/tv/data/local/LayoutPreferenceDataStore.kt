@@ -184,7 +184,7 @@ class LayoutPreferenceDataStore @Inject constructor(
     }
 
     val focusedPosterBackdropExpandEnabled: Flow<Boolean> = profileFlow { prefs ->
-        prefs[focusedPosterBackdropExpandEnabledKey] ?: false
+        prefs[focusedPosterBackdropExpandEnabledKey] ?: true
     }
 
     val focusedPosterBackdropExpandDelaySeconds: Flow<Int> = profileFlow { prefs ->
@@ -242,7 +242,7 @@ class LayoutPreferenceDataStore @Inject constructor(
     }
 
     val detailPageTrailerButtonEnabled: Flow<Boolean> = profileFlow { prefs ->
-        prefs[detailPageTrailerButtonEnabledKey] ?: false
+        prefs[detailPageTrailerButtonEnabledKey] ?: true
     }
 
     val preferExternalMetaAddonDetail: Flow<Boolean> = profileFlow { prefs ->

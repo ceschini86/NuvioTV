@@ -26,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.tv.R
 import com.nuvio.tv.data.local.AudioLanguageOption
 import com.nuvio.tv.data.local.StreamAutoPlayMode
+import com.nuvio.tv.ui.components.P2pConsentDialog
 import kotlinx.coroutines.launch
 
 @Composable
@@ -39,6 +40,7 @@ fun EssentialPlaybackSettingsContent(
     var showSubtitleLanguageDialog by remember { mutableStateOf(false) }
     var showAudioLanguageDialog by remember { mutableStateOf(false) }
     var showDecoderPriorityDialog by remember { mutableStateOf(false) }
+    var showP2pConsentDialog by remember { mutableStateOf(false) }
     val settings = playerSettings
 
     val listState = rememberLazyListState()
@@ -101,7 +103,11 @@ fun EssentialPlaybackSettingsContent(
                         checked = torrentSettings?.p2pEnabled == true,
                         onToggle = {
                             val current = torrentSettings ?: return@SettingsToggleRow
-                            viewModel.setP2pEnabled(!current.p2pEnabled)
+                            if (current.p2pEnabled) {
+                                viewModel.setP2pEnabled(false)
+                            } else {
+                                showP2pConsentDialog = true
+                            }
                         },
                         enabled = torrentSettings != null
                     )
@@ -185,6 +191,15 @@ fun EssentialPlaybackSettingsContent(
                 showDecoderPriorityDialog = false
             },
             onDismiss = { showDecoderPriorityDialog = false }
+        )
+    }
+    if (showP2pConsentDialog) {
+        P2pConsentDialog(
+            onEnableP2p = {
+                viewModel.setP2pEnabled(true)
+                showP2pConsentDialog = false
+            },
+            onDismiss = { showP2pConsentDialog = false }
         )
     }
 }

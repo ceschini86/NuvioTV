@@ -280,6 +280,8 @@
     <string name="about_supporters_contributors_subtitle">Open recognition and project credits</string>
 
     <!-- SettingsScreen categories -->
+    <string name="settings_experience">Experience</string>
+    <string name="settings_experience_subtitle">Essential or Advanced</string>
     <string name="settings_account">Account</string>
     <string name="settings_account_subtitle">Account and sync status</string>
     <string name="settings_profiles">Profiles</string>
@@ -297,6 +299,17 @@
     <string name="settings_network_subtitle">Latency and download diagnostics</string>
     <string name="settings_advanced">Advanced</string>
     <string name="settings_advanced_subtitle">Performance, navigation, cache, and diagnostics</string>
+    <string name="experience_mode_essential">Essential</string>
+    <string name="experience_mode_group_title">Experience mode</string>
+    <string name="experience_mode_switch_to_essential">Switch to Essential</string>
+    <string name="experience_mode_switch_to_essential_subtitle">Hide advanced setup surfaces without changing your saved values.</string>
+    <string name="experience_mode_switch_to_advanced">Switch to Advanced</string>
+    <string name="experience_mode_switch_to_advanced_header_subtitle">Switch to Advanced for the full settings surface.</string>
+    <string name="experience_mode_switch_to_advanced_subtitle">Show full layout, plug-in, integration, catalog, collection, and tuning settings.</string>
+    <string name="experience_mode_confirm_essential_title">Switch to Essential?</string>
+    <string name="experience_mode_confirm_advanced_title">Switch to Advanced?</string>
+    <string name="experience_mode_confirm_essential_subtitle">Advanced setup surfaces will be hidden, but your saved settings stay unchanged. You can switch back anytime.</string>
+    <string name="experience_mode_confirm_advanced_subtitle">This reveals the full settings surface, including advanced setup, catalog, collection, and tuning controls.</string>
     <string name="network_speed_test_run">Run Speed Test</string>
     <string name="network_speed_test_running">Running Speed Test</string>
     <string name="network_speed_test_subtitle">Measure download speed and latency</string>
