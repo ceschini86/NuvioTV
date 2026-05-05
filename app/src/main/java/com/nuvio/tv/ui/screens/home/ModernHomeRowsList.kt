@@ -45,6 +45,7 @@ import com.nuvio.tv.domain.model.FocusedPosterTrailerPlaybackTarget
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.ui.util.StableList
 import com.nuvio.tv.ui.util.StableMap
+import com.nuvio.tv.ui.util.StableRef
 import com.nuvio.tv.ui.util.dpadVerticalFastScroll
 import com.nuvio.tv.ui.util.LocalRecompositionHighlighterEnabled
 import com.nuvio.tv.ui.util.recompositionHighlighter
@@ -65,9 +66,9 @@ internal fun ModernHomeRowsList(
     isVerticalRowsScrolling: () -> Boolean,
     carouselRows: StableList<HeroCarouselRow>,
     verticalRowListState: LazyListState,
-    focusedItemByRow: MutableMap<String, Int>,
-    rowListStates: MutableMap<String, LazyListState>,
-    loadMoreRequestedTotals: MutableMap<String, Int>,
+    focusedItemByRow: StableRef<MutableMap<String, Int>>,
+    rowListStates: StableRef<MutableMap<String, LazyListState>>,
+    loadMoreRequestedTotals: StableRef<MutableMap<String, Int>>,
     focusState: HomeScreenFocusState,
     activeRowKey: State<String?>,
     activeItemIndex: State<Int>,
@@ -130,11 +131,16 @@ internal fun ModernHomeRowsList(
     onExpansionInteractionNonceChange: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Unwrap StableRef wrappers for internal use (not passed to child composables)
+    val focusedItemByRowMap = focusedItemByRow.value
+    val rowListStatesMap = rowListStates.value
+    val loadMoreRequestedTotalsMap = loadMoreRequestedTotals.value
+
     val latestOnActiveRowKeyChange = rememberUpdatedState(onActiveRowKeyChange)
     val latestOnActiveItemIndexChange = rememberUpdatedState(onActiveItemIndexChange)
 
     val rowFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
-    val itemFocusRequestersByRow = remember { mutableMapOf<String, MutableMap<Int, FocusRequester>>() }
+    val stableItemFocusRequestersByRow = remember { mutableMapOf<String, StableRef<MutableMap<Int, FocusRequester>>>() }
 
     val density = LocalDensity.current
     val context = LocalContext.current
@@ -284,7 +290,7 @@ internal fun ModernHomeRowsList(
                         val targetRow = carouselRows.list.getOrNull(targetRowIndex)
                         if (targetRow == null) null
                         else {
-                            val savedIdx = (focusedItemByRow[targetRow.key] ?: 0)
+                            val savedIdx = (focusedItemByRowMap[targetRow.key] ?: 0)
                                 .coerceIn(0, (targetRow.items.list.size - 1).coerceAtLeast(0))
                             latestOnActiveRowKeyChange.value(targetRow.key)
                             latestOnActiveItemIndexChange.value(savedIdx)
@@ -326,8 +332,8 @@ internal fun ModernHomeRowsList(
                         }
 
                         // Always keep the focusedItemByRow map in sync for ALL rows
-                        if (focusedItemByRow[rowKey] != index) {
-                            focusedItemByRow[rowKey] = index
+                        if (focusedItemByRowMap[rowKey] != index) {
+                            focusedItemByRowMap[rowKey] = index
                         }
 
                         if (isContinueWatchingRow) {
@@ -402,7 +408,9 @@ internal fun ModernHomeRowsList(
                     onBackdropInteraction = onBackdropInteraction,
                     onExpandedCatalogFocusKeyChange = onExpandedCatalogFocusKeyChange,
                     isVerticalRowsScrolling = isVerticalRowsScrolling,
-                    itemFocusRequesters = itemFocusRequestersByRow.getOrPut(row.key) { mutableMapOf() }
+                    itemFocusRequesters = stableItemFocusRequestersByRow.getOrPut(row.key) {
+                        StableRef(mutableMapOf())
+                    }
                 )
             }
         }

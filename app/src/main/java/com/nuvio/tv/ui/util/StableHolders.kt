@@ -37,3 +37,16 @@ fun <T> List<T>.asStable(): StableList<T> = StableList(this)
  * Extension to easily wrap a Set.
  */
 fun <T> Set<T>.asStable(): StableSet<T> = StableSet(this)
+
+
+/**
+ * A @Stable wrapper around a mutable reference. Compose will treat this as stable
+ * and skip recomposition of composables that receive it as a parameter, even when
+ * the parent recomposes. The wrapped value is accessed via [value].
+ *
+ * Use this for objects like MutableMap or MutableList that are referentially stable
+ * (same instance) but not structurally stable in the eyes of the Compose compiler.
+ */
+@Suppress("unused")
+@androidx.compose.runtime.Stable
+class StableRef<T>(val value: T)

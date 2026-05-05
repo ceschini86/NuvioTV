@@ -98,6 +98,10 @@ internal fun HomeViewModel.observeTmdbSettingsPipeline() {
             .collectLatest { settings ->
                 val languageChanged = currentTmdbSettings.language != settings.language
                 currentTmdbSettings = settings
+                val tmdbEnabledForLayout = settings.enabled &&
+                    (_uiState.value.homeLayout != HomeLayout.MODERN || settings.modernHomeEnabled)
+                val enrichEnabled = tmdbEnabledForLayout || externalMetaPrefetchEnabled
+                _uiState.update { it.copy(heroEnrichmentEnabled = enrichEnabled) }
                 if (languageChanged) {
                     // Allow re-enrichment with the new language on next focus.
                     prefetchedTmdbIds.clear()

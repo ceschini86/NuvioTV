@@ -77,6 +77,7 @@ import com.nuvio.tv.LocalSidebarExpanded
 import com.nuvio.tv.LocalContentFocusRequester
 import com.nuvio.tv.ui.theme.NuvioColors
 import com.nuvio.tv.ui.util.LocalRecompositionHighlighterEnabled
+import com.nuvio.tv.ui.util.StableRef
 import com.nuvio.tv.ui.util.asStable
 import com.nuvio.tv.ui.util.recompositionHighlighter
 import androidx.compose.ui.graphics.Color
@@ -97,6 +98,7 @@ fun ModernHomeContent(
     enrichingItemId: String? = null,
     lastEnrichedPreview: MetaPreview? = null,
     enrichedPreviews: Map<String, MetaPreview> = emptyMap(),
+    failedEnrichmentIds: Set<String> = emptySet(),
     trailerPreviewUrls: Map<String, String> = emptyMap(),
     trailerPreviewAudioUrls: Map<String, String> = emptyMap(),
     onNavigateToDetail: (String, String, String) -> Unit,
@@ -157,6 +159,9 @@ fun ModernHomeContent(
     val loadMoreRequestedTotals = remember { mutableStateMapOf<String, Int>() }
 
     val focusedItemByRow = remember { mutableStateMapOf<String, Int>() }
+    val stableFocusedItemByRow = remember { StableRef<MutableMap<String, Int>>(focusedItemByRow) }
+    val stableRowListStates = remember { StableRef<MutableMap<String, LazyListState>>(rowListStates) }
+    val stableLoadMoreRequestedTotals = remember { StableRef<MutableMap<String, Int>>(loadMoreRequestedTotals) }
     if (focusedItemByRow.isEmpty() && focusState.hasSavedFocus) {
         val savedRowKey = focusState.focusedRowKey
         if (savedRowKey != null) {
@@ -575,7 +580,7 @@ fun ModernHomeContent(
                 }
             }
 
-            val resolvedHeroState = remember(activeCarouselItemState, enrichedPreviews, enrichingItemId, heroItem) {
+            val resolvedHeroState = remember(activeCarouselItemState, enrichedPreviews, enrichingItemId, heroItem, uiState.heroEnrichmentEnabled, failedEnrichmentIds) {
                 derivedStateOf {
                     val activeCarouselItem = activeCarouselItemState.value
                     val activeItemId = activeCarouselItem?.metaPreview?.id
@@ -611,6 +616,15 @@ fun ModernHomeContent(
                         else -> activeCarouselItem?.heroPreview ?: heroItem.value
                     }
                     
+                    // Only use the real enrichmentActive flag from the ViewModel.
+                    // Additionally, if enrichment is enabled but no enriched data exists yet
+                    // for this item, treat as pending to avoid showing un-enriched addon data.
+                    // Exception: if enrichment already failed for this item, show addon data.
+                    val heroEnrichmentEnabled = uiState.heroEnrichmentEnabled
+                    val enrichmentFailed = activeItemId != null && activeItemId in failedEnrichmentIds
+                    val effectiveEnrichmentActive = enrichmentActive ||
+                        (enrichedHero == null && activeItemId != null && heroEnrichmentEnabled && !enrichmentFailed)
+                    
                     val activeRowKeyVal = activeRowKey.value
                     val activeRow = activeRowKeyVal?.let { rowByKey[it] }
                     val activeRowFallbackBackdrop = activeRow?.items?.list?.firstNotNullOfOrNull { item ->
@@ -624,7 +638,7 @@ fun ModernHomeContent(
                         if (heroItem.value == null) activeRowFallbackBackdrop else null
                     )
                     
-                    Triple(heroBackdrop, resolvedHero, enrichmentActive)
+                    Triple(heroBackdrop, resolvedHero, effectiveEnrichmentActive)
                 }
             }
 
@@ -894,8 +908,9 @@ fun ModernHomeContent(
 
             HeroTitleBlock(
                 previewProvider = {
-                    if (isRapidHorizontalNav.value) null
-                    else heroSceneStateLambda().preview
+                    val state = heroSceneStateLambda()
+                    if (isRapidHorizontalNav.value || state.enrichmentActive) null
+                    else state.preview
                 },
                 enrichmentActive = {
                     if (isRapidHorizontalNav.value) false
@@ -954,9 +969,9 @@ fun ModernHomeContent(
             ModernHomeRowsList(
                 carouselRows = carouselRows,
                 verticalRowListState = verticalRowListState,
-                focusedItemByRow = focusedItemByRow,
-                rowListStates = rowListStates,
-                loadMoreRequestedTotals = loadMoreRequestedTotals,
+                focusedItemByRow = stableFocusedItemByRow,
+                rowListStates = stableRowListStates,
+                loadMoreRequestedTotals = stableLoadMoreRequestedTotals,
                 focusState = focusState,
                 activeRowKey = activeRowKey,
                 activeItemIndex = activeItemIndex,

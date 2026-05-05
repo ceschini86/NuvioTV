@@ -111,6 +111,7 @@ import kotlinx.coroutines.delay
 import com.nuvio.tv.ui.util.LocalRecompositionHighlighterEnabled
 import com.nuvio.tv.ui.util.recompositionHighlighter
 import com.nuvio.tv.ui.util.StableMap
+import com.nuvio.tv.ui.util.StableRef
 import com.nuvio.tv.ui.util.asStable
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.debounce
@@ -398,9 +399,9 @@ internal fun ModernRowSection(
     rowTitleBottom: Dp,
     defaultBringIntoViewSpec: BringIntoViewSpec,
     focusStateCatalogRowScrollIndex: Int,
-    focusedItemByRow: MutableMap<String, Int>,
-    rowListStates: MutableMap<String, LazyListState>,
-    loadMoreRequestedTotals: MutableMap<String, Int>,
+    focusedItemByRow: StableRef<MutableMap<String, Int>>,
+    rowListStates: StableRef<MutableMap<String, LazyListState>>,
+    loadMoreRequestedTotals: StableRef<MutableMap<String, Int>>,
     pendingRowFocusKey: State<String?>,
     pendingRowFocusIndex: State<Int?>,
     pendingRowFocusNonce: State<Int>,
@@ -437,8 +438,13 @@ internal fun ModernRowSection(
     onLoadMoreCatalog: (String, String, String) -> Unit,
     onBackdropInteraction: () -> Unit,
     onExpandedCatalogFocusKeyChange: (String?) -> Unit,
-    itemFocusRequesters: MutableMap<Int, FocusRequester> = mutableMapOf()
+    itemFocusRequesters: StableRef<MutableMap<Int, FocusRequester>> = StableRef(mutableMapOf())
 ) {
+    // Unwrap StableRef wrappers
+    @Suppress("NAME_SHADOWING") val focusedItemByRow = focusedItemByRow.value
+    @Suppress("NAME_SHADOWING") val rowListStates = rowListStates.value
+    @Suppress("NAME_SHADOWING") val loadMoreRequestedTotals = loadMoreRequestedTotals.value
+    @Suppress("NAME_SHADOWING") val itemFocusRequesters = itemFocusRequesters.value
     val highlighterEnabled = LocalRecompositionHighlighterEnabled.current
     val rowKey = row.key
     // Blocks vertical focus exit during placeholder→data transition.

@@ -140,6 +140,10 @@ class HomeViewModel @Inject constructor(
     internal val _enrichedPreviews = MutableStateFlow<Map<String, MetaPreview>>(emptyMap())
     val enrichedPreviews: StateFlow<Map<String, MetaPreview>> = _enrichedPreviews.asStateFlow()
 
+    /** Items for which enrichment was attempted but produced no enriched data. */
+    internal val _failedEnrichmentIds = MutableStateFlow<Set<String>>(emptySet())
+    val failedEnrichmentIds: StateFlow<Set<String>> = _failedEnrichmentIds.asStateFlow()
+
     internal val catalogStateLock = Any()
     internal val catalogsMap = linkedMapOf<String, CatalogRow>()
     internal val catalogItemKeyIndex = mutableMapOf<String, MutableSet<String>>()

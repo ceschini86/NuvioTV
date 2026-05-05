@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -53,6 +54,8 @@ import com.nuvio.tv.ui.util.recompositionHighlighter
 import coil3.request.transitionFactory
 import com.nuvio.tv.R
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
 import com.nuvio.tv.ui.components.TrailerPlayer
 import com.nuvio.tv.ui.theme.NuvioColors
 import androidx.compose.ui.res.stringResource
@@ -97,6 +100,7 @@ internal fun ModernHeroScene(
     )
 }
 
+@OptIn(FlowPreview::class)
 @Composable
 internal fun ModernHeroMediaLayer(
     heroBackdrop: () -> String?,
@@ -113,8 +117,8 @@ internal fun ModernHeroMediaLayer(
     requestWidthPx: Int,
     requestHeightPx: Int
 ) {
-    val shouldPlay = shouldPlayHeroTrailer()
-    val trailerRendered = heroTrailerFirstFrameRendered()
+    val shouldPlay by remember { derivedStateOf { shouldPlayHeroTrailer() } }
+    val trailerRendered by remember { derivedStateOf { heroTrailerFirstFrameRendered() } }
     val transitionProgressState = animateFloatAsState(
         targetValue = if (shouldPlay && trailerRendered) 1f else 0f,
         animationSpec = tween(durationMillis = 480),
@@ -122,46 +126,57 @@ internal fun ModernHeroMediaLayer(
     )
     val localContext = LocalContext.current
 
-    val backdropVal = heroBackdrop()
-    val enrichmentActiveVal = enrichmentActive()
-    // Freeze the backdrop URL while enrichment is active — only update when enrichment ends
-    // so Coil crossfade starts with the final URL, not an intermediate one.
-    var stableBackdrop by remember { mutableStateOf(backdropVal) }
-    LaunchedEffect(backdropVal, enrichmentActiveVal) {
-        if (!enrichmentActiveVal) {
-            delay(400) // Debounce backdrop load to prevent lag during rapid scroll
-            stableBackdrop = backdropVal
-        }
+    // Read backdrop/enrichment only inside LaunchedEffect to avoid recomposing
+    // this composable on every horizontal focus change.
+    // Single press (>200ms gap): update immediately. Holding: freeze until user stops.
+    // Initialize from HeroBackdropState (survives navigation) to prevent flash.
+    var stableBackdrop by remember { mutableStateOf(HeroBackdropState.lastDisplayedUrl ?: heroBackdrop()) }
+    LaunchedEffect(Unit) {
+        snapshotFlow { heroBackdrop() to enrichmentActive() }
+            .debounce(200L)
+            .collect { (_, _) ->
+                // Re-read current values after debounce to get the truly settled state.
+                // This avoids showing intermediate "addon" backdrop when enrichment
+                // hasn't started yet for the new item.
+                val currentBackdrop = heroBackdrop()
+                val isEnriching = enrichmentActive()
+                if (!isEnriching && currentBackdrop != stableBackdrop) {
+                    stableBackdrop = currentBackdrop
+                }
+            }
     }
-    val heroBackdropTransitionFactory = remember { AlwaysCrossfadeTransitionFactory(durationMillis = 400) }
-
     val imageModel = remember(
         localContext,
         stableBackdrop,
         requestWidthPx,
-        requestHeightPx,
-        heroBackdropTransitionFactory
+        requestHeightPx
     ) {
-        ImageRequest.Builder(localContext)
-            .data(stableBackdrop)
-            .transitionFactory(heroBackdropTransitionFactory)
-            .size(width = requestWidthPx, height = requestHeightPx)
-            .build()
+        stableBackdrop?.let {
+            ImageRequest.Builder(localContext)
+                .data(it)
+                .size(width = requestWidthPx, height = requestHeightPx)
+                .build()
+        }
     }
 
     Box(modifier = modifier) {
-        AsyncImage(
-            model = imageModel,
-            contentDescription = null,
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    alpha = 1f - transitionProgressState.value
-                },
-            contentScale = ContentScale.Crop,
-            alignment = Alignment.TopEnd
-        )
-
+        androidx.compose.animation.Crossfade(
+            targetState = imageModel,
+            animationSpec = tween(durationMillis = 400),
+            label = "heroBackdropCrossfade"
+        ) { model ->
+            AsyncImage(
+                model = model,
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        alpha = 1f - transitionProgressState.value
+                    },
+                contentScale = ContentScale.Crop,
+                alignment = Alignment.TopEnd
+            )
+        }
         if (shouldPlay) {
             val trailerUrlVal = heroTrailerUrl()
             val playbackKeyVal = heroTrailerPlaybackKey()
