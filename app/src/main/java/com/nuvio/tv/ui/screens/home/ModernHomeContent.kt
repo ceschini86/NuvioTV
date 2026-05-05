@@ -232,7 +232,7 @@ fun ModernHomeContent(
         shouldActivateFocusedPosterFlow,
         trailerPlaybackTarget,
         uiState.focusedPosterBackdropExpandDelaySeconds,
-        verticalRowListState
+        verticalRowListState.isScrollInProgress
     ) {
         expandedCatalogFocusKey.value = null
         if (!shouldActivateFocusedPosterFlow) return@LaunchedEffect
@@ -252,7 +252,7 @@ fun ModernHomeContent(
     LaunchedEffect(
         focusedCatalogSelection.value?.focusKey,
         effectiveAutoplayEnabled,
-        verticalRowListState
+        verticalRowListState.isScrollInProgress
     ) {
         if (!effectiveAutoplayEnabled) {
             lastRequestedTrailerFocusKey = null
@@ -419,7 +419,8 @@ fun ModernHomeContent(
 
     LaunchedEffect(activeRow?.key, activeRow?.items?.size) {
         val row = activeRow ?: return@LaunchedEffect
-        val clampedIndex = focusHolder.activeItemIndex.coerceIn(0, (row.items.size - 1).coerceAtLeast(0))
+        val savedIdx = focusedItemByRow[row.key] ?: 0
+        val clampedIndex = savedIdx.coerceIn(0, (row.items.size - 1).coerceAtLeast(0))
         if (focusHolder.activeItemIndex != clampedIndex) {
             focusHolder.activeItemIndex = clampedIndex
             activeItemIndex.intValue = clampedIndex
@@ -896,7 +897,6 @@ fun ModernHomeContent(
                     pendingRowFocusIndex.value = null
                 }
             }
-            val stableOnRequestLazyCatalogLoad = rememberUpdatedState(onRequestLazyCatalogLoad)
             val onRowItemFocusedInternalLambda = remember(onRowItemFocusedPassedDown) {
                 { rowKey: String, index: Int, isCw: Boolean ->
                     onRowItemFocusedPassedDown.value.invoke(rowKey, index, isCw)
@@ -912,6 +912,12 @@ fun ModernHomeContent(
             val isVerticalRowsScrollingLambda = remember(verticalRowListState) {
                 { verticalRowListState.isScrollInProgress }
             }
+            val stableOnRequestLazyCatalogLoad = remember(onRequestLazyCatalogLoad) {
+                { catalogKey: String -> onRequestLazyCatalogLoad(catalogKey) }
+            }
+            val stableOnItemFocus = remember(onItemFocus) { { item: MetaPreview -> onItemFocus(item) } }
+            val stableOnPreloadAdjacentItem = remember(onPreloadAdjacentItem) { { item: MetaPreview -> onPreloadAdjacentItem(item) } }
+
             ModernHomeRowsList(
                 carouselRows = carouselRows,
                 verticalRowListState = verticalRowListState,
@@ -934,10 +940,10 @@ fun ModernHomeContent(
                 onLoadMoreCatalog = onLoadMoreCatalog,
                 onContinueWatchingClick = onContinueWatchingClick,
                 onContinueWatchingOptions = onContinueWatchingOptionsLambda,
-                onRequestLazyCatalogLoad = remember { { stableOnRequestLazyCatalogLoad.value(it) } },
+                onRequestLazyCatalogLoad = stableOnRequestLazyCatalogLoad,
                 onBackdropInteraction = onBackdropInteractionLambda,
-                onItemFocus = onItemFocus,
-                onPreloadAdjacentItem = onPreloadAdjacentItem,
+                onItemFocus = stableOnItemFocus,
+                onPreloadAdjacentItem = stableOnPreloadAdjacentItem,
                 onExpandedCatalogFocusKeyChange = onExpandedCatalogFocusKeyChangeLambda,
                 isCatalogItemWatched = isCatalogItemWatched,
                 onCatalogItemLongPress = onCatalogItemLongPress,

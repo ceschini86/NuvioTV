@@ -134,6 +134,7 @@ internal fun ModernHomeRowsList(
     val latestOnActiveItemIndexChange = rememberUpdatedState(onActiveItemIndexChange)
 
     val rowFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
+    val itemFocusRequestersByRow = remember { mutableMapOf<String, MutableMap<Int, FocusRequester>>() }
 
     val density = LocalDensity.current
     val context = LocalContext.current
@@ -196,11 +197,33 @@ internal fun ModernHomeRowsList(
             val rows = latestCarouselRowsForLazy.value
             for (idx in firstVisible.coerceAtLeast(0)..(lastVisible + prefetchAheadForLazy)) {
                 val row = rows.list.getOrNull(idx) ?: continue
-                if (row.isLoading && row.items.list.firstOrNull()?.key?.startsWith("placeholder_") == true) {
+                if (row.isLoading && row.items.list.firstOrNull()?.imageUrl == "placeholder://empty") {
                     latestOnRequestLazyCatalogLoad.value(row.key)
                 }
             }
         }
+    }
+
+    // Secondary trigger: when scroll settles after focus-driven BringIntoView,
+    // check again for placeholder rows that need loading. The primary snapshotFlow
+    // above may miss this if visible indices didn't change.
+    LaunchedEffect(verticalRowListState) {
+        snapshotFlow { verticalRowListState.isScrollInProgress }
+            .collect { scrolling ->
+                if (scrolling) return@collect
+                delay(200)
+                if (verticalRowListState.isScrollInProgress) return@collect
+                val rows = latestCarouselRowsForLazy.value
+                val info = verticalRowListState.layoutInfo
+                val firstVisible = info.visibleItemsInfo.firstOrNull()?.index ?: return@collect
+                val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: return@collect
+                for (idx in firstVisible.coerceAtLeast(0)..(lastVisible + 1)) {
+                    val row = rows.list.getOrNull(idx) ?: continue
+                    if (row.isLoading && row.items.list.firstOrNull()?.imageUrl == "placeholder://empty") {
+                        latestOnRequestLazyCatalogLoad.value(row.key)
+                    }
+                }
+            }
     }
 
     val focusRestorerRequester = remember(activeRowKey) {
@@ -378,7 +401,8 @@ internal fun ModernHomeRowsList(
                     onLoadMoreCatalog = onLoadMoreCatalog,
                     onBackdropInteraction = onBackdropInteraction,
                     onExpandedCatalogFocusKeyChange = onExpandedCatalogFocusKeyChange,
-                    isVerticalRowsScrolling = isVerticalRowsScrolling
+                    isVerticalRowsScrolling = isVerticalRowsScrolling,
+                    itemFocusRequesters = itemFocusRequestersByRow.getOrPut(row.key) { mutableMapOf() }
                 )
             }
         }
