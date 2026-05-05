@@ -540,16 +540,22 @@ private fun GridHomeRoute(
         showContinueWatchingManualPlayOption = showContinueWatchingManualPlayOption,
         onNavigateToCatalogSeeAll = onNavigateToCatalogSeeAll,
         onNavigateToFolderDetail = onNavigateToFolderDetail,
-        onRemoveContinueWatching = { contentId, season, episode, isNextUp ->
-            viewModel.onEvent(HomeEvent.OnRemoveContinueWatching(contentId, season, episode, isNextUp))
+        onRemoveContinueWatching = remember(viewModel) {
+            { contentId, season, episode, isNextUp ->
+                viewModel.onEvent(HomeEvent.OnRemoveContinueWatching(contentId, season, episode, isNextUp))
+            }
         },
         isCatalogItemWatched = isCatalogItemWatched,
         onCatalogItemLongPress = onCatalogItemLongPress,
-        onItemFocus = { item ->
-            viewModel.onItemFocus(item)
+        onItemFocus = remember(viewModel) {
+            { item ->
+                viewModel.onItemFocus(item)
+            }
         },
-        onSaveGridFocusState = { vi, vo, key ->
-            viewModel.saveGridFocusState(vi, vo, focusedItemKey = key)
+        onSaveGridFocusState = remember(viewModel) {
+            { vi, vo, key ->
+                viewModel.saveGridFocusState(vi, vo, focusedItemKey = key)
+            }
         }
     )
 }

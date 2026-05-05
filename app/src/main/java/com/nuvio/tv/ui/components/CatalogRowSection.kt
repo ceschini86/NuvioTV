@@ -136,15 +136,13 @@ fun CatalogRowSection(
         blockingFocusExit.value = false
     }
 
-    // When fresh data prepends new items to a row the user hasn't
-    // scrolled, snap back to position 0 so the newest content is visible.
-    val firstItemKey = catalogRow.items.firstOrNull()?.let { rowItemFocusKey(0, it) }
-    LaunchedEffect(firstItemKey) {
-        if (firstItemKey == null) return@LaunchedEffect
-        if (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0) {
-            listState.scrollToItem(0)
-        }
-    }
+    val latestOnItemClick by rememberUpdatedState(onItemClick)
+    val latestOnSeeAll by rememberUpdatedState(onSeeAll)
+    val latestOnItemFocus by rememberUpdatedState(onItemFocus)
+    val latestIsItemWatched by rememberUpdatedState(isItemWatched)
+    val latestOnItemLongPress by rememberUpdatedState(onItemLongPress)
+    val latestOnItemFocused by rememberUpdatedState(onItemFocused)
+    val latestOnRequestTrailerPreview by rememberUpdatedState(onRequestTrailerPreview)
 
     LaunchedEffect(catalogRow.items) {
         val validKeys = catalogRow.items.mapIndexedTo(mutableSetOf()) { index, item ->
@@ -290,18 +288,18 @@ fun CatalogRowSection(
                     rowItemFocusKey(index, item)
                 ) { FocusRequester() }
 
-                val onItemClickStable = remember(onItemClick, item.id) {
-                    { onItemClick(item.id, item.apiType, catalogRow.addonBaseUrl) }
+                val onItemClickStable = remember(item.id, catalogRow.addonBaseUrl) {
+                    { latestOnItemClick(item.id, item.apiType, catalogRow.addonBaseUrl) }
                 }
-                val onItemLongPressStable = remember(onItemLongPress, item.id) {
-                    { onItemLongPress(item, catalogRow.addonBaseUrl) }
+                val onItemLongPressStable = remember(item.id, catalogRow.addonBaseUrl) {
+                    { latestOnItemLongPress(item, catalogRow.addonBaseUrl) }
                 }
-                val onFocusStable = remember(onItemFocus, index) {
+                val onFocusStable = remember(index) {
                     { focusedItem: MetaPreview ->
-                        onItemFocus(focusedItem)
+                        latestOnItemFocus(focusedItem)
                         if (lastFocusedItemIndex.intValue != index) {
                             lastFocusedItemIndex.intValue = index
-                            onItemFocused(index)
+                            latestOnItemFocused(index)
                         }
                     }
                 }
@@ -317,8 +315,8 @@ fun CatalogRowSection(
                     focusedPosterBackdropTrailerMuted = focusedPosterBackdropTrailerMuted,
                     trailerPreviewUrl = trailerPreviewUrls[item.id],
                     trailerPreviewAudioUrl = trailerPreviewAudioUrls[item.id],
-                    onRequestTrailerPreview = onRequestTrailerPreview,
-                    isWatched = isItemWatched(item),
+                    onRequestTrailerPreview = latestOnRequestTrailerPreview,
+                    isWatched = latestIsItemWatched(item),
                     onFocus = onFocusStable,
                     onBackdropExpandedChanged = null,
                     onClick = onItemClickStable,

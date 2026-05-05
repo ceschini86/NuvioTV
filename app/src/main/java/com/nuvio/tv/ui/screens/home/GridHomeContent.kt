@@ -279,12 +279,14 @@ fun GridHomeContent(
                         HeroCarousel(
                             items = gridItem.items,
                             focusRequester = if (shouldRequestInitialFocus) heroFocusRequester else null,
-                            onItemClick = { item ->
-                                onNavigateToDetail(
-                                    item.id,
-                                    item.apiType,
-                                    ""
-                                )
+                            onItemClick = remember(onNavigateToDetail) {
+                                { item ->
+                                    onNavigateToDetail(
+                                        item.id,
+                                        item.apiType,
+                                        ""
+                                    )
+                                }
                             },
                             fullWidth = gridWidth,
                             modifier = Modifier.fillMaxWidth()
@@ -373,19 +375,25 @@ fun GridHomeContent(
                             posterCardStyle = posterCardStyle,
                             showLabel = uiState.posterLabelsEnabled,
                             isWatched = isCatalogItemWatched(gridItem.item),
-                            onFocused = {
-                                lastFocusedGridItemKey.value = itemKey
-                                onItemFocus(gridItem.item)
+                            onFocused = remember(itemKey, gridItem.item) {
+                                {
+                                    lastFocusedGridItemKey.value = itemKey
+                                    onItemFocus(gridItem.item)
+                                }
                             },
-                            onClick = {
-                                onNavigateToDetail(
-                                    gridItem.item.id,
-                                    gridItem.item.apiType,
-                                    gridItem.addonBaseUrl
-                                )
+                            onClick = remember(gridItem.item, gridItem.addonBaseUrl) {
+                                {
+                                    onNavigateToDetail(
+                                        gridItem.item.id,
+                                        gridItem.item.apiType,
+                                        gridItem.addonBaseUrl
+                                    )
+                                }
                             },
-                            onLongPress = {
-                                onCatalogItemLongPress(gridItem.item, gridItem.addonBaseUrl)
+                            onLongPress = remember(gridItem.item, gridItem.addonBaseUrl) {
+                                {
+                                    onCatalogItemLongPress(gridItem.item, gridItem.addonBaseUrl)
+                                }
                             }
                         )
                     }
@@ -457,9 +465,11 @@ fun GridHomeContent(
                             focusGlowEnabled = gridItem.focusGlowEnabled,
                             posterCardStyle = posterCardStyle,
                             focusRequester = focusRequesters.getOrPut(itemKey) { FocusRequester() },
-                            onFocused = { lastFocusedGridItemKey.value = itemKey },
-                            onClick = {
-                                onNavigateToFolderDetail(gridItem.collectionId, gridItem.folder.id)
+                            onFocused = remember(itemKey) { { lastFocusedGridItemKey.value = itemKey } },
+                            onClick = remember(gridItem.collectionId, gridItem.folder.id) {
+                                {
+                                    onNavigateToFolderDetail(gridItem.collectionId, gridItem.folder.id)
+                                }
                             }
                         )
                     }
