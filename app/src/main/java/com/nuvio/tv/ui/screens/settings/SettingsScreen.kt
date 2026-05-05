@@ -446,7 +446,8 @@ fun SettingsScreen(
                                 contentFocusRequesters[SettingsCategory.LAYOUT]
                             } else {
                                 null
-                            }
+                            },
+                            essentialMode = isEssentialMode
                         )
                         SettingsCategory.PLAYBACK -> if (isEssentialMode) {
                             EssentialPlaybackSettingsContent(

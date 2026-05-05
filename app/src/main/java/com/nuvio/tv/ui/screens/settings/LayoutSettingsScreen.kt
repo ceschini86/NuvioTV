@@ -89,11 +89,12 @@ private enum class LayoutSettingsSection {
 @Composable
 fun LayoutSettingsContent(
     viewModel: LayoutSettingsViewModel = hiltViewModel(),
-    initialFocusRequester: FocusRequester? = null
+    initialFocusRequester: FocusRequester? = null,
+    essentialMode: Boolean = false
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    var homeLayoutExpanded by rememberSaveable { mutableStateOf(false) }
+    var homeLayoutExpanded by rememberSaveable(essentialMode) { mutableStateOf(essentialMode) }
     var homeContentExpanded by rememberSaveable { mutableStateOf(false) }
     var detailPageExpanded by rememberSaveable { mutableStateOf(false) }
     var continueWatchingExpanded by rememberSaveable { mutableStateOf(false) }
@@ -148,7 +149,9 @@ fun LayoutSettingsContent(
     ) {
         SettingsDetailHeader(
             title = stringResource(R.string.layout_title),
-            subtitle = stringResource(R.string.layout_subtitle)
+            subtitle = stringResource(
+                if (essentialMode) R.string.layout_selection_subtitle else R.string.layout_subtitle
+            )
         )
 
         SettingsGroupCard(
@@ -295,6 +298,7 @@ fun LayoutSettingsContent(
                 }
             }
 
+            if (!essentialMode) {
             item(key = "home_content_section") {
                 CollapsibleSectionCard(
                     title = stringResource(R.string.layout_section_content),
@@ -677,6 +681,7 @@ fun LayoutSettingsContent(
                         onFocused = { focusedSection = LayoutSettingsSection.POSTER_CARD_STYLE }
                     )
                 }
+            }
             }
         }
         SettingsVerticalScrollIndicators(state = layoutListState)
