@@ -7,6 +7,7 @@
     <!-- WebConfigServers -->
     <string name="web_manage_addons_title">Gestionar addons</string>
     <string name="web_manage_addons_subtitle">Gestiona addons, catálogos y colecciones</string>
+    <string name="web_manage_addons_only_subtitle">Instalar o eliminar add-ons</string>
     <string name="web_add_addon_url">Añadir addon mediante URL</string>
     <string name="web_placeholder_url">https://example.com/manifest.json</string>
     <string name="web_btn_add">Añadir</string>
@@ -152,6 +153,7 @@
     <string name="episodes_mark_season_unwatched">Marcar temporada como no vista</string>
     <string name="episodes_mark_previous_watched">Marcar anteriores de esta temporada como vistos</string>
     <string name="episodes_play">Reproducir</string>
+    <string name="episodes_open_comments">Abrir comentarios del episodio</string>
     <string name="play_manually">Reproducir manualmente</string>
     <string name="episodes_season_actions">Acciones de la temporada</string>
 
@@ -278,6 +280,8 @@
     <string name="about_supporters_contributors_subtitle">Reconocimiento abierto y créditos del proyecto</string>
 
     <!-- SettingsScreen categories -->
+    <string name="settings_experience">Experiencia</string>
+    <string name="settings_experience_subtitle">Esencial o Avanzado</string>
     <string name="settings_account">Cuenta</string>
     <string name="settings_account_subtitle">Estado de la cuenta y sincronización</string>
     <string name="settings_profiles">Perfiles</string>
@@ -294,10 +298,21 @@
     <string name="settings_network">Velocidad de red</string>
     <string name="settings_network_subtitle">Diagnóstico de latencia y descarga</string>
     <string name="settings_advanced">Avanzado</string>
-    <string name="settings_advanced_subtitle">Ejecutar diagnóstico de velocidad de red</string>
+    <string name="settings_advanced_subtitle">Rendimiento, navegación, caché y diagnósticos</string>
+    <string name="experience_mode_essential">Esencial</string>
+    <string name="experience_mode_group_title">Modo de experiencia</string>
+    <string name="experience_mode_switch_to_essential">Cambiar a Esencial</string>
+    <string name="experience_mode_switch_to_essential_subtitle">Oculta las opciones avanzadas sin cambiar tus configuraciones guardadas.</string>
+    <string name="experience_mode_switch_to_advanced">Cambiar a Avanzado</string>
+    <string name="experience_mode_switch_to_advanced_header_subtitle">Cambia a Avanzado para acceder a todas las configuraciones.</string>
+    <string name="experience_mode_switch_to_advanced_subtitle">Muestra el diseño completo, ajustes de plugins, integraciones, catálogo, colecciones y configuración avanzada.</string>
+    <string name="experience_mode_confirm_essential_title">¿Cambiar a Esencial?</string>
+    <string name="experience_mode_confirm_advanced_title">¿Cambiar a Avanzado?</string>
+    <string name="experience_mode_confirm_essential_subtitle">Las opciones avanzadas se ocultarán, pero tus configuraciones guardadas no cambiarán. Puedes volver en cualquier momento.</string>
+    <string name="experience_mode_confirm_advanced_subtitle">Esto mostrará todas las configuraciones, incluyendo opciones avanzadas, catálogo, colecciones y ajustes.</string>
     <string name="network_speed_test_run">Ejecutar prueba de velocidad</string>
     <string name="network_speed_test_running">Ejecutando prueba de velocidad</string>
-    <string name="network_speed_test_subtitle">Medir velocidad de descarga y latencia</string>
+    <string name="network_speed_test_subtitle">Mide la velocidad de descarga y la latencia</string>
     <string name="network_testing_latency">Midiendo latencia</string>
     <string name="network_testing_download">Midiendo velocidad de descarga</string>
     <string name="network_results_title">Resultados</string>
@@ -309,33 +324,35 @@
     <string name="network_connection_ethernet">Ethernet</string>
     <string name="network_connection_offline">Sin conexión</string>
     <string name="advanced_section_performance">Rendimiento y navegación</string>
-    <string name="advanced_section_diagnostics">Diagnóstico</string>
+    <string name="advanced_section_diagnostics">Diagnósticos</string>
     <string name="advanced_section_cache">Caché</string>
     <string name="advanced_fast_horizontal_navigation">Navegación horizontal rápida</string>
     <string name="advanced_fast_horizontal_navigation_subtitle">Aumenta la velocidad de repetición del D-pad en filas manteniendo el control de repetición activado.</string>
     <string name="advanced_nuvio_focus_scroll">Desplazamiento de enfoque Nuvio</string>
-    <string name="advanced_nuvio_focus_scroll_subtitle">Usa la animación y posicionamiento personalizados de desplazamiento de enfoque global de Nuvio.</string>
+    <string name="advanced_nuvio_focus_scroll_subtitle">Usa la animación y posicionamiento de desplazamiento de enfoque global personalizados de Nuvio.</string>
     <string name="advanced_memory_only_vertical_scroll">Desplazamiento vertical solo en memoria</string>
-    <string name="advanced_memory_only_vertical_scroll_subtitle">Omite solicitudes de imágenes desde disco y red al desplazarte verticalmente en las filas de inicio.</string>
-    <string name="advanced_clear_cw_cache">Borrar caché de Continuar viendo</string>
-    <string name="advanced_clear_cw_cache_subtitle">Elimina miniaturas, títulos y datos enriquecidos en caché de Continuar viendo</string>
+    <string name="advanced_memory_only_vertical_scroll_subtitle">Evita solicitudes de imágenes al disco y red al desplazarte verticalmente por filas de inicio.</string>
+    <string name="advanced_compose_highlighter">Resaltador de Compose</string>
+    <string name="advanced_compose_highlighter_subtitle">Muestra bordes intermitentes en elementos de la UI que se recomponen para depuración de rendimiento.</string>
+    <string name="advanced_clear_cw_cache">Borrar caché de "Continuar viendo"</string>
+    <string name="advanced_clear_cw_cache_subtitle">Elimina miniaturas, títulos y datos almacenados en caché de "Continuar viendo"</string>
     <string name="advanced_clear_cw_cache_done">Caché borrada</string>
     <string name="advanced_remember_last_profile">Recordar último perfil</string>
-    <string name="advanced_remember_last_profile_subtitle">Recuerda el último perfil seleccionado al iniciar</string>
+    <string name="advanced_remember_last_profile_subtitle">Recordar el último perfil seleccionado al iniciar</string>
     <string name="settings_debug">Depuración</string>
     <string name="settings_debug_subtitle">Herramientas de desarrollador y funciones experimentales</string>
-    <string name="settings_plugins_section_subtitle">Administrar repositorios, proveedores y estado de los plugins</string>
-    <string name="settings_account_section_subtitle">Estado de la cuenta y sincronización</string>
+    <string name="settings_plugins_section_subtitle">Gestiona repositorios, proveedores y estados de plugins</string>
+    <string name="settings_account_section_subtitle">Cuenta y estado de sincronización</string>
     <string name="account_stat_addons">addons</string>
     <string name="account_stat_plugins">plugins</string>
     <string name="account_stat_library">biblioteca</string>
     <string name="account_stat_progress">progreso</string>
     <string name="account_stat_watched">vistos</string>
     <string name="settings_integrations_section">Integraciones</string>
-    <string name="settings_integrations_section_subtitle">Gestionar integraciones disponibles</string>
+    <string name="settings_integrations_section_subtitle">Gestiona las integraciones disponibles</string>
     <string name="settings_tmdb_subtitle">Controles de enriquecimiento de metadatos</string>
-    <string name="settings_mdblist_subtitle">Proveedores de calificaciones externos</string>
-    <string name="settings_animeskip_subtitle">Marcas de tiempo para omitir intro/outro de anime</string>
+    <string name="settings_mdblist_subtitle">Proveedores externos de calificaciones</string>
+    <string name="settings_animeskip_subtitle">Tiempos de omisión de intro/outro en anime</string>
 
     <!-- PlaybackSettingsScreen -->
     <string name="playback_title">Ajustes de Reproducción</string>
@@ -392,7 +409,15 @@
     <string name="playback_osd_clock">Reloj OSD (En pantalla)</string>
     <string name="playback_skip_intro">Omitir Intro</string>
     <string name="playback_skip_intro_sub">Usar introdb.app para detectar intros y resúmenes.</string>
-    <string name="playback_auto_frame_rate">Tasa de Refresco Automática (AFR)</string>
+    <string name="playback_auto_skip_segments">Omisión automática</string>
+    <string name="playback_auto_skip_segments_sub">Elige qué segmentos se omiten automáticamente.</string>
+    <string name="auto_skip_intro">Intro / Opening</string>
+    <string name="auto_skip_intro_sub">Omitir automáticamente intros y openings de anime.</string>
+    <string name="auto_skip_recap">Resumen</string>
+    <string name="auto_skip_recap_sub">Omitir automáticamente los segmentos de resumen.</string>
+    <string name="auto_skip_outro">Outro / Ending</string>
+    <string name="auto_skip_outro_sub">Omitir automáticamente outros y endings de anime.</string>
+    <string name="playback_auto_frame_rate">Frecuencia de cuadros y resolución automáticas</string>
     <string name="playback_section_player">Reproductor y Selección de Fuente</string>
     <string name="playback_section_player_desc">Preferencia de reproductor, auto-reproducción y filtrado de fuentes.</string>
     <string name="playback_player">Reproductor</string>
@@ -446,8 +471,8 @@
     <string name="audio_preferred_lang">Idioma de Audio Preferido</string>
     <string name="audio_skip_silence">Omitir Silencios</string>
     <string name="audio_skip_silence_sub">Omitir las partes silenciosas del audio durante la reproducción</string>
-
-
+    <string name="audio_remember_delay_per_device">Recordar retraso de audio por dispositivo</string>
+    <string name="audio_remember_delay_per_device_sub">Guardar y restaurar el retraso de audio del reproductor para la salida de audio actual</string>
     <string name="audio_advanced_section">Audio Avanzado</string>
     <string name="audio_advanced_warning">Estos ajustes pueden causar problemas en algunos dispositivos. Cámbialos solo si sabes lo que haces.</string>
     <string name="audio_decoder_device_only">Solo decodificadores del dispositivo</string>
@@ -605,11 +630,19 @@
     <string name="layout_hide_unreleased">Ocultar contenido no estrenado</string>
     <string name="layout_hide_unreleased_sub">Ocultar películas y series que aún no se han estrenado.</string>
     <string name="layout_section_detail">Página de Detalles</string>
+    <string name="layout_section_detail_desc">Configuraciones para las pantallas de detalle y episodios.</string>
     <string name="layout_section_detail_desc">Ajustes para las pantallas de detalles y episodios.</string>
+    <string name="layout_section_continue_watching_desc">Configuraciones para la sección "Continuar viendo".</string>
+    <string name="layout_use_episode_thumbnails_cw">Usar miniaturas de episodios en "Continuar viendo"</string>
+    <string name="layout_use_episode_thumbnails_cw_sub">Usa miniaturas de episodios como imagen predeterminada. Cuando está desactivado, se usa el fondo.</string>
     <string name="layout_blur_unwatched">Desenfocar Episodios No Vistos</string>
     <string name="layout_blur_unwatched_sub">Desenfocar miniaturas de episodios hasta que sean vistos para evitar spoilers.</string>
     <string name="layout_blur_cw_next_up">Difuminar no vistos en “Continuar viendo”</string>
     <string name="layout_blur_cw_next_up_sub">Difumina las miniaturas del próximo episodio en “Continuar viendo” para evitar spoilers.</string>
+    <string name="layout_next_up_furthest_episode">Siguiente desde el episodio más avanzado</string>
+    <string name="layout_next_up_furthest_episode_sub">Muestra el siguiente episodio según el episodio más avanzado visto. Desactívalo si estás volviendo a ver para usar el episodio visto más recientemente.</string>
+    <string name="layout_show_unaired_next_up">Mostrar próximos episodios no emitidos</string>
+    <string name="layout_show_unaired_next_up_sub">Incluye episodios próximos en "Continuar viendo" antes de su emisión.</string>
     <string name="layout_trailer_button">Mostrar Botón de Tráiler</string>
     <string name="layout_trailer_button_sub">Mostrar el botón de tráiler en la página de detalles (solo si está disponible).</string>
     <string name="layout_prefer_external_meta">Preferir metadatos de addon externo</string>
@@ -916,10 +949,12 @@
     <string name="addon_remove">Eliminar</string>
     <string name="addon_manage_from_phone_title">Administrar desde el teléfono</string>
     <string name="addon_manage_from_phone_subtitle">Escanea un código QR para administrar addons y catálogos de Inicio desde tu teléfono</string>
+    <string name="addon_manage_addons_only_from_phone_subtitle">Escanea un código QR para instalar o eliminar add-ons desde tu teléfono</string>
     <string name="addon_manage_collections_from_phone_subtitle">Escanea un código QR para administrar las colecciones desde tu teléfono</string>
     <string name="addon_reorder_title">Reordenar catálogos de inicio</string>
     <string name="addon_reorder_subtitle">Controla el orden de la fila de catálogos en Inicio (Clásico + Moderno + Cuadrícula)</string>
     <string name="addon_qr_scan_instruction">Escanea con tu teléfono para administrar addons y catálogos</string>
+    <string name="addon_qr_addons_only_scan_instruction">Escanea con tu teléfono para instalar o eliminar add-ons</string>
     <string name="addon_qr_collections_scan_instruction">Escanea con tu teléfono para administrar las colecciones</string>
     <string name="addon_qr_close">Cerrar</string>
     <string name="addon_confirm_title">Confirmar cambios en addons y catálogos</string>
@@ -1594,8 +1629,18 @@
     <string name="collections_editor_shape_square">Cuadrado</string>
     <string name="collections_editor_addon_missing">Addon no instalado: %1$s</string>
     <string name="collections_editor_add_tmdb_source">Agregar fuente TMDB</string>
-    <string name="collections_editor_edit_tmdb_source">Editar fuente TMDB</string>
-    <string name="collections_editor_tmdb_sources">Fuentes TMDB</string>
+    <string name="collections_editor_add_trakt_source">Agregar lista de Trakt</string>
+    <string name="collections_editor_edit_tmdb_source">Editar fuente de TMDB</string>
+    <string name="collections_editor_tmdb_sources">Fuentes de TMDB</string>
+    <string name="collections_editor_trakt_sources">Listas de Trakt</string>
+    <string name="collections_editor_edit_trakt_source">Editar lista de Trakt</string>
+    <string name="collections_editor_trakt_list">Lista de Trakt</string>
+    <string name="collections_editor_trakt_search_results">Resultados de búsqueda</string>
+    <string name="collections_editor_trakt_trending">Listas en tendencia</string>
+    <string name="collections_editor_trakt_popular">Listas populares</string>
+    <string name="collections_editor_trakt_direction">Dirección</string>
+    <string name="collections_editor_trakt_ascending">Ascendente</string>
+    <string name="collections_editor_trakt_descending">Descendente</string>
     <string name="collections_editor_tmdb_id_or_url">ID o URL de TMDB</string>
     <string name="collections_editor_tmdb_public_list">Lista pública de TMDB</string>
     <string name="collections_editor_tmdb_network_id">ID de red</string>
