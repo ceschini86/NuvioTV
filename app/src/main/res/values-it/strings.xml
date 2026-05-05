@@ -1667,4 +1667,22 @@
   <string name="audio_delay_range">Intervallo: da %1$.2fs a %2$.2fs</string>
   <string name="collections_editor_hero_video">Video Hero (Home Moderna)</string>
   <string name="collections_editor_placeholder_hero_video">URL video hero personalizzato (opzionale)</string>
+  <string name="layout_section_continue_watching">Continua a guardare</string>
+  <string name="layout_section_continue_watching_desc">Impostazioni per la sezione \"Continua a guardare\".</string>
+  <string name="layout_use_episode_thumbnails_cw">Usa miniature episodi in \"Continua a guardare\"</string>
+  <string name="layout_use_episode_thumbnails_cw_sub">Usa le miniature degli episodi come immagine predefinita. Se disattivato, usa lo sfondo.</string>
+  <string name="layout_next_up_furthest_episode">Prossimo episodio dall\'ultimo raggiunto</string>
+  <string name="layout_next_up_furthest_episode_sub">Mostra l\'episodio successivo basandosi su quello più avanti nella visione. Disattiva per i rewatch per usare invece l\'episodio guardato più di recente.</string>
+  <string name="layout_show_unaired_next_up">Mostra episodi non ancora trasmessi</string>
+  <string name="layout_show_unaired_next_up_sub">Includi i prossimi episodi in \"Continua a guardare\" prima della loro messa in onda.</string>
+  <string name="collections_editor_add_trakt_source">Aggiungi lista Trakt</string>
+  <string name="collections_editor_trakt_sources">Liste Trakt</string>
+  <string name="collections_editor_edit_trakt_source">Modifica lista Trakt</string>
+  <string name="collections_editor_trakt_list">Lista Trakt</string>
+  <string name="collections_editor_trakt_search_results">Risultati della ricerca</string>
+  <string name="collections_editor_trakt_trending">Liste di tendenza</string>
+  <string name="collections_editor_trakt_popular">Liste popolari</string>
+  <string name="collections_editor_trakt_direction">Direzione</string>
+  <string name="collections_editor_trakt_ascending">Crescente</string>
+  <string name="collections_editor_trakt_descending">Decrescente</string>
 </resources>
