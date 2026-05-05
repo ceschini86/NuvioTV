@@ -251,11 +251,11 @@ private fun ModernCatalogRowItem(
     val latestOnCatalogSelectionFocused by rememberUpdatedState(onCatalogSelectionFocused)
 
     // Bump focusEventId to re-trigger selection reporting.
-    LaunchedEffect(focusKey, isTargetItem) {
-        if (isTargetItem && isCardFocused) {
-            focusEventId++
-        }
-    }
+    //LaunchedEffect(focusKey, isTargetItem) {
+    //    if (isTargetItem && isCardFocused) {
+    //        focusEventId++
+    //    }
+    //}
 
     LaunchedEffect(focusEventId, isCardFocused, focusKey) {
         if (focusEventId == 0 || !isCardFocused) {
@@ -775,23 +775,18 @@ internal fun ModernRowSection(
                         }
                     }
 
-                    val isVerticalScrolling = isVerticalRowsScrolling()
                     val isTargetItem = remember(
                         isActiveRow(),
                         pendingRowFocusKey.value,
                         pendingRowFocusIndex.value,
                         row.key,
-                        index,
-                        isVerticalScrolling
+                        index
                     ) {
-                        if (isVerticalScrolling) false
-                        else {
-                            val isPending = pendingRowFocusKey.value == row.key &&
-                                (pendingRowFocusIndex.value ?: 0) == index
-                            val isCurrent = isActiveRow() &&
-                                (focusedItemByRow[row.key] ?: 0) == index
-                            isPending || isCurrent
-                        }
+                        val isPending = pendingRowFocusKey.value == row.key &&
+                            (pendingRowFocusIndex.value ?: 0) == index
+                        val isCurrent = isActiveRow() &&
+                            (focusedItemByRow[row.key] ?: 0) == index
+                        isPending || isCurrent
                     }
 
                     when (val payload = item.payload) {
@@ -813,6 +808,7 @@ internal fun ModernRowSection(
                         is ModernPayload.Catalog,
                         is ModernPayload.CollectionFolder -> {
                             val nextCatalogItem = row.items.list.getOrNull(index + 1)?.metaPreview
+                            val prevCatalogItem = row.items.list.getOrNull(index - 1)?.metaPreview
                             val metaPreview = item.metaPreview
                             val onLongPress: () -> Unit = when {
                                 payload is ModernPayload.Catalog && metaPreview != null -> remember(metaPreview, payload.addonBaseUrl) {
@@ -827,9 +823,16 @@ internal fun ModernRowSection(
                                 is ModernPayload.Catalog -> payload.focusKey
                                 is ModernPayload.CollectionFolder -> payload.focusKey
                             }
-                            val isBackdropExpandedLambda = {
-                                effectiveExpandEnabled && !isRowScrollingState.value &&
-                                    expandedCatalogFocusKey.value == expandedFocusKey
+                            val isBackdropExpandedLambda = remember(
+                                effectiveExpandEnabled,
+                                isRowScrollingState,
+                                expandedCatalogFocusKey,
+                                expandedFocusKey
+                            ) {
+                                {
+                                    effectiveExpandEnabled && !isRowScrollingState.value &&
+                                        expandedCatalogFocusKey.value == expandedFocusKey
+                                }
                             }
                             ModernCatalogRowItem(
                                 item = item,
@@ -854,8 +857,11 @@ internal fun ModernRowSection(
                                 isCatalogItemWatched = isCatalogItemWatched,
                                 onFocused = onFocused,
                                 onItemFocus = onItemFocus,
-                                onPreloadAdjacentItem = remember(nextCatalogItem, onPreloadAdjacentItem) {
-                                     { nextCatalogItem?.let(onPreloadAdjacentItem) }
+                                onPreloadAdjacentItem = remember(nextCatalogItem, prevCatalogItem, onPreloadAdjacentItem) {
+                                     {
+                                         nextCatalogItem?.let(onPreloadAdjacentItem)
+                                         prevCatalogItem?.let(onPreloadAdjacentItem)
+                                     }
                                 },
                                 onCatalogSelectionFocused = onCatalogSelectionFocused,
                                 onNavigateToDetail = onNavigateToDetail,

@@ -195,6 +195,7 @@ fun ModernHomeContent(
     val lastHeroNavigationAtMs = remember { mutableLongStateOf(0L) }
     val heroFocusSettleDelayMs = remember { mutableLongStateOf(MODERN_HERO_FOCUS_DEBOUNCE_MS) }
     val isFastScrolling = remember { mutableStateOf(false) }
+    val isRapidHorizontalNav = remember { mutableStateOf(false) }
     val focusedCatalogSelection = remember { mutableStateOf<FocusedCatalogSelection?>(null) }
     var lastRequestedTrailerFocusKey by remember { mutableStateOf<String?>(null) }
     val expandedCatalogFocusKey = remember { mutableStateOf<String?>(null) }
@@ -434,6 +435,23 @@ fun ModernHomeContent(
             row.items.getOrNull(clampedActiveItemIndex)?.key ?: row.items.firstOrNull()?.key
         }
     }
+
+    // Detect rapid horizontal navigation (holding DPAD left/right).
+    // Activates after two successive item changes within the SAME row within 300ms.
+    val lastRapidNavRowKey = remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(activeHeroItemKey) {
+        if (activeHeroItemKey == null) return@LaunchedEffect
+        val currentRowKey = activeRowKey.value
+        val timeSinceLast = System.currentTimeMillis() - lastHeroNavigationAtMs.longValue
+        // Only activate rapid nav if we're in the same row as last navigation
+        if (timeSinceLast in 1..300 && lastRapidNavRowKey.value == currentRowKey) {
+            isRapidHorizontalNav.value = true
+        }
+        lastRapidNavRowKey.value = currentRowKey
+        delay(heroFocusSettleDelayMs.longValue)
+        isRapidHorizontalNav.value = false
+    }
+
     val latestHeroRow by rememberUpdatedState(activeRow)
     val latestHeroIndex by rememberUpdatedState(clampedActiveItemIndex)
     LaunchedEffect(activeHeroItemKey, verticalRowListState) {
@@ -588,7 +606,7 @@ fun ModernHomeContent(
                     } else null
 
                     val resolvedHero = when {
-                        enrichmentActive -> heroItem.value
+                        enrichmentActive -> activeCarouselItem?.heroPreview ?: heroItem.value
                         enrichedHero != null -> enrichedHero
                         else -> activeCarouselItem?.heroPreview ?: heroItem.value
                     }
@@ -728,11 +746,12 @@ fun ModernHomeContent(
                 snapshotFlow {
                     val currentLive = liveHeroSceneState.value
                     val isScrolling = verticalRowListState.isScrollInProgress
+                    val isRapidNav = isRapidHorizontalNav.value
                     val stable = stableHeroSceneStateRef.value
-                    if (!isScrolling || stable?.preview == null) {
-                        currentLive
-                    } else {
-                        stable
+                    when {
+                        isScrolling && stable?.preview != null -> stable
+                        isRapidNav -> currentLive.copy(preview = null, enrichmentActive = false)
+                        else -> currentLive
                     }
                 }.collect { currentStable ->
                     if (stableHeroSceneStateRef.value != currentStable) {
@@ -750,10 +769,12 @@ fun ModernHomeContent(
                     val isScrolling = isScrollInProgressUpdated
                     val stable = stableHeroSceneStateRef.value
 
-                    if (!isScrolling || stable?.preview == null) {
-                        currentLive
-                    } else {
-                        stable
+                    when {
+                        // During vertical scroll, freeze everything
+                        isScrolling && stable?.preview != null -> stable
+                        // Normal + rapid nav: show live state
+                        // (HeroTitleBlock handles hiding during rapid nav via separate flag)
+                        else -> currentLive
                     }
                 }
             }
@@ -769,11 +790,14 @@ fun ModernHomeContent(
                 snapshotFlow {
                     val currentLive = liveHeroSceneState.value
                     val isScrolling = verticalRowListState.isScrollInProgress
+                    val isRapidNav = isRapidHorizontalNav.value
                     val stable = stableHeroSceneStateRef.value
-                    if (!isScrolling || stable?.preview == null) {
-                        currentLive.heroBackdrop
-                    } else {
-                        stable.heroBackdrop
+                    when {
+                        // During vertical scroll, freeze backdrop
+                        isScrolling && stable?.heroBackdrop != null -> stable.heroBackdrop
+                        // During rapid horizontal nav, freeze backdrop too
+                        isRapidNav && stable?.heroBackdrop != null -> stable.heroBackdrop
+                        else -> currentLive.heroBackdrop
                     }
                 }.collect { backdrop ->
                     HeroBackdropState.update(backdrop)
@@ -869,12 +893,21 @@ fun ModernHomeContent(
             }
 
             HeroTitleBlock(
-                previewProvider = { heroSceneStateLambda().preview },
-                enrichmentActive = { heroSceneStateLambda().enrichmentActive },
+                previewProvider = {
+                    if (isRapidHorizontalNav.value) null
+                    else heroSceneStateLambda().preview
+                },
+                enrichmentActive = {
+                    if (isRapidHorizontalNav.value) false
+                    else heroSceneStateLambda().enrichmentActive
+                },
                 portraitMode = !useLandscapePosters,
                 trailerPlaying = {
-                    val state = heroSceneStateLambda()
-                    state.fullScreenBackdrop && shouldPlayTrailerLambda() && heroTrailerRenderedLambda()
+                    if (isRapidHorizontalNav.value) false
+                    else {
+                        val state = heroSceneStateLambda()
+                        state.fullScreenBackdrop && shouldPlayTrailerLambda() && heroTrailerRenderedLambda()
+                    }
                 },
                 modifier = heroMetadataModifier
             )
