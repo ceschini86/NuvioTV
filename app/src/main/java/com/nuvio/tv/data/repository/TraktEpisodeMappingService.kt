@@ -96,9 +96,13 @@ class TraktEpisodeMappingService @Inject constructor(
         addonEpisodes: List<EpisodeMappingEntry>,
         traktEpisodes: List<EpisodeMappingEntry>
     ): Boolean {
-        val addonSeasons = addonEpisodes.mapTo(mutableSetOf()) { it.season }
-        val traktSeasons = traktEpisodes.mapTo(mutableSetOf()) { it.season }
-        return addonSeasons == traktSeasons
+        // Compare per-season episode counts, not just the set of season numbers.
+        // Anime often uses the same season numbers in both sources but with completely
+        // different episode distributions (e.g. One Piece has seasons 1-24 in both
+        // AIOMetadata and Trakt but with different episode counts per season).
+        val addonPerSeason = addonEpisodes.groupBy { it.season }.mapValues { it.value.size }
+        val traktPerSeason = traktEpisodes.groupBy { it.season }.mapValues { it.value.size }
+        return addonPerSeason == traktPerSeason
     }
 
     internal suspend fun getCachedEpisodeMapping(
@@ -117,7 +121,8 @@ class TraktEpisodeMappingService @Inject constructor(
         contentType: String?,
         videoId: String?,
         season: Int?,
-        episode: Int?
+        episode: Int?,
+        episodeTitle: String? = null
     ): EpisodeMappingEntry? {
         val key = cacheKey(contentId, contentType, videoId, season, episode) ?: return null
         cacheMutex.withLock {
@@ -144,7 +149,7 @@ class TraktEpisodeMappingService @Inject constructor(
             requestedSeason = requestedSeason,
             requestedEpisode = requestedEpisode,
             requestedVideoId = videoId,
-            requestedTitle = null,
+            requestedTitle = episodeTitle,
             addonEpisodes = addonEpisodes,
             traktEpisodes = traktEpisodes
         ) ?: return null
