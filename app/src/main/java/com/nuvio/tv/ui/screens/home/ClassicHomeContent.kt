@@ -248,18 +248,22 @@ fun ClassicHomeContent(
     var focusedArtwork by remember { mutableStateOf<ClassicFocusArtwork?>(null) }
     val latestOnItemFocus by rememberUpdatedState(onItemFocus)
 
-    fun handleMetaFocus(item: MetaPreview) {
-        if (uiState.classicFocusGradientEnabled) {
-            focusedArtwork = item.toClassicFocusArtwork(uiState.focusedPosterBackdropExpandEnabled)
+    val handleMetaFocus: (MetaPreview) -> Unit = remember(uiState.classicFocusGradientEnabled, uiState.focusedPosterBackdropExpandEnabled) {
+        { item ->
+            if (uiState.classicFocusGradientEnabled) {
+                focusedArtwork = item.toClassicFocusArtwork(uiState.focusedPosterBackdropExpandEnabled)
+            }
+            latestOnItemFocus(item)
         }
-        latestOnItemFocus(item)
     }
 
-    fun handleHeroFocus(item: MetaPreview) {
-        if (uiState.classicFocusGradientEnabled) {
-            focusedArtwork = null
+    val handleHeroFocus: (MetaPreview) -> Unit = remember(uiState.classicFocusGradientEnabled) {
+        { item ->
+            if (uiState.classicFocusGradientEnabled) {
+                focusedArtwork = null
+            }
+            latestOnItemFocus(item)
         }
-        latestOnItemFocus(item)
     }
 
     LaunchedEffect(uiState.classicFocusGradientEnabled) {
@@ -319,7 +323,7 @@ fun ClassicHomeContent(
     ) {
     Box(modifier = Modifier.fillMaxSize()) {
     ClassicFocusGradientBackdrop(
-        artwork = focusedArtwork,
+        artworkProvider = { focusedArtwork },
         enabled = uiState.classicFocusGradientEnabled,
         modifier = Modifier.fillMaxSize()
     )
@@ -388,7 +392,7 @@ fun ClassicHomeContent(
                             focusedArtwork = null
                         }
                     },
-                    onItemFocus = ::handleHeroFocus,
+                    onItemFocus = handleHeroFocus,
                     onItemClick = { item ->
                         onNavigateToDetail(
                             item.id,
@@ -527,7 +531,7 @@ fun ClassicHomeContent(
                         trailerPreviewUrls = stableTrailerPreviewUrls.value,
                         trailerPreviewAudioUrls = stableTrailerPreviewAudioUrls.value,
                         onRequestTrailerPreview = onRequestTrailerPreview,
-                        onItemFocus = ::handleMetaFocus,
+                        onItemFocus = handleMetaFocus,
                         isItemWatched = isCatalogItemWatched,
                         onItemLongPress = onCatalogItemLongPress,
                         seeAllLabel = catalogSeeAllLabel,

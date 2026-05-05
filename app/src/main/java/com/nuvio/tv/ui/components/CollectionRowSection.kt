@@ -77,6 +77,7 @@ fun CollectionRowSection(
     onFolderFocused: (collection: Collection, folder: CollectionFolder) -> Unit = { _, _ -> },
     entryFocusRequester: FocusRequester? = null
 ) {
+    val currentOnFolderClick by rememberUpdatedState(onFolderClick)
     val currentOnItemFocused by rememberUpdatedState(onItemFocused)
     val currentOnFolderFocused by rememberUpdatedState(onFolderFocused)
     val rowFocusRequester = remember { FocusRequester() }
@@ -180,13 +181,15 @@ fun CollectionRowSection(
                         folder = folder,
                         collection = collection,
                         posterCardStyle = posterCardStyle,
-                        onClick = { onFolderClick(collection.id, folder.id) },
-                        onFocused = {
-                            if (lastFocusedItemIndex != index) {
-                                lastFocusedItemIndex = index
-                                currentOnItemFocused(index)
+                        onClick = remember(collection.id, folder.id) { { currentOnFolderClick(collection.id, folder.id) } },
+                        onFocused = remember(index, folder.id) {
+                            {
+                                if (lastFocusedItemIndex != index) {
+                                    lastFocusedItemIndex = index
+                                    currentOnItemFocused(index)
+                                }
+                                currentOnFolderFocused(collection, folder)
                             }
-                            currentOnFolderFocused(collection, folder)
                         },
                         modifier = if (isEntryTarget) Modifier.focusRequester(entryFocusRequester!!) else Modifier,
                         focusRequester = itemFocusRequesters.getOrPut(
