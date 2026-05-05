@@ -546,7 +546,7 @@ private fun MpvHardwareDecodeModeDialog(
 }
 
 @Composable
-private fun DecoderPriorityDialog(
+internal fun DecoderPriorityDialog(
     selectedPriority: Int,
     onPrioritySelected: (Int) -> Unit,
     onDismiss: () -> Unit

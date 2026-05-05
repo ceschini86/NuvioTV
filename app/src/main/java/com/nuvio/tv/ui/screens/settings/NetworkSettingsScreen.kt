@@ -61,6 +61,7 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
+import com.nuvio.tv.domain.model.ExperienceMode
 import com.nuvio.tv.ui.theme.NuvioColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -165,7 +166,8 @@ private suspend fun fetchFastComUrls(): List<String> = withContext(Dispatchers.I
 @Composable
 fun AdvancedSettingsContent(
     initialFocusRequester: FocusRequester? = null,
-    viewModel: AdvancedSettingsViewModel = hiltViewModel()
+    viewModel: AdvancedSettingsViewModel = hiltViewModel(),
+    experienceModeViewModel: ExperienceModeSettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -252,6 +254,7 @@ fun AdvancedSettingsContent(
 
     val networkListState = rememberLazyListState()
     val performanceFocusRequester = remember { initialFocusRequester ?: FocusRequester() }
+    var showExperienceModeConfirmation by remember { mutableStateOf(false) }
     Box(modifier = Modifier.fillMaxSize()) {
     LazyColumn(
         state = networkListState,
@@ -276,6 +279,20 @@ fun AdvancedSettingsContent(
                 ) {
                     ConnectionStatusBadge(type = connectionType)
                 }
+            }
+        }
+
+        item(key = "experience_mode_settings") {
+            SettingsGroupCard(
+                modifier = Modifier.fillMaxWidth(),
+                title = stringResource(R.string.experience_mode_group_title)
+            ) {
+                SettingsActionRow(
+                    title = stringResource(R.string.experience_mode_switch_to_essential),
+                    subtitle = stringResource(R.string.experience_mode_switch_to_essential_subtitle),
+                    value = stringResource(R.string.experience_mode_essential),
+                    onClick = { showExperienceModeConfirmation = true }
+                )
             }
         }
 
@@ -470,6 +487,14 @@ fun AdvancedSettingsContent(
         }
     }
         SettingsVerticalScrollIndicators(state = networkListState)
+    }
+
+    if (showExperienceModeConfirmation) {
+        ExperienceModeConfirmationDialog(
+            targetMode = ExperienceMode.ESSENTIAL,
+            onConfirm = { experienceModeViewModel.setMode(ExperienceMode.ESSENTIAL) },
+            onDismiss = { showExperienceModeConfirmation = false }
+        )
     }
 }
 

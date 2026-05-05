@@ -35,11 +35,13 @@ import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.tmdb.TmdbCollectionSourceResolver
 import com.nuvio.tv.core.trakt.TraktPublicListSourceResolver
 import com.nuvio.tv.data.local.CollectionsDataStore
+import com.nuvio.tv.data.local.ExperienceModeDataStore
 import com.nuvio.tv.data.local.LayoutPreferenceDataStore
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.Collection
 import com.nuvio.tv.domain.model.CatalogDescriptor
 import com.nuvio.tv.domain.model.AddonCatalogCollectionSource
+import com.nuvio.tv.domain.model.ExperienceMode
 import com.nuvio.tv.domain.model.TmdbCollectionSource
 import com.nuvio.tv.domain.model.TmdbCollectionSourceType
 import com.nuvio.tv.domain.model.TraktCollectionSource
@@ -63,6 +65,7 @@ import javax.inject.Inject
 class AddonManagerViewModel @Inject constructor(
     private val addonRepository: AddonRepository,
     private val layoutPreferenceDataStore: LayoutPreferenceDataStore,
+    private val experienceModeDataStore: ExperienceModeDataStore,
     private val collectionsDataStore: CollectionsDataStore,
     private val collectionSyncService: CollectionSyncService,
     private val homeCatalogSettingsSyncService: HomeCatalogSettingsSyncService,
@@ -75,6 +78,7 @@ class AddonManagerViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(AddonManagerUiState())
     val uiState: StateFlow<AddonManagerUiState> = _uiState.asStateFlow()
+    val experienceMode = experienceModeDataStore.mode
 
     val isReadOnly: Boolean
         get() {
@@ -82,7 +86,11 @@ class AddonManagerViewModel @Inject constructor(
         }
 
     val webConfigMode: AddonWebConfigMode
-        get() = AddonManagementAccess.webConfigMode(profileManager.activeProfile)
+        get() = webConfigMode(ExperienceMode.ADVANCED)
+
+    fun webConfigMode(mode: ExperienceMode): AddonWebConfigMode {
+        return AddonManagementAccess.webConfigMode(profileManager.activeProfile, mode)
+    }
 
     private var server: AddonConfigServer? = null
     private var logoBytes: ByteArray? = null
@@ -232,7 +240,7 @@ class AddonManagerViewModel @Inject constructor(
         }
     }
 
-    fun startQrMode() {
+    fun startQrMode(webConfigMode: AddonWebConfigMode = this.webConfigMode) {
         val ip = DeviceIpAddress.get(context)
         if (ip == null) {
             _uiState.update { it.copy(error = context.getString(R.string.error_network_required)) }

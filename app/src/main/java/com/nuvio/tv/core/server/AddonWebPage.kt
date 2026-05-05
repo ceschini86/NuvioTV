@@ -24,10 +24,12 @@ object AddonWebPage {
         } else {
             context.getString(R.string.web_manage_addons_title)
         }
-        val pageSubtitle = if (isCollectionsOnly) {
-            context.getString(R.string.web_manage_collections_subtitle)
-        } else {
-            context.getString(R.string.web_manage_addons_subtitle)
+        val pageSubtitle = when {
+            isCollectionsOnly -> context.getString(R.string.web_manage_collections_subtitle)
+            webConfigMode == AddonWebConfigMode.ADDONS_ONLY -> {
+                context.getString(R.string.web_manage_addons_only_subtitle)
+            }
+            else -> context.getString(R.string.web_manage_addons_subtitle)
         }
         val successStatusMessage = if (isCollectionsOnly) {
             context.getString(R.string.web_status_msg_collections_updated)
@@ -36,26 +38,40 @@ object AddonWebPage {
         }
         val allowAddonManagement = webConfigMode.allowAddonManagement
         val allowCatalogManagement = webConfigMode.allowCatalogManagement
+        val allowCollectionManagement = webConfigMode.allowCollectionManagement
         val defaultTab = when {
             allowAddonManagement -> "addons"
             allowCatalogManagement -> "catalogs"
-            else -> "collections"
+            allowCollectionManagement -> "collections"
+            else -> "addons"
         }
-        val tabsHtml = if (isCollectionsOnly) {
-            """
+        val tabButtons = listOfNotNull(
+            if (allowAddonManagement) {
+                """    <button class="tab${if (defaultTab == "addons") " active" else ""}" type="button" onclick="switchTab('addons')">${context.getString(R.string.web_tab_addons)}</button>"""
+            } else {
+                null
+            },
+            if (allowCatalogManagement) {
+                """    <button class="tab${if (defaultTab == "catalogs") " active" else ""}" type="button" onclick="switchTab('catalogs')">${context.getString(R.string.web_tab_home_layout)}</button>"""
+            } else {
+                null
+            },
+            if (allowCollectionManagement) {
+                """    <button class="tab${if (defaultTab == "collections") " active" else ""}" type="button" onclick="switchTab('collections')">${context.getString(R.string.web_tab_collections)}</button>"""
+            } else {
+                null
+            }
+        ).joinToString("\n")
+        val availableTabsJs = listOfNotNull(
+            if (allowAddonManagement) "'addons'" else null,
+            if (allowCatalogManagement) "'catalogs'" else null,
+            if (allowCollectionManagement) "'collections'" else null
+        ).joinToString(prefix = "[", postfix = "]")
+        val tabsHtml = """
   <div class="tabs">
-    <button class="tab active" type="button" onclick="switchTab('collections')">${context.getString(R.string.web_tab_collections)}</button>
+${tabButtons}
   </div>
 """
-        } else {
-            """
-  <div class="tabs">
-    <button class="tab active" type="button" onclick="switchTab('addons')">${context.getString(R.string.web_tab_addons)}</button>
-    <button class="tab" type="button" onclick="switchTab('catalogs')">${context.getString(R.string.web_tab_home_layout)}</button>
-    <button class="tab" type="button" onclick="switchTab('collections')">${context.getString(R.string.web_tab_collections)}</button>
-  </div>
-"""
-        }
         val addonsTabHtml = if (allowAddonManagement) {
             """
   <div class="tab-content active" id="tab-addons">
@@ -98,6 +114,28 @@ object AddonWebPage {
       </div>
       <ul class="addon-list" id="catalogList"></ul>
       <div class="empty-state" id="catalogEmptyState">${context.getString(R.string.web_no_catalogs)}</div>
+    </div>
+  </div>
+"""
+        } else {
+            ""
+        }
+        val collectionsTabHtml = if (allowCollectionManagement) {
+            """
+  <div class="tab-content${if (defaultTab == "collections") " active" else ""}" id="tab-collections">
+    <div class="section-block">
+      <div class="section-label">${context.getString(R.string.web_tab_collections)}</div>
+      <div class="add-section" style="display:flex;gap:0.5rem">
+        <button class="btn" onclick="enableAllCollections()" style="flex:1">${context.getString(R.string.web_btn_show_all)}</button>
+        <button class="btn" onclick="disableAllCollections()" style="flex:1">${context.getString(R.string.web_btn_hide_all)}</button>
+      </div>
+      <div class="add-section" style="display:flex;gap:0.5rem">
+        <button class="btn" onclick="addCollection()" style="flex:1">${context.getString(R.string.web_btn_new_collection)}</button>
+        <button class="btn" onclick="exportCollections()" style="flex:1">${context.getString(R.string.web_btn_export)}</button>
+        <button class="btn" onclick="showImportModal()" style="flex:1">${context.getString(R.string.web_btn_import)}</button>
+      </div>
+      <div id="collectionsList"></div>
+      <div class="empty-state" id="collectionsEmptyState">${context.getString(R.string.web_no_collections)}</div>
     </div>
   </div>
 """
@@ -1048,22 +1086,7 @@ object AddonWebPage {
 
   $catalogsTabHtml
 
-  <div class="tab-content${if (defaultTab == "collections") " active" else ""}" id="tab-collections">
-    <div class="section-block">
-      <div class="section-label">${context.getString(R.string.web_tab_collections)}</div>
-      <div class="add-section" style="display:flex;gap:0.5rem">
-        <button class="btn" onclick="enableAllCollections()" style="flex:1">${context.getString(R.string.web_btn_show_all)}</button>
-        <button class="btn" onclick="disableAllCollections()" style="flex:1">${context.getString(R.string.web_btn_hide_all)}</button>
-      </div>
-      <div class="add-section" style="display:flex;gap:0.5rem">
-        <button class="btn" onclick="addCollection()" style="flex:1">${context.getString(R.string.web_btn_new_collection)}</button>
-        <button class="btn" onclick="exportCollections()" style="flex:1">${context.getString(R.string.web_btn_export)}</button>
-        <button class="btn" onclick="showImportModal()" style="flex:1">${context.getString(R.string.web_btn_import)}</button>
-      </div>
-      <div id="collectionsList"></div>
-      <div class="empty-state" id="collectionsEmptyState">${context.getString(R.string.web_no_collections)}</div>
-    </div>
-  </div>
+  $collectionsTabHtml
 
   <div class="import-overlay" id="importOverlay">
     <div class="import-modal">
@@ -1212,7 +1235,8 @@ var connectionLost = false;
 var consecutiveErrors = 0;
 var allowAddonManagement = ${allowAddonManagement.toString().lowercase()};
 var allowCatalogManagement = ${allowCatalogManagement.toString().lowercase()};
-var availableTabs = ${if (isCollectionsOnly) "['collections']" else "['addons','catalogs','collections']"};
+var allowCollectionManagement = ${allowCollectionManagement.toString().lowercase()};
+var availableTabs = $availableTabsJs;
 var successStatusMessage = '${successStatusMessage.replace("'", "\\'")}';
 var activeTab = '$defaultTab';
 
@@ -2745,8 +2769,10 @@ function updateSaveButtonState() {
 }
 
 function renderCollections() {
+  if (!allowCollectionManagement) return;
   var container = document.getElementById('collectionsList');
   var empty = document.getElementById('collectionsEmptyState');
+  if (!container || !empty) return;
   container.innerHTML = '';
   if (collections.length === 0) { empty.style.display = 'block'; return; }
   empty.style.display = 'none';

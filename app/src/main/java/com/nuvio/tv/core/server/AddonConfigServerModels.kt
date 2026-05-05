@@ -4,15 +4,23 @@ import java.util.UUID
 
 enum class AddonWebConfigMode(
     val allowAddonManagement: Boolean,
-    val allowCatalogManagement: Boolean
+    val allowCatalogManagement: Boolean,
+    val allowCollectionManagement: Boolean
 ) {
     FULL(
         allowAddonManagement = true,
-        allowCatalogManagement = true
+        allowCatalogManagement = true,
+        allowCollectionManagement = true
     ),
     COLLECTIONS_ONLY(
         allowAddonManagement = false,
-        allowCatalogManagement = false
+        allowCatalogManagement = false,
+        allowCollectionManagement = true
+    ),
+    ADDONS_ONLY(
+        allowAddonManagement = true,
+        allowCatalogManagement = false,
+        allowCollectionManagement = false
     )
 }
 

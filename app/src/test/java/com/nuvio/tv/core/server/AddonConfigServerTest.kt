@@ -76,4 +76,47 @@ class AddonConfigServerTest {
 
         assertEquals(proposedChange, sanitized)
     }
+
+    @Test
+    fun `addons only mode preserves catalog and collection state`() {
+        val currentState = PageState(
+            addons = listOf(
+                AddonInfo(
+                    url = "https://primary.example",
+                    name = "Primary",
+                    description = null
+                )
+            ),
+            catalogs = listOf(
+                CatalogInfo(
+                    key = "catalog_a",
+                    disableKey = "catalog_a",
+                    catalogName = "Featured",
+                    addonName = "Primary",
+                    type = "movie",
+                    isDisabled = true
+                )
+            ),
+            disabledCollectionKeys = listOf("collection_saved")
+        )
+        val proposedChange = PendingAddonChange(
+            proposedUrls = listOf("https://primary.example", "https://new.example"),
+            proposedCatalogOrderKeys = listOf("catalog_b"),
+            proposedDisabledCatalogKeys = emptyList(),
+            proposedCollectionsJson = "[{\"id\":\"new\"}]",
+            proposedDisabledCollectionKeys = listOf("collection_new")
+        )
+
+        val sanitized = sanitizePendingAddonChange(
+            mode = AddonWebConfigMode.ADDONS_ONLY,
+            proposedChange = proposedChange,
+            currentState = currentState
+        )
+
+        assertEquals(listOf("https://primary.example", "https://new.example"), sanitized.proposedUrls)
+        assertEquals(listOf("catalog_a"), sanitized.proposedCatalogOrderKeys)
+        assertEquals(listOf("catalog_a"), sanitized.proposedDisabledCatalogKeys)
+        assertEquals(null, sanitized.proposedCollectionsJson)
+        assertEquals(listOf("collection_saved"), sanitized.proposedDisabledCollectionKeys)
+    }
 }
