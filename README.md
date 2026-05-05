@@ -71,7 +71,7 @@ NuvioTV functions solely as a client-side interface for browsing metadata and pl
 
 NuvioTV is not affiliated with any third-party extensions or content providers. It does not host, store, or distribute any media content.
 
-For comprehensive legal information, including our full disclaimer, third-party extension policy, and DMCA/Copyright information, please visit our **[Legal & Disclaimer Page](https://tapframe.github.io/NuvioTV/#legal)**.
+For comprehensive legal information, including our full disclaimer, third-party extension policy, and DMCA/Copyright information, please visit our **[Legal & Disclaimer Page](https://nuvioapp.space/legal)**.
 
 ## Built With
 
