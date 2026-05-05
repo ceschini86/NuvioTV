@@ -208,7 +208,8 @@ internal fun ModernHomeRowsList(
 
     CompositionLocalProvider(
         LocalBringIntoViewSpec provides verticalRowBringIntoViewSpec,
-        LocalFastScrollActive provides isFastScrolling.value
+        LocalFastScrollActive provides isFastScrolling.value,
+        LocalVerticalRowsScrolling provides isVerticalRowsScrolling
     ) {
         LazyColumn(
             state = verticalRowListState,

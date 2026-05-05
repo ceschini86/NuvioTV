@@ -33,6 +33,7 @@ import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalDensity
 import com.nuvio.tv.ui.util.dpadVerticalFastScroll
+import com.nuvio.tv.ui.util.asStable
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import com.nuvio.tv.domain.model.MetaPreview
@@ -317,7 +318,8 @@ fun ClassicHomeContent(
 
     CompositionLocalProvider(
         LocalBringIntoViewSpec provides verticalBringIntoViewSpec,
-        LocalFastScrollActive provides isFastScrolling
+        LocalFastScrollActive provides isFastScrolling,
+        LocalVerticalRowsScrolling provides columnListState.isScrollInProgress
     ) {
     Box(modifier = Modifier.fillMaxSize()) {
     ClassicFocusGradientBackdrop(
@@ -380,7 +382,7 @@ fun ClassicHomeContent(
         if (heroVisible) {
             item(key = "hero_carousel", contentType = "hero") {
                 HeroCarousel(
-                    items = uiState.heroItems,
+                    items = uiState.heroItems.asStable(),
                     focusRequester = if (shouldRequestInitialFocus) heroFocusRequester else null,
                     modifier = Modifier.onFocusChanged {
                         if (it.hasFocus && uiState.classicFocusGradientEnabled) {

@@ -40,6 +40,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import com.nuvio.tv.ui.util.asStable
 import com.nuvio.tv.ui.util.dpadRepeatThrottle
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -277,7 +278,7 @@ fun GridHomeContent(
                 when (gridItem) {
                     is GridItem.Hero -> {
                         HeroCarousel(
-                            items = gridItem.items,
+                            items = gridItem.items.asStable(),
                             focusRequester = if (shouldRequestInitialFocus) heroFocusRequester else null,
                             onItemClick = remember(onNavigateToDetail) {
                                 { item ->

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -61,7 +62,7 @@ private data class ModernHeroSecondaryMeta(
 
 @Composable
 internal fun ModernHeroScene(
-    state: ModernHeroSceneState,
+    stateProvider: () -> ModernHeroSceneState,
     bgColor: Color,
     modifier: Modifier,
     requestWidthPx: Int,
@@ -69,26 +70,29 @@ internal fun ModernHeroScene(
     onTrailerEnded: () -> Unit,
     onFirstFrameRendered: () -> Unit
 ) {
-    ModernHeroMediaLayer(
-        heroBackdrop = state.heroBackdrop,
-        enrichmentActive = state.enrichmentActive,
-        shouldPlayHeroTrailer = state.shouldPlayTrailer,
-        heroTrailerFirstFrameRendered = state.trailerFirstFrameRendered,
-        heroTrailerUrl = state.trailerUrl,
-        heroTrailerAudioUrl = state.trailerAudioUrl,
-        heroTrailerPlaybackKey = state.trailerPlaybackKey,
-        muted = state.trailerMuted,
-        onTrailerEnded = onTrailerEnded,
-        onFirstFrameRendered = onFirstFrameRendered,
-        modifier = modifier,
-        requestWidthPx = requestWidthPx,
-        requestHeightPx = requestHeightPx
-    )
-    ModernHeroGradientLayer(
-        bgColor = bgColor,
-        isFullScreen = state.fullScreenBackdrop,
-        modifier = modifier
-    )
+    val state = stateProvider()
+    Box(modifier = modifier) {
+        ModernHeroMediaLayer(
+            heroBackdrop = state.heroBackdrop,
+            enrichmentActive = state.enrichmentActive,
+            shouldPlayHeroTrailer = state.shouldPlayTrailer,
+            heroTrailerFirstFrameRendered = state.trailerFirstFrameRendered,
+            heroTrailerUrl = state.trailerUrl,
+            heroTrailerAudioUrl = state.trailerAudioUrl,
+            heroTrailerPlaybackKey = state.trailerPlaybackKey,
+            muted = state.trailerMuted,
+            onTrailerEnded = onTrailerEnded,
+            onFirstFrameRendered = onFirstFrameRendered,
+            modifier = Modifier.fillMaxSize(),
+            requestWidthPx = requestWidthPx,
+            requestHeightPx = requestHeightPx
+        )
+        ModernHeroGradientLayer(
+            bgColor = bgColor,
+            isFullScreen = state.fullScreenBackdrop,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
 }
 
 @Composable
@@ -148,13 +152,15 @@ internal fun ModernHeroMediaLayer(
         )
 
         if (shouldPlayHeroTrailer) {
+            val playerOnEnded by rememberUpdatedState(onTrailerEnded)
+            val playerOnFirstFrameRendered by rememberUpdatedState(onFirstFrameRendered)
             key(heroTrailerPlaybackKey ?: heroTrailerUrl) {
                 TrailerPlayer(
                     trailerUrl = heroTrailerUrl,
                     trailerAudioUrl = heroTrailerAudioUrl,
                     isPlaying = true,
-                    onEnded = onTrailerEnded,
-                    onFirstFrameRendered = onFirstFrameRendered,
+                    onEnded = playerOnEnded,
+                    onFirstFrameRendered = playerOnFirstFrameRendered,
                     muted = muted,
                     cropToFill = true,
                     overscanZoom = MODERN_TRAILER_OVERSCAN_ZOOM,
@@ -254,23 +260,25 @@ internal fun ModernHeroGradientLayer(
 
 @Composable
 internal fun HeroTitleBlock(
-    preview: HeroPreview?,
-    enrichmentActive: Boolean = false,
+    previewProvider: () -> HeroPreview?,
+    enrichmentActiveProvider: () -> Boolean = { false },
     portraitMode: Boolean,
-    trailerPlaying: Boolean = false,
+    trailerPlayingProvider: () -> Boolean = { false },
     modifier: Modifier = Modifier
 ) {
-    var stablePreview by remember { mutableStateOf<HeroPreview?>(null) }
-
-    if (!enrichmentActive && preview != null) stablePreview = preview
-    if (enrichmentActive) stablePreview = null
+    val preview = previewProvider()
+    val enrichmentActive = enrichmentActiveProvider()
+    val trailerPlaying = trailerPlayingProvider()
+    val stablePreview = remember(preview, enrichmentActive) {
+        if (enrichmentActive) null else preview
+    }
 
     if (stablePreview == null) return
     Box(
         modifier = modifier,
         contentAlignment = Alignment.BottomStart
     ) {
-        HeroTitleContent(preview = stablePreview!!, portraitMode = portraitMode, trailerPlaying = trailerPlaying)
+        HeroTitleContent(preview = stablePreview, portraitMode = portraitMode, trailerPlaying = trailerPlaying)
     }
 }
 

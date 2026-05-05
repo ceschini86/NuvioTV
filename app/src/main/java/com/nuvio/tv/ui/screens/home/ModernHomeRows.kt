@@ -398,6 +398,20 @@ internal fun ModernRowSection(
     val rowListStates = uiCaches.rowListStates
     val loadMoreRequestedTotals = uiCaches.loadMoreRequestedTotals
 
+    val currentOnRowItemFocused by rememberUpdatedState(onRowItemFocused)
+    val currentOnContinueWatchingClick by rememberUpdatedState(onContinueWatchingClick)
+    val currentOnContinueWatchingOptions by rememberUpdatedState(onContinueWatchingOptions)
+    val currentIsCatalogItemWatched by rememberUpdatedState(isCatalogItemWatched)
+    val currentOnCatalogItemLongPress by rememberUpdatedState(onCatalogItemLongPress)
+    val currentOnItemFocus by rememberUpdatedState(onItemFocus)
+    val currentOnPreloadAdjacentItem by rememberUpdatedState(onPreloadAdjacentItem)
+    val currentOnCatalogSelectionFocused by rememberUpdatedState(onCatalogSelectionFocused)
+    val currentOnNavigateToDetail by rememberUpdatedState(onNavigateToDetail)
+    val currentOnNavigateToFolderDetail by rememberUpdatedState(onNavigateToFolderDetail)
+    val currentOnLoadMoreCatalog by rememberUpdatedState(onLoadMoreCatalog)
+    val currentOnBackdropInteraction by rememberUpdatedState(onBackdropInteraction)
+    val currentOnExpandedCatalogFocusKeyChange by rememberUpdatedState(onExpandedCatalogFocusKeyChange)
+
     val rowKey = row.key
     // Blocks vertical focus exit during placeholder→data transition.
     val blockingFocusExit = remember { mutableStateOf(false) }
@@ -793,8 +807,10 @@ internal fun ModernRowSection(
                     val requester = uiCaches.requesterFor(row.key, stableItemKey)
                     val isContinueWatchingRow = row.key == MODERN_CONTINUE_WATCHING_ROW_KEY
                     val onFocused = remember(row.key, index, isContinueWatchingRow) {
-                        { onRowItemFocused(row.key, index, isContinueWatchingRow)
-                            focusedItemByRow[row.key] = index }
+                        {
+                            currentOnRowItemFocused(row.key, index, isContinueWatchingRow)
+                            focusedItemByRow[row.key] = index
+                        }
                     }
 
                     when (val payload = item.payload) {
@@ -807,8 +823,8 @@ internal fun ModernRowSection(
                                 blurUnwatchedEpisodes = blurUnwatchedEpisodes,
                                 useEpisodeThumbnails = useEpisodeThumbnails,
                                 onFocused = onFocused,
-                                onContinueWatchingClick = onContinueWatchingClick,
-                                onShowOptions = onContinueWatchingOptions
+                                onContinueWatchingClick = currentOnContinueWatchingClick,
+                                onShowOptions = currentOnContinueWatchingOptions
                             )
                         }
 
@@ -816,11 +832,11 @@ internal fun ModernRowSection(
                         is ModernPayload.CollectionFolder -> {
                             val nextCatalogItem = row.items.list.getOrNull(index + 1)?.metaPreview
                             val metaPreview = item.metaPreview
-                            val isWatched = metaPreview?.let(isCatalogItemWatched) ?: false
+                            val isWatched = metaPreview?.let { currentIsCatalogItemWatched(it) } ?: false
                             val onLongPress: () -> Unit = when {
                                 payload is ModernPayload.Catalog && metaPreview != null -> remember(metaPreview, payload.addonBaseUrl) {
                                     {
-                                        onCatalogItemLongPress(metaPreview, payload.addonBaseUrl)
+                                        currentOnCatalogItemLongPress(metaPreview, payload.addonBaseUrl)
                                         Unit
                                     }
                                 }
@@ -862,16 +878,16 @@ internal fun ModernRowSection(
                                 expandedTrailerPreviewAudioUrl = expandedTrailerPreviewAudioUrl,
                                 isWatched = isWatched,
                                 onFocused = onFocused,
-                                onItemFocus = onItemFocus,
-                                onPreloadAdjacentItem = remember(nextCatalogItem, onPreloadAdjacentItem) {
-                                     { nextCatalogItem?.let(onPreloadAdjacentItem) }
+                                onItemFocus = currentOnItemFocus,
+                                onPreloadAdjacentItem = remember(nextCatalogItem) {
+                                     { nextCatalogItem?.let { currentOnPreloadAdjacentItem(it) } }
                                 },
-                                onCatalogSelectionFocused = onCatalogSelectionFocused,
-                                onNavigateToDetail = onNavigateToDetail,
-                                onNavigateToFolderDetail = onNavigateToFolderDetail,
+                                onCatalogSelectionFocused = currentOnCatalogSelectionFocused,
+                                onNavigateToDetail = currentOnNavigateToDetail,
+                                onNavigateToFolderDetail = currentOnNavigateToFolderDetail,
                                 onLongPress = onLongPress,
-                                onBackdropInteraction = onBackdropInteraction,
-                                onExpandedCatalogFocusKeyChange = onExpandedCatalogFocusKeyChange,
+                                onBackdropInteraction = currentOnBackdropInteraction,
+                                onExpandedCatalogFocusKeyChange = currentOnExpandedCatalogFocusKeyChange,
                                 enrichedLogoUrl = (payload as? ModernPayload.Catalog)?.itemId?.let { enrichedPreviews.map[it]?.logo },
                                 enrichedBackdropUrl = (payload as? ModernPayload.Catalog)?.itemId?.let { enrichedPreviews.map[it]?.backdropUrl }
                             )
@@ -1198,12 +1214,23 @@ private fun ModernCarouselCard(
                         MonochromePosterPlaceholder()
                     }
 
-                    if (shouldPlayTrailerInCard) {
+                    val showTrailerPlayer = remember { mutableStateOf(shouldPlayTrailerInCard) }
+                    LaunchedEffect(shouldPlayTrailerInCard) {
+                        if (shouldPlayTrailerInCard) {
+                            showTrailerPlayer.value = true
+                        } else {
+                            // Keep player in hierarchy during collapse to avoid layout thrashing
+                            delay(600)
+                            showTrailerPlayer.value = false
+                        }
+                    }
+
+                    if (showTrailerPlayer.value) {
                         key(trailerPreviewUrl) {
                             TrailerPlayer(
                                 trailerUrl = trailerPreviewUrl,
                                 trailerAudioUrl = trailerPreviewAudioUrl,
-                                isPlaying = true,
+                                isPlaying = shouldPlayTrailerInCard,
                                 onEnded = onTrailerEnded,
                                 muted = focusedPosterBackdropTrailerMuted,
                                 cropToFill = true,
