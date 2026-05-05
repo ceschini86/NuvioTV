@@ -143,6 +143,33 @@ fun ModernHomeContent(
                 trailerPlaybackTarget == FocusedPosterTrailerPlaybackTarget.HERO_MEDIA)
     val presentation = uiState.modernHomePresentation
     val carouselRows = presentation.rows
+
+    val hasCollections = remember(uiState.homeRows) {
+        uiState.homeRows.any { it is HomeRow.CollectionRow }
+    }
+    val hasCatalogs = uiState.catalogRows.isNotEmpty()
+    if (hasCollections && !hasCatalogs && uiState.installedAddonsCount > 0 && uiState.isLoading) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            LoadingIndicator()
+        }
+        return
+    }
+
+    if (carouselRows.list.isEmpty()) {
+        if (uiState.heroSectionEnabled && uiState.heroItems.isNotEmpty()) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                com.nuvio.tv.ui.components.HeroCarousel(
+                    items = uiState.heroItems.asStable(),
+                    onItemClick = { item ->
+                        onNavigateToDetail(item.id, item.apiType, "")
+                    },
+                    onItemFocus = onItemFocus
+                )
+            }
+        }
+        return
+    }
+
     val carouselLookups = presentation.lookups
     val rowIndexByKey = carouselLookups.rowIndexByKey
     val rowByKey = carouselLookups.rowByKey
@@ -154,6 +181,9 @@ fun ModernHomeContent(
         initialFirstVisibleItemIndex = focusState.verticalScrollIndex,
         initialFirstVisibleItemScrollOffset = focusState.verticalScrollOffset
     )
+    val isVerticalRowsScrollingState = remember(verticalRowListState) {
+        derivedStateOf { verticalRowListState.isScrollInProgress }
+    }
 
     val rowListStates = remember { mutableStateMapOf<String, LazyListState>() }
     val loadMoreRequestedTotals = remember { mutableStateMapOf<String, Int>() }
@@ -207,11 +237,6 @@ fun ModernHomeContent(
     val focusedHeroMediaNonce = remember { mutableIntStateOf(0) }
     var endedCollectionHeroVideoPlaybackKey by remember { mutableStateOf<String?>(null) }
     val expansionInteractionNonce = remember { mutableIntStateOf(0) }
-
-    val hasCollections = remember(uiState.homeRows) {
-        uiState.homeRows.any { it is HomeRow.CollectionRow }
-    }
-    val hasCatalogs = uiState.catalogRows.isNotEmpty()
 
 
     LaunchedEffect(scrollToTopTrigger) {
@@ -460,6 +485,7 @@ fun ModernHomeContent(
     val latestHeroRow by rememberUpdatedState(activeRow)
     val latestHeroIndex by rememberUpdatedState(clampedActiveItemIndex)
     LaunchedEffect(activeHeroItemKey, verticalRowListState) {
+        if (verticalRowListState.isScrollInProgress) return@LaunchedEffect
         val targetHeroKey = activeHeroItemKey ?: return@LaunchedEffect
         val settleDelayMs = heroFocusSettleDelayMs.longValue
         delay(settleDelayMs)
@@ -535,34 +561,7 @@ fun ModernHomeContent(
     val screenWidth = localConfiguration.screenWidthDp.dp
     val screenHeight = localConfiguration.screenHeightDp.dp
 
-    if (hasCollections && !hasCatalogs && uiState.installedAddonsCount > 0 && uiState.isLoading) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            LoadingIndicator()
-        }
-        return
-    }
-
-    if (carouselRows.list.isEmpty()) {
-        if (uiState.heroSectionEnabled && uiState.heroItems.isNotEmpty()) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                com.nuvio.tv.ui.components.HeroCarousel(
-                    items = uiState.heroItems,
-                    onItemClick = { item ->
-                        onNavigateToDetail(item.id, item.apiType, "")
-                    },
-                    onItemFocus = onItemFocus
-                )
-            }
-        }
-        return
-    }
-
     Box(modifier = Modifier.fillMaxSize()) {
-        val showMainContent = carouselRows.list.isNotEmpty()
-        val showHeroCarousel = !showMainContent && uiState.heroSectionEnabled && uiState.heroItems.isNotEmpty()
-        val showLoading = hasCollections && !hasCatalogs && uiState.installedAddonsCount > 0 && uiState.isLoading
-
-        if (showMainContent) {
             val posterCardCornerRadius = remember(uiState.posterCardCornerRadiusDp) { uiState.posterCardCornerRadiusDp.dp }
             val rowHorizontalPadding = 52.dp
 
@@ -957,9 +956,6 @@ fun ModernHomeContent(
             val stableTrailerPreviewUrls = remember(trailerPreviewUrls) { trailerPreviewUrls.asStable() }
             val stableTrailerPreviewAudioUrls = remember(trailerPreviewAudioUrls) { trailerPreviewAudioUrls.asStable() }
 
-            val isVerticalRowsScrollingLambda = remember(verticalRowListState) {
-                { verticalRowListState.isScrollInProgress }
-            }
             val stableOnRequestLazyCatalogLoad = remember(onRequestLazyCatalogLoad) {
                 { catalogKey: String -> onRequestLazyCatalogLoad(catalogKey) }
             }
@@ -1032,26 +1028,9 @@ fun ModernHomeContent(
                 focusedHeroMediaNonce = focusedHeroMediaNonce,
                 onFocusedHeroMediaNonceChange = onFocusedHeroMediaNonceChangeLambda,
                 onExpansionInteractionNonceChange = onExpansionInteractionNonceChangeLambda,
-                isVerticalRowsScrolling = isVerticalRowsScrollingLambda,
+                isVerticalRowsScrollingState = isVerticalRowsScrollingState,
                 modifier = Modifier.align(Alignment.BottomStart)
             )
-        }
-
-        if (showHeroCarousel) {
-            com.nuvio.tv.ui.components.HeroCarousel(
-                items = uiState.heroItems,
-                onItemClick = { item ->
-                    onNavigateToDetail(item.id, item.apiType, "")
-                },
-                onItemFocus = onItemFocus
-            )
-        }
-
-        if (showLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                LoadingIndicator()
-            }
-        }
     }
 
     val selectedOptionsItem = optionsItem.value

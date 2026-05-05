@@ -108,7 +108,6 @@ import kotlin.math.abs
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import com.nuvio.tv.ui.util.LocalRecompositionHighlighterEnabled
 import com.nuvio.tv.ui.util.recompositionHighlighter
 import com.nuvio.tv.ui.util.StableMap
 import com.nuvio.tv.ui.util.StableRef
@@ -120,7 +119,7 @@ private const val MODERN_HORIZONTAL_FOCUS_DEBOUNCE_MS = 140L
 private const val POSTER_PREFETCH_DISTANCE = 2
 private const val NESTED_PREFETCH_COUNT = 2
 
-internal val LocalVerticalRowsScrolling = compositionLocalOf { false }
+internal val LocalVerticalRowsScrolling = compositionLocalOf<State<Boolean>> { mutableStateOf(false) }
 
 /**
  * True while the user is actively "fast-scrolling" — i.e. holding DPAD_LEFT/RIGHT or
@@ -395,7 +394,7 @@ internal fun ModernRowSection(
     row: HeroCarouselRow,
     isActiveRow: () -> Boolean,
     rowFocusRequester: FocusRequester,
-    isVerticalRowsScrolling: () -> Boolean,
+    isVerticalRowsScrollingState: State<Boolean>,
     rowTitleBottom: Dp,
     defaultBringIntoViewSpec: BringIntoViewSpec,
     focusStateCatalogRowScrollIndex: Int,
@@ -445,7 +444,6 @@ internal fun ModernRowSection(
     @Suppress("NAME_SHADOWING") val rowListStates = rowListStates.value
     @Suppress("NAME_SHADOWING") val loadMoreRequestedTotals = loadMoreRequestedTotals.value
     @Suppress("NAME_SHADOWING") val itemFocusRequesters = itemFocusRequesters.value
-    val highlighterEnabled = LocalRecompositionHighlighterEnabled.current
     val rowKey = row.key
     // Blocks vertical focus exit during placeholder→data transition.
     val blockingFocusExit = remember { mutableStateOf(false) }
@@ -575,7 +573,7 @@ internal fun ModernRowSection(
         LaunchedEffect(
             row.key,
             isActiveRow,
-            isVerticalRowsScrolling,
+            isVerticalRowsScrollingState,
             rowItemCount,
             portraitCatalogCardWidth,
             portraitCatalogCardHeight,
@@ -584,7 +582,7 @@ internal fun ModernRowSection(
             continueWatchingCardWidth,
             continueWatchingCardHeight
         ) {
-            if (!isActiveRow() || isVerticalRowsScrolling()) return@LaunchedEffect
+            if (!isActiveRow() || isVerticalRowsScrollingState.value) return@LaunchedEffect
             delay(150) // Wait before spamming image requests to survive rapid vertical D-pad scrolls!
             val cwWidthPx = with(density) { continueWatchingCardWidth.roundToPx() }
             val cwHeightPx = with(density) { continueWatchingCardHeight.roundToPx() }
@@ -740,7 +738,7 @@ internal fun ModernRowSection(
             LazyRow(
                 state = rowListState,
                 modifier = Modifier
-                    .then(if (highlighterEnabled) Modifier.recompositionHighlighter() else Modifier)
+                    .recompositionHighlighter()
                     .focusRequester(rowFocusRequester)
                     .focusRestorer {
                         val savedIdx = focusedItemByRow[row.key] ?: 0
@@ -914,7 +912,6 @@ private fun ModernCarouselCard(
     onTrailerEnded: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val highlighterEnabled = LocalRecompositionHighlighterEnabled.current
     val cardShape = remember(cardCornerRadius) { RoundedCornerShape(cardCornerRadius) }
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -1028,14 +1025,14 @@ private fun ModernCarouselCard(
     }
     var landscapeLogoLoadFailed by remember(effectiveLogoUrl) { mutableStateOf(false) }
     val shouldPlayTrailerInCard = playTrailerInExpandedCard && !trailerPreviewUrl.isNullOrBlank()
-    val isVerticalRowsScrolling = LocalVerticalRowsScrolling.current
+    val isVerticalRowsScrollingState = LocalVerticalRowsScrolling.current
 
     // Coil 3's AsyncImage is skippable — it compares ImageRequest structurally and won't
     // re-trigger a failed memory-only request when policies change. We solve this by
     // building a restricted request during scroll and using Compose's `key()` on the
     // scroll state around AsyncImage so that stopping the scroll destroys the old
     // (memory-only) AsyncImage and creates a fresh one with the full request.
-    val scrollAwareImageModel = if (!isVerticalRowsScrolling || imageModel == null) {
+    val scrollAwareImageModel = if (!isVerticalRowsScrollingState.value || imageModel == null) {
         imageModel
     } else {
         remember(imageModel) {
@@ -1048,7 +1045,7 @@ private fun ModernCarouselCard(
         }
     }
     // When true, wrap AsyncImage in key(scrollPhaseKey) to force re-creation on scroll stop.
-    val scrollPhaseKey = isVerticalRowsScrolling
+    val scrollPhaseKey = isVerticalRowsScrollingState.value
 
     val hasImage = !imageUrl.isNullOrBlank()
     val hasLandscapeLogo =
@@ -1098,7 +1095,7 @@ private fun ModernCarouselCard(
     Column(
         modifier = modifier
             .width(animatedCardWidth)
-            .then(if (highlighterEnabled) Modifier.recompositionHighlighter() else Modifier),
+            .recompositionHighlighter(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Card(

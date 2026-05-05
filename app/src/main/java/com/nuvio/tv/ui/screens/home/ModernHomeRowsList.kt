@@ -47,7 +47,6 @@ import com.nuvio.tv.ui.util.StableList
 import com.nuvio.tv.ui.util.StableMap
 import com.nuvio.tv.ui.util.StableRef
 import com.nuvio.tv.ui.util.dpadVerticalFastScroll
-import com.nuvio.tv.ui.util.LocalRecompositionHighlighterEnabled
 import com.nuvio.tv.ui.util.recompositionHighlighter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -63,7 +62,7 @@ import kotlinx.coroutines.withContext
 )
 @Composable
 internal fun ModernHomeRowsList(
-    isVerticalRowsScrolling: () -> Boolean,
+    isVerticalRowsScrollingState: State<Boolean>,
     carouselRows: StableList<HeroCarouselRow>,
     verticalRowListState: LazyListState,
     focusedItemByRow: StableRef<MutableMap<String, Int>>,
@@ -145,11 +144,10 @@ internal fun ModernHomeRowsList(
     val density = LocalDensity.current
     val context = LocalContext.current
     val verticalPrefetchImageLoader = context.imageLoader
-    val highlighterEnabled = LocalRecompositionHighlighterEnabled.current
 
     LaunchedEffect(verticalPrefetchImageLoader, density) {
         val prefetchAheadRows = 1
-        val prefetchItemsPerRow = 3
+        val prefetchItemsPerRow = 1
         snapshotFlow {
             verticalRowListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
         }
@@ -162,12 +160,13 @@ internal fun ModernHomeRowsList(
                         for (i in 0 until minOf(prefetchItemsPerRow, row.items.list.size)) {
                             val item = row.items.list[i]
                             val url = item.imageUrl ?: continue
-                            val metrics = item.catalogCardMetrics(
+                            val metrics = item.catalogCardRequestMetrics(
                                 useLandscapePosters = useLandscapePosters,
                                 portraitCardWidth = portraitCatalogCardWidth,
                                 portraitCardHeight = portraitCatalogCardHeight,
                                 landscapeCardWidth = landscapeCatalogCardWidth,
-                                landscapeCardHeight = landscapeCatalogCardHeight
+                                landscapeCardHeight = landscapeCatalogCardHeight,
+                                expandEnabled = effectiveExpandEnabled
                             )
                             val wPx = with(density) { metrics.width.roundToPx() }
                             val hPx = with(density) { metrics.height.roundToPx() }
@@ -242,13 +241,14 @@ internal fun ModernHomeRowsList(
 
     CompositionLocalProvider(
         LocalBringIntoViewSpec provides verticalRowBringIntoViewSpec,
-        LocalFastScrollActive provides isFastScrolling.value
+        LocalFastScrollActive provides isFastScrolling.value,
+        LocalVerticalRowsScrolling provides isVerticalRowsScrollingState
     ) {
         LazyColumn(
             state = verticalRowListState,
             modifier = modifier
                 .fillMaxWidth()
-                .then(if (highlighterEnabled) Modifier.recompositionHighlighter() else Modifier)
+                .recompositionHighlighter()
                 .height(rowsViewportHeight)
                 .padding(bottom = catalogBottomPadding)
                 .clipToBounds()
@@ -407,7 +407,7 @@ internal fun ModernHomeRowsList(
                     onLoadMoreCatalog = onLoadMoreCatalog,
                     onBackdropInteraction = onBackdropInteraction,
                     onExpandedCatalogFocusKeyChange = onExpandedCatalogFocusKeyChange,
-                    isVerticalRowsScrolling = isVerticalRowsScrolling,
+                    isVerticalRowsScrollingState = isVerticalRowsScrollingState,
                     itemFocusRequesters = stableItemFocusRequestersByRow.getOrPut(row.key) {
                         StableRef(mutableMapOf())
                     }

@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyListPrefetchStrategy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -33,6 +34,7 @@ import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalDensity
 import com.nuvio.tv.ui.util.dpadVerticalFastScroll
+import com.nuvio.tv.ui.util.asStable
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import com.nuvio.tv.domain.model.MetaPreview
@@ -288,7 +290,7 @@ fun ClassicHomeContent(
     val latestOnRequestLazyCatalogLoad = rememberUpdatedState(onRequestLazyCatalogLoad)
     val latestVisibleHomeRows = rememberUpdatedState(visibleHomeRows)
     LaunchedEffect(columnListState) {
-        val prefetchAhead = 2
+        val prefetchAhead = 1
         snapshotFlow {
             val scrolling = columnListState.isScrollInProgress
             val info = columnListState.layoutInfo
@@ -317,9 +319,13 @@ fun ClassicHomeContent(
         }
     }
 
+    val isVerticalScrollingState = remember(columnListState) {
+        derivedStateOf { columnListState.isScrollInProgress }
+    }
     CompositionLocalProvider(
         LocalBringIntoViewSpec provides verticalBringIntoViewSpec,
-        LocalFastScrollActive provides isFastScrolling
+        LocalFastScrollActive provides isFastScrolling,
+        LocalVerticalRowsScrolling provides isVerticalScrollingState
     ) {
     Box(modifier = Modifier.fillMaxSize()) {
     ClassicFocusGradientBackdrop(
@@ -385,7 +391,7 @@ fun ClassicHomeContent(
         if (heroVisible) {
             item(key = "hero_carousel", contentType = "hero") {
                 HeroCarousel(
-                    items = uiState.heroItems,
+                    items = uiState.heroItems.asStable(),
                     focusRequester = if (shouldRequestInitialFocus) heroFocusRequester else null,
                     modifier = Modifier.onFocusChanged {
                         if (it.hasFocus && uiState.classicFocusGradientEnabled) {
