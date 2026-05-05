@@ -5,6 +5,7 @@ import android.os.SystemClock
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nuvio.tv.LocaleCache
 import com.nuvio.tv.core.player.StreamAutoPlayPolicy
 import com.nuvio.tv.core.tmdb.TmdbMetadataService
 import com.nuvio.tv.core.tmdb.TmdbService
@@ -110,6 +111,15 @@ class HomeViewModel @Inject constructor(
     private val _scrollToTopTrigger = MutableStateFlow(0)
     val scrollToTopTrigger: StateFlow<Int> = _scrollToTopTrigger.asStateFlow()
 
+    internal val _currentLocaleTag = MutableStateFlow(LocaleCache.localeTag)
+
+    fun notifyLocaleChanged() {
+        val tag = LocaleCache.localeTag
+        if (_currentLocaleTag.value != tag) {
+            _currentLocaleTag.value = tag
+        }
+    }
+
     fun requestScrollToTop() {
         clearFocusState()
         _gridFocusState.value = HomeScreenFocusState()
@@ -137,6 +147,7 @@ class HomeViewModel @Inject constructor(
     internal var collectionsCache: List<Collection> = emptyList()
     internal var homeCatalogOrderKeys: List<String> = emptyList()
     internal var disabledHomeCatalogKeys: Set<String> = emptySet()
+    internal var followAddonsOrderEnabled: Boolean = false
     internal var customCatalogTitles: Map<String, String> = emptyMap()
     internal var currentHeroCatalogKeys: List<String> = emptyList()
     internal var catalogUpdateJob: Job? = null
@@ -239,6 +250,7 @@ class HomeViewModel @Inject constructor(
             observeModernHomePresentation()
             observeExternalMetaPrefetchPreference()
             loadHomeCatalogOrderPreference()
+            loadFollowAddonsOrder()
             loadDisabledHomeCatalogPreference()
             loadCustomCatalogTitles()
             observeLibraryState()
@@ -345,6 +357,26 @@ class HomeViewModel @Inject constructor(
                     _uiState.update { it.copy(blurUnwatchedEpisodes = enabled) }
                 }
         }
+        viewModelScope.launch {
+            layoutPreferenceDataStore.useEpisodeThumbnailsInCw
+                .distinctUntilChanged()
+                .collect { enabled ->
+                    _uiState.update { it.copy(useEpisodeThumbnailsInCw = enabled) }
+                }
+        }
+        // When "next up from furthest episode" changes, clear CW caches and retrigger pipeline
+        viewModelScope.launch {
+            var initial = true
+            layoutPreferenceDataStore.nextUpFromFurthestEpisode
+                .distinctUntilChanged()
+                .collect {
+                    if (initial) {
+                        initial = false
+                        return@collect
+                    }
+                    clearAllCwInMemoryCaches()
+                }
+        }
     }
 
     private fun observeMemoryOnlyVerticalScroll() {
@@ -376,6 +408,8 @@ class HomeViewModel @Inject constructor(
     fun preloadAdjacentItem(item: MetaPreview) = preloadAdjacentItemPipeline(item)
 
     private fun loadHomeCatalogOrderPreference() = loadHomeCatalogOrderPreferencePipeline()
+
+    private fun loadFollowAddonsOrder() = loadFollowAddonsOrderPipeline()
 
     private fun loadDisabledHomeCatalogPreference() = loadDisabledHomeCatalogPreferencePipeline()
 

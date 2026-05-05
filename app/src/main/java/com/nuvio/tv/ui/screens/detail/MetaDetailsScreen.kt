@@ -68,6 +68,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.nuvio.tv.ui.util.recompositionHighlighter
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListPrefetchStrategy
 import androidx.compose.foundation.lazy.LazyRow
@@ -168,18 +169,10 @@ private fun resolveDetailReturnEpisodeFocusTarget(
 
 private const val USER_INTERACTION_DISPATCH_DEBOUNCE_MS = 120L
 
-private val DETAIL_YEAR_RANGE_REGEX = Regex("""^((19|20)\d{2})\s*[-–]\s*((19|20)\d{2})?$""")
 
 private fun formatDetailYearRange(releaseInfo: String?): String? {
     if (releaseInfo.isNullOrBlank()) return null
-    val trimmed = releaseInfo.trim()
-    val match = DETAIL_YEAR_RANGE_REGEX.find(trimmed)
-    if (match != null) {
-        val startYear = match.groupValues[1]
-        val endYear = match.groupValues[3]
-        return if (endYear.isNotBlank()) "$startYear–$endYear" else startYear
-    }
-    return Regex("""\b(19|20)\d{2}\b""").find(trimmed)?.value ?: trimmed
+    return releaseInfo.trim()
 }
 
 private fun applyDither(bmp: android.graphics.Bitmap) {
@@ -1512,7 +1505,9 @@ private fun MetaDetailsContent(
 
         // Single scrollable column with hero + content
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .recompositionHighlighter(),
             state = listState
         ) {
             // Hero as first item in the lazy column

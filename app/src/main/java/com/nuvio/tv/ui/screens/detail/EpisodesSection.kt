@@ -82,8 +82,10 @@ import com.nuvio.tv.domain.model.Video
 import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.theme.NuvioColors
 import com.nuvio.tv.ui.theme.NuvioTheme
+import com.nuvio.tv.ui.theme.ThemeColors
 import android.text.format.DateFormat
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.shadow
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -284,9 +286,6 @@ fun EpisodesRow(
         episodeFocusRequesters.keys.retainAll(episodeIds)
     }
 
-    // Track the last focused episode requester for focus restoration
-    var lastFocusedEpisodeRequester by remember { androidx.compose.runtime.mutableStateOf<FocusRequester?>(null) }
-
     LaunchedEffect(restoreFocusToken, restoreEpisodeId, restoreTargetRequester, dedupedEpisodes) {
         if (restoreFocusToken <= 0 || restoreEpisodeId.isNullOrBlank()) return@LaunchedEffect
         if (dedupedEpisodes.none { it.id == restoreEpisodeId }) return@LaunchedEffect
@@ -295,7 +294,6 @@ fun EpisodesRow(
             val offsetPx = with(density) { (cardMetrics.cardWidth * 2f / 3f - cardMetrics.itemSpacing).roundToPx() }
             lazyListState.scrollToItem(index, scrollOffset = -offsetPx)
         }
-        lastFocusedEpisodeRequester = restoreTargetRequester
         restoreTargetRequester?.requestFocusAfterFrames()
     }
 
@@ -305,18 +303,12 @@ fun EpisodesRow(
         if (index < 0) return@LaunchedEffect
         val offsetPx = with(density) { (cardMetrics.cardWidth * 2f / 3f - cardMetrics.itemSpacing).roundToPx() }
         lazyListState.scrollToItem(index, scrollOffset = -offsetPx)
-        // Reset the focus restorer target so it doesn't point at an off-screen episode
-        // after the list scrolled to a different position.
-        lastFocusedEpisodeRequester = episodeFocusRequesters[scrollToEpisodeId]
         onScrollToEpisodeHandled()
     }
 
     LazyRow(
         modifier = Modifier
             .fillMaxWidth()
-            .focusRestorer {
-                lastFocusedEpisodeRequester ?: FocusRequester.Default
-            }
             .onPreviewKeyEvent { event ->
                 val native = event.nativeKeyEvent
                 val isHorizontalKey = native.keyCode == AndroidKeyEvent.KEYCODE_DPAD_LEFT ||
@@ -354,7 +346,6 @@ fun EpisodesRow(
             val episodeOnClick = remember(episode.id) { { onEpisodeClick(episode) } }
             val episodeOnLongPress = remember(episode.id) { { optionsEpisode = episode } }
             val episodeOnFocused = remember(episode.id) { {
-                lastFocusedEpisodeRequester = episodeFocusRequester
                 onEpisodeFocused(episode.id)
             } }
             val isRestoreTarget = episode.id == restoreEpisodeId
@@ -467,7 +458,7 @@ private fun EpisodeCard(
     val isWatched = remember(watchProgress, isMarkedWatched) { watchProgress?.isCompleted() == true || isMarkedWatched }
     val shouldBlur = remember(blurUnwatched, isWatched) { blurUnwatched && !isWatched }
     val progressPercent = remember(watchProgress) { watchProgress?.progressPercentage ?: 0f }
-    val showProgress = remember(progressPercent) { progressPercent >= 0.02f && progressPercent < 0.85f }
+    val showProgress = remember(watchProgress) { watchProgress?.isInProgress() == true }
     val showCompletedBadge = isWatched
     val showNotStartedBadge = remember(showCompletedBadge, progressPercent) { !showCompletedBadge && progressPercent < 0.02f }
     val isUnavailable = remember(episode.available) { episode.available == false }
@@ -817,13 +808,14 @@ private fun EpisodeCard(
                             top = cardMetrics.statusBadgeInset
                         )
                         .size(cardMetrics.statusBadgeSize)
-                        .background(primaryColor, CircleShape),
+                        .shadow(10.dp, shape = CircleShape, spotColor = Color.Transparent)
+                        .background(NuvioColors.Secondary, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Check,
                         contentDescription = strCdWatched,
-                        tint = Color.White,
+                        tint = if (NuvioColors.Secondary == ThemeColors.White.secondary) Color.Black else Color.White,
                         modifier = Modifier.size(cardMetrics.statusIconSize)
                     )
                 }

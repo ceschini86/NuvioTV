@@ -60,6 +60,7 @@ class StreamScreenViewModel @Inject constructor(
     private var directAutoPlayFlowEnabledForSession = false
     private var streamLoadJob: Job? = null
     private var sourceChipErrorDismissJob: Job? = null
+    private var pendingCacheSaveJob: Job? = null
 
     private val videoId: String = savedStateHandle["videoId"] ?: ""
     private val contentType: String = savedStateHandle["contentType"] ?: ""
@@ -377,8 +378,10 @@ class StreamScreenViewModel @Inject constructor(
                             lastSuccessData = result.data
                             applySuccess(result.data, isAllLoaded = false)
                             if (timeoutElapsed && !autoSelectTriggered) {
-                                autoSelectTriggered = true
                                 applySuccess(result.data, isAllLoaded = true)
+                                if (resolvedAutoPlayTarget) {
+                                    autoSelectTriggered = true
+                                }
                             }
                         }
                         is NetworkResult.Error -> {
@@ -434,8 +437,10 @@ class StreamScreenViewModel @Inject constructor(
             }
             timeoutElapsed = true
             if (!autoSelectTriggered && lastSuccessData != null) {
-                autoSelectTriggered = true
                 applySuccess(lastSuccessData!!, isAllLoaded = true)
+                if (resolvedAutoPlayTarget) {
+                    autoSelectTriggered = true
+                }
             }
 
             // Hard wall-clock fallback: if the upstream stream flow never terminates
@@ -727,7 +732,7 @@ class StreamScreenViewModel @Inject constructor(
 
         val url = playbackInfo.url
         if (!url.isNullOrBlank() && !playbackInfo.isExternal) {
-            viewModelScope.launch {
+            pendingCacheSaveJob = viewModelScope.launch {
                 streamLinkCacheDataStore.save(
                     contentKey = streamCacheKey,
                     url = url,
@@ -742,6 +747,10 @@ class StreamScreenViewModel @Inject constructor(
         }
 
         return playbackInfo
+    }
+
+    suspend fun awaitStreamLinkCacheSave() {
+        pendingCacheSaveJob?.join()
     }
 
     override fun onCleared() {
