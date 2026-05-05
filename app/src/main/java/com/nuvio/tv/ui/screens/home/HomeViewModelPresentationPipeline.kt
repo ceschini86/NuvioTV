@@ -481,6 +481,11 @@ internal fun HomeViewModel.onItemFocusPipeline(item: MetaPreview) {
         } finally {
             if (_enrichingItemId.value == item.id) {
                 setEnrichingItemId(null)
+                // If enrichment completed but no enriched data exists for this item,
+                // mark it as failed so the UI can show addon data immediately.
+                if (item.id !in _enrichedPreviews.value) {
+                    _failedEnrichmentIds.value = _failedEnrichmentIds.value + item.id
+                }
             }
         }
     }

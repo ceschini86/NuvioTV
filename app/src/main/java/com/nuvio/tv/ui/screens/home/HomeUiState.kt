@@ -57,6 +57,7 @@ data class HomeUiState(
     val memoryOnlyVerticalScroll: Boolean = false,
     val blurUnwatchedEpisodes: Boolean = false,
     val useEpisodeThumbnailsInCw: Boolean = true,
+    val heroEnrichmentEnabled: Boolean = false,
     val startupAuthNotice: StartupAuthNotice? = null,
     val homeRows: List<HomeRow> = emptyList()
 )

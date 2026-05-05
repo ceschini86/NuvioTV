@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -52,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import com.nuvio.tv.ui.util.StableList
 import com.nuvio.tv.ui.util.recompositionHighlighter
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
@@ -60,6 +62,8 @@ import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.ui.theme.NuvioColors
+import com.nuvio.tv.ui.util.LocalRecompositionHighlighterEnabled
+import com.nuvio.tv.ui.util.recompositionHighlighter
 import kotlinx.coroutines.delay
 
 private const val AUTO_ADVANCE_INTERVAL_MS = 10000L
@@ -68,7 +72,7 @@ private val YEAR_REGEX = Regex("""\b\d{4}\b""")
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun HeroCarousel(
-    items: List<MetaPreview>,
+    items: StableList<MetaPreview>,
     onItemClick: (MetaPreview) -> Unit,
     onItemFocus: (MetaPreview) -> Unit = {},
     focusRequester: FocusRequester? = null,
@@ -77,13 +81,15 @@ fun HeroCarousel(
 ) {
     if (items.isEmpty()) return
 
+    val currentOnItemClick by rememberUpdatedState(onItemClick)
+    val currentOnItemFocus by rememberUpdatedState(onItemFocus)
     var activeIndex by remember { mutableIntStateOf(0) }
     var isFocused by remember { mutableStateOf(false) }
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
 
     LaunchedEffect(activeIndex, isFocused) {
         if (!isFocused) return@LaunchedEffect
-        items.getOrNull(activeIndex)?.let { onItemFocus(it) }
+        items.getOrNull(activeIndex)?.let { currentOnItemFocus(it) }
     }
 
     // Auto-advance when not focused — delay first advance to 20s so initial GPU load settles
@@ -132,7 +138,7 @@ fun HeroCarousel(
                 } else if (event.type == KeyEventType.KeyUp &&
                     (event.key == Key.DirectionCenter || event.key == Key.Enter)
                 ) {
-                    onItemClick(items[activeIndex])
+                    currentOnItemClick(items[activeIndex])
                     true
                 } else {
                     false
@@ -149,7 +155,7 @@ fun HeroCarousel(
             HeroCarouselSlide(item = item)
         }
 
-        // Indicator dots — pre-compute colors + shape to avoid reallocation per dot
+        // Indicator dots — optimized to minimize recompositions and layout passes
         val focusRing = NuvioColors.FocusRing
         val dotColorFocusedInactive = remember(focusRing) { focusRing.copy(alpha = 0.4f) }
         val dotColorUnfocusedInactive = remember { Color.White.copy(alpha = 0.3f) }
@@ -160,27 +166,26 @@ fun HeroCarousel(
                 .padding(bottom = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items.forEachIndexed { index, _ ->
+            repeat(items.size) { index ->
                 val isActive = index == activeIndex
+                val dotBackground = when {
+                    isFocused && isActive -> focusRing
+                    isFocused -> dotColorFocusedInactive
+                    isActive -> focusRing
+                    else -> dotColorUnfocusedInactive
+                }
                 val dotWidth = when {
                     isFocused && isActive -> 32.dp
                     isActive -> 24.dp
                     else -> 12.dp
                 }
                 val dotHeight = if (isFocused && isActive) 6.dp else 4.dp
+                
                 Box(
                     modifier = Modifier
-                        .width(dotWidth)
-                        .height(dotHeight)
+                        .size(width = dotWidth, height = dotHeight)
                         .clip(dotShape)
-                        .background(
-                            when {
-                                isFocused && isActive -> focusRing
-                                isFocused -> dotColorFocusedInactive
-                                isActive -> focusRing
-                                else -> dotColorUnfocusedInactive
-                            }
-                        )
+                        .background(dotBackground)
                 )
             }
         }
@@ -192,6 +197,7 @@ fun HeroCarousel(
 private fun HeroCarouselSlide(
     item: MetaPreview
 ) {
+    val highlighterEnabled = LocalRecompositionHighlighterEnabled.current
     val context = LocalContext.current
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
@@ -249,7 +255,7 @@ private fun HeroCarouselSlide(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .recompositionHighlighter()
+            .then(if (highlighterEnabled) Modifier.recompositionHighlighter() else Modifier)
     ) {
         // Background image
         AsyncImage(

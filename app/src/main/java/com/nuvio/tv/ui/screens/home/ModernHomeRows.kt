@@ -42,7 +42,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.graphics.Brush
@@ -64,6 +63,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalDensity
@@ -110,14 +110,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import com.nuvio.tv.ui.util.recompositionHighlighter
 import com.nuvio.tv.ui.util.StableMap
+import com.nuvio.tv.ui.util.StableRef
 import com.nuvio.tv.ui.util.asStable
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.debounce
 
 private const val MODERN_HORIZONTAL_FOCUS_DEBOUNCE_MS = 140L
-private const val POSTER_PREFETCH_DISTANCE = 4
+private const val POSTER_PREFETCH_DISTANCE = 2
+private const val NESTED_PREFETCH_COUNT = 2
 
-internal val LocalVerticalRowsScrolling = compositionLocalOf { false }
+internal val LocalVerticalRowsScrolling = compositionLocalOf<State<Boolean>> { mutableStateOf(false) }
 
 /**
  * True while the user is actively "fast-scrolling" — i.e. holding DPAD_LEFT/RIGHT or
@@ -135,6 +137,7 @@ internal val LocalFastScrollActive = compositionLocalOf { false }
 private fun ModernContinueWatchingRowItem(
     payload: ModernPayload.ContinueWatching,
     requester: FocusRequester,
+    isTargetItem: Boolean = false,
     cardWidth: Dp,
     imageHeight: Dp,
     blurUnwatchedEpisodes: Boolean,
@@ -147,16 +150,26 @@ private fun ModernContinueWatchingRowItem(
     val item = payload.item
     val onClick = remember(item) { { onContinueWatchingClick(item) } }
     val onLongPress = remember(item) { { onShowOptions(item) } }
-    var focusEventId by remember { mutableStateOf(0) }
+    var focusEventId by remember { mutableIntStateOf(0) }
     var isCardFocused by remember { mutableStateOf(false) }
     val latestOnFocused by rememberUpdatedState(onFocused)
 
     LaunchedEffect(focusEventId, isCardFocused) {
         if (focusEventId == 0 || !isCardFocused) return@LaunchedEffect
+        
+        // Update global focus state immediately so "self-claiming" logic in other items
+        // knows this item is now the one in charge.
+        latestOnFocused()
+
         val targetEventId = focusEventId
         delay(MODERN_HORIZONTAL_FOCUS_DEBOUNCE_MS)
         if (!isCardFocused || focusEventId != targetEventId) return@LaunchedEffect
-        latestOnFocused()
+    }
+
+    LaunchedEffect(isTargetItem) {
+        if (isTargetItem && !isCardFocused) {
+            runCatching { requester.requestFocus() }
+        }
     }
 
     ContinueWatchingCard(
@@ -184,6 +197,7 @@ private fun ModernCatalogRowItem(
     item: ModernCarouselItem,
     payload: ModernPayload,
     requester: FocusRequester,
+    isTargetItem: Boolean = false,
     useLandscapePosters: Boolean,
     showLabels: Boolean,
     placeholderShimmerOffsetState: State<Float>?,
@@ -199,7 +213,8 @@ private fun ModernCatalogRowItem(
     isBackdropExpanded: () -> Boolean,
     expandedTrailerPreviewUrl: () -> String?,
     expandedTrailerPreviewAudioUrl: () -> String?,
-    isWatched: Boolean,
+    isCatalogItemWatched: (MetaPreview) -> Boolean,
+    isFocusTarget: Boolean = false,
     onFocused: () -> Unit,
     onItemFocus: (MetaPreview) -> Unit,
     onPreloadAdjacentItem: () -> Unit,
@@ -209,8 +224,7 @@ private fun ModernCatalogRowItem(
     onLongPress: () -> Unit,
     onBackdropInteraction: () -> Unit,
     onExpandedCatalogFocusKeyChange: (String?) -> Unit,
-    enrichedLogoUrl: String? = null,
-    enrichedBackdropUrl: String? = null,
+    enrichedPreviews: StableMap<String, MetaPreview>,
     modifier: Modifier = Modifier
 ) {
     val focusKey = when (payload) {
@@ -218,24 +232,47 @@ private fun ModernCatalogRowItem(
         is ModernPayload.CollectionFolder -> payload.focusKey
         is ModernPayload.ContinueWatching -> error("Unsupported payload for ModernCatalogRowItem")
     }
-    var focusEventId by remember(focusKey) { mutableStateOf(0) }
-    var isCardFocused by remember(focusKey) { mutableStateOf(false) }
+
+    val metaPreview = item.metaPreview
+    val isWatched by remember {
+        derivedStateOf { metaPreview?.let { isCatalogItemWatched(it) } ?: false }
+    }
+    val enrichedMeta by remember {
+        derivedStateOf { (payload as? ModernPayload.Catalog)?.itemId?.let { enrichedPreviews.map[it] } }
+    }
+    val enrichedLogoUrl = enrichedMeta?.logo
+    val enrichedBackdropUrl = enrichedMeta?.backdropUrl
+
+    var focusEventId by remember { mutableIntStateOf(0) }
+    var isCardFocused by remember { mutableStateOf(false) }
     val latestOnFocused by rememberUpdatedState(onFocused)
     val latestOnItemFocus by rememberUpdatedState(onItemFocus)
     val latestOnPreloadAdjacentItem by rememberUpdatedState(onPreloadAdjacentItem)
     val latestOnCatalogSelectionFocused by rememberUpdatedState(onCatalogSelectionFocused)
 
+    // Bump focusEventId to re-trigger selection reporting.
+    //LaunchedEffect(focusKey, isTargetItem) {
+    //    if (isTargetItem && isCardFocused) {
+    //        focusEventId++
+    //    }
+    //}
+
     LaunchedEffect(focusEventId, isCardFocused, focusKey) {
         if (focusEventId == 0 || !isCardFocused) {
             return@LaunchedEffect
         }
+
+        // Update global focus state immediately so "self-claiming" logic in other items
+        // knows this item is now the one in charge.
+        latestOnFocused()
+
         val targetEventId = focusEventId
         delay(MODERN_HORIZONTAL_FOCUS_DEBOUNCE_MS)
         if (!isCardFocused || focusEventId != targetEventId) {
             return@LaunchedEffect
         }
 
-        latestOnFocused()
+        // Heavy "settled" work (trailers, enrichment) remains debounced.
         item.metaPreview?.let { latestOnItemFocus(it) }
         latestOnPreloadAdjacentItem()
         when (payload) {
@@ -261,10 +298,18 @@ private fun ModernCatalogRowItem(
         }
     }
 
+    LaunchedEffect(isTargetItem) {
+        if (isTargetItem && !isCardFocused) {
+            runCatching { requester.requestFocus() }
+        }
+    }
+
     val suppressCardExpansionForHeroTrailer =
         effectiveAutoplayEnabled &&
                 trailerPlaybackTarget == FocusedPosterTrailerPlaybackTarget.HERO_MEDIA
-    val effectiveBackdropExpanded = isBackdropExpanded() && !suppressCardExpansionForHeroTrailer
+    val effectiveBackdropExpanded by remember(isBackdropExpanded, suppressCardExpansionForHeroTrailer) {
+        derivedStateOf { isBackdropExpanded() && !suppressCardExpansionForHeroTrailer }
+    }
 
     val isSidebarExpanded = LocalSidebarExpanded.current
     val playTrailerInExpandedCard =
@@ -272,11 +317,8 @@ private fun ModernCatalogRowItem(
             !isSidebarExpanded &&
             trailerPlaybackTarget == FocusedPosterTrailerPlaybackTarget.EXPANDED_CARD &&
             effectiveBackdropExpanded
-    val trailerPreviewUrl = if (playTrailerInExpandedCard) {
-        expandedTrailerPreviewUrl()
-    } else {
-        null
-    }
+    val trailerUrl = expandedTrailerPreviewUrl()
+    val trailerPreviewUrl = if (playTrailerInExpandedCard) trailerUrl else null
     val trailerPreviewAudioUrl = if (playTrailerInExpandedCard) {
         expandedTrailerPreviewAudioUrl()
     } else {
@@ -351,11 +393,14 @@ private fun ModernCatalogRowItem(
 internal fun ModernRowSection(
     row: HeroCarouselRow,
     isActiveRow: () -> Boolean,
-    isVerticalRowsScrolling: Boolean,
+    rowFocusRequester: FocusRequester,
+    isVerticalRowsScrollingState: State<Boolean>,
     rowTitleBottom: Dp,
     defaultBringIntoViewSpec: BringIntoViewSpec,
     focusStateCatalogRowScrollIndex: Int,
-    uiCaches: ModernHomeUiCaches,
+    focusedItemByRow: StableRef<MutableMap<String, Int>>,
+    rowListStates: StableRef<MutableMap<String, LazyListState>>,
+    loadMoreRequestedTotals: StableRef<MutableMap<String, Int>>,
     pendingRowFocusKey: State<String?>,
     pendingRowFocusIndex: State<Int?>,
     pendingRowFocusNonce: State<Int>,
@@ -391,13 +436,14 @@ internal fun ModernRowSection(
     onNavigateToFolderDetail: (String, String) -> Unit,
     onLoadMoreCatalog: (String, String, String) -> Unit,
     onBackdropInteraction: () -> Unit,
-    onExpandedCatalogFocusKeyChange: (String?) -> Unit
+    onExpandedCatalogFocusKeyChange: (String?) -> Unit,
+    itemFocusRequesters: StableRef<MutableMap<Int, FocusRequester>> = StableRef(mutableMapOf())
 ) {
-    val focusedItemByRow = uiCaches.focusedItemByRow
-    val itemFocusRequesters = uiCaches.itemFocusRequesters
-    val rowListStates = uiCaches.rowListStates
-    val loadMoreRequestedTotals = uiCaches.loadMoreRequestedTotals
-
+    // Unwrap StableRef wrappers
+    @Suppress("NAME_SHADOWING") val focusedItemByRow = focusedItemByRow.value
+    @Suppress("NAME_SHADOWING") val rowListStates = rowListStates.value
+    @Suppress("NAME_SHADOWING") val loadMoreRequestedTotals = loadMoreRequestedTotals.value
+    @Suppress("NAME_SHADOWING") val itemFocusRequesters = itemFocusRequesters.value
     val rowKey = row.key
     // Blocks vertical focus exit during placeholder→data transition.
     val blockingFocusExit = remember { mutableStateOf(false) }
@@ -430,74 +476,32 @@ internal fun ModernRowSection(
         val rowListState = rowListStates.getOrPut(row.key) {
             LazyListState(
                 firstVisibleItemIndex = focusStateCatalogRowScrollIndex,
-                prefetchStrategy = LazyListPrefetchStrategy(nestedPrefetchItemCount = 4)
+                prefetchStrategy = LazyListPrefetchStrategy(nestedPrefetchItemCount = NESTED_PREFETCH_COUNT)
             )
         }
 
-        // When fresh data prepends new items to a row the user hasn't
-        // scrolled, snap back to position 0 so the newest content is visible.
         val firstItemKey = row.items.list.firstOrNull()?.key
-        LaunchedEffect(row.key, firstItemKey) {
-            if (firstItemKey == null) return@LaunchedEffect
-            val state = rowListState
-            // Only reset if the user hasn't scrolled at all.
-            if (state.firstVisibleItemIndex == 0 && state.firstVisibleItemScrollOffset == 0) {
-                state.scrollToItem(0)
-            }
-        }
 
         // When placeholder items are replaced by real data and this row
         // is the active row, re-request focus on the first real item.
-        val wasPlaceholderRef = remember { mutableStateOf(row.isLoading && firstItemKey?.startsWith("placeholder_") == true) }
+        val firstItemImageUrl = row.items.list.firstOrNull()?.imageUrl
+        val wasPlaceholderRef = remember { mutableStateOf(row.isLoading && firstItemImageUrl == "placeholder://empty") }
         val needsFocusRestore = remember { mutableStateOf(false) }
         
-        LaunchedEffect(row.isLoading, firstItemKey, isActiveRow) {
+        LaunchedEffect(row.isLoading, firstItemImageUrl, isActiveRow) {
             val wasPlaceholder = wasPlaceholderRef.value
-            val isNowReal = !row.isLoading || firstItemKey?.startsWith("placeholder_") != true
+            val isNowReal = !row.isLoading || firstItemImageUrl != "placeholder://empty"
             if (wasPlaceholder && isNowReal && isActiveRow()) {
                 needsFocusRestore.value = true
                 blockingFocusExit.value = true
             }
-            wasPlaceholderRef.value = row.isLoading && firstItemKey?.startsWith("placeholder_") == true
+            wasPlaceholderRef.value = row.isLoading && firstItemImageUrl == "placeholder://empty"
         }
 
-        // Restore focus after placeholder→data transition using a retry loop
-        // that starts immediately (no pre-delay) to minimize the visible jump.
+        // Restore focus after placeholder→data transition.
         LaunchedEffect(needsFocusRestore.value, row.key) {
             if (!needsFocusRestore.value) return@LaunchedEffect
             needsFocusRestore.value = false
-            if (row.items.list.isEmpty()) {
-                blockingFocusExit.value = false
-                return@LaunchedEffect
-            }
-            // Use index-based key matching the LazyRow key scheme
-            val targetStableKey = "${row.key}_0"
-            var focusRestored = false
-            repeat(15) { attempt ->
-                val requester = uiCaches.itemFocusRequesters[row.key]?.get(targetStableKey)
-                if (requester != null) {
-                    val ok = runCatching { requester.requestFocus(); true }.getOrDefault(false)
-                    if (ok) {
-                        blockingFocusExit.value = false
-                        focusRestored = true
-                        // Directly notify selection since the new composable's
-                        // focusEventId resets to 0 and won't fire on its own.
-                        onRowItemFocused(row.key, 0, false)
-                        val firstItem = row.items.list.firstOrNull()
-                        val firstPayload = firstItem?.payload as? ModernPayload.Catalog
-                        if (firstPayload != null && !firstPayload.itemId.startsWith("__placeholder_")) {
-                            onCatalogSelectionFocused(
-                                FocusedCatalogSelection(
-                                    focusKey = firstPayload.focusKey,
-                                    payload = firstPayload
-                                )
-                            )
-                        }
-                        return@LaunchedEffect
-                    }
-                }
-                withFrameNanos { }
-            }
             blockingFocusExit.value = false
         }
 
@@ -518,35 +522,8 @@ internal fun ModernRowSection(
             if (pendingRowFocusKey.value != row.key) return@LaunchedEffect
             val targetIndex = (pendingRowFocusIndex.value ?: 0)
                 .coerceIn(0, (row.items.list.size - 1).coerceAtLeast(0))
-            val targetStableKey = "${row.key}_$targetIndex"
-            val requester = uiCaches.requesterFor(row.key, targetStableKey)
-            var didFocus = false
-            var didScrollToTarget = false
-            repeat(20) {
-                didFocus = runCatching {
-                    requester.requestFocus()
-                    true
-                }.getOrDefault(false)
-                if (didFocus) {
-                    return@repeat
-                }
-                if (!didScrollToTarget) {
-                    runCatching { rowListState.scrollToItem(targetIndex) }
-                    didScrollToTarget = true
-                }
-                withFrameNanos { }
-            }
-            if (!didFocus) {
-                val fallbackIndex = rowListState.firstVisibleItemIndex
-                    .coerceIn(0, (row.items.list.size - 1).coerceAtLeast(0))
-                val fallbackStableKey = "${row.key}_$fallbackIndex"
-                didFocus = runCatching {
-                    uiCaches.requesterFor(row.key, fallbackStableKey).requestFocus()
-                    true
-                }.getOrDefault(false)
-            }
-            if (didFocus) {
-                onPendingRowFocusCleared()
+            if (!rowListState.isScrollInProgress) {
+                runCatching { rowListState.scrollToItem(targetIndex) }
             }
         }
 
@@ -596,7 +573,7 @@ internal fun ModernRowSection(
         LaunchedEffect(
             row.key,
             isActiveRow,
-            isVerticalRowsScrolling,
+            isVerticalRowsScrollingState,
             rowItemCount,
             portraitCatalogCardWidth,
             portraitCatalogCardHeight,
@@ -605,7 +582,7 @@ internal fun ModernRowSection(
             continueWatchingCardWidth,
             continueWatchingCardHeight
         ) {
-            if (!isActiveRow() || isVerticalRowsScrolling) return@LaunchedEffect
+            if (!isActiveRow() || isVerticalRowsScrollingState.value) return@LaunchedEffect
             delay(150) // Wait before spamming image requests to survive rapid vertical D-pad scrolls!
             val cwWidthPx = with(density) { continueWatchingCardWidth.roundToPx() }
             val cwHeightPx = with(density) { continueWatchingCardHeight.roundToPx() }
@@ -762,10 +739,12 @@ internal fun ModernRowSection(
                 state = rowListState,
                 modifier = Modifier
                     .recompositionHighlighter()
+                    .focusRequester(rowFocusRequester)
                     .focusRestorer {
-                        val savedIdx = (focusedItemByRow[rowKey] ?: 0)
-                            .coerceIn(0, (row.items.list.size - 1).coerceAtLeast(0))
-                        uiCaches.requesterFor(rowKey, "${row.key}_$savedIdx")
+                        val savedIdx = focusedItemByRow[row.key] ?: 0
+                        itemFocusRequesters[savedIdx]
+                            ?: itemFocusRequesters[0]
+                            ?: FocusRequester.Default
                     }
                     .focusGroup()
                     .then(
@@ -780,21 +759,38 @@ internal fun ModernRowSection(
             ) {
                 itemsIndexed(
                     items = row.items.list,
-                    key = { index, _ -> "${row.key}_$index" },
+                    key = { _, item -> item.key },
                     contentType = { _, item ->
                         when (val payload = item.payload) {
                             is ModernPayload.ContinueWatching -> "modern_cw_card"
-                            is ModernPayload.Catalog -> payload.itemType
+                            is ModernPayload.Catalog -> if (payload.itemId.startsWith("__placeholder_")) "placeholder" else payload.itemType
                             is ModernPayload.CollectionFolder -> "modern_collection_folder_card"
                         }
                     }
                 ) { index, item ->
-                    val stableItemKey = "${row.key}_$index"
-                    val requester = uiCaches.requesterFor(row.key, stableItemKey)
+                    val requester = itemFocusRequesters.getOrPut(index) { FocusRequester() }
                     val isContinueWatchingRow = row.key == MODERN_CONTINUE_WATCHING_ROW_KEY
                     val onFocused = remember(row.key, index, isContinueWatchingRow) {
-                        { onRowItemFocused(row.key, index, isContinueWatchingRow)
-                            focusedItemByRow[row.key] = index }
+                        {
+                            onRowItemFocused(row.key, index, isContinueWatchingRow)
+                            if (pendingRowFocusKey.value == row.key && (pendingRowFocusIndex.value ?: 0) == index) {
+                                onPendingRowFocusCleared()
+                            }
+                        }
+                    }
+
+                    val isTargetItem = remember(
+                        isActiveRow(),
+                        pendingRowFocusKey.value,
+                        pendingRowFocusIndex.value,
+                        row.key,
+                        index
+                    ) {
+                        val isPending = pendingRowFocusKey.value == row.key &&
+                            (pendingRowFocusIndex.value ?: 0) == index
+                        val isCurrent = isActiveRow() &&
+                            (focusedItemByRow[row.key] ?: 0) == index
+                        isPending || isCurrent
                     }
 
                     when (val payload = item.payload) {
@@ -802,6 +798,7 @@ internal fun ModernRowSection(
                             ModernContinueWatchingRowItem(
                                 payload = payload,
                                 requester = requester,
+                                isTargetItem = isTargetItem,
                                 cardWidth = continueWatchingCardWidth,
                                 imageHeight = continueWatchingCardHeight,
                                 blurUnwatchedEpisodes = blurUnwatchedEpisodes,
@@ -815,8 +812,8 @@ internal fun ModernRowSection(
                         is ModernPayload.Catalog,
                         is ModernPayload.CollectionFolder -> {
                             val nextCatalogItem = row.items.list.getOrNull(index + 1)?.metaPreview
+                            val prevCatalogItem = row.items.list.getOrNull(index - 1)?.metaPreview
                             val metaPreview = item.metaPreview
-                            val isWatched = metaPreview?.let(isCatalogItemWatched) ?: false
                             val onLongPress: () -> Unit = when {
                                 payload is ModernPayload.Catalog && metaPreview != null -> remember(metaPreview, payload.addonBaseUrl) {
                                     {
@@ -845,14 +842,11 @@ internal fun ModernRowSection(
                                 item = item,
                                 payload = payload,
                                 requester = requester,
+                                isTargetItem = isTargetItem,
                                 useLandscapePosters = useLandscapePosters,
                                 showLabels = showLabels,
                                 placeholderShimmerOffsetState = placeholderShimmerOffsetState,
                                 posterCardCornerRadius = posterCardCornerRadius,
-                                portraitCatalogCardWidth = portraitCatalogCardWidth,
-                                portraitCatalogCardHeight = portraitCatalogCardHeight,
-                                landscapeCatalogCardWidth = landscapeCatalogCardWidth,
-                                landscapeCatalogCardHeight = landscapeCatalogCardHeight,
                                 focusedPosterBackdropTrailerMuted = focusedPosterBackdropTrailerMuted,
                                 effectiveExpandEnabled = effectiveExpandEnabled,
                                 effectiveAutoplayEnabled = effectiveAutoplayEnabled,
@@ -860,11 +854,18 @@ internal fun ModernRowSection(
                                 isBackdropExpanded = isBackdropExpandedLambda,
                                 expandedTrailerPreviewUrl = expandedTrailerPreviewUrl,
                                 expandedTrailerPreviewAudioUrl = expandedTrailerPreviewAudioUrl,
-                                isWatched = isWatched,
+                                portraitCatalogCardWidth = portraitCatalogCardWidth,
+                                portraitCatalogCardHeight = portraitCatalogCardHeight,
+                                landscapeCatalogCardWidth = landscapeCatalogCardWidth,
+                                landscapeCatalogCardHeight = landscapeCatalogCardHeight,
+                                isCatalogItemWatched = isCatalogItemWatched,
                                 onFocused = onFocused,
                                 onItemFocus = onItemFocus,
-                                onPreloadAdjacentItem = remember(nextCatalogItem, onPreloadAdjacentItem) {
-                                     { nextCatalogItem?.let(onPreloadAdjacentItem) }
+                                onPreloadAdjacentItem = remember(nextCatalogItem, prevCatalogItem, onPreloadAdjacentItem) {
+                                     {
+                                         nextCatalogItem?.let(onPreloadAdjacentItem)
+                                         prevCatalogItem?.let(onPreloadAdjacentItem)
+                                     }
                                 },
                                 onCatalogSelectionFocused = onCatalogSelectionFocused,
                                 onNavigateToDetail = onNavigateToDetail,
@@ -872,8 +873,7 @@ internal fun ModernRowSection(
                                 onLongPress = onLongPress,
                                 onBackdropInteraction = onBackdropInteraction,
                                 onExpandedCatalogFocusKeyChange = onExpandedCatalogFocusKeyChange,
-                                enrichedLogoUrl = (payload as? ModernPayload.Catalog)?.itemId?.let { enrichedPreviews.map[it]?.logo },
-                                enrichedBackdropUrl = (payload as? ModernPayload.Catalog)?.itemId?.let { enrichedPreviews.map[it]?.backdropUrl }
+                                enrichedPreviews = enrichedPreviews
                             )
                         }
                     }
@@ -1025,14 +1025,14 @@ private fun ModernCarouselCard(
     }
     var landscapeLogoLoadFailed by remember(effectiveLogoUrl) { mutableStateOf(false) }
     val shouldPlayTrailerInCard = playTrailerInExpandedCard && !trailerPreviewUrl.isNullOrBlank()
-    val isVerticalRowsScrolling = LocalVerticalRowsScrolling.current
+    val isVerticalRowsScrollingState = LocalVerticalRowsScrolling.current
 
     // Coil 3's AsyncImage is skippable — it compares ImageRequest structurally and won't
     // re-trigger a failed memory-only request when policies change. We solve this by
     // building a restricted request during scroll and using Compose's `key()` on the
     // scroll state around AsyncImage so that stopping the scroll destroys the old
     // (memory-only) AsyncImage and creates a fresh one with the full request.
-    val scrollAwareImageModel = if (!isVerticalRowsScrolling || imageModel == null) {
+    val scrollAwareImageModel = if (!isVerticalRowsScrollingState.value || imageModel == null) {
         imageModel
     } else {
         remember(imageModel) {
@@ -1045,7 +1045,7 @@ private fun ModernCarouselCard(
         }
     }
     // When true, wrap AsyncImage in key(scrollPhaseKey) to force re-creation on scroll stop.
-    val scrollPhaseKey = isVerticalRowsScrolling
+    val scrollPhaseKey = isVerticalRowsScrollingState.value
 
     val hasImage = !imageUrl.isNullOrBlank()
     val hasLandscapeLogo =

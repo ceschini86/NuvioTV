@@ -98,6 +98,10 @@ internal fun HomeViewModel.observeTmdbSettingsPipeline() {
             .collectLatest { settings ->
                 val languageChanged = currentTmdbSettings.language != settings.language
                 currentTmdbSettings = settings
+                val tmdbEnabledForLayout = settings.enabled &&
+                    (_uiState.value.homeLayout != HomeLayout.MODERN || settings.modernHomeEnabled)
+                val enrichEnabled = tmdbEnabledForLayout || externalMetaPrefetchEnabled
+                _uiState.update { it.copy(heroEnrichmentEnabled = enrichEnabled) }
                 if (languageChanged) {
                     // Allow re-enrichment with the new language on next focus.
                     prefetchedTmdbIds.clear()
@@ -144,13 +148,13 @@ internal suspend fun HomeViewModel.loadAllCatalogsPipeline(
     val isReload = _uiState.value.catalogRows.isNotEmpty() || _uiState.value.homeRows.isNotEmpty()
     if (!isReload) {
         _uiState.update { it.copy(isLoading = true, error = null, installedAddonsCount = addons.size) }
+        synchronized(catalogStateLock) {
+            catalogOrder.clear()
+        }
+        clearCatalogData()
     } else {
         _uiState.update { it.copy(error = null, installedAddonsCount = addons.size) }
     }
-    synchronized(catalogStateLock) {
-        catalogOrder.clear()
-    }
-    clearCatalogData()
     posterStatusReconcileJob?.cancel()
     reconcilePosterStatusObserversPipeline(emptyList())
     _fullCatalogRows.value = emptyList()

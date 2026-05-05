@@ -44,7 +44,7 @@ internal data class ClassicFocusArtwork(
 
 @Composable
 internal fun ClassicFocusGradientBackdrop(
-    artwork: ClassicFocusArtwork?,
+    artworkProvider: () -> ClassicFocusArtwork?,
     enabled: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -58,27 +58,29 @@ internal fun ClassicFocusGradientBackdrop(
         label = "classicFocusGradientColor"
     )
 
-    LaunchedEffect(context, artwork, enabled, fallbackColor) {
-        if (!enabled || artwork == null) {
-            targetColor = Color.Transparent
-            return@LaunchedEffect
-        }
+    LaunchedEffect(context, enabled, fallbackColor) {
+        androidx.compose.runtime.snapshotFlow { artworkProvider() }.collect { artwork ->
+            if (!enabled || artwork == null) {
+                targetColor = Color.Transparent
+                return@collect
+            }
 
-        colorCache[artwork]?.let {
-            targetColor = it
-            return@LaunchedEffect
-        }
+            colorCache[artwork]?.let {
+                targetColor = it
+                return@collect
+            }
 
-        delay(CLASSIC_FOCUS_GRADIENT_DEBOUNCE_MS)
-        var resolvedColor = resolveArtworkColor(context, artwork, fallbackColor)
-        targetColor = resolvedColor.color
-        if (!resolvedColor.cacheable) {
-            delay(CLASSIC_FOCUS_GRADIENT_CACHE_RETRY_MS)
-            resolvedColor = resolveArtworkColor(context, artwork, fallbackColor)
+            delay(CLASSIC_FOCUS_GRADIENT_DEBOUNCE_MS)
+            var resolvedColor = resolveArtworkColor(context, artwork, fallbackColor)
             targetColor = resolvedColor.color
-        }
-        if (resolvedColor.cacheable) {
-            colorCache[artwork] = resolvedColor.color
+            if (!resolvedColor.cacheable) {
+                delay(CLASSIC_FOCUS_GRADIENT_CACHE_RETRY_MS)
+                resolvedColor = resolveArtworkColor(context, artwork, fallbackColor)
+                targetColor = resolvedColor.color
+            }
+            if (resolvedColor.cacheable) {
+                colorCache[artwork] = resolvedColor.color
+            }
         }
     }
 

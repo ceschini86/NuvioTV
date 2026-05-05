@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyListPrefetchStrategy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -33,6 +34,7 @@ import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalDensity
 import com.nuvio.tv.ui.util.dpadVerticalFastScroll
+import com.nuvio.tv.ui.util.asStable
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import com.nuvio.tv.domain.model.MetaPreview
@@ -80,7 +82,7 @@ fun ClassicHomeContent(
     onRequestTrailerPreview: (MetaPreview) -> Unit,
     onItemFocus: (MetaPreview) -> Unit = {},
     catalogSeeAllLabel: String? = null,
-    onSaveFocusState: (Int, Int, Int, Int, Map<String, Int>) -> Unit,
+    onSaveFocusState: (Int, Int, String?, Map<String, String>, Map<String, Int>, Int, Int) -> Unit,
     scrollToTopTrigger: Int = 0,
     onRequestLazyCatalogLoad: (String) -> Unit = {}
 ) {
@@ -201,9 +203,11 @@ fun ClassicHomeContent(
             onSaveFocusState(
                 columnListState.firstVisibleItemIndex,
                 columnListState.firstVisibleItemScrollOffset,
+                currentFocusSnapshot.rowKey,
+                emptyMap(), // Classic doesn't use ID-based restoration for inner rows yet
+                focusState.catalogRowScrollStates + rowStates.mapValues { it.value.firstVisibleItemIndex },
                 currentFocusSnapshot.rowIndex,
-                currentFocusSnapshot.itemIndex,
-                focusState.catalogRowScrollStates + rowStates.mapValues { it.value.firstVisibleItemIndex }
+                currentFocusSnapshot.itemIndex
             )
         }
     }
@@ -246,18 +250,22 @@ fun ClassicHomeContent(
     var focusedArtwork by remember { mutableStateOf<ClassicFocusArtwork?>(null) }
     val latestOnItemFocus by rememberUpdatedState(onItemFocus)
 
-    fun handleMetaFocus(item: MetaPreview) {
-        if (uiState.classicFocusGradientEnabled) {
-            focusedArtwork = item.toClassicFocusArtwork(uiState.focusedPosterBackdropExpandEnabled)
+    val handleMetaFocus: (MetaPreview) -> Unit = remember(uiState.classicFocusGradientEnabled, uiState.focusedPosterBackdropExpandEnabled) {
+        { item ->
+            if (uiState.classicFocusGradientEnabled) {
+                focusedArtwork = item.toClassicFocusArtwork(uiState.focusedPosterBackdropExpandEnabled)
+            }
+            latestOnItemFocus(item)
         }
-        latestOnItemFocus(item)
     }
 
-    fun handleHeroFocus(item: MetaPreview) {
-        if (uiState.classicFocusGradientEnabled) {
-            focusedArtwork = null
+    val handleHeroFocus: (MetaPreview) -> Unit = remember(uiState.classicFocusGradientEnabled) {
+        { item ->
+            if (uiState.classicFocusGradientEnabled) {
+                focusedArtwork = null
+            }
+            latestOnItemFocus(item)
         }
-        latestOnItemFocus(item)
     }
 
     LaunchedEffect(uiState.classicFocusGradientEnabled) {
@@ -282,7 +290,7 @@ fun ClassicHomeContent(
     val latestOnRequestLazyCatalogLoad = rememberUpdatedState(onRequestLazyCatalogLoad)
     val latestVisibleHomeRows = rememberUpdatedState(visibleHomeRows)
     LaunchedEffect(columnListState) {
-        val prefetchAhead = 2
+        val prefetchAhead = 1
         snapshotFlow {
             val scrolling = columnListState.isScrollInProgress
             val info = columnListState.layoutInfo
@@ -311,13 +319,17 @@ fun ClassicHomeContent(
         }
     }
 
+    val isVerticalScrollingState = remember(columnListState) {
+        derivedStateOf { columnListState.isScrollInProgress }
+    }
     CompositionLocalProvider(
         LocalBringIntoViewSpec provides verticalBringIntoViewSpec,
-        LocalFastScrollActive provides isFastScrolling
+        LocalFastScrollActive provides isFastScrolling,
+        LocalVerticalRowsScrolling provides isVerticalScrollingState
     ) {
     Box(modifier = Modifier.fillMaxSize()) {
     ClassicFocusGradientBackdrop(
-        artwork = focusedArtwork,
+        artworkProvider = { focusedArtwork },
         enabled = uiState.classicFocusGradientEnabled,
         modifier = Modifier.fillMaxSize()
     )
@@ -365,9 +377,12 @@ fun ClassicHomeContent(
                         rowEntryFocusRequesters.containsKey(k) -> rowEntryFocusRequesters[k]
                         else -> null
                     }
-                    if (target == null) null
+                    val requester = if (target == null) null
                     else requesterForKey(target.key as? String)
                         ?: visibleItems.firstNotNullOfOrNull { requesterForKey(it.key as? String) }
+
+                    runCatching { requester?.requestFocus() }
+                    null // Classic uses imperative requestFocus for now
                 },
             ),
         contentPadding = PaddingValues(top = if (heroVisible) 0.dp else 24.dp, bottom = 24.dp),
@@ -376,14 +391,14 @@ fun ClassicHomeContent(
         if (heroVisible) {
             item(key = "hero_carousel", contentType = "hero") {
                 HeroCarousel(
-                    items = uiState.heroItems,
+                    items = uiState.heroItems.asStable(),
                     focusRequester = if (shouldRequestInitialFocus) heroFocusRequester else null,
                     modifier = Modifier.onFocusChanged {
                         if (it.hasFocus && uiState.classicFocusGradientEnabled) {
                             focusedArtwork = null
                         }
                     },
-                    onItemFocus = ::handleHeroFocus,
+                    onItemFocus = handleHeroFocus,
                     onItemClick = { item ->
                         onNavigateToDetail(
                             item.id,
@@ -522,7 +537,7 @@ fun ClassicHomeContent(
                         trailerPreviewUrls = stableTrailerPreviewUrls.value,
                         trailerPreviewAudioUrls = stableTrailerPreviewAudioUrls.value,
                         onRequestTrailerPreview = onRequestTrailerPreview,
-                        onItemFocus = ::handleMetaFocus,
+                        onItemFocus = handleMetaFocus,
                         isItemWatched = isCatalogItemWatched,
                         onItemLongPress = onCatalogItemLongPress,
                         seeAllLabel = catalogSeeAllLabel,

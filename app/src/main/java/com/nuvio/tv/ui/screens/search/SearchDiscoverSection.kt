@@ -586,7 +586,9 @@ internal fun DiscoverGrid(
                             sign > 0 -> contentVisible.last()
                             else -> contentVisible.first()
                         }
-                        itemFocusRequesters[target.index]
+                        val requester = itemFocusRequesters[target.index]
+                        runCatching { requester?.requestFocus() }
+                        null // Discover uses imperative requestFocus for now
                     }
                 }
             ),

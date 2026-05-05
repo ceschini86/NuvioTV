@@ -122,8 +122,13 @@ fun TrailerPlayer(
             player.playWhenReady = true
         } else {
             hasRenderedFirstFrame = false
-            player.stop()
-            player.clearMediaItems()
+            player.playWhenReady = false
+            // Defer heavy stop and clear until focus settling/collapse has finished
+            delay(150)
+            if (!isPlaying) {
+                player.stop()
+                player.clearMediaItems()
+            }
         }
     }
 

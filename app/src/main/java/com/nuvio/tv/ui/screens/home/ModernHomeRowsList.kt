@@ -28,6 +28,9 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -42,6 +45,7 @@ import com.nuvio.tv.domain.model.FocusedPosterTrailerPlaybackTarget
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.ui.util.StableList
 import com.nuvio.tv.ui.util.StableMap
+import com.nuvio.tv.ui.util.StableRef
 import com.nuvio.tv.ui.util.dpadVerticalFastScroll
 import com.nuvio.tv.ui.util.recompositionHighlighter
 import kotlinx.coroutines.Dispatchers
@@ -58,10 +62,12 @@ import kotlinx.coroutines.withContext
 )
 @Composable
 internal fun ModernHomeRowsList(
-    isVerticalRowsScrolling: Boolean,
+    isVerticalRowsScrollingState: State<Boolean>,
     carouselRows: StableList<HeroCarouselRow>,
     verticalRowListState: LazyListState,
-    uiCaches: ModernHomeUiCaches,
+    focusedItemByRow: StableRef<MutableMap<String, Int>>,
+    rowListStates: StableRef<MutableMap<String, LazyListState>>,
+    loadMoreRequestedTotals: StableRef<MutableMap<String, Int>>,
     focusState: HomeScreenFocusState,
     activeRowKey: State<String?>,
     activeItemIndex: State<Int>,
@@ -124,13 +130,24 @@ internal fun ModernHomeRowsList(
     onExpansionInteractionNonceChange: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Unwrap StableRef wrappers for internal use (not passed to child composables)
+    val focusedItemByRowMap = focusedItemByRow.value
+    val rowListStatesMap = rowListStates.value
+    val loadMoreRequestedTotalsMap = loadMoreRequestedTotals.value
+
+    val latestOnActiveRowKeyChange = rememberUpdatedState(onActiveRowKeyChange)
+    val latestOnActiveItemIndexChange = rememberUpdatedState(onActiveItemIndexChange)
+
+    val rowFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
+    val stableItemFocusRequestersByRow = remember { mutableMapOf<String, StableRef<MutableMap<Int, FocusRequester>>>() }
+
     val density = LocalDensity.current
     val context = LocalContext.current
     val verticalPrefetchImageLoader = context.imageLoader
 
     LaunchedEffect(verticalPrefetchImageLoader, density) {
-        val prefetchAheadRows = 3
-        val prefetchItemsPerRow = 4
+        val prefetchAheadRows = 1
+        val prefetchItemsPerRow = 1
         snapshotFlow {
             verticalRowListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
         }
@@ -143,12 +160,13 @@ internal fun ModernHomeRowsList(
                         for (i in 0 until minOf(prefetchItemsPerRow, row.items.list.size)) {
                             val item = row.items.list[i]
                             val url = item.imageUrl ?: continue
-                            val metrics = item.catalogCardMetrics(
+                            val metrics = item.catalogCardRequestMetrics(
                                 useLandscapePosters = useLandscapePosters,
                                 portraitCardWidth = portraitCatalogCardWidth,
                                 portraitCardHeight = portraitCatalogCardHeight,
                                 landscapeCardWidth = landscapeCatalogCardWidth,
-                                landscapeCardHeight = landscapeCatalogCardHeight
+                                landscapeCardHeight = landscapeCatalogCardHeight,
+                                expandEnabled = effectiveExpandEnabled
                             )
                             val wPx = with(density) { metrics.width.roundToPx() }
                             val hPx = with(density) { metrics.height.roundToPx() }
@@ -170,7 +188,7 @@ internal fun ModernHomeRowsList(
     val latestOnRequestLazyCatalogLoad = rememberUpdatedState(onRequestLazyCatalogLoad)
     val latestCarouselRowsForLazy = rememberUpdatedState(carouselRows)
     LaunchedEffect(verticalRowListState) {
-        val prefetchAheadForLazy = 2
+        val prefetchAheadForLazy = 1
         snapshotFlow {
             val scrolling = verticalRowListState.isScrollInProgress
             val info = verticalRowListState.layoutInfo
@@ -184,23 +202,38 @@ internal fun ModernHomeRowsList(
             val rows = latestCarouselRowsForLazy.value
             for (idx in firstVisible.coerceAtLeast(0)..(lastVisible + prefetchAheadForLazy)) {
                 val row = rows.list.getOrNull(idx) ?: continue
-                if (row.isLoading && row.items.list.firstOrNull()?.key?.startsWith("placeholder_") == true) {
+                if (row.isLoading && row.items.list.firstOrNull()?.imageUrl == "placeholder://empty") {
                     latestOnRequestLazyCatalogLoad.value(row.key)
                 }
             }
         }
     }
 
-    val focusRestorerRequester = remember(carouselRows, uiCaches, activeRowKey) {
+    // Secondary trigger: when scroll settles after focus-driven BringIntoView,
+    // check again for placeholder rows that need loading. The primary snapshotFlow
+    // above may miss this if visible indices didn't change.
+    LaunchedEffect(verticalRowListState) {
+        snapshotFlow { verticalRowListState.isScrollInProgress }
+            .collect { scrolling ->
+                if (scrolling) return@collect
+                delay(200)
+                if (verticalRowListState.isScrollInProgress) return@collect
+                val rows = latestCarouselRowsForLazy.value
+                val info = verticalRowListState.layoutInfo
+                val firstVisible = info.visibleItemsInfo.firstOrNull()?.index ?: return@collect
+                val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: return@collect
+                for (idx in firstVisible.coerceAtLeast(0)..(lastVisible + 1)) {
+                    val row = rows.list.getOrNull(idx) ?: continue
+                    if (row.isLoading && row.items.list.firstOrNull()?.imageUrl == "placeholder://empty") {
+                        latestOnRequestLazyCatalogLoad.value(row.key)
+                    }
+                }
+            }
+    }
+
+    val focusRestorerRequester = remember(activeRowKey) {
         {
-            val rowKey = activeRowKey.value
-            if (rowKey != null) {
-                val row = carouselRows.list.firstOrNull { it.key == rowKey }
-                val savedIdx = (uiCaches.focusedItemByRow[rowKey] ?: 0)
-                    .coerceIn(0, ((row?.items?.list?.size ?: 1) - 1).coerceAtLeast(0))
-                val stableKey = "${rowKey}_$savedIdx"
-                uiCaches.itemFocusRequesters[rowKey]?.get(stableKey) ?: FocusRequester.Default
-            } else FocusRequester.Default
+            activeRowKey.value?.let { rowFocusRequesters[it] } ?: FocusRequester.Default
         }
     }
 
@@ -208,7 +241,8 @@ internal fun ModernHomeRowsList(
 
     CompositionLocalProvider(
         LocalBringIntoViewSpec provides verticalRowBringIntoViewSpec,
-        LocalFastScrollActive provides isFastScrolling.value
+        LocalFastScrollActive provides isFastScrolling.value,
+        LocalVerticalRowsScrolling provides isVerticalRowsScrollingState
     ) {
         LazyColumn(
             state = verticalRowListState,
@@ -256,10 +290,14 @@ internal fun ModernHomeRowsList(
                         val targetRow = carouselRows.list.getOrNull(targetRowIndex)
                         if (targetRow == null) null
                         else {
-                            val savedIdx = (uiCaches.focusedItemByRow[targetRow.key] ?: 0)
+                            val savedIdx = (focusedItemByRowMap[targetRow.key] ?: 0)
                                 .coerceIn(0, (targetRow.items.list.size - 1).coerceAtLeast(0))
-                            val targetStableKey = "${targetRow.key}_$savedIdx"
-                            uiCaches.requesterFor(targetRow.key, targetStableKey)
+                            latestOnActiveRowKeyChange.value(targetRow.key)
+                            latestOnActiveItemIndexChange.value(savedIdx)
+
+                            val targetItemKey = targetRow.items.list.getOrNull(savedIdx)?.key
+                                ?: "${targetRow.key}_$savedIdx"
+                            targetItemKey
                         }
                     },
                 ),
@@ -278,22 +316,26 @@ internal fun ModernHomeRowsList(
                     { rowKey: String, index: Int, isContinueWatchingRow: Boolean ->
                         val rowBecameActive = activeRowKey.value != rowKey
                         val itemChanged = activeItemIndex.value != index
+                        
                         if (rowBecameActive || itemChanged) {
                             val now = System.currentTimeMillis()
                             val timeSinceLastHeroNav = now - lastHeroNavigationAtMs.value
                             onHeroFocusSettleDelayChange(
                                 if (lastHeroNavigationAtMs.value != 0L &&
                                     timeSinceLastHeroNav in 1 until 130L // MODERN_HERO_RAPID_NAV_THRESHOLD_MS
-                                ) 320L // MODERN_HERO_RAPID_NAV_SETTLE_MS
-                                else 250L // MODERN_HERO_FOCUS_DEBOUNCE_MS
+                                ) 400L // MODERN_HERO_RAPID_NAV_SETTLE_MS
+                                else 450L // MODERN_HERO_FOCUS_DEBOUNCE_MS
                             )
                             onLastHeroNavigationAtMsChange(now)
                             onActiveRowKeyChange(rowKey)
                             onActiveItemIndexChange(index)
                         }
-                        if (uiCaches.focusedItemByRow[rowKey] != index) {
-                            uiCaches.focusedItemByRow[rowKey] = index
+
+                        // Always keep the focusedItemByRow map in sync for ALL rows
+                        if (focusedItemByRowMap[rowKey] != index) {
+                            focusedItemByRowMap[rowKey] = index
                         }
+
                         if (isContinueWatchingRow) {
                             if (lastFocusedContinueWatchingIndex.value != index) {
                                 onLastFocusedContinueWatchingIndexChange(index)
@@ -305,16 +347,30 @@ internal fun ModernHomeRowsList(
                         onRowItemFocusedInternal(rowKey, index, isContinueWatchingRow)
                     }
                 }
-                val isActiveRowLambda = remember(row.key, activeRowKey) {
+                val isActiveRowLambda = remember(row.key) {
                     { row.key == activeRowKey.value }
+                }
+                val stableOnCatalogSelectionFocused = remember {
+                    { selection: FocusedCatalogSelection ->
+                        val isCollectionFolder = selection.payload is ModernPayload.CollectionFolder
+                        if (focusedCatalogSelection.value != selection || isCollectionFolder) {
+                            onFocusedCatalogSelectionChange(selection)
+                            if (isCollectionFolder) {
+                                onFocusedHeroMediaNonceChange(focusedHeroMediaNonce.value + 1)
+                            }
+                        }
+                    }
                 }
                 ModernRowSection(
                     row = row,
                     isActiveRow = isActiveRowLambda,
+                    rowFocusRequester = rowFocusRequesters.getOrPut(row.key) { FocusRequester() },
                     rowTitleBottom = 14.dp, // rowTitleBottom
                     defaultBringIntoViewSpec = defaultBringIntoViewSpec,
                     focusStateCatalogRowScrollIndex = focusState.catalogRowScrollStates[row.key] ?: 0,
-                    uiCaches = uiCaches,
+                    focusedItemByRow = focusedItemByRow,
+                    rowListStates = rowListStates,
+                    loadMoreRequestedTotals = loadMoreRequestedTotals,
                     pendingRowFocusKey = pendingRowFocusKey,
                     pendingRowFocusIndex = pendingRowFocusIndex,
                     pendingRowFocusNonce = pendingRowFocusNonce,
@@ -345,23 +401,16 @@ internal fun ModernHomeRowsList(
                     onItemFocus = onItemFocus,
                     onPreloadAdjacentItem = onPreloadAdjacentItem,
                     enrichedPreviews = enrichedPreviews,
-                    onCatalogSelectionFocused = remember(focusedCatalogSelection, focusedHeroMediaNonce) {
-                        { selection ->
-                            val isCollectionFolder = selection.payload is ModernPayload.CollectionFolder
-                            if (focusedCatalogSelection.value != selection || isCollectionFolder) {
-                                onFocusedCatalogSelectionChange(selection)
-                                if (isCollectionFolder) {
-                                    onFocusedHeroMediaNonceChange(focusedHeroMediaNonce.value + 1)
-                                }
-                            }
-                        }
-                    },
+                    onCatalogSelectionFocused = stableOnCatalogSelectionFocused,
                     onNavigateToDetail = onNavigateToDetail,
                     onNavigateToFolderDetail = onNavigateToFolderDetail,
                     onLoadMoreCatalog = onLoadMoreCatalog,
                     onBackdropInteraction = onBackdropInteraction,
                     onExpandedCatalogFocusKeyChange = onExpandedCatalogFocusKeyChange,
-                    isVerticalRowsScrolling = isVerticalRowsScrolling
+                    isVerticalRowsScrollingState = isVerticalRowsScrollingState,
+                    itemFocusRequesters = stableItemFocusRequestersByRow.getOrPut(row.key) {
+                        StableRef(mutableMapOf())
+                    }
                 )
             }
         }
