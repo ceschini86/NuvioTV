@@ -94,6 +94,15 @@ private fun localizedTypeLabel(key: String): String = when (key.lowercase()) {
     else -> formatAddonTypeLabel(key)
 }
 
+@Composable
+private fun LibraryListTab.localizedTitle(): String {
+    return if (type == LibraryListTab.Type.WATCHLIST) {
+        stringResource(R.string.library_watchlist)
+    } else {
+        title
+    }
+}
+
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun LibraryScreen(
@@ -444,7 +453,8 @@ private fun LibrarySelectorsRow(
     onSelectGenre: (String?) -> Unit,
     onSelectYear: (String?) -> Unit
 ) {
-    val selectedListLabel = listTabs.firstOrNull { it.key == selectedListKey }?.title ?: "Select"
+    val selectedListLabel = listTabs.firstOrNull { it.key == selectedListKey }?.localizedTitle()
+        ?: stringResource(R.string.action_select)
     val selectedTypeLabel = selectedTypeTab?.let {
         if (it.key == LibraryTypeTab.ALL_KEY) stringResource(R.string.library_type_all) else localizedTypeLabel(it.key)
     } ?: stringResource(R.string.library_type_all)
@@ -470,7 +480,7 @@ private fun LibrarySelectorsRow(
                     value = selectedListLabel,
                     selectedValue = selectedListKey,
                     expanded = expandedPicker == "list",
-                    options = listTabs.map { LibraryOption(it.title, it.key) },
+                    options = listTabs.map { LibraryOption(it.localizedTitle(), it.key) },
                     onExpandedChange = { onExpandedChange("list", it) },
                     onSelect = { onSelectList(it.value) }
                 )
@@ -822,7 +832,7 @@ private fun ManageListsDialog(
                                 )
                             ) {
                                 Text(
-                                    text = tab.title,
+                                    text = tab.localizedTitle(),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )

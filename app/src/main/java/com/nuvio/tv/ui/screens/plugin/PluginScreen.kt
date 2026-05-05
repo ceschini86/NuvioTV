@@ -467,7 +467,7 @@ private fun AddRepositoryInline(
                             decorationBox = { innerTextField ->
                                 if (url.isEmpty()) {
                                     Text(
-                                        text = "URL or short code",
+                                        text = stringResource(R.string.plugin_url_or_short_code_placeholder),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = NuvioColors.TextTertiary
                                     )
@@ -1313,7 +1313,7 @@ private fun ScraperCard(
                         ) {
                             Column(modifier = Modifier.padding(8.dp)) {
                                 Text(
-                                    text = if (diagnosticsExpanded) "Diagnostics (tap to collapse)" else "Diagnostics (tap to expand)",
+                                    text = if (diagnosticsExpanded) stringResource(R.string.plugin_diagnostics_collapse) else stringResource(R.string.plugin_diagnostics_expand),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = NuvioColors.TextTertiary
                                 )

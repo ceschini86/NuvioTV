@@ -92,7 +92,7 @@ fun FolderDetailScreen(
 
     if (folder == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Folder not found", color = NuvioColors.TextSecondary)
+            Text(stringResource(R.string.folder_detail_not_found), color = NuvioColors.TextSecondary)
         }
         return
     }

@@ -1,14 +1,17 @@
 package com.nuvio.tv.ui.screens.tmdb
 
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nuvio.tv.R
 import com.nuvio.tv.core.tmdb.TmdbEntityBrowseData
 import com.nuvio.tv.core.tmdb.TmdbEntityKind
+import com.nuvio.tv.core.tmdb.TmdbEntityRailType
 import com.nuvio.tv.core.tmdb.TmdbEntityMediaType
 import com.nuvio.tv.core.tmdb.TmdbMetadataService
-import com.nuvio.tv.core.tmdb.TmdbEntityRailType
 import com.nuvio.tv.data.local.TmdbSettingsDataStore
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +23,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class TmdbEntityBrowseViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val tmdbMetadataService: TmdbMetadataService,
     private val tmdbSettingsDataStore: TmdbSettingsDataStore,
     val posterOptions: com.nuvio.tv.ui.components.posteroptions.PosterOptionsController,
@@ -118,15 +122,15 @@ class TmdbEntityBrowseViewModel @Inject constructor(
                 } else {
                     TmdbEntityBrowseUiState.Error(
                         if (entityName.isNotBlank()) {
-                            "Could not load $entityName"
+                            context.getString(R.string.tmdb_entity_error_load_named, entityName)
                         } else {
-                            "Could not load TMDB entity"
+                            context.getString(R.string.tmdb_entity_error_load)
                         }
                     )
                 }
             } catch (e: Exception) {
                 _uiState.value = TmdbEntityBrowseUiState.Error(
-                    e.message ?: "Could not load TMDB entity"
+                    e.message ?: context.getString(R.string.tmdb_entity_error_load)
                 )
             }
         }

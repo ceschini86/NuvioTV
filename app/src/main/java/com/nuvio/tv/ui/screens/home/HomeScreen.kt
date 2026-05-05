@@ -191,6 +191,9 @@ fun HomeScreen(
         )
     }
 
+    val noAddonsError = stringResource(R.string.home_error_no_addons)
+    val noCatalogAddonsError = stringResource(R.string.home_error_no_catalog_addons)
+
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
@@ -218,7 +221,7 @@ fun HomeScreen(
                 }
             }
 
-            uiState.error == "No addons installed" && uiState.catalogRows.isEmpty() -> {
+            uiState.error == noAddonsError && uiState.catalogRows.isEmpty() -> {
                 if (!homeStableGateReleased) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         LoadingIndicator()
@@ -237,7 +240,7 @@ fun HomeScreen(
                 }
             }
 
-            uiState.error == "No catalog addons installed" && uiState.catalogRows.isEmpty() && !hasCollectionContent && !hasHeroContent -> {
+            uiState.error == noCatalogAddonsError && uiState.catalogRows.isEmpty() && !hasCollectionContent && !hasHeroContent -> {
                 if (!homeStableGateReleased) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         LoadingIndicator()

@@ -1,6 +1,9 @@
 package com.nuvio.tv.data.repository
 
+import android.content.Context
+import android.util.Log
 import com.nuvio.tv.BuildConfig
+import com.nuvio.tv.R
 import com.nuvio.tv.data.local.AuthSessionNoticeDataStore
 import com.nuvio.tv.data.local.TraktAuthDataStore
 import com.nuvio.tv.data.local.TraktAuthState
@@ -10,7 +13,7 @@ import com.nuvio.tv.data.remote.dto.trakt.TraktDeviceCodeResponseDto
 import com.nuvio.tv.data.remote.dto.trakt.TraktDeviceTokenRequestDto
 import com.nuvio.tv.data.remote.dto.trakt.TraktRefreshTokenRequestDto
 import com.nuvio.tv.data.remote.dto.trakt.TraktRevokeRequestDto
-import android.util.Log
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
@@ -33,6 +36,7 @@ sealed interface TraktTokenPollResult {
 
 @Singleton
 class TraktAuthService @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val traktApi: TraktApi,
     private val traktAuthDataStore: TraktAuthDataStore,
     private val authSessionNoticeDataStore: AuthSessionNoticeDataStore
@@ -121,7 +125,7 @@ class TraktAuthService @Inject constructor(
 
     suspend fun startDeviceAuth(): Result<TraktDeviceCodeResponseDto> {
         if (!hasRequiredCredentials()) {
-            return Result.failure(IllegalStateException("Missing TRAKT credentials"))
+            return Result.failure(IllegalStateException(context.getString(R.string.trakt_error_missing_credentials)))
         }
 
         // Reuse an existing, still-valid device flow if one is already active.
@@ -159,7 +163,7 @@ class TraktAuthService @Inject constructor(
         var response = try {
             requestOnce()
         } catch (e: IOException) {
-            return Result.failure(IllegalStateException("Network error, please try again"))
+            return Result.failure(IllegalStateException(context.getString(R.string.trakt_error_network_retry)))
         }
 
         if (response.code() == 429) {
@@ -169,7 +173,7 @@ class TraktAuthService @Inject constructor(
                 response = try {
                     requestOnce()
                 } catch (e: IOException) {
-                    return Result.failure(IllegalStateException("Network error, please try again"))
+                    return Result.failure(IllegalStateException(context.getString(R.string.trakt_error_network_retry)))
                 }
             }
         }
@@ -184,24 +188,24 @@ class TraktAuthService @Inject constructor(
             val retryAfter = response.headers()["Retry-After"]?.toLongOrNull()
             val minutes = ((retryAfter ?: 300L) + 59L) / 60L
             return Result.failure(
-                IllegalStateException("Trakt is rate limiting requests. Try again in ~${minutes} min")
+                IllegalStateException(context.getString(R.string.trakt_error_rate_limited_minutes, minutes))
             )
         }
 
         return Result.failure(
-            IllegalStateException("Failed to start Trakt auth (${response.code()})")
+            IllegalStateException(context.getString(R.string.trakt_error_failed_start_code, response.code()))
         )
     }
 
     suspend fun pollDeviceToken(): TraktTokenPollResult {
         if (!hasRequiredCredentials()) {
-            return TraktTokenPollResult.Failed("Missing TRAKT credentials")
+            return TraktTokenPollResult.Failed(context.getString(R.string.trakt_error_missing_credentials))
         }
 
         val state = getCurrentAuthState()
         val deviceCode = state.deviceCode
         if (deviceCode.isNullOrBlank()) {
-            return TraktTokenPollResult.Failed("No active Trakt device code")
+            return TraktTokenPollResult.Failed(context.getString(R.string.trakt_error_no_active_device_code))
         }
 
         val response = try {
@@ -213,7 +217,7 @@ class TraktAuthService @Inject constructor(
                 )
             )
         } catch (e: IOException) {
-            return TraktTokenPollResult.Failed("Network error, will retry")
+            return TraktTokenPollResult.Failed(context.getString(R.string.trakt_error_network_will_retry))
         }
 
         val tokenBody = response.body()
@@ -233,7 +237,7 @@ class TraktAuthService @Inject constructor(
             }
             404 -> {
                 traktAuthDataStore.clearDeviceFlow()
-                TraktTokenPollResult.Failed("Invalid device code")
+                TraktTokenPollResult.Failed(context.getString(R.string.trakt_error_invalid_device_code))
             }
             410 -> {
                 traktAuthDataStore.clearDeviceFlow()
@@ -248,7 +252,9 @@ class TraktAuthService @Inject constructor(
                 traktAuthDataStore.updatePollInterval(nextInterval)
                 TraktTokenPollResult.SlowDown(nextInterval)
             }
-            else -> TraktTokenPollResult.Failed("Token polling failed (${response.code()})")
+            else -> TraktTokenPollResult.Failed(
+                context.getString(R.string.trakt_error_token_polling_failed_code, response.code())
+            )
         }
     }
 

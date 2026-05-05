@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Card
@@ -159,7 +160,7 @@ internal fun ModernSidebarBlurPanel(
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.app_logo_wordmark),
-                    contentDescription = "NuvioTV",
+                    contentDescription = stringResource(R.string.app_name),
                     modifier = Modifier
                         .fillMaxWidth(0.72f)
                         .height(36.dp),

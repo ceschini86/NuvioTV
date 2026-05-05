@@ -1,5 +1,7 @@
 package com.nuvio.tv.core.trakt
 
+import android.content.Context
+import com.nuvio.tv.R
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.data.remote.api.TraktApi
 import com.nuvio.tv.data.remote.dto.trakt.TraktListItemDto
@@ -24,6 +26,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import retrofit2.Response
 import java.util.Locale
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,9 +47,13 @@ data class TraktPublicListSearchResult(
 
 @Singleton
 class TraktPublicListSourceResolver @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val traktApi: TraktApi,
     private val traktAuthService: TraktAuthService
 ) {
+    private fun string(resId: Int): String = appContext.getString(resId)
+    private fun string(resId: Int, vararg args: Any): String = appContext.getString(resId, *args)
+
     fun resolve(source: TraktCollectionSource, page: Int = 1): Flow<NetworkResult<CatalogRow>> = flow {
         emit(NetworkResult.Loading)
         val result = runCatching {
@@ -65,7 +72,7 @@ class TraktPublicListSourceResolver @Inject constructor(
                     )
                 }
                 val pageCountHeader = response.headers()["X-Pagination-Page-Count"]
-                if (!response.isSuccessful) error(errorMessageFor(response.code(), "Could not load Trakt list"))
+                if (!response.isSuccessful) error(errorMessageFor(response.code(), string(R.string.collections_editor_error_load_trakt_list)))
                 val rawItems = response.body().orEmpty()
                 val items = rawItems
                     .mapNotNull { it.toPreview(source.mediaType) }
@@ -84,16 +91,17 @@ class TraktPublicListSourceResolver @Inject constructor(
         }
         result.fold(
             onSuccess = { emit(NetworkResult.Success(it)) },
-            onFailure = { emit(NetworkResult.Error(it.message ?: "Could not load Trakt list")) }
+            onFailure = { emit(NetworkResult.Error(it.message ?: string(R.string.collections_editor_error_load_trakt_list))) }
         )
     }
 
     suspend fun listImportMetadata(input: String): TraktPublicListImportMetadata = withContext(Dispatchers.IO) {
-        val idPath = parseTraktListPath(input) ?: error("Enter a valid Trakt list ID or URL")
+        val idPath = parseTraktListPath(input) ?: error(string(R.string.collections_editor_error_trakt_list_id_or_url))
         val response = publicRequest { traktApi.getPublicList(id = idPath) }
-        if (!response.isSuccessful) error(errorMessageFor(response.code(), "Trakt list not found"))
-        val list = response.body() ?: error("Trakt list not found")
-        val id = list.ids?.trakt ?: idPath.toLongOrNull() ?: error("Trakt list did not include a numeric ID")
+        if (!response.isSuccessful) error(errorMessageFor(response.code(), string(R.string.collections_editor_error_trakt_list_not_found)))
+        val list = response.body() ?: error(string(R.string.collections_editor_error_trakt_list_not_found))
+        val id = list.ids?.trakt ?: idPath.toLongOrNull()
+            ?: error(string(R.string.collections_editor_error_trakt_list_missing_numeric_id))
         TraktPublicListImportMetadata(
             title = list.name?.takeIf { it.isNotBlank() },
             coverImageUrl = list.images?.posters.firstTraktImageUrl(),
@@ -108,7 +116,7 @@ class TraktPublicListSourceResolver @Inject constructor(
                 query = query.trim()
             )
         }
-        if (!response.isSuccessful) error(errorMessageFor(response.code(), "Could not search Trakt lists"))
+        if (!response.isSuccessful) error(errorMessageFor(response.code(), string(R.string.collections_editor_error_search_trakt_lists)))
         response.body().orEmpty().mapNotNull { it.toPublicListResult() }
     }
 
@@ -128,7 +136,7 @@ class TraktPublicListSourceResolver @Inject constructor(
         call: suspend () -> Response<List<TraktProminentListDto>>
     ): List<TraktPublicListSearchResult> = withContext(Dispatchers.IO) {
         val response = publicRequest(call)
-        if (!response.isSuccessful) error(errorMessageFor(response.code(), "Could not load Trakt lists"))
+        if (!response.isSuccessful) error(errorMessageFor(response.code(), string(R.string.collections_editor_error_load_trakt_lists)))
         response.body().orEmpty().mapNotNull { item ->
             item.list?.toPublicListResult(
                 likeCount = item.likeCount
@@ -137,7 +145,7 @@ class TraktPublicListSourceResolver @Inject constructor(
     }
 
     private suspend fun <T> publicRequest(call: suspend () -> Response<T>): Response<T> {
-        return traktAuthService.executePublicRequest(call) ?: error("Trakt request failed")
+        return traktAuthService.executePublicRequest(call) ?: error(string(R.string.trakt_error_public_request_failed))
     }
 
     private fun row(source: TraktCollectionSource, page: Int, hasMore: Boolean, items: List<MetaPreview>): CatalogRow {
@@ -243,13 +251,15 @@ class TraktPublicListSourceResolver @Inject constructor(
 
     private fun TraktListSummaryDto.toPublicListResult(likeCount: Int? = null): TraktPublicListSearchResult? {
         val id = ids?.trakt ?: return null
-        val listTitle = name?.takeIf { it.isNotBlank() } ?: "Trakt List $id"
+        val listTitle = name?.takeIf { it.isNotBlank() }
+            ?: string(R.string.collections_editor_trakt_list_with_id, id)
         val owner = user?.username?.takeIf { it.isNotBlank() }
         val stats = buildList {
-            itemCount?.let { add("$it items") }
-            (likeCount ?: likes)?.let { add("$it likes") }
+            itemCount?.let { add(string(R.string.collections_editor_trakt_items_count, it)) }
+            (likeCount ?: likes)?.let { add(string(R.string.collections_editor_trakt_likes_count, it)) }
         }
-        val subtitle = (listOfNotNull(owner) + stats).joinToString(" • ").ifBlank { "Trakt public list" }
+        val subtitle = (listOfNotNull(owner) + stats).joinToString(" • ")
+            .ifBlank { string(R.string.collections_editor_trakt_public_list) }
         return TraktPublicListSearchResult(
             traktListId = id,
             title = listTitle,
@@ -312,9 +322,9 @@ class TraktPublicListSourceResolver @Inject constructor(
 
     private fun errorMessageFor(code: Int, fallback: String): String {
         return when (code) {
-            401, 403 -> "Trakt list not found or not public"
-            404 -> "Trakt list not found or not public"
-            429 -> "Trakt rate limit reached"
+            401, 403 -> string(R.string.trakt_error_list_not_found_or_private)
+            404 -> string(R.string.trakt_error_list_not_found_or_private)
+            429 -> string(R.string.trakt_error_rate_limit_reached)
             else -> "$fallback ($code)"
         }
     }

@@ -18,6 +18,10 @@ object AddonWebPage {
             config.setLocale(Locale.forLanguageTag(tag))
             baseContext.createConfigurationContext(config)
         } else baseContext
+        fun jsString(resId: Int): String = context.getString(resId)
+            .replace("\\", "\\\\")
+            .replace("'", "\\'")
+            .replace("\n", "\\n")
         val isCollectionsOnly = webConfigMode == AddonWebConfigMode.COLLECTIONS_ONLY
         val pageTitle = if (isCollectionsOnly) {
             context.getString(R.string.web_manage_collections_title)
@@ -1095,26 +1099,26 @@ ${tabButtons}
         <button class="btn import-tab-btn active" onclick="switchImportTab('paste')">${context.getString(R.string.web_import_tab_paste)}</button>
         <button class="btn import-tab-btn" onclick="switchImportTab('file')">${context.getString(R.string.web_import_tab_file)}</button>
         <button class="btn import-tab-btn" onclick="switchImportTab('url')">${context.getString(R.string.web_import_tab_url)}</button>
-      </div>
-      <div id="import-tab-paste" class="import-tab active">
-        <textarea id="importJsonInput" placeholder="Paste collections JSON here..." style="width:100%;min-height:120px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:0.75rem;color:#fff;font-family:monospace;font-size:0.8rem;resize:vertical"></textarea>
-      </div>
-      <div id="import-tab-file" class="import-tab">
-        <label style="display:block;text-align:center;padding:2rem;border:2px dashed rgba(255,255,255,0.15);border-radius:12px;cursor:pointer;color:rgba(255,255,255,0.4);font-size:0.85rem;transition:border-color 0.2s" id="fileDropLabel">
-          <input type="file" id="importFileInput" accept=".json,application/json" style="display:none" onchange="onFileSelected(this)">
-          Tap to select a .json file
-          <div id="fileSelectedName" style="color:#fff;font-weight:600;margin-top:0.5rem;display:none"></div>
-        </label>
-      </div>
-      <div id="import-tab-url" class="import-tab">
-        <input type="url" id="importUrlInput" placeholder="https://example.com/collections.json" style="width:100%;background:transparent;border:1px solid rgba(255,255,255,0.12);border-radius:100px;padding:0.875rem 1.25rem;color:#fff;font-family:inherit;font-size:0.9rem">
+	      </div>
+	      <div id="import-tab-paste" class="import-tab active">
+	        <textarea id="importJsonInput" placeholder="${context.getString(R.string.web_import_paste_placeholder)}" style="width:100%;min-height:120px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:0.75rem;color:#fff;font-family:monospace;font-size:0.8rem;resize:vertical"></textarea>
+	      </div>
+	      <div id="import-tab-file" class="import-tab">
+	        <label style="display:block;text-align:center;padding:2rem;border:2px dashed rgba(255,255,255,0.15);border-radius:12px;cursor:pointer;color:rgba(255,255,255,0.4);font-size:0.85rem;transition:border-color 0.2s" id="fileDropLabel">
+	          <input type="file" id="importFileInput" accept=".json,application/json" style="display:none" onchange="onFileSelected(this)">
+	          ${context.getString(R.string.web_import_file_select)}
+	          <div id="fileSelectedName" style="color:#fff;font-weight:600;margin-top:0.5rem;display:none"></div>
+	        </label>
+	      </div>
+	      <div id="import-tab-url" class="import-tab">
+	        <input type="url" id="importUrlInput" placeholder="${context.getString(R.string.collections_import_url_placeholder)}" style="width:100%;background:transparent;border:1px solid rgba(255,255,255,0.12);border-radius:100px;padding:0.875rem 1.25rem;color:#fff;font-family:inherit;font-size:0.9rem">
       </div>
       <div id="importError" style="color:rgba(207,102,121,0.9);font-size:0.8rem;margin-top:0.5rem;display:none"></div>
-      <div id="importSuccess" style="color:rgba(130,200,130,0.9);font-size:0.8rem;margin-top:0.5rem;display:none"></div>
-      <div style="display:flex;gap:0.75rem;margin-top:1rem">
-        <button class="btn" onclick="dismissImportModal()" style="flex:1">Cancel</button>
-        <button class="btn" onclick="doImport()" style="flex:1" id="importBtn">Import</button>
-      </div>
+	      <div id="importSuccess" style="color:rgba(130,200,130,0.9);font-size:0.8rem;margin-top:0.5rem;display:none"></div>
+	      <div style="display:flex;gap:0.75rem;margin-top:1rem">
+	        <button class="btn" onclick="dismissImportModal()" style="flex:1">${context.getString(R.string.collections_cancel)}</button>
+	        <button class="btn" onclick="doImport()" style="flex:1" id="importBtn">${context.getString(R.string.web_btn_import)}</button>
+	      </div>
     </div>
   </div>
 
@@ -1220,6 +1224,7 @@ var i18n = {
   tmdbNetworks: '${context.getString(R.string.collections_editor_tmdb_networks).replace("'", "\\'")}',
   tmdbYear: '${context.getString(R.string.collections_editor_tmdb_year).replace("'", "\\'")}',
   addFolder: '${context.getString(R.string.collections_editor_add_folder).replace("'", "\\'")}',
+  newFolder: '${jsString(R.string.collections_editor_new_folder)}',
   folders: '${context.getString(R.string.collections_editor_folders).replace("'", "\\'")}',
   hidden: '${context.getString(R.string.web_badge_disabled).replace("'", "\\'")}',
   display: '${context.getString(R.string.collections_editor_display).replace("'", "\\'")}',
@@ -1228,9 +1233,82 @@ var i18n = {
   shapeWide: '${context.getString(R.string.collections_editor_shape_wide).replace("'", "\\'")}',
   shapeSquare: '${context.getString(R.string.collections_editor_shape_square).replace("'", "\\'")}',
   tapToPickEmoji: '${context.getString(R.string.collections_editor_cover_emoji).replace("'", "\\'")}',
-  added: '${context.getString(R.string.web_btn_add).replace("'", "\\'")}',
-  add: '+ ${context.getString(R.string.web_btn_add).replace("'", "\\'")}'
-};
+  added: '${jsString(R.string.web_source_added)}',
+  add: '+ ${jsString(R.string.web_btn_add)}',
+  movies: '${jsString(R.string.type_movies)}',
+  seriesPlural: '${jsString(R.string.type_series_plural)}',
+  collectionNamePlaceholder: '${jsString(R.string.collections_editor_placeholder_name)}',
+  backdropPlaceholder: '${jsString(R.string.collections_editor_placeholder_backdrop)}',
+  folderPlaceholder: '${jsString(R.string.collections_editor_placeholder_folder)}',
+  searchEmojiPlaceholder: '${jsString(R.string.collections_editor_search_emoji_placeholder)}',
+  coverImagePlaceholder: '${jsString(R.string.collections_editor_placeholder_cover_image)}',
+  focusGifPlaceholder: '${jsString(R.string.collections_editor_placeholder_gif)}',
+  heroBackdropPlaceholder: '${jsString(R.string.collections_editor_placeholder_hero_backdrop)}',
+  heroVideoPlaceholder: '${jsString(R.string.collections_editor_placeholder_hero_video)}',
+  titleLogoPlaceholder: '${jsString(R.string.collections_editor_placeholder_title_logo)}',
+  filterActiveSourcesPlaceholder: '${jsString(R.string.collections_editor_filter_active_sources_placeholder)}',
+  searchCatalogsPlaceholder: '${jsString(R.string.collections_editor_search_catalogs_placeholder)}',
+  tmdbDefaultList: '${jsString(R.string.collections_editor_tmdb_default_list)}',
+  tmdbDefaultProduction: '${jsString(R.string.collections_editor_tmdb_default_production)}',
+  tmdbDefaultNetwork: '${jsString(R.string.collections_editor_tmdb_default_network)}',
+  tmdbDefaultDiscover: '${jsString(R.string.collections_editor_tmdb_default_discover)}',
+  tmdbMovieCollection: '${jsString(R.string.collections_editor_tmdb_movie_collection)}',
+  tmdbModePresets: '${jsString(R.string.collections_editor_tmdb_mode_presets)}',
+  tmdbModePublicList: '${jsString(R.string.collections_editor_tmdb_mode_public_list)}',
+  tmdbModeProduction: '${jsString(R.string.collections_editor_tmdb_mode_production)}',
+  tmdbModeNetwork: '${jsString(R.string.collections_editor_tmdb_mode_network)}',
+  tmdbModeCustom: '${jsString(R.string.collections_editor_tmdb_mode_custom)}',
+  tmdbPersonCredits: '${jsString(R.string.collections_editor_tmdb_person_credits)}',
+  tmdbDirectorCredits: '${jsString(R.string.collections_editor_tmdb_director_credits)}',
+  tmdbPlaceholderList: '${jsString(R.string.collections_editor_tmdb_placeholder_list)}',
+  tmdbPlaceholderCollection: '${jsString(R.string.collections_editor_tmdb_placeholder_collection)}',
+  tmdbPlaceholderCompany: '${jsString(R.string.collections_editor_tmdb_placeholder_company)}',
+  tmdbPlaceholderNetwork: '${jsString(R.string.collections_editor_tmdb_placeholder_network)}',
+  traktIdPlaceholder: '${jsString(R.string.collections_editor_trakt_id_placeholder)}',
+  traktNamePlaceholder: '${jsString(R.string.collection_editor_trakt_name_placeholder)}',
+  sortOriginal: '${jsString(R.string.collections_editor_sort_original)}',
+  sortListOrder: '${jsString(R.string.collections_editor_sort_list_order)}',
+  sortRecentlyAdded: '${jsString(R.string.collections_editor_sort_recently_added)}',
+  sortTitle: '${jsString(R.string.collections_editor_sort_title)}',
+  sortReleased: '${jsString(R.string.collections_editor_sort_released)}',
+  sortVotes: '${jsString(R.string.collections_editor_sort_votes)}',
+  choiceBoth: '${jsString(R.string.collection_editor_choice_both)}',
+  show: '${jsString(R.string.web_title_show)}',
+  hide: '${jsString(R.string.web_title_hide)}',
+  remove: '${jsString(R.string.web_btn_remove)}',
+  sendToTop: '${jsString(R.string.web_order_send_to_top)}',
+  sendToBottom: '${jsString(R.string.web_order_send_to_bottom)}',
+  moveUp: '${jsString(R.string.cd_move_up)}',
+  moveDown: '${jsString(R.string.cd_move_down)}',
+  issueSingular: '${jsString(R.string.web_issue_singular)}',
+  issuePlural: '${jsString(R.string.web_issue_plural)}',
+  sourceSingular: '${jsString(R.string.web_source_singular)}',
+  sourcePlural: '${jsString(R.string.web_source_plural)}',
+  noSourcesAdded: '${jsString(R.string.web_no_sources_added)}',
+  selectFileFirst: '${jsString(R.string.web_import_select_file_first)}',
+  enterUrl: '${jsString(R.string.web_import_enter_url)}',
+  failedFetchUrl: '${jsString(R.string.web_import_failed_fetch_url)}',
+  noJsonProvided: '${jsString(R.string.web_import_no_json)}',
+  expectedJsonArray: '${jsString(R.string.web_import_expected_array)}',
+  emptyJsonArray: '${jsString(R.string.web_import_empty_array)}',
+  invalidJson: '${jsString(R.string.web_import_invalid_json)}',
+  importSuccess: '${jsString(R.string.web_import_success)}',
+  importCollectionInvalidId: '${jsString(R.string.web_import_error_collection_invalid_id)}',
+  importCollectionInvalidTitle: '${jsString(R.string.web_import_error_collection_invalid_title)}',
+  importCollectionFoldersArray: '${jsString(R.string.web_import_error_collection_folders_array)}',
+  importFolderInvalidFormat: '${jsString(R.string.web_import_error_folder_invalid_format)}',
+  importFolderMissingId: '${jsString(R.string.web_import_error_folder_missing_id)}',
+  importFolderMissingTitle: '${jsString(R.string.web_import_error_folder_missing_title)}',
+  importSourcesArray: '${jsString(R.string.web_import_error_sources_array)}',
+  importInvalidTileShape: '${jsString(R.string.web_import_error_invalid_tile_shape)}',
+  importSourceInvalidFormat: '${jsString(R.string.web_import_error_source_invalid_format)}',
+  importSourceMissingAddonFields: '${jsString(R.string.web_import_error_source_missing_addon_fields)}',
+  importSourceMissingTmdbType: '${jsString(R.string.web_import_error_source_missing_tmdb_type)}',
+  importSourceMissingTraktId: '${jsString(R.string.web_import_error_source_missing_trakt_id)}',
+  errorValidTmdbId: '${jsString(R.string.collections_editor_error_valid_tmdb_id_or_url)}',
+  errorLoadTmdbSource: '${jsString(R.string.collections_editor_error_load_tmdb_source)}',
+  errorLoadTraktList: '${jsString(R.string.collections_editor_error_load_trakt_list)}'
+  };
 var connectionLost = false;
 var consecutiveErrors = 0;
 var allowAddonManagement = ${allowAddonManagement.toString().lowercase()};
@@ -1312,11 +1390,11 @@ function normalizeCollectionsForEditing(items) {
 }
 
 function tmdbDefaultTitle(type) {
-  if (type === 'LIST') return 'TMDB List';
-  if (type === 'COLLECTION') return 'TMDB Collection';
-  if (type === 'COMPANY') return 'TMDB Production';
-  if (type === 'NETWORK') return 'TMDB Network';
-  return 'TMDB Discover';
+  if (type === 'LIST') return i18n.tmdbDefaultList;
+  if (type === 'COLLECTION') return i18n.tmdbCollection;
+  if (type === 'COMPANY') return i18n.tmdbDefaultProduction;
+  if (type === 'NETWORK') return i18n.tmdbDefaultNetwork;
+  return i18n.tmdbDefaultDiscover;
 }
 
 var TMDB_PRESETS = [
@@ -1334,12 +1412,12 @@ var TMDB_PRESETS = [
 ];
 
 function tmdbModeLabel(mode) {
-  if (mode === 'PRESETS') return 'Presets';
-  if (mode === 'LIST') return 'Public List';
-  if (mode === 'COLLECTION') return 'Collection';
-  if (mode === 'COMPANY') return 'Production';
-  if (mode === 'NETWORK') return 'Network';
-  return 'Custom';
+  if (mode === 'PRESETS') return i18n.tmdbModePresets;
+  if (mode === 'LIST') return i18n.tmdbModePublicList;
+  if (mode === 'COLLECTION') return i18n.tmdbCollection;
+  if (mode === 'COMPANY') return i18n.tmdbModeProduction;
+  if (mode === 'NETWORK') return i18n.tmdbModeNetwork;
+  return i18n.tmdbModeCustom;
 }
 
 function tmdbModeHelp(mode) {
@@ -1372,14 +1450,14 @@ async function addTmdbPreset(ci, fi, presetIndex) {
 }
 
 function tmdbSourceSubtitle(src) {
-  var media = src.mediaType === 'TV' ? i18n.series : i18n.movie + 's';
-  if (src.tmdbSourceType === 'NETWORK') return ['Network', i18n.series].join(' • ');
-  if (src.tmdbSourceType === 'COMPANY') return ['Production', media, sortLabel(src.sortBy || 'popularity.desc')].join(' • ');
+  var media = src.mediaType === 'TV' ? i18n.seriesPlural : i18n.movies;
+  if (src.tmdbSourceType === 'NETWORK') return [i18n.tmdbModeNetwork, i18n.seriesPlural].join(' • ');
+  if (src.tmdbSourceType === 'COMPANY') return [i18n.tmdbModeProduction, media, sortLabel(src.sortBy || 'popularity.desc')].join(' • ');
   if (src.tmdbSourceType === 'COLLECTION') return i18n.tmdbCollection;
-  if (src.tmdbSourceType === 'LIST') return 'TMDB List';
-  if (src.tmdbSourceType === 'PERSON') return ['Person Credits', media, sortLabel(src.sortBy || 'popularity.desc')].join(' • ');
-  if (src.tmdbSourceType === 'DIRECTOR') return ['Director Credits', media, sortLabel(src.sortBy || 'popularity.desc')].join(' • ');
-  return ['TMDB Discover', media, sortLabel(src.sortBy || 'popularity.desc')].join(' • ');
+  if (src.tmdbSourceType === 'LIST') return i18n.tmdbDefaultList;
+  if (src.tmdbSourceType === 'PERSON') return [i18n.tmdbPersonCredits, media, sortLabel(src.sortBy || 'popularity.desc')].join(' • ');
+  if (src.tmdbSourceType === 'DIRECTOR') return [i18n.tmdbDirectorCredits, media, sortLabel(src.sortBy || 'popularity.desc')].join(' • ');
+  return [i18n.tmdbDefaultDiscover, media, sortLabel(src.sortBy || 'popularity.desc')].join(' • ');
 }
 
 var EMOJI_CATEGORIES = [
@@ -1627,16 +1705,16 @@ function renderCatalogs() {
 
     li.innerHTML =
       '<div class="addon-order">' +
-        '<button class="btn-order" onclick="moveCatalogToTop(' + i + ')"' + (topDisabled ? ' disabled' : '') + ' title="Send to top">' +
+        '<button class="btn-order" onclick="moveCatalogToTop(' + i + ')"' + (topDisabled ? ' disabled' : '') + ' title="' + escapeAttr(i18n.sendToTop) + '">' +
           '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11l-6-6-6 6"/><path d="M18 18l-6-6-6 6"/></svg>' +
         '</button>' +
-        '<button class="btn-order" onclick="moveCatalog(' + i + ',-1)"' + (upDisabled ? ' disabled' : '') + ' title="Move up">' +
+        '<button class="btn-order" onclick="moveCatalog(' + i + ',-1)"' + (upDisabled ? ' disabled' : '') + ' title="' + escapeAttr(i18n.moveUp) + '">' +
           '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>' +
         '</button>' +
-        '<button class="btn-order" onclick="moveCatalog(' + i + ',1)"' + (downDisabled ? ' disabled' : '') + ' title="Move down">' +
+        '<button class="btn-order" onclick="moveCatalog(' + i + ',1)"' + (downDisabled ? ' disabled' : '') + ' title="' + escapeAttr(i18n.moveDown) + '">' +
           '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>' +
         '</button>' +
-        '<button class="btn-order" onclick="moveCatalogToBottom(' + i + ')"' + (bottomDisabled ? ' disabled' : '') + ' title="Send to bottom">' +
+        '<button class="btn-order" onclick="moveCatalogToBottom(' + i + ')"' + (bottomDisabled ? ' disabled' : '') + ' title="' + escapeAttr(i18n.sendToBottom) + '">' +
           '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l6 6 6-6"/><path d="M6 13l6 6 6-6"/></svg>' +
         '</button>' +
       '</div>' +
@@ -2014,11 +2092,24 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+function formatTemplate(template, values) {
+  return String(template || '').replace(/\{(\w+)\}/g, function(match, key) {
+    return Object.prototype.hasOwnProperty.call(values, key) ? values[key] : match;
+  });
+}
+
 function formatCatalogTitle(name, type) {
   var safeName = name || '';
   var safeType = type || '';
   if (!safeType) return safeName;
-  return safeName + ' - ' + toTitleCase(safeType);
+  return safeName + ' - ' + localizedCatalogType(safeType);
+}
+
+function localizedCatalogType(value) {
+  var normalized = String(value || '').toLowerCase();
+  if (normalized === 'movie') return i18n.movie;
+  if (normalized === 'series' || normalized === 'tv') return i18n.series;
+  return toTitleCase(value);
 }
 
 function toTitleCase(value) {
@@ -2074,7 +2165,7 @@ function updateCollectionTitle(ci, val) {
 }
 
 function addFolder(ci) {
-  collections[ci].folders.push({ id: generateId(), title: 'New Folder', coverImageUrl: null, focusGifUrl: null, focusGifEnabled: true, coverEmoji: null, tileShape: 'SQUARE', hideTitle: false, heroBackdropUrl: null, heroVideoUrl: null, titleLogoUrl: null, catalogSources: [], sources: [] });
+  collections[ci].folders.push({ id: generateId(), title: i18n.newFolder, coverImageUrl: null, focusGifUrl: null, focusGifEnabled: true, coverEmoji: null, tileShape: 'SQUARE', hideTitle: false, heroBackdropUrl: null, heroVideoUrl: null, titleLogoUrl: null, catalogSources: [], sources: [] });
   expandedFolder = ci + '-' + (collections[ci].folders.length - 1);
   renderCollections();
 }
@@ -2233,7 +2324,7 @@ async function addTmdbSource(ci, fi) {
     }
   }
   if (type !== 'DISCOVER' && (!tmdbId || tmdbId < 1)) {
-    errorEl.textContent = 'Enter a TMDB ID for this source';
+    errorEl.textContent = i18n.errorValidTmdbId;
     errorEl.style.display = 'block';
     return;
   }
@@ -2250,7 +2341,7 @@ async function addTmdbSource(ci, fi) {
     getFolderSources(folder).push({
       provider: 'tmdb',
       tmdbSourceType: type,
-      title: mediaTypes.length > 1 ? title + ' ' + (selectedMediaType === 'TV' ? 'Series' : 'Movies') : title,
+      title: mediaTypes.length > 1 ? title + ' ' + (selectedMediaType === 'TV' ? i18n.seriesPlural : i18n.movies) : title,
       tmdbId: tmdbId,
       mediaType: selectedMediaType,
       sortBy: sortBy,
@@ -2310,7 +2401,7 @@ async function autoFillTmdbSource(ci, fi) {
   var metadata = await loadTmdbMetadata(type, tmdbId);
   if (!metadata) {
     if (errorEl) {
-      errorEl.textContent = 'Could not load TMDB source';
+      errorEl.textContent = i18n.errorLoadTmdbSource;
       errorEl.style.display = 'block';
     }
     return;
@@ -2355,19 +2446,19 @@ async function addTraktSource(ci, fi) {
   var input = inputEl ? inputEl.value.trim() : '';
   var metadata = await loadTraktMetadata(input);
   if (!metadata || !metadata.traktListId) {
-    errorEl.textContent = 'Could not load Trakt list';
+    errorEl.textContent = i18n.errorLoadTraktList;
     errorEl.style.display = 'block';
     return;
   }
   errorEl.style.display = 'none';
-  var title = (titleEl && titleEl.value.trim()) || metadata.title || ('Trakt List ' + metadata.traktListId);
+  var title = (titleEl && titleEl.value.trim()) || metadata.title || (i18n.traktList + ' ' + metadata.traktListId);
   applyTraktMetadataToFolder(ci, fi, metadata, false);
   var mediaType = mediaEl ? mediaEl.value : 'MOVIE';
   var mediaTypes = bothEl && bothEl.checked ? ['MOVIE', 'TV'] : [mediaType];
   mediaTypes.forEach(function(selectedMediaType) {
     getFolderSources(folder).push({
       provider: 'trakt',
-      title: mediaTypes.length > 1 ? title + ' ' + (selectedMediaType === 'TV' ? 'Series' : 'Movies') : title,
+      title: mediaTypes.length > 1 ? title + ' ' + (selectedMediaType === 'TV' ? i18n.seriesPlural : i18n.movies) : title,
       traktListId: metadata.traktListId,
       mediaType: selectedMediaType,
       sortBy: sortEl ? sortEl.value : 'rank',
@@ -2411,9 +2502,9 @@ async function searchTraktSources(ci, fi) {
     var data = await res.json();
     var results = Array.isArray(data) ? data : [];
     resultsEl.innerHTML = results.map(function(item) {
-      return '<button class="tmdb-preset-card" onclick="addTraktSearchResult(' + ci + ',' + fi + ',' + item.id + ',\'' + escapeJsSingle(item.title || ('Trakt List ' + item.id)) + '\',\'' + escapeJsSingle(item.coverImageUrl || '') + '\')">' +
-        '<span>' + escapeHtml(item.title || ('Trakt List ' + item.id)) + '<br><small style="color:rgba(255,255,255,0.35);font-weight:400">' + escapeHtml(item.subtitle || 'Trakt public list') + '</small></span>' +
-        '<span style="color:rgba(130,200,130,0.9);font-size:0.72rem;flex-shrink:0">+ Add</span>' +
+      return '<button class="tmdb-preset-card" onclick="addTraktSearchResult(' + ci + ',' + fi + ',' + item.id + ',\'' + escapeJsSingle(item.title || (i18n.traktList + ' ' + item.id)) + '\',\'' + escapeJsSingle(item.coverImageUrl || '') + '\')">' +
+        '<span>' + escapeHtml(item.title || (i18n.traktList + ' ' + item.id)) + '<br><small style="color:rgba(255,255,255,0.35);font-weight:400">' + escapeHtml(item.subtitle || i18n.traktList) + '</small></span>' +
+        '<span style="color:rgba(130,200,130,0.9);font-size:0.72rem;flex-shrink:0">' + escapeHtml(i18n.add) + '</span>' +
       '</button>';
     }).join('');
   } catch (e) {
@@ -2427,13 +2518,13 @@ function addTraktSearchResult(ci, fi, id, title, coverImageUrl) {
   var bothEl = document.getElementById('trakt-both-' + ci + '-' + fi);
   var sortEl = document.getElementById('trakt-sort-' + ci + '-' + fi);
   var sortHowEl = document.getElementById('trakt-sort-how-' + ci + '-' + fi);
-  var resolvedTitle = (titleEl && titleEl.value.trim()) || title || ('Trakt List ' + id);
+  var resolvedTitle = (titleEl && titleEl.value.trim()) || title || (i18n.traktList + ' ' + id);
   var mediaType = mediaEl ? mediaEl.value : 'MOVIE';
   var mediaTypes = bothEl && bothEl.checked ? ['MOVIE', 'TV'] : [mediaType];
   mediaTypes.forEach(function(selectedMediaType) {
     getFolderSources(folder).push({
       provider: 'trakt',
-      title: mediaTypes.length > 1 ? resolvedTitle + ' ' + (selectedMediaType === 'TV' ? 'Series' : 'Movies') : resolvedTitle,
+      title: mediaTypes.length > 1 ? resolvedTitle + ' ' + (selectedMediaType === 'TV' ? i18n.seriesPlural : i18n.movies) : resolvedTitle,
       traktListId: id,
       mediaType: selectedMediaType,
       sortBy: sortEl ? sortEl.value : 'rank',
@@ -2483,38 +2574,46 @@ function catalogSourceLabel(src) {
   var match = availableCatalogs.find(function(c) {
     return c.key === src.addonId + '_' + src.type + '_' + src.catalogId;
   });
-  if (match) return match.catalogName + ' - ' + toTitleCase(match.type) + ' (' + match.addonName + ')';
-  return src.catalogId + ' - ' + toTitleCase(src.type) + ' (' + src.addonId + ')';
+  if (match) return match.catalogName + ' - ' + localizedCatalogType(match.type) + ' (' + match.addonName + ')';
+  return src.catalogId + ' - ' + localizedCatalogType(src.type) + ' (' + src.addonId + ')';
 }
 
 function tmdbSourceLabel(src) {
-  var media = src.mediaType === 'TV' ? i18n.series : i18n.movie + 's';
+  var media = src.mediaType === 'TV' ? i18n.seriesPlural : i18n.movies;
   var type = src.tmdbSourceType || 'DISCOVER';
   var title = src.title || tmdbDefaultTitle(type);
   return title + ' - ' + typeLabel(type) + ' (' + media + ')';
 }
 
 function traktSourceLabel(src) {
-  var media = src.mediaType === 'TV' ? i18n.series : i18n.movie + 's';
-  var title = src.title || 'Trakt List ' + (src.traktListId || '');
-  return title + ' - Trakt List (' + media + ', ' + traktSortLabel(src.sortBy || 'rank') + ')';
+  var media = src.mediaType === 'TV' ? i18n.seriesPlural : i18n.movies;
+  var title = src.title || i18n.traktList + ' ' + (src.traktListId || '');
+  return title + ' - ' + i18n.traktList + ' (' + media + ', ' + traktSortLabel(src.sortBy || 'rank') + ')';
 }
 
 function traktSortLabel(value) {
-  if (value === 'added') return 'Recently Added';
-  if (value === 'title') return 'Title';
-  if (value === 'released') return 'Released';
+  if (value === 'added') return i18n.sortRecentlyAdded;
+  if (value === 'title') return i18n.sortTitle;
+  if (value === 'released') return i18n.sortReleased;
   if (value === 'popularity') return i18n.popular;
-  if (value === 'votes') return 'Votes';
-  return 'List Order';
+  if (value === 'votes') return i18n.sortVotes;
+  return i18n.sortListOrder;
 }
 
 function typeLabel(value) {
+  var type = String(value || '').toUpperCase();
+  if (type === 'LIST') return i18n.tmdbDefaultList;
+  if (type === 'COLLECTION') return i18n.tmdbCollection;
+  if (type === 'COMPANY') return i18n.tmdbModeProduction;
+  if (type === 'NETWORK') return i18n.tmdbModeNetwork;
+  if (type === 'PERSON') return i18n.tmdbPersonCredits;
+  if (type === 'DIRECTOR') return i18n.tmdbDirectorCredits;
+  if (type === 'DISCOVER') return i18n.tmdbDefaultDiscover;
   return (value || '').toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
 }
 
 function sortLabel(value) {
-  if (value === 'original') return 'Original';
+  if (value === 'original') return i18n.sortOriginal;
   if (value === 'vote_average.desc') return i18n.topRated;
   if (value === 'primary_release_date.desc' || value === 'first_air_date.desc') return i18n.recent;
   return i18n.popular;
@@ -2558,7 +2657,7 @@ function tmdbBuilderHtml(ci, fi, folder) {
     TMDB_PRESETS.forEach(function(preset, index) {
       html += '<button class="tmdb-preset-card" onclick="addTmdbPreset(' + ci + ',' + fi + ',' + index + ')">' +
         '<span>' + escapeHtml(preset.title) + '<br><small style="color:rgba(255,255,255,0.35);font-weight:400">' + escapeHtml(tmdbSourceSubtitle(preset.source)) + '</small></span>' +
-        '<span style="color:rgba(130,200,130,0.9);font-size:0.72rem;flex-shrink:0">+ Add</span>' +
+        '<span style="color:rgba(130,200,130,0.9);font-size:0.72rem;flex-shrink:0">' + escapeHtml(i18n.add) + '</span>' +
       '</button>';
     });
     html += '</div>';
@@ -2570,9 +2669,9 @@ function tmdbBuilderHtml(ci, fi, folder) {
   var idLabel = mode === 'LIST' ? i18n.tmdbPublicList :
     mode === 'COLLECTION' ? i18n.tmdbCollectionId :
     mode === 'COMPANY' ? i18n.tmdbCompanySearch : i18n.tmdbNetworkId;
-  var idPlaceholder = mode === 'LIST' ? 'https://www.themoviedb.org/list/8504994 or 8504994' :
-    mode === 'COLLECTION' ? '10 for Star Wars Collection' :
-    mode === 'COMPANY' ? 'Marvel Studios, 420, or company URL' : '213 for Netflix, 49 for HBO, 2739 for Disney+';
+  var idPlaceholder = mode === 'LIST' ? i18n.tmdbPlaceholderList :
+    mode === 'COLLECTION' ? i18n.tmdbPlaceholderCollection :
+    mode === 'COMPANY' ? i18n.tmdbPlaceholderCompany : i18n.tmdbPlaceholderNetwork;
   var idHelper = mode === 'LIST' ? i18n.tmdbListHelper :
     mode === 'COLLECTION' ? i18n.tmdbCollectionHelper :
     mode === 'COMPANY' ? i18n.tmdbSearchHelper : i18n.tmdbNetworkHelper;
@@ -2591,13 +2690,13 @@ function tmdbBuilderHtml(ci, fi, folder) {
       '<option value="MOVIE">' + escapeHtml(i18n.movie) + '</option>' +
       '<option value="TV">' + escapeHtml(i18n.series) + '</option>' +
     '</select>' +
-    '<label class="tmdb-checkbox"><input id="tmdb-both-' + ci + '-' + fi + '" type="checkbox"> Both</label>';
+      '<label class="tmdb-checkbox"><input id="tmdb-both-' + ci + '-' + fi + '" type="checkbox"> ' + escapeHtml(i18n.choiceBoth) + '</label>';
   } else {
     html += '<input id="tmdb-media-' + ci + '-' + fi + '" type="hidden" value="' + (mode === 'NETWORK' ? 'TV' : 'MOVIE') + '">';
   }
   html += '<label class="tmdb-helper">' + escapeHtml(i18n.filterSort) + '</label>' +
     '<select id="tmdb-sort-' + ci + '-' + fi + '">' +
-    ((mode === 'LIST' || mode === 'COLLECTION') ? '<option value="original" selected>Original</option>' : '') +
+    ((mode === 'LIST' || mode === 'COLLECTION') ? '<option value="original" selected>' + escapeHtml(i18n.sortOriginal) + '</option>' : '') +
     (mode === 'COLLECTION' ? '' : '<option value="popularity.desc"' + (defaultSort === 'popularity.desc' ? ' selected' : '') + '>' + escapeHtml(i18n.popular) + '</option>') +
     '<option value="vote_average.desc">' + escapeHtml(i18n.topRated) + '</option>' +
     '<option value="' + (mode === 'NETWORK' ? 'first_air_date.desc' : 'primary_release_date.desc') + '">' + escapeHtml(i18n.recent) + '</option>' +
@@ -2626,23 +2725,23 @@ function tmdbBuilderHtml(ci, fi, folder) {
 function traktBuilderHtml(ci, fi) {
   var html = '<div class="tmdb-source-grid" style="margin-top:0.65rem">';
   html += '<label class="tmdb-helper">' + escapeHtml(i18n.traktList) + '</label>' +
-    '<input id="trakt-id-' + ci + '-' + fi + '" class="tmdb-source-wide" type="text" placeholder="https://trakt.tv/lists/123456 or 123456" onblur="autoFillTraktSource(' + ci + ',' + fi + ')">';
+    '<input id="trakt-id-' + ci + '-' + fi + '" class="tmdb-source-wide" type="text" placeholder="' + escapeAttr(i18n.traktIdPlaceholder) + '" onblur="autoFillTraktSource(' + ci + ',' + fi + ')">';
   html += '<label class="tmdb-helper">' + escapeHtml(i18n.tmdbDisplayTitle) + '</label>' +
-    '<input id="trakt-title-' + ci + '-' + fi + '" class="tmdb-source-wide" placeholder="Weekend Watch, Award Winners">';
+    '<input id="trakt-title-' + ci + '-' + fi + '" class="tmdb-source-wide" placeholder="' + escapeAttr(i18n.traktNamePlaceholder) + '">';
   html += '<label class="tmdb-helper">' + escapeHtml(i18n.filterType) + '</label>' +
     '<select id="trakt-media-' + ci + '-' + fi + '">' +
       '<option value="MOVIE">' + escapeHtml(i18n.movie) + '</option>' +
       '<option value="TV">' + escapeHtml(i18n.series) + '</option>' +
     '</select>' +
-    '<label class="tmdb-checkbox"><input id="trakt-both-' + ci + '-' + fi + '" type="checkbox"> Both</label>';
+    '<label class="tmdb-checkbox"><input id="trakt-both-' + ci + '-' + fi + '" type="checkbox"> ' + escapeHtml(i18n.choiceBoth) + '</label>';
   html += '<label class="tmdb-helper">' + escapeHtml(i18n.filterSort) + '</label>' +
     '<select id="trakt-sort-' + ci + '-' + fi + '">' +
-      '<option value="rank">List Order</option>' +
-      '<option value="added">Recently Added</option>' +
-      '<option value="title">Title</option>' +
-      '<option value="released">Released</option>' +
+      '<option value="rank">' + escapeHtml(i18n.sortListOrder) + '</option>' +
+      '<option value="added">' + escapeHtml(i18n.sortRecentlyAdded) + '</option>' +
+      '<option value="title">' + escapeHtml(i18n.sortTitle) + '</option>' +
+      '<option value="released">' + escapeHtml(i18n.sortReleased) + '</option>' +
       '<option value="popularity">' + escapeHtml(i18n.popular) + '</option>' +
-      '<option value="votes">Votes</option>' +
+      '<option value="votes">' + escapeHtml(i18n.sortVotes) + '</option>' +
     '</select>';
   html += '<label class="tmdb-helper">' + escapeHtml(i18n.traktDirection) + '</label>' +
     '<select id="trakt-sort-how-' + ci + '-' + fi + '">' +
@@ -2753,7 +2852,7 @@ function getCollectionErrors(col) {
   if (!col.folders || col.folders.length === 0) errors.push('No folders');
   (col.folders || []).forEach(function(f, fi) {
     if (getFolderSources(f).length === 0) {
-      errors.push((f.title || 'Folder ' + (fi + 1)) + ': no sources');
+      errors.push((f.title || i18n.newFolder + ' ' + (fi + 1)) + ': ' + i18n.noSourcesAdded);
     }
   });
   return errors;
@@ -2790,9 +2889,9 @@ function renderCollections() {
     var headerHtml =
       '<div class="collection-header collapse-header" onclick="toggleCollectionExpand(' + ci + ')">' +
         '<span class="collapse-arrow' + (isExpanded ? ' open' : '') + '">&#9654;</span>' +
-        '<input class="collection-title-input" value="' + escapeAttr(col.title) + '" onchange="updateCollectionTitle(' + ci + ',this.value);updateSaveButtonState()" onclick="event.stopPropagation()" placeholder="Collection name">' +
+        '<input class="collection-title-input" value="' + escapeAttr(col.title) + '" onchange="updateCollectionTitle(' + ci + ',this.value);updateSaveButtonState()" onclick="event.stopPropagation()" placeholder="' + escapeAttr(i18n.collectionNamePlaceholder) + '">' +
         (disabled ? '<span class="badge-collection-disabled">' + i18n.hidden + '</span>' : '') +
-        (errors.length > 0 ? '<span style="font-size:0.6rem;font-weight:700;color:rgba(255,180,60,0.9);background:rgba(255,180,60,0.12);padding:0.2rem 0.5rem;border-radius:100px;flex-shrink:0">' + errors.length + ' issue' + (errors.length > 1 ? 's' : '') + '</span>' : '') +
+        (errors.length > 0 ? '<span style="font-size:0.6rem;font-weight:700;color:rgba(255,180,60,0.9);background:rgba(255,180,60,0.12);padding:0.2rem 0.5rem;border-radius:100px;flex-shrink:0">' + errors.length + ' ' + (errors.length > 1 ? i18n.issuePlural : i18n.issueSingular) + '</span>' : '') +
         '<div class="col-actions" onclick="event.stopPropagation()">' +
           '<button class="btn-order" onclick="moveCollection(' + ci + ',-1)"' + (ci === 0 ? ' disabled' : '') + '>' +
             '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 15l-6-6-6 6"/></svg>' +
@@ -2800,10 +2899,10 @@ function renderCollections() {
           '<button class="btn-order" onclick="moveCollection(' + ci + ',1)"' + (ci === collections.length - 1 ? ' disabled' : '') + '>' +
             '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>' +
           '</button>' +
-          '<button class="btn-icon" onclick="toggleCollection(' + ci + ')" title="' + (disabled ? 'Show' : 'Hide') + '">' +
+          '<button class="btn-icon" onclick="toggleCollection(' + ci + ')" title="' + escapeAttr(disabled ? i18n.show : i18n.hide) + '">' +
             '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="' + (disabled ? 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 9a3 3 0 100 6 3 3 0 000-6z' : 'M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19M1 1l22 22') + '"/></svg>' +
           '</button>' +
-          '<button class="btn-icon danger" onclick="removeCollection(' + ci + ')" title="Remove">' +
+          '<button class="btn-icon danger" onclick="removeCollection(' + ci + ')" title="' + escapeAttr(i18n.remove) + '">' +
             '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>' +
           '</button>' +
         '</div>' +
@@ -2822,7 +2921,7 @@ function renderCollections() {
         '<div class="col-setting-row">' +
           '<span class="col-meta-label">' + i18n.backdrop + '</span>' +
           '<img id="col-backdrop-preview-' + ci + '" src="' + escapeAttr(col.backdropImageUrl || '') + '" style="' + (col.backdropImageUrl ? '' : 'display:none') + '" onerror="this.style.display=\'none\'">' +
-          '<input type="url" placeholder="Image URL (optional)" value="' + escapeAttr(col.backdropImageUrl || '') + '" oninput="updateCollectionBackdrop(' + ci + ',this.value)">' +
+          '<input type="url" placeholder="' + escapeAttr(i18n.backdropPlaceholder) + '" value="' + escapeAttr(col.backdropImageUrl || '') + '" oninput="updateCollectionBackdrop(' + ci + ',this.value)">' +
         '</div>' +
         '<div class="col-setting-row">' +
           '<span class="toggle-label">' + i18n.pinAbove + '</span>' +
@@ -2901,16 +3000,16 @@ function renderCollections() {
         var val = c.key.split('_')[0] + '::' + c.type + '::' + c.key.split('_').slice(2).join('_');
         var parts = val.split('::');
         var alreadyAdded = existingSources.some(function(s) { return s.addonId === parts[0] && s.type === parts[1] && s.catalogId === parts[2]; });
-        var label = c.catalogName + ' - ' + toTitleCase(c.type) + ' (' + c.addonName + ')';
+        var label = c.catalogName + ' - ' + localizedCatalogType(c.type) + ' (' + c.addonName + ')';
         if (alreadyAdded) {
           sourceListHtml += '<div class="source-item" data-label="' + escapeAttr(label) + '" style="padding:0.4rem 0.75rem;opacity:0.4">' +
             '<span class="source-label">' + escapeHtml(label) + '</span>' +
-            '<span style="font-size:0.7rem;color:rgba(130,200,130,0.85);flex-shrink:0">Added</span>' +
+            '<span style="font-size:0.7rem;color:rgba(130,200,130,0.85);flex-shrink:0">' + escapeHtml(i18n.added) + '</span>' +
           '</div>';
         } else {
           sourceListHtml += '<div class="source-item" data-label="' + escapeAttr(label) + '" style="cursor:pointer;padding:0.4rem 0.75rem" onclick="addCatalogSourceByVal(' + ci + ',' + fi + ',\'' + escapeAttr(val) + '\')">' +
             '<span class="source-label" style="color:rgba(255,255,255,0.45)">' + escapeHtml(label) + '</span>' +
-            '<span style="font-size:0.7rem;color:rgba(255,255,255,0.2);flex-shrink:0">+ Add</span>' +
+            '<span style="font-size:0.7rem;color:rgba(255,255,255,0.2);flex-shrink:0">' + escapeHtml(i18n.add) + '</span>' +
           '</div>';
         }
       });
@@ -2923,8 +3022,8 @@ function renderCollections() {
         '<div class="folder-card">' +
           '<div class="folder-header collapse-header" onclick="toggleFolderExpand(' + ci + ',' + fi + ')">' +
             '<span class="collapse-arrow' + (isFolderExpanded ? ' open' : '') + '">&#9654;</span>' +
-            '<input class="folder-title-input" value="' + escapeAttr(folder.title) + '" onchange="updateFolderTitle(' + ci + ',' + fi + ',this.value)" onclick="event.stopPropagation()" placeholder="Folder name">' +
-            (!isFolderExpanded ? '<span style="font-size:0.7rem;color:rgba(255,255,255,0.3);background:rgba(255,255,255,0.06);padding:0.15rem 0.5rem;border-radius:100px;flex-shrink:0">' + srcCount + ' source' + (srcCount !== 1 ? 's' : '') + '</span>' : '') +
+            '<input class="folder-title-input" value="' + escapeAttr(folder.title) + '" onchange="updateFolderTitle(' + ci + ',' + fi + ',this.value)" onclick="event.stopPropagation()" placeholder="' + escapeAttr(i18n.folderPlaceholder) + '">' +
+            (!isFolderExpanded ? '<span style="font-size:0.7rem;color:rgba(255,255,255,0.3);background:rgba(255,255,255,0.06);padding:0.15rem 0.5rem;border-radius:100px;flex-shrink:0">' + srcCount + ' ' + (srcCount !== 1 ? i18n.sourcePlural : i18n.sourceSingular) + '</span>' : '') +
             '<div class="col-actions" onclick="event.stopPropagation()">' +
               '<button class="btn-order" onclick="moveFolder(' + ci + ',' + fi + ',-1)"' + (fi === 0 ? ' disabled' : '') + ' style="width:22px;height:22px">' +
                 '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 15l-6-6-6 6"/></svg>' +
@@ -2956,16 +3055,16 @@ function renderCollections() {
                 '<span style="font-size:0.78rem;color:rgba(255,255,255,0.3);flex:1">' + i18n.tapToPickEmoji + '</span>' +
               '</div>' +
               '<div id="emoji-grid-' + ci + '-' + fi + '" class="emoji-grid-wrap" style="margin:0 0.75rem 0.5rem">' +
-                '<input class="emoji-grid-search" placeholder="Search emoji..." oninput="filterEmoji(' + ci + ',' + fi + ',this.value)">' +
+                '<input class="emoji-grid-search" placeholder="' + escapeAttr(i18n.searchEmojiPlaceholder) + '" oninput="filterEmoji(' + ci + ',' + fi + ',this.value)">' +
                 '<div class="emoji-grid" id="emoji-cells-' + ci + '-' + fi + '">' + emojiCellsHtml + '</div>' +
               '</div>' : '') +
               (coverMode === 'image' ?
               '<div class="folder-setting-item">' +
                 '<img id="cover-preview-' + ci + '-' + fi + '" src="' + escapeAttr(folder.coverImageUrl || '') + '" style="' + (folder.coverImageUrl ? '' : 'display:none') + '" onerror="this.style.display=\'none\'">' +
-                '<input type="url" placeholder="Cover image URL" value="' + escapeAttr(folder.coverImageUrl || '') + '" oninput="updateFolderCoverImage(' + ci + ',' + fi + ',this.value)">' +
+                '<input type="url" placeholder="' + escapeAttr(i18n.coverImagePlaceholder) + '" value="' + escapeAttr(folder.coverImageUrl || '') + '" oninput="updateFolderCoverImage(' + ci + ',' + fi + ',this.value)">' +
               '</div>' : '') +
               '<div class="folder-setting-item">' +
-                '<input type="url" placeholder="Focused GIF URL (optional)" value="' + escapeAttr(folder.focusGifUrl || '') + '" oninput="updateFolderFocusGifUrl(' + ci + ',' + fi + ',this.value)">' +
+                '<input type="url" placeholder="' + escapeAttr(i18n.focusGifPlaceholder) + '" value="' + escapeAttr(folder.focusGifUrl || '') + '" oninput="updateFolderFocusGifUrl(' + ci + ',' + fi + ',this.value)">' +
               '</div>' +
               '<div class="folder-setting-item">' +
                 '<span class="toggle-label">' + i18n.playGif + '</span>' +
@@ -2998,32 +3097,32 @@ function renderCollections() {
               '<div class="folder-setting-item">' +
                 '<span class="folder-setting-label">' + i18n.heroBackdrop + '</span>' +
                 '<img id="hero-backdrop-preview-' + ci + '-' + fi + '" src="' + escapeAttr(folder.heroBackdropUrl || '') + '" style="' + (folder.heroBackdropUrl ? '' : 'display:none') + '" onerror="this.style.display=\'none\'">' +
-                '<input type="url" placeholder="Hero backdrop URL" value="' + escapeAttr(folder.heroBackdropUrl || '') + '" oninput="updateFolderHeroBackdropUrl(' + ci + ',' + fi + ',this.value)">' +
+                '<input type="url" placeholder="' + escapeAttr(i18n.heroBackdropPlaceholder) + '" value="' + escapeAttr(folder.heroBackdropUrl || '') + '" oninput="updateFolderHeroBackdropUrl(' + ci + ',' + fi + ',this.value)">' +
               '</div>' +
               '<div class="folder-setting-item">' +
                 '<span class="folder-setting-label">' + i18n.heroVideo + '</span>' +
-                '<input type="url" placeholder="Hero video URL" value="' + escapeAttr(folder.heroVideoUrl || '') + '" oninput="updateFolderHeroVideoUrl(' + ci + ',' + fi + ',this.value)">' +
+                '<input type="url" placeholder="' + escapeAttr(i18n.heroVideoPlaceholder) + '" value="' + escapeAttr(folder.heroVideoUrl || '') + '" oninput="updateFolderHeroVideoUrl(' + ci + ',' + fi + ',this.value)">' +
               '</div>' +
               '<div class="folder-setting-item">' +
                 '<span class="folder-setting-label">' + i18n.titleLogo + '</span>' +
                 '<img id="title-logo-preview-' + ci + '-' + fi + '" src="' + escapeAttr(folder.titleLogoUrl || '') + '" style="' + (folder.titleLogoUrl ? '' : 'display:none;') + 'width:52px;height:32px;object-fit:contain" onerror="this.style.display=\'none\'">' +
-                '<input type="url" placeholder="Title logo URL" value="' + escapeAttr(folder.titleLogoUrl || '') + '" oninput="updateFolderTitleLogoUrl(' + ci + ',' + fi + ',this.value)">' +
+                '<input type="url" placeholder="' + escapeAttr(i18n.titleLogoPlaceholder) + '" value="' + escapeAttr(folder.titleLogoUrl || '') + '" oninput="updateFolderTitleLogoUrl(' + ci + ',' + fi + ',this.value)">' +
               '</div>' : '') +
             '</div>' +
             '<div class="folder-settings-group">' +
               '<div class="folder-settings-group-label">' + i18n.catalogs + '</div>' +
               '<div style="padding:0.5rem 0.75rem">' +
-                '<input class="source-search-input" placeholder="Filter active sources..." oninput="filterActiveSources(' + ci + ',' + fi + ',this.value)" id="active-src-search-' + ci + '-' + fi + '">' +
+                '<input class="source-search-input" placeholder="' + escapeAttr(i18n.filterActiveSourcesPlaceholder) + '" oninput="filterActiveSources(' + ci + ',' + fi + ',this.value)" id="active-src-search-' + ci + '-' + fi + '">' +
                 '<div id="active-src-list-' + ci + '-' + fi + '" style="max-height:180px;overflow-y:auto;border:1px solid rgba(255,255,255,0.05);border-radius:8px;margin-top:0.25rem">' +
                 sourcesHtml +
-                (sourcesHtml ? '' : '<div style="padding:0.4rem 0.5rem;font-size:0.78rem;color:rgba(255,255,255,0.2)">No sources added yet</div>') +
+                (sourcesHtml ? '' : '<div style="padding:0.4rem 0.5rem;font-size:0.78rem;color:rgba(255,255,255,0.2)">' + escapeHtml(i18n.noSourcesAdded) + '</div>') +
                 '</div>' +
               '</div>' +
             '</div>' +
             '<div class="folder-settings-group" style="margin-top:0.5rem">' +
               '<div class="folder-settings-group-label">' + i18n.addCatalog + '</div>' +
               '<div style="padding:0.5rem 0.75rem">' +
-                '<input class="source-search-input" placeholder="Search catalogs..." oninput="filterCatalogSources(' + ci + ',' + fi + ',this.value)" id="src-search-' + ci + '-' + fi + '">' +
+                '<input class="source-search-input" placeholder="' + escapeAttr(i18n.searchCatalogsPlaceholder) + '" oninput="filterCatalogSources(' + ci + ',' + fi + ',this.value)" id="src-search-' + ci + '-' + fi + '">' +
                 '<div id="src-list-' + ci + '-' + fi + '" style="max-height:200px;overflow-y:auto;border:1px solid rgba(255,255,255,0.05);border-radius:8px;margin-top:0.25rem">' + sourceListHtml + '</div>' +
               '</div>' +
             '</div>' +
@@ -3120,51 +3219,51 @@ async function doImport() {
   sucEl.style.display = 'none';
 
   var json = '';
-  if (activeImportTab === 'paste') {
-    json = document.getElementById('importJsonInput').value.trim();
-  } else if (activeImportTab === 'file') {
-    if (!importFileContent) { errEl.textContent = 'Select a file first'; errEl.style.display = 'block'; return; }
-    json = importFileContent.trim();
-  } else {
-    var url = document.getElementById('importUrlInput').value.trim();
-    if (!url) { errEl.textContent = 'Enter a URL'; errEl.style.display = 'block'; return; }
-    try {
-      var res = await fetch(url);
-      json = await res.text();
-    } catch (e) {
-      errEl.textContent = 'Failed to fetch URL: ' + e.message;
+	  if (activeImportTab === 'paste') {
+	    json = document.getElementById('importJsonInput').value.trim();
+	  } else if (activeImportTab === 'file') {
+	    if (!importFileContent) { errEl.textContent = i18n.selectFileFirst; errEl.style.display = 'block'; return; }
+	    json = importFileContent.trim();
+	  } else {
+	    var url = document.getElementById('importUrlInput').value.trim();
+	    if (!url) { errEl.textContent = i18n.enterUrl; errEl.style.display = 'block'; return; }
+	    try {
+	      var res = await fetch(url);
+	      json = await res.text();
+	    } catch (e) {
+	      errEl.textContent = i18n.failedFetchUrl + ': ' + e.message;
       errEl.style.display = 'block';
       return;
     }
   }
 
-  if (!json) { errEl.textContent = 'No JSON provided'; errEl.style.display = 'block'; return; }
+	  if (!json) { errEl.textContent = i18n.noJsonProvided; errEl.style.display = 'block'; return; }
 
   try {
     var parsed = JSON.parse(json);
-    if (!Array.isArray(parsed)) { errEl.textContent = 'Expected a JSON array of collections'; errEl.style.display = 'block'; return; }
-    if (parsed.length === 0) { errEl.textContent = 'Empty array: no collections found'; errEl.style.display = 'block'; return; }
+	    if (!Array.isArray(parsed)) { errEl.textContent = i18n.expectedJsonArray; errEl.style.display = 'block'; return; }
+	    if (parsed.length === 0) { errEl.textContent = i18n.emptyJsonArray; errEl.style.display = 'block'; return; }
     var validShapes = ['POSTER','LANDSCAPE','SQUARE','poster','wide','square'];
     for (var i = 0; i < parsed.length; i++) {
       var c = parsed[i];
-      if (!c.id || typeof c.id !== 'string') { errEl.textContent = 'Collection ' + (i+1) + ': missing or invalid "id"'; errEl.style.display = 'block'; return; }
-      if (!c.title || typeof c.title !== 'string') { errEl.textContent = 'Collection "' + (c.id) + '": missing or invalid "title"'; errEl.style.display = 'block'; return; }
-      if (!Array.isArray(c.folders)) { errEl.textContent = 'Collection "' + c.title + '": "folders" must be an array'; errEl.style.display = 'block'; return; }
+	      if (!c.id || typeof c.id !== 'string') { errEl.textContent = formatTemplate(i18n.importCollectionInvalidId, { index: i + 1 }); errEl.style.display = 'block'; return; }
+	      if (!c.title || typeof c.title !== 'string') { errEl.textContent = formatTemplate(i18n.importCollectionInvalidTitle, { collection: c.id }); errEl.style.display = 'block'; return; }
+	      if (!Array.isArray(c.folders)) { errEl.textContent = formatTemplate(i18n.importCollectionFoldersArray, { collection: c.title }); errEl.style.display = 'block'; return; }
       for (var j = 0; j < c.folders.length; j++) {
         var f = c.folders[j];
-        if (!f || typeof f !== 'object') { errEl.textContent = 'Collection "' + c.title + '", folder ' + (j+1) + ': invalid format'; errEl.style.display = 'block'; return; }
-        if (!f.id || typeof f.id !== 'string') { errEl.textContent = 'Collection "' + c.title + '", folder ' + (j+1) + ': missing "id"'; errEl.style.display = 'block'; return; }
-        if (!f.title || typeof f.title !== 'string') { errEl.textContent = 'Collection "' + c.title + '", folder "' + f.id + '": missing "title"'; errEl.style.display = 'block'; return; }
-        var importedSources = Array.isArray(f.sources) ? f.sources : f.catalogSources;
-        if (!Array.isArray(importedSources)) { errEl.textContent = 'Collection "' + c.title + '", folder "' + f.title + '": "sources" must be an array'; errEl.style.display = 'block'; return; }
-        if (f.tileShape && validShapes.indexOf(f.tileShape) < 0) { errEl.textContent = 'Collection "' + c.title + '", folder "' + f.title + '": invalid tileShape "' + f.tileShape + '"'; errEl.style.display = 'block'; return; }
-        for (var k = 0; k < importedSources.length; k++) {
-          var s = importedSources[k];
-          if (!s || typeof s !== 'object') { errEl.textContent = 'Collection "' + c.title + '", folder "' + f.title + '", source ' + (k+1) + ': invalid format'; errEl.style.display = 'block'; return; }
-          var provider = (s.provider || 'addon').toLowerCase();
-          if (provider === 'addon' && (typeof s.addonId !== 'string' || typeof s.type !== 'string' || typeof s.catalogId !== 'string')) { errEl.textContent = 'Collection "' + c.title + '", folder "' + f.title + '", source ' + (k+1) + ': missing required fields (addonId, type, catalogId)'; errEl.style.display = 'block'; return; }
-          if (provider === 'tmdb' && typeof s.tmdbSourceType !== 'string') { errEl.textContent = 'Collection "' + c.title + '", folder "' + f.title + '", source ' + (k+1) + ': missing TMDB source type'; errEl.style.display = 'block'; return; }
-          if (provider === 'trakt' && typeof s.traktListId !== 'number') { errEl.textContent = 'Collection "' + c.title + '", folder "' + f.title + '", source ' + (k+1) + ': missing Trakt list ID'; errEl.style.display = 'block'; return; }
+	        if (!f || typeof f !== 'object') { errEl.textContent = formatTemplate(i18n.importFolderInvalidFormat, { collection: c.title, index: j + 1 }); errEl.style.display = 'block'; return; }
+	        if (!f.id || typeof f.id !== 'string') { errEl.textContent = formatTemplate(i18n.importFolderMissingId, { collection: c.title, index: j + 1 }); errEl.style.display = 'block'; return; }
+	        if (!f.title || typeof f.title !== 'string') { errEl.textContent = formatTemplate(i18n.importFolderMissingTitle, { collection: c.title, folder: f.id }); errEl.style.display = 'block'; return; }
+	        var importedSources = Array.isArray(f.sources) ? f.sources : f.catalogSources;
+	        if (!Array.isArray(importedSources)) { errEl.textContent = formatTemplate(i18n.importSourcesArray, { collection: c.title, folder: f.title }); errEl.style.display = 'block'; return; }
+	        if (f.tileShape && validShapes.indexOf(f.tileShape) < 0) { errEl.textContent = formatTemplate(i18n.importInvalidTileShape, { collection: c.title, folder: f.title, shape: f.tileShape }); errEl.style.display = 'block'; return; }
+	        for (var k = 0; k < importedSources.length; k++) {
+	          var s = importedSources[k];
+	          if (!s || typeof s !== 'object') { errEl.textContent = formatTemplate(i18n.importSourceInvalidFormat, { collection: c.title, folder: f.title, index: k + 1 }); errEl.style.display = 'block'; return; }
+	          var provider = (s.provider || 'addon').toLowerCase();
+	          if (provider === 'addon' && (typeof s.addonId !== 'string' || typeof s.type !== 'string' || typeof s.catalogId !== 'string')) { errEl.textContent = formatTemplate(i18n.importSourceMissingAddonFields, { collection: c.title, folder: f.title, index: k + 1 }); errEl.style.display = 'block'; return; }
+	          if (provider === 'tmdb' && typeof s.tmdbSourceType !== 'string') { errEl.textContent = formatTemplate(i18n.importSourceMissingTmdbType, { collection: c.title, folder: f.title, index: k + 1 }); errEl.style.display = 'block'; return; }
+	          if (provider === 'trakt' && typeof s.traktListId !== 'number') { errEl.textContent = formatTemplate(i18n.importSourceMissingTraktId, { collection: c.title, folder: f.title, index: k + 1 }); errEl.style.display = 'block'; return; }
         }
       }
     }
@@ -3179,11 +3278,11 @@ async function doImport() {
       }
     });
     renderCollections();
-    sucEl.textContent = 'Imported ' + parsed.length + ' collection(s). Review and hit Save Changes to apply.';
+	    sucEl.textContent = formatTemplate(i18n.importSuccess, { count: parsed.length });
     sucEl.style.display = 'block';
     setTimeout(function() { dismissImportModal(); }, 2000);
   } catch (e) {
-    errEl.textContent = 'Invalid JSON: ' + e.message;
+	    errEl.textContent = i18n.invalidJson + ': ' + e.message;
     errEl.style.display = 'block';
   }
 }

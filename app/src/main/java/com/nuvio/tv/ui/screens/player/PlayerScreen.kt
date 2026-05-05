@@ -2354,7 +2354,7 @@ private fun SubtitleDelayOverlay(
             shape = CardDefaults.shape(RoundedCornerShape(12.dp))
         ) {
             Text(
-                text = "Sync Line",
+                text = stringResource(R.string.player_sync_line),
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                 color = Color.White,
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)

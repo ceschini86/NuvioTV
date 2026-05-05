@@ -752,7 +752,7 @@ private fun AddonFilterChips(
     ) {
         item {
             SourceStatusFilterChip(
-                name = "All",
+                name = stringResource(R.string.stream_filter_all),
                 isSelected = selectedAddon == null,
                 status = SourceChipStatus.SUCCESS,
                 isSelectable = true,

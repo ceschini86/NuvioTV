@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.player
 
+import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.Subtitle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
@@ -72,7 +73,10 @@ internal fun PlayerRuntimeController.applySubtitleAutoSyncCue(cueStartTimeMs: Lo
             showSubtitleTimingDialog = false,
             showSubtitleDelayOverlay = true,
             showControls = false,
-            subtitleAutoSyncStatus = "Sync applied: ${formatAutoSyncDelay(newDelayMs)}",
+            subtitleAutoSyncStatus = context.getString(
+                R.string.subtitle_auto_sync_applied,
+                formatAutoSyncDelay(newDelayMs)
+            ),
             subtitleAutoSyncError = null
         )
     }
@@ -109,7 +113,7 @@ private fun PlayerRuntimeController.maybeLoadSubtitleAutoSyncCues(force: Boolean
                 subtitleAutoSyncCues = emptyList(),
                 subtitleAutoSyncCapturedVideoMs = null,
                 subtitleAutoSyncLoading = false,
-                subtitleAutoSyncError = "Select an addon subtitle track to use Auto Sync.",
+                subtitleAutoSyncError = context.getString(R.string.subtitle_auto_sync_select_addon_track),
                 subtitleAutoSyncLoadedTrackKey = null
             )
         }

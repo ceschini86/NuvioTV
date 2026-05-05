@@ -345,7 +345,7 @@ fun FolderEditorContent(
                             value = folder.coverImageUrl ?: "",
                             onValueChange = { viewModel.updateFolderCoverImage(it) },
                             modifier = Modifier.weight(1f),
-                            placeholder = "https://..."
+                            placeholder = stringResource(R.string.collections_editor_url_short_placeholder)
                         )
                         if (!folder.coverImageUrl.isNullOrBlank()) {
                             Card(
@@ -624,6 +624,11 @@ fun FolderEditorContent(
                 } else {
                     stringResource(R.string.collections_editor_all_genres)
                 }
+                val addonTypeLabel = when (addonSource?.type?.lowercase()) {
+                    "movie" -> stringResource(R.string.type_movie)
+                    "series", "tv" -> stringResource(R.string.type_series)
+                    else -> addonSource?.type.orEmpty()
+                }
                 val hasGenreOptions = addonSource != null && catalog?.genreOptions?.isNotEmpty() == true
                 Surface(
                     shape = RoundedCornerShape(12.dp),
@@ -654,7 +659,7 @@ fun FolderEditorContent(
                             Text(
                                 text = when {
                                     isMissing -> stringResource(R.string.collections_editor_addon_missing, addonSource.addonId)
-                                    addonSource != null && catalog != null -> "${addonSource.type} - ${catalog.addonName}"
+                                    addonSource != null && catalog != null -> "$addonTypeLabel - ${catalog.addonName}"
                                     tmdbSource != null -> tmdbSourceSubtitle(tmdbSource)
                                     traktSource != null -> traktSourceSubtitle(traktSource)
                                     else -> stringResource(R.string.collections_editor_source)
