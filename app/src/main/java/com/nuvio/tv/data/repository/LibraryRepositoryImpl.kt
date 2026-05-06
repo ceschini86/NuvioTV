@@ -1,10 +1,13 @@
 package com.nuvio.tv.data.repository
 
+import android.util.Log
 import com.nuvio.tv.core.auth.AuthManager
+import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.sync.LibrarySyncService
 import com.nuvio.tv.data.local.LibraryPreferences
 import com.nuvio.tv.data.local.TraktAuthDataStore
 import com.nuvio.tv.data.local.TraktSettingsDataStore
+import com.nuvio.tv.domain.repository.MetaRepository
 import com.nuvio.tv.domain.model.LibraryEntry
 import com.nuvio.tv.domain.model.LibraryEntryInput
 import com.nuvio.tv.domain.model.LibraryListTab
@@ -24,10 +27,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -40,10 +45,12 @@ class LibraryRepositoryImpl @Inject constructor(
     private val traktSettingsDataStore: TraktSettingsDataStore,
     private val traktLibraryService: TraktLibraryService,
     private val librarySyncService: LibrarySyncService,
-    private val authManager: AuthManager
+    private val authManager: AuthManager,
+    private val metaRepository: MetaRepository,
 ) : LibraryRepository {
 
     private val syncScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val hydratedLogoIds = mutableSetOf<String>()
     private var syncJob: Job? = null
     private val _isSyncingFromRemote = MutableStateFlow(false)
     var isSyncingFromRemote: Boolean
@@ -99,7 +106,7 @@ class LibraryRepositoryImpl @Inject constructor(
                             poster = saved.poster,
                             posterShape = saved.posterShape,
                             background = saved.background,
-                            logo = null,
+                            logo = saved.logo,
                             description = saved.description,
                             releaseInfo = saved.releaseInfo,
                             imdbRating = saved.imdbRating,
@@ -107,6 +114,11 @@ class LibraryRepositoryImpl @Inject constructor(
                             addonBaseUrl = saved.addonBaseUrl,
                             listedAt = saved.addedAt
                         )
+                    }
+                }.onEach { entries ->
+                    val needsLogos = entries.filter { it.logo == null && it.id !in hydratedLogoIds }
+                    if (needsLogos.isNotEmpty()) {
+                        syncScope.launch { hydrateLibraryLogos(needsLogos) }
                     }
                 }
             }
@@ -262,8 +274,23 @@ class LibraryRepositoryImpl @Inject constructor(
             releaseInfo = releaseInfo,
             imdbRating = imdbRating,
             genres = genres,
-            addonBaseUrl = addonBaseUrl
+            addonBaseUrl = addonBaseUrl,
+            logo = logo
         )
+    }
+
+    private suspend fun hydrateLibraryLogos(items: List<LibraryEntry>) {
+        items.take(20).forEach { entry ->
+            hydratedLogoIds.add(entry.id)
+            runCatching {
+                val result = metaRepository.getMetaFromPrimaryAddon(entry.type, entry.id)
+                    .firstOrNull { it is NetworkResult.Success }
+                val logo = (result as? NetworkResult.Success)?.data?.logo
+                if (logo != null) {
+                    libraryPreferences.updateLogo(entry.id, entry.type, logo)
+                }
+            }.onFailure { Log.w("LibraryRepo", "Logo hydration failed for ${entry.id}", it) }
+        }
     }
 
     companion object {

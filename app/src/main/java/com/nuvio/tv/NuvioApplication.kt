@@ -18,6 +18,7 @@ import coil3.bitmapFactoryMaxParallelism
 import okio.Path.Companion.toOkioPath
 import com.nuvio.tv.core.runtime.PluginRuntimeHooks
 import com.nuvio.tv.core.sync.StartupSyncService
+import com.nuvio.tv.core.sync.androidtv.AndroidTvChannelSyncService
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +34,7 @@ import javax.inject.Inject
 class NuvioApplication : Application(), SingletonImageLoader.Factory {
 
     @Inject lateinit var startupSyncService: StartupSyncService
+    @Inject lateinit var androidTvChannelSyncService: AndroidTvChannelSyncService
 
     companion object {
         /**
@@ -62,6 +64,7 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         PluginRuntimeHooks.onApplicationCreate(this)
+        androidTvChannelSyncService.start()
         // Warm locale cache off main thread so attachBaseContext never hits disk
         CoroutineScope(Dispatchers.IO).launch {
             val tag = getSharedPreferences("app_locale", Context.MODE_PRIVATE)
