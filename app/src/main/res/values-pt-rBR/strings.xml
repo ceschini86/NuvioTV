@@ -517,6 +517,8 @@
     <string name="audio_preferred_lang">Idioma de áudio preferido</string>
     <string name="audio_skip_silence">Pular silêncio</string>
     <string name="audio_skip_silence_sub">Pular partes silenciosas</string>
+    <string name="audio_remember_delay_per_device">Lembrar atraso de áudio por dispositivo</string>
+    <string name="audio_remember_delay_per_device_sub">Salva o ajuste de áudio para cada saída de som</string>
     <string name="audio_advanced_section">Áudio avançado</string>
     <string name="audio_advanced_warning">Pode causar problemas. Alterar com cuidado</string>
     <string name="audio_decoder_device_only">Apenas decodificadores nativos</string>
@@ -659,6 +661,8 @@
     <string name="layout_modern_sidebar_blur_sub">Ative o efeito de desfoque (blur) no menu.</string>
     <string name="layout_fullscreen_hero_backdrop">Fundo em tela cheia</string>
     <string name="layout_fullscreen_hero_backdrop_sub">Expanda o fundo do modo Moderno por toda a tela.</string>
+    <string name="layout_classic_focus_gradient">Gradiente no item focado</string>
+    <string name="layout_classic_focus_gradient_sub">Mescla cores da arte na lateral do Visual Clássico</string>
     <string name="layout_show_hero">Mostrar Destaque</string>
     <string name="layout_show_hero_sub">Exiba o banner de destaque no topo da home.</string>
     <string name="layout_show_discover">Mostrar "Descobrir" na busca</string>
@@ -673,10 +677,18 @@
     <string name="layout_hide_unreleased_sub">Esconda títulos que ainda não estrearam.</string>
     <string name="layout_section_detail">Página de Detalhes</string>
     <string name="layout_section_detail_desc">Personalize as telas de títulos e episódios.</string>
+    <string name="layout_section_continue_watching">Continuar Assistindo</string>
+    <string name="layout_section_continue_watching_desc">Ajustes para a seção Continuar Assistindo</string>
+    <string name="layout_use_episode_thumbnails_cw">Usar miniaturas no Continuar Assistindo</string>
+    <string name="layout_use_episode_thumbnails_cw_sub">Usa imagens do episódio em vez da arte da série</string>
     <string name="layout_blur_unwatched">Desfocar não assistidos</string>
     <string name="layout_blur_unwatched_sub">Desfoque a imagem para evitar spoilers.</string>
     <string name="layout_blur_cw_next_up">Desfocar no "Continuar Assistindo"</string>
     <string name="layout_blur_cw_next_up_sub">Evite spoilers nos próximos episódios da lista.</string>
+    <string name="layout_next_up_furthest_episode">Próximo pelo último episódio assistido</string>
+    <string name="layout_next_up_furthest_episode_sub">Usa o episódio mais avançado. Desative para rever.</string>
+    <string name="layout_show_unaired_next_up">Mostrar episódios não lançados</string>
+    <string name="layout_show_unaired_next_up_sub">Exibe futuros episódios no Continuar Assistindo</string>
     <string name="layout_trailer_button">Botão de Trailer</string>
     <string name="layout_trailer_button_sub">Exiba o botão nos detalhes, se disponível.</string>
     <string name="layout_prefer_external_meta">Priorizar metadados externos</string>
@@ -808,6 +820,8 @@
     <string name="qr_login_approved">Login aprovado. Finalizando acesso…</string>
     <string name="qr_login_pending">Aguardando aprovação no seu celular…</string>
     <string name="qr_login_expired">O QR Code expirou. Gere um novo código.</string>
+    <string name="qr_login_preparing">Preparando login via QR...</string>
+    <string name="qr_login_device_auth_failed">Falha ao autenticar dispositivo</string>
     <string name="qr_login_scan_prompt">Escaneie o QR e entre pelo celular</string>
     <string name="qr_login_start_failed">Falha ao iniciar login por QR</string>
     <string name="qr_login_signing_in">Entrando…</string>
@@ -983,10 +997,12 @@
     <string name="addon_remove">Remover</string>
     <string name="addon_manage_from_phone_title">Gerenciar pelo celular</string>
     <string name="addon_manage_from_phone_subtitle">Escaneie um QR para gerenciar addons, catálogos e coleções pelo celular</string>
+    <string name="addon_manage_addons_only_from_phone_subtitle">Leia o código QR para gerenciar extensões pelo celular</string>
     <string name="addon_manage_collections_from_phone_subtitle">Escaneie um QR para gerenciar coleções pelo celular</string>
     <string name="addon_reorder_title">Reordenar Home</string>
     <string name="addon_reorder_subtitle">Controla a ordem dos catálogos e coleções na Home (Clássico + Moderno + Grade)</string>
     <string name="addon_qr_scan_instruction">Escaneie com seu celular para gerenciar addons, catálogos e coleções</string>
+    <string name="addon_qr_addons_only_scan_instruction">Leia com o celular para gerenciar extensões</string>
     <string name="addon_qr_collections_scan_instruction">Escaneie com seu celular para gerenciar coleções</string>
     <string name="addon_qr_close">Fechar</string>
     <string name="addon_confirm_title">Confirmar alterações</string>
@@ -999,10 +1015,17 @@
     <string name="addon_confirm_no_changes">Nenhuma alteração detectada.</string>
     <string name="addon_confirm_reject">Recusar</string>
     <string name="addon_confirm_confirm">Confirmar</string>
+    <string name="addon_refresh_action">Atualizar extensões</string>
+    <string name="addon_refresh_default_subtitle">Busca mudanças recentes para este perfil</string>
+    <string name="addon_refresh_done_subtitle">Extensões atualizadas agora mesmo</string>
+    <string name="addon_pending_collections_updated">Coleções atualizadas</string>
+    <string name="addon_pending_collections_replace">%1$d coleção(ões) substituirão as atuais</string>
 
     <!-- CatalogOrderScreen -->
     <string name="catalog_order_title">Reordenar Catálogos</string>
     <string name="catalog_order_subtitle">Defina a ordem dos conteúdos na tela inicial.</string>
+    <string name="catalog_order_follow_addons">Seguir ordem das extensões</string>
+    <string name="catalog_order_follow_addons_desc">Catálogos seguem a ordem das extensões instaladas.</string>
     <string name="catalog_order_empty">Nenhum catálogo disponível no momento.</string>
     <string name="catalog_order_disabled_on_home">Oculto na Home</string>
     <string name="catalog_order_enable">Ativar</string>
@@ -1030,6 +1053,7 @@
     <string name="stream_player_picker_title">Qual player deseja usar?</string>
     <string name="stream_player_internal">Player Interno</string>
     <string name="stream_player_external">Player Externo</string>
+     <string name="stream_filter_all">Tudo</string>
 
     <!-- PlayerScreen -->
     <string name="player_no_external_player">Nenhum player externo encontrado</string>
