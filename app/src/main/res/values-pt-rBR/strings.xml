@@ -1,12 +1,16 @@
   <resources>
     <string name="app_name">Nuvio</string>
-    <string name="type_movie">Filmes</string>
-    <string name="type_series">Séries</string>
+    <string name="tv_channel_continue_watching">Continue Assistindo</string>
+    <string name="type_movie">Filme</string>,
+    <string name="type_movies">Movies</string>
+    <string name="type_series_plural">Series</string>
+    <string name="type_series">Série</string>
     <string name="type_unknown">Desconhecidos</string>
 
     <!-- WebConfigServers -->
     <string name="web_manage_addons_title">Gerenciar Addons</string>
     <string name="web_manage_addons_subtitle">Gerencie addons e catálogos iniciais</string>
+     <string name="web_manage_addons_only_subtitle">Instale ou remova add-ons</string>
     <string name="web_add_addon_url">Adicionar addon por URL</string>
     <string name="web_placeholder_url">https://exemplo.com/manifest.json</string>
     <string name="web_btn_add">Adicionar</string>
