@@ -220,6 +220,11 @@ internal fun HomeViewModel.observeLayoutPreferencesPipeline() {
                     )
                 }
                 if (shouldRefreshCatalogPresentation) {
+                    // When switching to GRID layout, load all pending lazy catalogs
+                    // since grid doesn't support placeholder shimmer rows.
+                    if (prefs.layout == HomeLayout.GRID) {
+                        loadAllPendingLazyCatalogs()
+                    }
                     // When hero catalog keys change, load any hero catalogs
                     // not yet in catalogsMap (e.g., after startup race or
                     // when user changes hero selection in settings).
