@@ -84,7 +84,8 @@ sealed class ModernPayload {
         val focusGifUrl: String?,
         val heroBackdropUrl: String?,
         val heroVideoUrl: String?,
-        val titleLogoUrl: String?
+        val titleLogoUrl: String?,
+        val coverEmoji: String? = null
     ) : ModernPayload()
 }
 
@@ -513,7 +514,10 @@ internal fun buildCollectionFolderItem(
     } else {
         folder.title
     }
-    val imageUrl = firstNonBlank(folder.coverImageUrl, collection.backdropImageUrl)
+    val hasEmoji = !folder.coverEmoji.isNullOrBlank()
+    // When folder uses emoji as cover, don't use any image for the card poster —
+    // emoji always takes priority as the visual cover.
+    val imageUrl = if (hasEmoji) null else firstNonBlank(folder.coverImageUrl, collection.backdropImageUrl)
     val heroBackdrop = firstNonBlank(folder.heroBackdropUrl, folder.coverImageUrl, collection.backdropImageUrl)
 
     return ModernCarouselItem(
@@ -544,7 +548,8 @@ internal fun buildCollectionFolderItem(
             focusGifUrl = folder.focusGifUrl,
             heroBackdropUrl = folder.heroBackdropUrl,
             heroVideoUrl = folder.heroVideoUrl,
-            titleLogoUrl = folder.titleLogoUrl
+            titleLogoUrl = folder.titleLogoUrl,
+            coverEmoji = folder.coverEmoji
         )
     )
 }
