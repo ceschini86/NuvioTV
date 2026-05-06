@@ -215,7 +215,9 @@ fun TmdbSourcePickerContent(
                         )
                     }
                 }
-                TmdbBuilderMode.PRODUCTION -> {
+                TmdbBuilderMode.PRODUCTION,
+                TmdbBuilderMode.PERSON,
+                TmdbBuilderMode.DIRECTOR -> {
                     item {
                         TmdbBasicSourceForm(
                             uiState = uiState,
@@ -225,41 +227,47 @@ fun TmdbSourcePickerContent(
                             onMediaBothChange = onMediaBothChange,
                             onSortChange = onSortChange,
                             onAdd = onAddFromInput,
-                            onSearch = onSearchCompanies,
+                            onSearch = if (uiState.tmdbBuilderMode == TmdbBuilderMode.PRODUCTION) {
+                                onSearchCompanies
+                            } else {
+                                null
+                            },
                             actionLabel = stringResource(
                                 if (isEditing) R.string.collections_editor_save_source else R.string.collections_editor_add_source
                             )
                         )
                     }
-                    items(uiState.tmdbCompanyResults) { result ->
-                        val title = result.name ?: stringResource(R.string.collections_editor_tmdb_company_fallback, result.id)
-                        val productionLabel = stringResource(R.string.collections_editor_tmdb_mode_production)
-                        val moviesLabel = stringResource(R.string.type_movies)
-                        val seriesLabel = stringResource(R.string.type_series_plural)
-                        TmdbPickerCard(
-                            title = title,
-                            subtitle = listOfNotNull(productionLabel, result.originCountry).joinToString(" • "),
-                            onClick = {
-                                onAddSources(
-                                    tmdbSelectedMediaTypes(uiState).map { mediaType ->
-                                        TmdbCollectionSource(
-                                            sourceType = TmdbCollectionSourceType.COMPANY,
-                                            title = tmdbTitleForMedia(
-                                                title = title,
+                    if (uiState.tmdbBuilderMode == TmdbBuilderMode.PRODUCTION) {
+                        items(uiState.tmdbCompanyResults) { result ->
+                            val title = result.name ?: stringResource(R.string.collections_editor_tmdb_company_fallback, result.id)
+                            val productionLabel = stringResource(R.string.collections_editor_tmdb_mode_production)
+                            val moviesLabel = stringResource(R.string.type_movies)
+                            val seriesLabel = stringResource(R.string.type_series_plural)
+                            TmdbPickerCard(
+                                title = title,
+                                subtitle = listOfNotNull(productionLabel, result.originCountry).joinToString(" • "),
+                                onClick = {
+                                    onAddSources(
+                                        tmdbSelectedMediaTypes(uiState).map { mediaType ->
+                                            TmdbCollectionSource(
+                                                sourceType = TmdbCollectionSourceType.COMPANY,
+                                                title = tmdbTitleForMedia(
+                                                    title = title,
+                                                    mediaType = mediaType,
+                                                    addSuffix = uiState.tmdbMediaBoth,
+                                                    moviesLabel = moviesLabel,
+                                                    seriesLabel = seriesLabel
+                                                ),
+                                                tmdbId = result.id,
                                                 mediaType = mediaType,
-                                                addSuffix = uiState.tmdbMediaBoth,
-                                                moviesLabel = moviesLabel,
-                                                seriesLabel = seriesLabel
-                                            ),
-                                            tmdbId = result.id,
-                                            mediaType = mediaType,
-                                            sortBy = uiState.tmdbSortBy,
-                                            filters = uiState.tmdbFilters
-                                        )
-                                    }
-                                )
-                            }
-                        )
+                                                sortBy = uiState.tmdbSortBy,
+                                                filters = uiState.tmdbFilters
+                                            )
+                                        }
+                                    )
+                                }
+                            )
+                        }
                     }
                 }
                 TmdbBuilderMode.COLLECTION -> {
@@ -346,6 +354,8 @@ private fun TmdbBasicSourceForm(
                 TmdbBuilderMode.NETWORK -> stringResource(R.string.collections_editor_tmdb_network_id)
                 TmdbBuilderMode.COLLECTION -> stringResource(R.string.collections_editor_tmdb_collection_id)
                 TmdbBuilderMode.PRODUCTION -> stringResource(R.string.collections_editor_tmdb_company_search)
+                TmdbBuilderMode.PERSON,
+                TmdbBuilderMode.DIRECTOR -> stringResource(R.string.collections_editor_tmdb_person_id)
                 else -> stringResource(R.string.collections_editor_tmdb_id_or_url)
             },
             value = uiState.tmdbInput,
@@ -355,6 +365,8 @@ private fun TmdbBasicSourceForm(
                 TmdbBuilderMode.NETWORK -> "213 for Netflix, 49 for HBO, 2739 for Disney+"
                 TmdbBuilderMode.COLLECTION -> "10 for Star Wars Collection"
                 TmdbBuilderMode.PRODUCTION -> "Marvel Studios, 420, or company URL"
+                TmdbBuilderMode.PERSON,
+                TmdbBuilderMode.DIRECTOR -> stringResource(R.string.collections_editor_tmdb_person_placeholder)
                 else -> stringResource(R.string.collections_editor_tmdb_id_or_url)
             },
             helper = when (uiState.tmdbBuilderMode) {
@@ -362,6 +374,8 @@ private fun TmdbBasicSourceForm(
                 TmdbBuilderMode.COLLECTION -> stringResource(R.string.collections_editor_tmdb_collection_helper)
                 TmdbBuilderMode.NETWORK -> stringResource(R.string.collections_editor_tmdb_network_helper)
                 TmdbBuilderMode.LIST -> stringResource(R.string.collections_editor_tmdb_list_helper)
+                TmdbBuilderMode.PERSON,
+                TmdbBuilderMode.DIRECTOR -> stringResource(R.string.collections_editor_tmdb_person_helper)
                 else -> ""
             }
         )
@@ -369,7 +383,11 @@ private fun TmdbBasicSourceForm(
             label = stringResource(R.string.collections_editor_tmdb_display_title),
             value = uiState.tmdbTitleInput,
             onValueChange = onTitleChange,
-            placeholder = stringResource(R.string.collections_editor_tmdb_movie_title_placeholder),
+            placeholder = when (uiState.tmdbBuilderMode) {
+                TmdbBuilderMode.PERSON -> stringResource(R.string.collections_editor_tmdb_person_title_placeholder)
+                TmdbBuilderMode.DIRECTOR -> stringResource(R.string.collections_editor_tmdb_director_title_placeholder)
+                else -> stringResource(R.string.collections_editor_tmdb_movie_title_placeholder)
+            },
             helper = stringResource(R.string.collections_editor_tmdb_title_helper)
         )
         if (showMediaControls || showSortControls) {
@@ -672,6 +690,8 @@ private fun TmdbModeHelp(mode: TmdbBuilderMode) {
         TmdbBuilderMode.PRODUCTION -> stringResource(R.string.collections_editor_tmdb_help_production)
         TmdbBuilderMode.NETWORK -> stringResource(R.string.collections_editor_tmdb_help_network)
         TmdbBuilderMode.COLLECTION -> stringResource(R.string.collections_editor_tmdb_help_collection)
+        TmdbBuilderMode.PERSON -> stringResource(R.string.collections_editor_tmdb_help_person)
+        TmdbBuilderMode.DIRECTOR -> stringResource(R.string.collections_editor_tmdb_help_director)
         TmdbBuilderMode.DISCOVER -> stringResource(R.string.collections_editor_tmdb_help_discover)
     }
     Text(text, style = MaterialTheme.typography.bodySmall, color = NuvioColors.TextSecondary)
@@ -880,6 +900,8 @@ private fun tmdbModeLabel(mode: TmdbBuilderMode): String {
         TmdbBuilderMode.PRODUCTION -> stringResource(R.string.collections_editor_tmdb_mode_production)
         TmdbBuilderMode.NETWORK -> stringResource(R.string.collections_editor_tmdb_mode_network)
         TmdbBuilderMode.COLLECTION -> stringResource(R.string.collections_editor_tmdb_collection)
+        TmdbBuilderMode.PERSON -> stringResource(R.string.collections_editor_tmdb_mode_person)
+        TmdbBuilderMode.DIRECTOR -> stringResource(R.string.collections_editor_tmdb_mode_director)
         TmdbBuilderMode.DISCOVER -> stringResource(R.string.collections_editor_tmdb_mode_custom)
     }
 }

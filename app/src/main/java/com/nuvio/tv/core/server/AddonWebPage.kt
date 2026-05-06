@@ -1185,6 +1185,7 @@ var i18n = {
   tmdbNetworkId: '${context.getString(R.string.collections_editor_tmdb_network_id).replace("'", "\\'")}',
   tmdbCollectionId: '${context.getString(R.string.collections_editor_tmdb_collection_id).replace("'", "\\'")}',
   tmdbCompanySearch: '${context.getString(R.string.collections_editor_tmdb_company_search).replace("'", "\\'")}',
+  tmdbPersonId: '${context.getString(R.string.collections_editor_tmdb_person_id).replace("'", "\\'")}',
   tmdbDisplayTitle: '${context.getString(R.string.collections_editor_tmdb_display_title).replace("'", "\\'")}',
   tmdbTitleHelper: '${context.getString(R.string.collections_editor_tmdb_title_helper).replace("'", "\\'")}',
   tmdbHelpPresets: '${context.getString(R.string.collections_editor_tmdb_help_presets).replace("'", "\\'")}',
@@ -1192,11 +1193,14 @@ var i18n = {
   tmdbHelpProduction: '${context.getString(R.string.collections_editor_tmdb_help_production).replace("'", "\\'")}',
   tmdbHelpNetwork: '${context.getString(R.string.collections_editor_tmdb_help_network).replace("'", "\\'")}',
   tmdbHelpCollection: '${context.getString(R.string.collections_editor_tmdb_help_collection).replace("'", "\\'")}',
+  tmdbHelpPerson: '${context.getString(R.string.collections_editor_tmdb_help_person).replace("'", "\\'")}',
+  tmdbHelpDirector: '${context.getString(R.string.collections_editor_tmdb_help_director).replace("'", "\\'")}',
   tmdbHelpDiscover: '${context.getString(R.string.collections_editor_tmdb_help_discover).replace("'", "\\'")}',
   tmdbSearchHelper: '${context.getString(R.string.collections_editor_tmdb_search_helper).replace("'", "\\'")}',
   tmdbCollectionHelper: '${context.getString(R.string.collections_editor_tmdb_collection_helper).replace("'", "\\'")}',
   tmdbNetworkHelper: '${context.getString(R.string.collections_editor_tmdb_network_helper).replace("'", "\\'")}',
   tmdbListHelper: '${context.getString(R.string.collections_editor_tmdb_list_helper).replace("'", "\\'")}',
+  tmdbPersonHelper: '${context.getString(R.string.collections_editor_tmdb_person_helper).replace("'", "\\'")}',
   tmdbCollection: '${context.getString(R.string.collections_editor_tmdb_collection).replace("'", "\\'")}',
   filterType: '${context.getString(R.string.library_filter_type).replace("'", "\\'")}',
   filterSort: '${context.getString(R.string.library_filter_sort).replace("'", "\\'")}',
@@ -1257,6 +1261,8 @@ var i18n = {
   tmdbModePublicList: '${jsString(R.string.collections_editor_tmdb_mode_public_list)}',
   tmdbModeProduction: '${jsString(R.string.collections_editor_tmdb_mode_production)}',
   tmdbModeNetwork: '${jsString(R.string.collections_editor_tmdb_mode_network)}',
+  tmdbModePerson: '${jsString(R.string.collections_editor_tmdb_mode_person)}',
+  tmdbModeDirector: '${jsString(R.string.collections_editor_tmdb_mode_director)}',
   tmdbModeCustom: '${jsString(R.string.collections_editor_tmdb_mode_custom)}',
   tmdbPersonCredits: '${jsString(R.string.collections_editor_tmdb_person_credits)}',
   tmdbDirectorCredits: '${jsString(R.string.collections_editor_tmdb_director_credits)}',
@@ -1264,6 +1270,7 @@ var i18n = {
   tmdbPlaceholderCollection: '${jsString(R.string.collections_editor_tmdb_placeholder_collection)}',
   tmdbPlaceholderCompany: '${jsString(R.string.collections_editor_tmdb_placeholder_company)}',
   tmdbPlaceholderNetwork: '${jsString(R.string.collections_editor_tmdb_placeholder_network)}',
+  tmdbPlaceholderPerson: '${jsString(R.string.collections_editor_tmdb_person_placeholder)}',
   traktIdPlaceholder: '${jsString(R.string.collections_editor_trakt_id_placeholder)}',
   traktNamePlaceholder: '${jsString(R.string.collection_editor_trakt_name_placeholder)}',
   sortOriginal: '${jsString(R.string.collections_editor_sort_original)}',
@@ -1394,6 +1401,8 @@ function tmdbDefaultTitle(type) {
   if (type === 'COLLECTION') return i18n.tmdbCollection;
   if (type === 'COMPANY') return i18n.tmdbDefaultProduction;
   if (type === 'NETWORK') return i18n.tmdbDefaultNetwork;
+  if (type === 'PERSON') return i18n.tmdbPersonCredits;
+  if (type === 'DIRECTOR') return i18n.tmdbDirectorCredits;
   return i18n.tmdbDefaultDiscover;
 }
 
@@ -1417,6 +1426,8 @@ function tmdbModeLabel(mode) {
   if (mode === 'COLLECTION') return i18n.tmdbCollection;
   if (mode === 'COMPANY') return i18n.tmdbModeProduction;
   if (mode === 'NETWORK') return i18n.tmdbModeNetwork;
+  if (mode === 'PERSON') return i18n.tmdbModePerson;
+  if (mode === 'DIRECTOR') return i18n.tmdbModeDirector;
   return i18n.tmdbModeCustom;
 }
 
@@ -1426,6 +1437,8 @@ function tmdbModeHelp(mode) {
   if (mode === 'COLLECTION') return i18n.tmdbHelpCollection;
   if (mode === 'COMPANY') return i18n.tmdbHelpProduction;
   if (mode === 'NETWORK') return i18n.tmdbHelpNetwork;
+  if (mode === 'PERSON') return i18n.tmdbHelpPerson;
+  if (mode === 'DIRECTOR') return i18n.tmdbHelpDirector;
   return i18n.tmdbHelpDiscover;
 }
 
@@ -2336,7 +2349,7 @@ async function addTmdbSource(ci, fi) {
     title = metadata.title;
   }
   applyTmdbMetadataToFolder(ci, fi, metadata, false);
-  var mediaTypes = bothEl && bothEl.checked && (type === 'COMPANY' || type === 'DISCOVER') ? ['MOVIE', 'TV'] : [mediaType];
+  var mediaTypes = bothEl && bothEl.checked && (type === 'COMPANY' || type === 'PERSON' || type === 'DIRECTOR' || type === 'DISCOVER') ? ['MOVIE', 'TV'] : [mediaType];
   mediaTypes.forEach(function(selectedMediaType) {
     getFolderSources(folder).push({
       provider: 'tmdb',
@@ -2646,7 +2659,7 @@ function tmdbFiltersFromInputs(ci, fi) {
 
 function tmdbBuilderHtml(ci, fi, folder) {
   var mode = folder._tmdbBuilderMode || 'PRESETS';
-  var modes = ['PRESETS', 'LIST', 'COMPANY', 'NETWORK', 'COLLECTION', 'DISCOVER'];
+  var modes = ['PRESETS', 'LIST', 'COMPANY', 'NETWORK', 'COLLECTION', 'PERSON', 'DIRECTOR', 'DISCOVER'];
   var html = '<div class="tmdb-mode-picker">';
   modes.forEach(function(item) {
     html += '<button class="tmdb-mode-btn' + (mode === item ? ' active' : '') + '" onclick="setTmdbBuilderMode(' + ci + ',' + fi + ',\'' + item + '\')">' + tmdbModeLabel(item) + '</button>';
@@ -2664,17 +2677,20 @@ function tmdbBuilderHtml(ci, fi, folder) {
     return html;
   }
   var needsId = mode !== 'DISCOVER';
-  var showMedia = mode === 'COMPANY' || mode === 'DISCOVER';
+  var showMedia = mode === 'COMPANY' || mode === 'PERSON' || mode === 'DIRECTOR' || mode === 'DISCOVER';
   var defaultSort = mode === 'LIST' || mode === 'COLLECTION' ? 'original' : 'popularity.desc';
   var idLabel = mode === 'LIST' ? i18n.tmdbPublicList :
     mode === 'COLLECTION' ? i18n.tmdbCollectionId :
-    mode === 'COMPANY' ? i18n.tmdbCompanySearch : i18n.tmdbNetworkId;
+    mode === 'COMPANY' ? i18n.tmdbCompanySearch :
+    (mode === 'PERSON' || mode === 'DIRECTOR') ? i18n.tmdbPersonId : i18n.tmdbNetworkId;
   var idPlaceholder = mode === 'LIST' ? i18n.tmdbPlaceholderList :
     mode === 'COLLECTION' ? i18n.tmdbPlaceholderCollection :
-    mode === 'COMPANY' ? i18n.tmdbPlaceholderCompany : i18n.tmdbPlaceholderNetwork;
+    mode === 'COMPANY' ? i18n.tmdbPlaceholderCompany :
+    (mode === 'PERSON' || mode === 'DIRECTOR') ? i18n.tmdbPlaceholderPerson : i18n.tmdbPlaceholderNetwork;
   var idHelper = mode === 'LIST' ? i18n.tmdbListHelper :
     mode === 'COLLECTION' ? i18n.tmdbCollectionHelper :
-    mode === 'COMPANY' ? i18n.tmdbSearchHelper : i18n.tmdbNetworkHelper;
+    mode === 'COMPANY' ? i18n.tmdbSearchHelper :
+    (mode === 'PERSON' || mode === 'DIRECTOR') ? i18n.tmdbPersonHelper : i18n.tmdbNetworkHelper;
   html += '<div class="tmdb-source-grid" style="margin-top:0.65rem">';
   if (needsId) {
     html += '<label class="tmdb-helper">' + escapeHtml(idLabel) + '</label>' +

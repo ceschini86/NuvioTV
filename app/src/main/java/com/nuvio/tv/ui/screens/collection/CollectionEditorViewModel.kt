@@ -94,6 +94,8 @@ enum class TmdbBuilderMode {
     PRODUCTION,
     NETWORK,
     COLLECTION,
+    PERSON,
+    DIRECTOR,
     DISCOVER
 }
 
@@ -755,6 +757,8 @@ class CollectionEditorViewModel @Inject constructor(
                 TmdbBuilderMode.NETWORK -> "${string(R.string.collections_editor_tmdb_default_network)} ${id ?: ""}".trim()
                 TmdbBuilderMode.COLLECTION -> "${string(R.string.collections_editor_tmdb_collection)} ${id ?: ""}".trim()
                 TmdbBuilderMode.PRODUCTION -> "${string(R.string.collections_editor_tmdb_default_production)} ${id ?: ""}".trim()
+                TmdbBuilderMode.PERSON -> "${string(R.string.collections_editor_tmdb_person_credits)} ${id ?: ""}".trim()
+                TmdbBuilderMode.DIRECTOR -> "${string(R.string.collections_editor_tmdb_director_credits)} ${id ?: ""}".trim()
                 else -> string(R.string.collections_editor_tmdb_default_discover)
             }
         }
@@ -763,6 +767,8 @@ class CollectionEditorViewModel @Inject constructor(
             TmdbBuilderMode.NETWORK -> TmdbCollectionSourceType.NETWORK
             TmdbBuilderMode.COLLECTION -> TmdbCollectionSourceType.COLLECTION
             TmdbBuilderMode.PRODUCTION -> TmdbCollectionSourceType.COMPANY
+            TmdbBuilderMode.PERSON -> TmdbCollectionSourceType.PERSON
+            TmdbBuilderMode.DIRECTOR -> TmdbCollectionSourceType.DIRECTOR
             else -> TmdbCollectionSourceType.DISCOVER
         }
         if (sourceType != TmdbCollectionSourceType.DISCOVER && id == null) {
@@ -812,31 +818,18 @@ class CollectionEditorViewModel @Inject constructor(
             }
             return
         }
-        if (mediaTypes.size > 1) {
-            addTmdbSourcesToFolder(
-                mediaTypes.map { type ->
-                    TmdbCollectionSource(
-                        sourceType = sourceType,
-                        title = titleForMedia(title, type, addSuffix = true),
-                        tmdbId = id,
-                        mediaType = type,
-                        sortBy = state.tmdbSortBy,
-                        filters = state.tmdbFilters
-                    )
-                }
-            )
-        } else {
-            addTmdbSourceToFolder(
+        addTmdbSources(
+            mediaTypes.map { type ->
                 TmdbCollectionSource(
                     sourceType = sourceType,
-                    title = title,
+                    title = titleForMedia(title, type, addSuffix = mediaTypes.size > 1),
                     tmdbId = id,
-                    mediaType = mediaType,
+                    mediaType = type,
                     sortBy = state.tmdbSortBy,
                     filters = state.tmdbFilters
                 )
-            )
-        }
+            }
+        )
     }
 
     fun addDiscoverSource() {
@@ -994,8 +987,8 @@ class CollectionEditorViewModel @Inject constructor(
             TmdbCollectionSourceType.COLLECTION -> TmdbBuilderMode.COLLECTION
             TmdbCollectionSourceType.COMPANY -> TmdbBuilderMode.PRODUCTION
             TmdbCollectionSourceType.NETWORK -> TmdbBuilderMode.NETWORK
-            TmdbCollectionSourceType.PERSON,
-            TmdbCollectionSourceType.DIRECTOR,
+            TmdbCollectionSourceType.PERSON -> TmdbBuilderMode.PERSON
+            TmdbCollectionSourceType.DIRECTOR -> TmdbBuilderMode.DIRECTOR
             TmdbCollectionSourceType.DISCOVER -> TmdbBuilderMode.DISCOVER
         }
     }
