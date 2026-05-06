@@ -17,6 +17,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import com.nuvio.tv.domain.model.MetaPreview
 import kotlinx.coroutines.launch
@@ -270,8 +271,15 @@ internal suspend fun HomeViewModel.loadAllCatalogsPipeline(
         }
 
         // Determine which home catalogs to load eagerly vs lazily.
-        val eagerHomeCatalogs = catalogsToLoad.take(eagerCatalogLoadCount)
-        val lazyHomeCatalogs = catalogsToLoad.drop(eagerCatalogLoadCount)
+        // Grid layout loads all catalogs eagerly since it doesn't support
+        // placeholder shimmer rows — all content must be available upfront.
+        // Wait for layout preferences if not yet ready, to avoid wrong eager/lazy split.
+        if (!_uiState.value.layoutPreferencesReady) {
+            _uiState.first { it.layoutPreferencesReady }
+        }
+        val isGridLayout = _uiState.value.homeLayout == HomeLayout.GRID
+        val eagerHomeCatalogs = if (isGridLayout) catalogsToLoad else catalogsToLoad.take(eagerCatalogLoadCount)
+        val lazyHomeCatalogs = if (isGridLayout) emptyList() else catalogsToLoad.drop(eagerCatalogLoadCount)
 
         // Build placeholder descriptors for lazy catalogs
         synchronized(catalogStateLock) {
@@ -734,7 +742,9 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
                 when (homeRow) {
                     is HomeRow.Catalog -> {
                         val row = homeRow.row
-                        if (row.items.isNotEmpty()) {
+                        val isPlaceholderRow = row.isLoading &&
+                            row.items.firstOrNull()?.id?.startsWith("__placeholder_") == true
+                        if (row.items.isNotEmpty() && !isPlaceholderRow) {
                             add(GridItem.SectionDivider(
                                 catalogName = row.catalogName,
                                 catalogId = row.catalogId,

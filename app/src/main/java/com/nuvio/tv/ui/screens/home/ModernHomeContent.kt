@@ -270,7 +270,8 @@ fun ModernHomeContent(
         if (verticalRowListState.isScrollInProgress) return@LaunchedEffect
         val selection = focusedCatalogSelection.value ?: return@LaunchedEffect
         if (selection.payload !is ModernPayload.Catalog) return@LaunchedEffect
-        delay(uiState.focusedPosterBackdropExpandDelaySeconds.coerceAtLeast(0) * 1000L)
+        val expansionDelayMs = (uiState.focusedPosterBackdropExpandDelaySeconds.coerceAtLeast(0) * 1000L).coerceAtLeast(150L)
+        delay(expansionDelayMs)
         if (!lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@LaunchedEffect
         if (shouldActivateFocusedPosterFlow &&
             !verticalRowListState.isScrollInProgress &&

@@ -316,6 +316,7 @@ private fun ModernCatalogRowItem(
     val playTrailerInExpandedCard =
         effectiveAutoplayEnabled &&
             !isSidebarExpanded &&
+            isCardFocused &&
             trailerPlaybackTarget == FocusedPosterTrailerPlaybackTarget.EXPANDED_CARD &&
             effectiveBackdropExpanded
     val trailerUrl = expandedTrailerPreviewUrl()

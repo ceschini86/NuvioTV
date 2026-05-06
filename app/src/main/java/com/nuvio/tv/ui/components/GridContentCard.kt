@@ -66,6 +66,7 @@ fun GridContentCard(
     modifier: Modifier = Modifier,
     posterCardStyle: PosterCardStyle = PosterCardDefaults.Style,
     showLabel: Boolean = true,
+    showLogo: Boolean = false,
     imageCrossfade: Boolean = true,
     isWatched: Boolean = false,
     focusRequester: FocusRequester? = null,
@@ -187,7 +188,7 @@ fun GridContentCard(
                     )
                 }
 
-                if (!item.logo.isNullOrBlank()) {
+                if (showLogo && !item.logo.isNullOrBlank()) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -238,7 +239,7 @@ fun GridContentCard(
             }
         }
 
-        if (showLabel && item.logo.isNullOrBlank()) {
+        if (showLabel && (!showLogo || item.logo.isNullOrBlank())) {
             Text(
                 text = item.name,
                 style = MaterialTheme.typography.titleMedium,

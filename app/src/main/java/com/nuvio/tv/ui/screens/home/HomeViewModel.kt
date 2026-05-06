@@ -657,6 +657,27 @@ class HomeViewModel @Inject constructor(
         loadCatalogPipeline(addon, catalog, generation)
     }
 
+    /**
+     * Load all pending lazy catalogs at once. Used when switching to GRID layout
+     * which needs all catalogs available upfront.
+     */
+    internal fun loadAllPendingLazyCatalogs() {
+        val pending = synchronized(catalogStateLock) {
+            val copy = pendingLazyCatalogs.toMap()
+            pendingLazyCatalogs.clear()
+            copy
+        }
+        if (pending.isEmpty()) return
+        val generation = catalogLoadGeneration
+        pending.forEach { (key, pair) ->
+            if (lazyLoadRequestedKeys.add(key)) {
+                val (addon, catalog) = pair
+                pendingCatalogLoads = (pendingCatalogLoads + 1)
+                loadCatalogPipeline(addon, catalog, generation)
+            }
+        }
+    }
+
     private suspend fun updateCatalogRows() = updateCatalogRowsPipeline()
 
     internal var posterStatusReconcileJob: Job? = null
