@@ -20,9 +20,6 @@ import com.nuvio.tv.core.runtime.PluginRuntimeHooks
 import com.nuvio.tv.core.sync.StartupSyncService
 import com.nuvio.tv.core.sync.androidtv.AndroidTvChannelSyncService
 import dagger.hilt.android.HiltAndroidApp
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
@@ -65,12 +62,11 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         PluginRuntimeHooks.onApplicationCreate(this)
         androidTvChannelSyncService.start()
-        // Warm locale cache off main thread so attachBaseContext never hits disk
-        CoroutineScope(Dispatchers.IO).launch {
-            val tag = getSharedPreferences("app_locale", Context.MODE_PRIVATE)
-                .getString("locale_tag", null)
-            LocaleCache.localeTag = tag ?: ""
-        }
+        // Load locale synchronously so it's available before Activity.attachBaseContext.
+        // SharedPreferences reads are fast (cached in memory after first access).
+        val tag = getSharedPreferences("app_locale", Context.MODE_PRIVATE)
+            .getString("locale_tag", null)
+        LocaleCache.localeTag = tag ?: ""
     }
 
     override fun newImageLoader(context: android.content.Context): ImageLoader {

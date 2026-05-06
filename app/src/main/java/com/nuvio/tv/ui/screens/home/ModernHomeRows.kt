@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -968,6 +969,9 @@ private fun ModernCarouselCard(
         }
     } else if (useLandscapeOverlayTreatment && !isCollectionFolder) {
         effectiveBackdropUrl ?: item.heroPreview.poster
+    } else if (isCollectionFolder && !payload?.coverEmoji.isNullOrBlank()) {
+        // Emoji cover folders: never fall back to backdrop for the card poster
+        item.imageUrl
     } else {
         item.imageUrl ?: item.heroPreview.poster ?: item.heroPreview.backdrop
     }
@@ -1192,6 +1196,16 @@ private fun ModernCarouselCard(
                                 error = backgroundPainter,
                                 fallback = backgroundPainter,
                                 contentScale = imageContentScale
+                            )
+                        }
+                    } else if (isCollectionFolder && !payload?.coverEmoji.isNullOrBlank()) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = payload!!.coverEmoji!!,
+                                fontSize = 48.sp
                             )
                         }
                     } else {
