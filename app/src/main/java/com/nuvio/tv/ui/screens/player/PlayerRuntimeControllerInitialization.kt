@@ -124,17 +124,7 @@ internal fun PlayerRuntimeController.initializePlayer(
             mpvHardwareDecodeModeSetting = playerSettings.mpvHardwareDecodeMode
             var effectiveInternalPlayerEngine = overrideInternalPlayerEngine ?: playerSettings.internalPlayerEngine
             if (effectiveInternalPlayerEngine == InternalPlayerEngine.AUTO) {
-                val hasAnimeGenre = metaGenres.any { it.equals("anime", ignoreCase = true) }
-                val isAnimationFromJapan = (metaGenres.any { it.equals("animation", ignoreCase = true) } &&
-                        metaCountry?.contains("Japan", ignoreCase = true) == true)
-                val hasAnimeId = currentVideoId?.startsWith("kitsu:") == true ||
-                        currentVideoId?.startsWith("mal:") == true ||
-                        currentVideoId?.startsWith("anilist:") == true
-
-                // AIOMetadata usually matches hasAnimeGenre or hasAnimeId, Cinemeta usually matches isAnimationFromJapan
-                val isAnime = hasAnimeGenre || hasAnimeId || isAnimationFromJapan
-
-                effectiveInternalPlayerEngine = if (isAnime) InternalPlayerEngine.MVP_PLAYER else InternalPlayerEngine.EXOPLAYER
+                effectiveInternalPlayerEngine = resolveAutoInternalPlayerEngine()
             }
             runtimeInternalPlayerEngineOverride = overrideInternalPlayerEngine
             if (overrideInternalPlayerEngine == null && playerSettings.internalPlayerEngine == InternalPlayerEngine.AUTO) {
@@ -553,6 +543,32 @@ internal fun PlayerRuntimeController.initializePlayer(
                 )
             }
         }
+    }
+}
+
+internal fun PlayerRuntimeController.resolveAutoInternalPlayerEngine(): InternalPlayerEngine {
+    val streamMetadataText = buildString {
+        currentFilename?.let { appendLine(it) }
+        streamName?.let { appendLine(it) }
+        currentStreamDescription?.let { appendLine(it) }
+        append(title)
+    }
+    val isHdrOrDv = Regex("""(?i)\b(hdr|hdr10\+?|dv|dolby\s*vision)\b""").containsMatchIn(streamMetadataText)
+
+    return if (isHdrOrDv) {
+        InternalPlayerEngine.EXOPLAYER
+    } else {
+        val hasAnimeGenre = metaGenres.any { it.equals("anime", ignoreCase = true) }
+        val isAnimationFromJapan = (metaGenres.any { it.equals("animation", ignoreCase = true) } &&
+                metaCountry?.contains("Japan", ignoreCase = true) == true)
+        val hasAnimeId = currentVideoId?.startsWith("kitsu:") == true ||
+                currentVideoId?.startsWith("mal:") == true ||
+                currentVideoId?.startsWith("anilist:") == true
+
+        // AIOMetadata usually matches hasAnimeGenre or hasAnimeId, Cinemeta usually matches isAnimationFromJapan
+        val isAnime = hasAnimeGenre || hasAnimeId || isAnimationFromJapan
+
+        if (isAnime) InternalPlayerEngine.MVP_PLAYER else InternalPlayerEngine.EXOPLAYER
     }
 }
 
