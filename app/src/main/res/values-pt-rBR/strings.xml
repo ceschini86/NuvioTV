@@ -380,8 +380,8 @@
     <string name="advanced_memory_only_vertical_scroll_subtitle">Não carrega imagens ao rolar as fileiras</string>
     <string name="advanced_compose_highlighter">Destacador de interface</string>
     <string name="advanced_compose_highlighter_subtitle">Destaca elementos recarregados na tela</string>
-    <string name="advanced_clear_cw_cache">Limpar cache do Continuar Assistindo</string>
-    <string name="advanced_clear_cw_cache_subtitle">Apaga dados temporários desta seção</string>
+    <string name="advanced_clear_cw_cache">Limpar cache de "Continuar Assistindo<"/string>
+    <string name="advanced_clear_cw_cache_subtitle">Apaga dados do "Continuar Assistindo"</string>
     <string name="advanced_clear_cw_cache_done">Cache limpo com sucesso</string>
     <string name="advanced_remember_last_profile">Lembrar último perfil</string>
     <string name="advanced_remember_last_profile_subtitle">Abre o último perfil ao iniciar o app</string>
