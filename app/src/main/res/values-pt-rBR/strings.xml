@@ -1073,6 +1073,17 @@
     <string name="player_engine_switching_manual_message">Mudando para %1$s…</string>
     <string name="playback_show_loading_status">Exibir status de carregamento</string>
     <string name="playback_show_loading_status_sub">Mostrar progresso passo a passo ao iniciar o player</string>
+    <string name="player_sync_line">Sincronizar fala</string>
+    <string name="subtitle_timing_press_sync">Pressione Sincronizar ao ouvir a fala.</string>
+    <string name="subtitle_timing_sync_button">Sincronizar</string>
+    <string name="subtitle_timing_select_addon_first">Selecione uma legenda de extensão primeiro.</string>
+    <string name="subtitle_auto_sync_select_addon_track">Selecione uma legenda de extensão para usar o Sincronismo Automático.</string>
+    <string name="subtitle_auto_sync_applied">Sincronia aplicada: %1$s</string>
+    <string name="subtitle_timing_loading">Carregando falas da legenda…</string>
+    <string name="subtitle_timing_no_lines_found">Nenhuma fala encontrada neste momento.</string>
+    <string name="subtitle_timing_press_back_cancel">Pressione Voltar para cancelar</string>
+    <string name="subtitle_timing_captured_at">Capturado em %1$s</string>
+    <string name="subtitle_timing_capturing">Capturando…</string>
     
     <!-- ParentalGuideOverlay -->
     <string name="parental_nudity">Nudez</string>
@@ -1146,6 +1157,8 @@
     <string name="audio_dialog_title">Áudio</string>
     <string name="audio_dialog_tab_tracks">Áudio</string>
     <string name="audio_dialog_tab_mix">Mixagem</string>
+    <string name="audio_delay_label">Atraso de áudio</string>
+    <string name="audio_delay_range">Intervalo: %1$.2fs a %2$.2fs</string>
     <string name="audio_mix_label">Amplificação (PCM)</string>
     <string name="audio_mix_value_db">%1$d dB</string>
     <string name="audio_mix_persist_on">Persistir entre sessões: ATIVADO</string>
@@ -1185,6 +1198,7 @@
     <string name="subtitle_style_font_size">Tamanho da fonte</string>
     <string name="subtitle_style_bold">Negrito</string>
     <string name="subtitle_style_text_color">Cor do texto</string>
+     <string name="subtitle_style_text_opacity">Opacidade do Texto</string>
     <string name="subtitle_style_outline">Contorno</string>
     <string name="subtitle_style_bottom_offset">Altura da legenda</string>
     <string name="subtitle_style_defaults">Padrões</string>
@@ -1279,6 +1293,7 @@
     <string name="library_list_delete">Excluir</string>
     <string name="library_list_close">Fechar</string>
     <string name="library_list_name_label">Nome</string>
+    <string name="library_error_list_name_required">Nome da lista é obrigatório</string>
     <string name="library_list_description_label">Descrição</string>
     <string name="library_list_privacy">Privacidade</string>
     <string name="library_delete_title">Excluir esta lista?</string>
@@ -1287,6 +1302,7 @@
     <string name="library_source_local">LOCAL</string>
     <string name="library_source_nuvio">NUVIO</string>
     <string name="library_source_trakt">TRAKT</string>
+    <string name="library_watchlist">Watchlist</string>
     <string name="library_syncing_library">Sincronizando biblioteca…</string>
     <string name="library_type_all">Todos</string>
     <string name="library_type_items">itens</string>
