@@ -1302,7 +1302,7 @@
     <string name="library_source_local">LOCAL</string>
     <string name="library_source_nuvio">NUVIO</string>
     <string name="library_source_trakt">TRAKT</string>
-    <string name="library_watchlist">Watchlist</string>
+    <string name="library_watchlist">Lista para asssitir</string>
     <string name="library_syncing_library">Sincronizando biblioteca…</string>
     <string name="library_type_all">Todos</string>
     <string name="library_type_items">itens</string>
@@ -1502,8 +1502,8 @@
     <string name="update_open_settings">Abrir Ajustes</string>
     <string name="update_install">Instalar</string>
     <string name="update_ignore">Ignorar</string>
-    <string name="watchlist_added">Adicionado à Watchlist</string>
-    <string name="watchlist_removed">Removido da Watchlist</string>
+    <string name="watchlist_added">Adicionado à Lista para asssitir</string>
+    <string name="watchlist_removed">Removido da Lista para asssitir</string>
 
     <!-- Profile PIN errors -->
     <string name="profile_pin_save_error">Não foi possível salvar o PIN. Tente novamente.</string>
