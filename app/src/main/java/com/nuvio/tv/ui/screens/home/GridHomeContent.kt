@@ -4,6 +4,8 @@ import androidx.compose.runtime.State
 import androidx.compose.foundation.lazy.grid.items
 import com.nuvio.tv.LocalContentFocusRequester
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
@@ -40,6 +42,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import com.nuvio.tv.ui.util.asStable
 import com.nuvio.tv.ui.util.dpadRepeatThrottle
 import androidx.compose.ui.res.stringResource
@@ -728,6 +731,27 @@ private fun GridCollectionFolderCard(
                         color = NuvioColors.TextSecondary
                     )
                 }
+            }
+
+            // GIF overlay: show on top of cover image or emoji, visible only once loaded
+            val focusGifUrl = if (isFocused && folder.focusGifEnabled) folder.focusGifUrl else null
+            if (!focusGifUrl.isNullOrBlank()) {
+                var gifLoaded by remember(focusGifUrl) { mutableStateOf(false) }
+                val gifAlpha by animateFloatAsState(
+                    targetValue = if (gifLoaded) 1f else 0f,
+                    animationSpec = tween(durationMillis = 200),
+                    label = "gifFadeIn"
+                )
+                AsyncImage(
+                    model = focusGifUrl,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(cardShape)
+                        .graphicsLayer { alpha = gifAlpha },
+                    contentScale = ContentScale.FillBounds,
+                    onSuccess = { gifLoaded = true }
+                )
             }
 
             if (!folder.hideTitle) {

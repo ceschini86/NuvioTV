@@ -5,6 +5,8 @@ package com.nuvio.tv.ui.screens.home
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -47,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
@@ -979,8 +982,14 @@ private fun ModernCarouselCard(
     val imageUrl = when {
         payload == null -> baseImageUrl
         !payload.focusGifEnabled -> baseImageUrl
-        isFocused -> payload.focusGifUrl ?: baseImageUrl
-        else -> baseImageUrl ?: payload.focusGifUrl
+        else -> baseImageUrl
+    }
+    // GIF overlay: shown on top of the base image only when focused and loaded
+    val focusGifUrl = when {
+        payload == null -> null
+        !payload.focusGifEnabled -> null
+        isFocused -> payload.focusGifUrl
+        else -> null
     }
     val imageContentScale = when (item.payload) {
         is ModernPayload.CollectionFolder -> ContentScale.FillBounds
@@ -1211,6 +1220,32 @@ private fun ModernCarouselCard(
                         }
                     } else {
                         MonochromePosterPlaceholder()
+                    }
+
+                    // GIF overlay: renders on top of image or emoji, visible only once loaded
+                    if (!focusGifUrl.isNullOrBlank()) {
+                        val gifModel = remember(context, focusGifUrl, requestWidthPx, requestHeightPx) {
+                            ImageRequest.Builder(context)
+                                .data(focusGifUrl)
+                                .memoryCacheKey("${focusGifUrl}_${requestWidthPx}x${requestHeightPx}")
+                                .size(width = requestWidthPx, height = requestHeightPx)
+                                .build()
+                        }
+                        var gifLoaded by remember(focusGifUrl) { mutableStateOf(false) }
+                        val gifAlpha by animateFloatAsState(
+                            targetValue = if (gifLoaded) 1f else 0f,
+                            animationSpec = tween(durationMillis = 200),
+                            label = "gifFadeIn"
+                        )
+                        AsyncImage(
+                            model = gifModel,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer { alpha = gifAlpha },
+                            contentScale = imageContentScale,
+                            onSuccess = { gifLoaded = true }
+                        )
                     }
 
                     if (shouldPlayTrailerInCard) {

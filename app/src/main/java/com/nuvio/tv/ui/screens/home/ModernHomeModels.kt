@@ -514,10 +514,14 @@ internal fun buildCollectionFolderItem(
     } else {
         folder.title
     }
-    val hasEmoji = !folder.coverEmoji.isNullOrBlank()
-    // When folder uses emoji as cover, don't use any image for the card poster —
-    // emoji always takes priority as the visual cover.
-    val imageUrl = if (hasEmoji) null else firstNonBlank(folder.coverImageUrl, collection.backdropImageUrl)
+    // Cover image takes priority over emoji. Emoji is only used as fallback
+    // when no cover image is available.
+    // When focusGifEnabled is off, the GIF URL acts as a regular poster (priority over cover image).
+    val imageUrl = if (!folder.focusGifEnabled) {
+        firstNonBlank(folder.focusGifUrl, folder.coverImageUrl, collection.backdropImageUrl)
+    } else {
+        firstNonBlank(folder.coverImageUrl, collection.backdropImageUrl)
+    }
     val heroBackdrop = firstNonBlank(folder.heroBackdropUrl, folder.coverImageUrl, collection.backdropImageUrl)
 
     return ModernCarouselItem(
