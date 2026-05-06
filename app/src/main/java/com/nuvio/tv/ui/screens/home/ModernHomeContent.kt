@@ -839,7 +839,9 @@ fun ModernHomeContent(
                         // is not at the target inset.
                         val currentLeadingEdge = offset
                         if (abs(currentLeadingEdge - topInsetPx) < 1f) return 0f
-                        return currentLeadingEdge - topInsetPx
+                        val distance = currentLeadingEdge - topInsetPx
+                        if (distance < 0f && currentLeadingEdge >= 0f) return 0f
+                        return distance
                     }
                 }
             }
