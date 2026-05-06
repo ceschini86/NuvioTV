@@ -12,6 +12,7 @@ import com.nuvio.tv.data.local.WatchProgressPreferences
 import com.nuvio.tv.data.local.WatchedItemsPreferences
 import com.nuvio.tv.domain.model.WatchProgress
 import com.nuvio.tv.domain.model.WatchedItem
+import com.nuvio.tv.core.tmdb.TmdbService
 import com.nuvio.tv.domain.repository.MetaRepository
 import com.nuvio.tv.domain.repository.WatchProgressRepository
 import kotlinx.coroutines.CoroutineScope
@@ -30,9 +31,11 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -54,16 +57,19 @@ class WatchProgressRepositoryImpl @Inject constructor(
     private val watchedItemsPreferences: WatchedItemsPreferences,
     private val watchedItemsSyncService: WatchedItemsSyncService,
     private val authManager: AuthManager,
-    private val metaRepository: MetaRepository
+    private val metaRepository: MetaRepository,
+    private val tmdbService: TmdbService,
 ) : WatchProgressRepository {
     companion object {
         private const val TAG = "WatchProgressRepo"
         private const val OPTIMISTIC_NEXT_UP_SEED_WINDOW_MS = 3 * 60_000L
+        private const val NUVIO_SYNC_PERIODIC_INTERVAL_MS = 5 * 60_000L
     }
 
     private data class EpisodeMetadata(
         val title: String?,
-        val thumbnail: String?
+        val thumbnail: String?,
+        val runtimeMs: Long = 0L
     )
 
     private data class ContentMetadata(
@@ -71,10 +77,12 @@ class WatchProgressRepositoryImpl @Inject constructor(
         val poster: String?,
         val backdrop: String?,
         val logo: String?,
-        val episodes: Map<Pair<Int, Int>, EpisodeMetadata>
+        val episodes: Map<Pair<Int, Int>, EpisodeMetadata>,
+        val runtimeMs: Long = 0L
     )
 
     private val syncScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val hydratedProgressIds = mutableSetOf<String>()
     private var syncJob: Job? = null
     private var watchedItemsSyncJob: Job? = null
     var isSyncingFromRemote = false
@@ -89,6 +97,24 @@ class WatchProgressRepositoryImpl @Inject constructor(
     private val metadataMutex = Mutex()
     private val inFlightMetadataKeys = mutableSetOf<String>()
     private val metadataHydrationLimit = 30
+
+    init {
+        // Nuvio Sync has no recurring remote pull after startup; add one so watch progress
+        // written on other devices (phone → TV) appears without requiring an app restart.
+        syncScope.launch {
+            while (true) {
+                delay(NUVIO_SYNC_PERIODIC_INTERVAL_MS)
+                if (useTraktProgressFlow().first()) continue
+                if (isSyncingFromRemote || !hasCompletedInitialPull || !authManager.isAuthenticated) continue
+                watchProgressSyncService.pullFromRemote()
+                    .onSuccess { entries ->
+                        watchProgressPreferences.mergeRemoteEntries(entries.toMap())
+                        Log.d(TAG, "Periodic Nuvio Sync pull: merged ${entries.size} entries")
+                    }
+                    .onFailure { Log.w(TAG, "Periodic Nuvio Sync pull failed", it) }
+            }
+        }
+    }
 
     private fun triggerRemoteSync() {
         if (isSyncingFromRemote) return
@@ -191,7 +217,8 @@ class WatchProgressRepositoryImpl @Inject constructor(
                         val episode = video.episode ?: return@mapNotNull null
                         (season to episode) to EpisodeMetadata(
                             title = video.title,
-                            thumbnail = video.thumbnail
+                            thumbnail = video.thumbnail,
+                            runtimeMs = (video.runtime ?: 0).toLong() * 60_000L
                         )
                     }
                     .toMap()
@@ -199,9 +226,10 @@ class WatchProgressRepositoryImpl @Inject constructor(
                 return ContentMetadata(
                     name = meta.name,
                     poster = meta.poster,
-                    backdrop = meta.background,
+                    backdrop = meta.backdropUrl,
                     logo = meta.logo,
-                    episodes = episodes
+                    episodes = episodes,
+                    runtimeMs = parseRuntimeToMs(meta.runtime)
                 )
             }
         }
@@ -223,11 +251,17 @@ class WatchProgressRepositoryImpl @Inject constructor(
             ?: metadata.backdrop
             ?: episodeMeta?.thumbnail
 
+        val episodeRuntimeMs = episodeMeta?.runtimeMs ?: 0L
+        val runtimeMs = episodeRuntimeMs.takeIf { it > 0 } ?: metadata.runtimeMs
+
         return progress.copy(
             name = if (shouldOverrideName) metadata.name ?: progress.name else progress.name,
             poster = progress.poster ?: metadata.poster,
             backdrop = backdrop,
             logo = progress.logo ?: metadata.logo,
+            duration = if (progress.duration > 0) progress.duration
+                       else if (runtimeMs > 0) runtimeMs
+                       else progress.duration,
             episodeTitle = progress.episodeTitle ?: episodeMeta?.title
         )
     }
@@ -276,6 +310,14 @@ class WatchProgressRepositoryImpl @Inject constructor(
                     traktAllProgressFlow()
                 } else {
                     watchProgressPreferences.allProgress
+                        .onEach { items ->
+                            val needsArtwork = items.filter {
+                                it.poster == null && it.backdrop == null && it.contentId !in hydratedProgressIds
+                            }
+                            if (needsArtwork.isNotEmpty()) {
+                                syncScope.launch { hydrateProgressArtwork(needsArtwork) }
+                            }
+                        }
                 }
             }
 
@@ -988,6 +1030,53 @@ class WatchProgressRepositoryImpl @Inject constructor(
     }
 
     override suspend fun isTraktProgressActive(): Boolean = shouldUseTraktProgress()
+
+    private suspend fun hydrateProgressArtwork(items: List<WatchProgress>) {
+        items.take(10).forEach { progress ->
+            hydratedProgressIds.add(progress.contentId)
+            runCatching {
+                val metadata = fetchContentMetadata(
+                    contentId = progress.contentId,
+                    contentType = progress.contentType
+                ) ?: return@runCatching
+                val episodeRuntimeMs = if (progress.season != null && progress.episode != null)
+                    metadata.episodes[progress.season to progress.episode]?.runtimeMs ?: 0L
+                else 0L
+                val durationMs = progress.duration.takeIf { it > 0 }
+                    ?: episodeRuntimeMs.takeIf { it > 0 }
+                    ?: metadata.runtimeMs
+
+                // If addon returned no backdrop or poster, fall back to TMDB
+                var backdropToSave = progress.backdrop ?: metadata.backdrop
+                var posterToSave = progress.poster ?: metadata.poster
+                if (backdropToSave == null && posterToSave == null) {
+                    val tmdbImages = tmdbService.fetchImdbImages(progress.contentId, progress.contentType)
+                    backdropToSave = tmdbImages?.backdropUrl
+                    posterToSave = tmdbImages?.posterUrl
+                }
+
+                val hasNewData = posterToSave != null || backdropToSave != null
+                    || metadata.logo != null || durationMs > 0
+                if (hasNewData) {
+                    watchProgressPreferences.saveProgress(
+                        progress.copy(
+                            poster = posterToSave,
+                            backdrop = backdropToSave,
+                            logo = progress.logo ?: metadata.logo,
+                            name = progress.name.takeIf { it.isNotBlank() && it != progress.contentId }
+                                ?: metadata.name ?: progress.name,
+                            duration = if (durationMs > 0) durationMs else progress.duration
+                        )
+                    )
+                }
+            }.onFailure { Log.w(TAG, "Progress artwork hydration failed for ${progress.contentId}", it) }
+        }
+    }
+
+    private fun parseRuntimeToMs(raw: String?): Long {
+        val minutes = raw?.trim()?.toLongOrNull() ?: return 0L
+        return minutes * 60_000L
+    }
 
     private fun progressKey(progress: WatchProgress): String {
         return if (progress.season != null && progress.episode != null) {
