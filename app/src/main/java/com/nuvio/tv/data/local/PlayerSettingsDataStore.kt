@@ -333,6 +333,8 @@ class PlayerSettingsDataStore @Inject constructor(
     private val streamReuseLastLinkCacheHoursKey = intPreferencesKey("stream_reuse_last_link_cache_hours")
     private val subtitleOrganizationModeKey = stringPreferencesKey("subtitle_organization_mode")
     private val addonSubtitleStartupModeKey = stringPreferencesKey("addon_subtitle_startup_mode")
+    private val addonSubtitleStartupModeAutoPreferredKey =
+        booleanPreferencesKey("addon_subtitle_startup_mode_auto_preferred")
     private val resizeModeKey = intPreferencesKey("resize_mode")
 
     // Subtitle style settings keys
@@ -794,6 +796,7 @@ class PlayerSettingsDataStore @Inject constructor(
     suspend fun setAddonSubtitleStartupMode(mode: AddonSubtitleStartupMode) {
         store().edit { prefs ->
             prefs[addonSubtitleStartupModeKey] = mode.name
+            prefs[addonSubtitleStartupModeAutoPreferredKey] = false
         }
     }
 
@@ -910,7 +913,22 @@ class PlayerSettingsDataStore @Inject constructor(
 
     suspend fun setSubtitleShowOnlyPreferredLanguages(enabled: Boolean) {
         store().edit { prefs ->
+            val currentStartupMode = parseAddonSubtitleStartupMode(prefs[addonSubtitleStartupModeKey])
             prefs[subtitleShowOnlyPreferredLanguagesKey] = enabled
+            if (enabled) {
+                if (currentStartupMode == AddonSubtitleStartupMode.ALL_SUBTITLES) {
+                    prefs[addonSubtitleStartupModeKey] = AddonSubtitleStartupMode.PREFERRED_ONLY.name
+                    prefs[addonSubtitleStartupModeAutoPreferredKey] = true
+                } else {
+                    prefs[addonSubtitleStartupModeAutoPreferredKey] = false
+                }
+            } else {
+                val wasAutoPreferred = prefs[addonSubtitleStartupModeAutoPreferredKey] ?: false
+                if (wasAutoPreferred && currentStartupMode == AddonSubtitleStartupMode.PREFERRED_ONLY) {
+                    prefs[addonSubtitleStartupModeKey] = AddonSubtitleStartupMode.ALL_SUBTITLES.name
+                }
+                prefs[addonSubtitleStartupModeAutoPreferredKey] = false
+            }
         }
     }
 
