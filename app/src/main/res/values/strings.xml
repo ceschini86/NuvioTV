@@ -551,6 +551,8 @@
     <string name="sub_forced_lang">Forced</string>
     <string name="sub_preferred_lang">Preferred Language</string>
     <string name="sub_secondary_lang">Secondary Preferred Language</string>
+    <string name="sub_show_only_preferred_languages">Show Only Preferred Languages</string>
+    <string name="sub_show_only_preferred_languages_desc">Hide all other subtitles languages from selection list</string>
     <string name="sub_organization">Subtitle Organization</string>
     <string name="sub_size">Size</string>
     <string name="sub_vertical_offset">Vertical Offset</string>

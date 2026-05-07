@@ -637,9 +637,16 @@ internal suspend fun PlayerRuntimeController.prepareStartupSubtitles(
     mode: AddonSubtitleStartupMode,
     preferredLanguage: String,
     secondaryLanguage: String?,
+    showOnlyPreferredLanguages: Boolean = false,
     showLoadingStatus: Boolean = true
 ): StartupSubtitlePreparation {
-    if (mode == AddonSubtitleStartupMode.FAST_STARTUP) {
+    val effectiveMode = if (showOnlyPreferredLanguages && mode == AddonSubtitleStartupMode.ALL_SUBTITLES) {
+        AddonSubtitleStartupMode.PREFERRED_ONLY
+    } else {
+        mode
+    }
+
+    if (effectiveMode == AddonSubtitleStartupMode.FAST_STARTUP) {
         return StartupSubtitlePreparation(
             fetchedSubtitles = emptyList(),
             attachedSubtitles = emptyList(),
@@ -667,7 +674,7 @@ internal suspend fun PlayerRuntimeController.prepareStartupSubtitles(
     }.map { PlayerSubtitleUtils.normalizeLanguageCode(it) }
         .distinct()
 
-    if (mode == AddonSubtitleStartupMode.PREFERRED_ONLY && preferredTargets.isEmpty()) {
+    if (effectiveMode == AddonSubtitleStartupMode.PREFERRED_ONLY && preferredTargets.isEmpty()) {
         return StartupSubtitlePreparation(
             fetchedSubtitles = emptyList(),
             attachedSubtitles = emptyList(),
@@ -696,7 +703,7 @@ internal suspend fun PlayerRuntimeController.prepareStartupSubtitles(
         fetchCompleted = false
     )
 
-    val attachedSubtitles = when (mode) {
+    val attachedSubtitles = when (effectiveMode) {
         AddonSubtitleStartupMode.ALL_SUBTITLES -> fetchedSubtitles
         AddonSubtitleStartupMode.PREFERRED_ONLY -> fetchedSubtitles.filter { subtitle ->
             preferredTargets.any { target ->
@@ -706,8 +713,10 @@ internal suspend fun PlayerRuntimeController.prepareStartupSubtitles(
         AddonSubtitleStartupMode.FAST_STARTUP -> emptyList()
     }
 
+    val visibleSubtitles = if (showOnlyPreferredLanguages) attachedSubtitles else fetchedSubtitles
+
     return StartupSubtitlePreparation(
-        fetchedSubtitles = fetchedSubtitles,
+        fetchedSubtitles = visibleSubtitles,
         attachedSubtitles = attachedSubtitles,
         fetchCompleted = true
     )
@@ -761,6 +770,7 @@ internal suspend fun PlayerRuntimeController.prepareStreamStartSubtitles(
         mode = playerSettings.addonSubtitleStartupMode,
         preferredLanguage = playerSettings.subtitleStyle.preferredLanguage,
         secondaryLanguage = playerSettings.subtitleStyle.secondaryPreferredLanguage,
+        showOnlyPreferredLanguages = playerSettings.subtitleStyle.showOnlyPreferredLanguages,
         showLoadingStatus = showLoadingStatus
     )
 }
