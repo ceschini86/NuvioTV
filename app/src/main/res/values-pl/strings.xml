@@ -1907,4 +1907,16 @@
     <string name="web_source_singular">źródło</string>
     <string name="web_title_hide">Ukryj</string>
     <string name="web_title_show">Pokaż</string>
+
+    <string name="tv_channel_continue_watching">Kontynuuj oglądanie</string>
+    <string name="profile_custom_avatar_web_panel_note">Niestandardowe adresy URL awatarów można skonfigurować z panelu webowego Nuvio.</string>
+    <string name="collections_editor_tmdb_mode_person">Osoba</string>
+    <string name="collections_editor_tmdb_mode_director">Reżyser</string>
+    <string name="collections_editor_tmdb_help_person">Wpisz ID osoby z TMDB lub URL, aby zbudować wiersz z obsady.</string>
+    <string name="collections_editor_tmdb_help_director">Wpisz ID osoby z TMDB lub URL, aby zbudować wiersz z reżyserii.</string>
+    <string name="collections_editor_tmdb_person_id">ID osoby</string>
+    <string name="collections_editor_tmdb_person_helper">Przykład: https://www.themoviedb.org/person/31-tom-hanks lub 31.</string>
+    <string name="collections_editor_tmdb_person_placeholder">31 dla Tom Hanks, lub URL osoby</string>
+    <string name="collections_editor_tmdb_person_title_placeholder">Filmy z Tom Hanks, Ulubieni aktorzy</string>
+    <string name="collections_editor_tmdb_director_title_placeholder">Filmy Christophera Nolana, Ulubieni reżyserzy</string>
 </resources>

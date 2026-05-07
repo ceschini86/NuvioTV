@@ -121,16 +121,31 @@ class LayoutPreferenceDataStore @Inject constructor(
         selections.firstOrNull()
     }
 
-    val homeCatalogOrderKeys: Flow<List<String>> = profileFlow { prefs ->
-        parseCatalogKeys(prefs[homeCatalogOrderKeysKey])
+    val homeCatalogOrderKeys: Flow<List<String>> = profileManager.activeProfileId.flatMapLatest { pid ->
+        val profile = profileManager.profiles.value.find { it.id == pid }
+        val usePrimary = profile != null && !profile.isPrimary && profile.usesPrimaryAddons
+        val effectivePid = if (usePrimary) 1 else pid
+        factory.get(effectivePid, FEATURE).data.map { prefs ->
+            parseCatalogKeys(prefs[homeCatalogOrderKeysKey])
+        }
     }
 
-    val disabledHomeCatalogKeys: Flow<List<String>> = profileFlow { prefs ->
-        parseCatalogKeys(prefs[disabledHomeCatalogKeysKey])
+    val disabledHomeCatalogKeys: Flow<List<String>> = profileManager.activeProfileId.flatMapLatest { pid ->
+        val profile = profileManager.profiles.value.find { it.id == pid }
+        val usePrimary = profile != null && !profile.isPrimary && profile.usesPrimaryAddons
+        val effectivePid = if (usePrimary) 1 else pid
+        factory.get(effectivePid, FEATURE).data.map { prefs ->
+            parseCatalogKeys(prefs[disabledHomeCatalogKeysKey])
+        }
     }
 
-    val customCatalogTitles: Flow<Map<String, String>> = profileFlow { prefs ->
-        parseCustomTitles(prefs[customCatalogTitlesKey])
+    val customCatalogTitles: Flow<Map<String, String>> = profileManager.activeProfileId.flatMapLatest { pid ->
+        val profile = profileManager.profiles.value.find { it.id == pid }
+        val usePrimary = profile != null && !profile.isPrimary && profile.usesPrimaryAddons
+        val effectivePid = if (usePrimary) 1 else pid
+        factory.get(effectivePid, FEATURE).data.map { prefs ->
+            parseCustomTitles(prefs[customCatalogTitlesKey])
+        }
     }
 
     val sidebarCollapsedByDefault: Flow<Boolean> = profileFlow { prefs ->
