@@ -557,6 +557,9 @@ fun MetaDetailsScreen(
                     onMarkPreviousEpisodesWatched = { video ->
                         viewModel.onEvent(MetaDetailsEvent.OnMarkPreviousEpisodesWatched(video))
                     },
+                    onMarkPreviousSeasonsWatched = { season ->
+                        viewModel.onEvent(MetaDetailsEvent.OnMarkPreviousSeasonsWatched(season))
+                    },
                     isSeasonFullyWatched = { season ->
                         viewModel.isSeasonFullyWatched(season)
                     },
@@ -799,6 +802,7 @@ private fun MetaDetailsContent(
     onMarkSeasonWatched: (Int) -> Unit,
     onMarkSeasonUnwatched: (Int) -> Unit,
     onMarkPreviousEpisodesWatched: (Video) -> Unit,
+    onMarkPreviousSeasonsWatched: (Int) -> Unit,
     isSeasonFullyWatched: (Int) -> Boolean,
     trailerUrl: String?,
     trailerAudioUrl: String?,
@@ -1915,9 +1919,13 @@ private fun MetaDetailsContent(
         }
 
         seasonOptionsDialogSeason?.let { season ->
+            val hasPreviousSeasons = remember(season, seasons) {
+                seasons.any { it != 0 && it < season }
+            }
             SeasonOptionsDialog(
                 season = season,
                 isFullyWatched = isSeasonFullyWatched(season),
+                hasPreviousSeasons = hasPreviousSeasons,
                 onDismiss = { seasonOptionsDialogSeason = null },
                 onMarkSeasonWatched = {
                     onMarkSeasonWatched(season)
@@ -1925,6 +1933,10 @@ private fun MetaDetailsContent(
                 },
                 onMarkSeasonUnwatched = {
                     onMarkSeasonUnwatched(season)
+                    seasonOptionsDialogSeason = null
+                },
+                onMarkPreviousSeasonsWatched = {
+                    onMarkPreviousSeasonsWatched(season)
                     seasonOptionsDialogSeason = null
                 }
             )
