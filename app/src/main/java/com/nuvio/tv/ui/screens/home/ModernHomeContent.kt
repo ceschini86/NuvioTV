@@ -771,7 +771,21 @@ fun ModernHomeContent(
                     }
                 }.collect { currentStable ->
                     if (stableHeroSceneStateRef.value != currentStable) {
-                        stableHeroSceneStateRef.value = currentStable
+                        // Don't update stable ref with a fallback backdrop (from heroItem)
+                        // when the active carousel item hasn't resolved yet for the new row.
+                        val currentItem = activeCarouselItemState.value
+                        if (currentItem == null && stableHeroSceneStateRef.value != null) {
+                            return@collect
+                        }
+                        val displayedBackdrop = HeroBackdropState.lastDisplayedUrl
+                        val corrected = if (!displayedBackdrop.isNullOrBlank() &&
+                            displayedBackdrop != currentStable.heroBackdrop
+                        ) {
+                            currentStable.copy(heroBackdrop = displayedBackdrop)
+                        } else {
+                            currentStable
+                        }
+                        stableHeroSceneStateRef.value = corrected
                     }
                 }
             }
