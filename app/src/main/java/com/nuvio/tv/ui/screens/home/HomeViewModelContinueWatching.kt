@@ -45,7 +45,7 @@ import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
 
 private const val CW_MAX_RECENT_PROGRESS_ITEMS = 300
-private const val CW_MAX_NEXT_UP_LOOKUPS = 32
+private const val CW_MAX_NEXT_UP_LOOKUPS = 64
 private const val CW_MAX_NEXT_UP_CONCURRENCY = 4
 private const val CW_MAX_ENRICHMENT_CONCURRENCY = 4
 private const val CW_PROGRESS_DEBOUNCE_MS = 500L
@@ -299,7 +299,7 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                 val dismissedNextUp = snapshot.dismissedNextUp
                 val showUnairedNextUp = snapshot.showUnairedNextUp
                 val nextUpFromFurthestEpisode = snapshot.nextUpFromFurthestEpisode
-                val cutoffMs = if (daysCap == TraktSettingsDataStore.CONTINUE_WATCHING_DAYS_CAP_ALL) {
+                val cutoffMs = if (!useTraktProgress || daysCap == TraktSettingsDataStore.CONTINUE_WATCHING_DAYS_CAP_ALL) {
                     null
                 } else {
                     val windowMs = daysCap.toLong() * 24L * 60L * 60L * 1000L
@@ -783,9 +783,13 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                                         resolvedSinceLastEmit++
                                         if (resolvedSinceLastEmit >= 3) {
                                             resolvedSinceLastEmit = 0
-                                            // Partial emit: inject discovered items into UI
-                                            val partialToInject = if (useTraktProgress) {
-                                                discoveredNextUpItems.filter { it.info.isReleaseAlert }
+                                            // Partial emit: inject discovered items into UI.
+                                            // Items within the daysCap window are injected normally.
+                                            // Items outside the window are only injected if they're release alerts.
+                                            val partialToInject = if (cutoffMs != null) {
+                                                discoveredNextUpItems.filter { item ->
+                                                    item.info.sortTimestamp >= cutoffMs || item.info.isReleaseAlert
+                                                }
                                             } else {
                                                 discoveredNextUpItems.toList()
                                             }
@@ -844,12 +848,14 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                                 publishBadgeUpdate(asyncWatchedEpisodes)
 
                                 if (discoveredNextUpItems.isNotEmpty()) {
-                                    // For Trakt users, only inject release alerts.
-                                    // For Nuvio Sync users, inject all next-up items (workaround for seed limit).
-                                    val itemsToInject = if (useTraktProgress) {
-                                        discoveredNextUpItems.filter { it.info.isReleaseAlert }
+                                    // Items within the daysCap window are injected normally.
+                                    // Items outside the window are only injected if they're release alerts.
+                                    val itemsToInject = if (cutoffMs != null) {
+                                        discoveredNextUpItems.filter { item ->
+                                            item.info.sortTimestamp >= cutoffMs || item.info.isReleaseAlert
+                                        }
                                     } else {
-                                        discoveredNextUpItems
+                                        discoveredNextUpItems.toList()
                                     }
                                     synchronized(discoveredOlderNextUpItems) {
                                         discoveredOlderNextUpItems.removeAll { old ->
