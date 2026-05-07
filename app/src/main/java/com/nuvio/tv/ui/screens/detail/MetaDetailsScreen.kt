@@ -888,6 +888,7 @@ private fun MetaDetailsContent(
     val collectionTabFocusRequester = remember { FocusRequester() }
     val ratingsTabFocusRequester = remember { FocusRequester() }
     val ratingsContentFocusRequester = remember { FocusRequester() }
+    val ratingsGridFocusRequester = remember { FocusRequester() }
     val castSectionFocusRequester = remember { FocusRequester() }
     val moreLikeSectionFocusRequester = remember { FocusRequester() }
     val trailerSectionFocusRequester = remember { FocusRequester() }
@@ -1257,7 +1258,7 @@ private fun MetaDetailsContent(
             PeopleSectionTab.MORE_LIKE_THIS -> moreLikeSectionFocusRequester
             PeopleSectionTab.TRAILER -> trailerSectionFocusRequester
             PeopleSectionTab.COLLECTION -> collectionSectionFocusRequester
-            PeopleSectionTab.RATINGS -> ratingsContentFocusRequester
+            PeopleSectionTab.RATINGS -> ratingsGridFocusRequester
         }
         isSeries -> seasonDownFocusRequester ?: heroPlayFocusRequester
         else -> heroPlayFocusRequester
@@ -1766,6 +1767,7 @@ private fun MetaDetailsContent(
                                     },
                                     downFocusRequester = if (shouldShowCommentsSection && canToggleEpisodeComments) commentsSelectedModeFocusRequester else null,
                                     firstItemFocusRequester = ratingsContentFocusRequester,
+                                    ratingsGridFocusRequester = ratingsGridFocusRequester,
                                     modifier = Modifier.heightIn(min = if (!hasItemsBelow) castSectionHeight else 0.dp)
                                 )
                             }
