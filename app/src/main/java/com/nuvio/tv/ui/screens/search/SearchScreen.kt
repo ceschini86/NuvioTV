@@ -578,7 +578,8 @@ fun SearchScreen(
                                     },
                                     onSectionFocusChanged = { focused ->
                                         isRecentSearchSectionFocused = focused
-                                    }
+                                    },
+                                    modifier = Modifier.padding(horizontal = 52.dp)
                                 )
                             } else {
                                 EmptyScreenState(
