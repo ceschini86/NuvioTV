@@ -142,6 +142,7 @@ class ProfileSettingsSyncService @Inject constructor(
                 val response = withJwtRefreshRetry {
                     postgrest.rpc("sync_pull_profile_settings_blob", params)
                 }
+                lastForegroundPullAtMs = SystemClock.elapsedRealtime()
                 val rows = response.decodeList<SupabaseProfileSettingsBlob>()
                 val blob = rows.firstOrNull()?.settingsJson
                 if (blob == null) {
