@@ -766,7 +766,8 @@ private fun ProfileGrid(
                 profiles.forEachIndexed { index, profile ->
                     ProfileCard(
                         profile = profile,
-                        avatarImageUrl = profile.avatarId?.let(avatarImageUrlsById::get),
+                        avatarImageUrl = profile.avatarUrl?.takeIf { it.isNotBlank() }
+                            ?: profile.avatarId?.let(avatarImageUrlsById::get),
                         focusRequester = focusRequesters[index],
                         onFocused = { onProfileFocused(profile.avatarColorHex) },
                         onClick = { onProfileSelected(profile) },
@@ -1212,6 +1213,15 @@ private fun CreateProfileOverlay(
                         textAlign = TextAlign.Center
                     )
 
+                    Text(
+                        text = stringResource(R.string.profile_custom_avatar_web_panel_note),
+                        modifier = Modifier.fillMaxWidth(),
+                        color = NuvioColors.TextTertiary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        textAlign = TextAlign.Center
+                    )
+
                     if (avatarCatalog.isNotEmpty()) {
                         AvatarPickerGrid(
                             avatars = avatarCatalog,
@@ -1353,9 +1363,11 @@ private fun EditProfileOverlay(
     val selectedAvatar = remember(avatarCatalog, selectedAvatarId) {
         avatarCatalog.find { it.id == selectedAvatarId }
     }
+    val hasChangedAvatarSelection = selectedAvatarId != profile.avatarId
     val previewAvatarImageUrl = when {
         selectedAvatar != null -> selectedAvatar.imageUrl
-        selectedAvatarId == profile.avatarId -> avatarUrlResolver(profile.avatarId)
+        !hasChangedAvatarSelection -> profile.avatarUrl?.takeIf { it.isNotBlank() }
+            ?: avatarUrlResolver(profile.avatarId)
         else -> null
     }
     val nameFocusRequester = remember { FocusRequester() }
@@ -1434,7 +1446,8 @@ private fun EditProfileOverlay(
                             profile.copy(
                                 name = profileName,
                                 avatarColorHex = selectedColorHex,
-                                avatarId = selectedAvatarId
+                                avatarId = selectedAvatarId,
+                                avatarUrl = if (hasChangedAvatarSelection) null else profile.avatarUrl
                             )
                         )
                     }
@@ -1500,6 +1513,15 @@ private fun EditProfileOverlay(
                         modifier = Modifier.fillMaxWidth(),
                         color = NuvioColors.TextSecondary,
                         fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Text(
+                        text = stringResource(R.string.profile_custom_avatar_web_panel_note),
+                        modifier = Modifier.fillMaxWidth(),
+                        color = NuvioColors.TextTertiary,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         textAlign = TextAlign.Center
                     )

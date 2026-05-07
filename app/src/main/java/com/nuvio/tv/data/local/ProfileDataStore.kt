@@ -139,7 +139,8 @@ internal data class ProfileJson(
     val avatarColorHex: String,
     val usesPrimaryAddons: Boolean = false,
     val usesPrimaryPlugins: Boolean = false,
-    val avatarId: String? = null
+    val avatarId: String? = null,
+    val avatarUrl: String? = null
 ) {
     fun toDomain() = UserProfile(
         id = id,
@@ -147,7 +148,8 @@ internal data class ProfileJson(
         avatarColorHex = avatarColorHex,
         usesPrimaryAddons = usesPrimaryAddons,
         usesPrimaryPlugins = usesPrimaryPlugins,
-        avatarId = avatarId
+        avatarId = avatarId,
+        avatarUrl = avatarUrl
     )
 
     companion object {
@@ -157,7 +159,8 @@ internal data class ProfileJson(
             avatarColorHex = profile.avatarColorHex,
             usesPrimaryAddons = profile.usesPrimaryAddons,
             usesPrimaryPlugins = profile.usesPrimaryPlugins,
-            avatarId = profile.avatarId
+            avatarId = profile.avatarId,
+            avatarUrl = profile.avatarUrl
         )
     }
 }
