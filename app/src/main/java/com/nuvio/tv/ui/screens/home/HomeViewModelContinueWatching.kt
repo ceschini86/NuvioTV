@@ -2123,21 +2123,13 @@ private suspend fun HomeViewModel.resolveMetaForProgress(
  * Resolves only the primary ID, then cross-caches under all siblings.
  */
 private suspend fun HomeViewModel.resolveBadgeGroup(group: List<String>) {
-    val primaryId = group.first()
-    val alreadyCached = synchronized(cwBadgeEpisodeCache) {
-        cwBadgeEpisodeCache.containsKey("series:$primaryId") ||
-            cwBadgeEpisodeCache.containsKey("tv:$primaryId")
-    }
-    if (!alreadyCached) {
-        val episodes = resolveBadgeEpisodes(primaryId, "series")
-        if (group.size > 1) {
-            synchronized(cwBadgeEpisodeCache) {
-                for (siblingId in group.drop(1)) {
-                    if (!cwBadgeEpisodeCache.containsKey("series:$siblingId")) {
-                        cwBadgeEpisodeCache["series:$siblingId"] = episodes
-                    }
-                }
-            }
+    for (id in group) {
+        val alreadyCached = synchronized(cwBadgeEpisodeCache) {
+            cwBadgeEpisodeCache.containsKey("series:$id") ||
+                cwBadgeEpisodeCache.containsKey("tv:$id")
+        }
+        if (!alreadyCached) {
+            resolveBadgeEpisodes(id, "series")
         }
     }
 }
