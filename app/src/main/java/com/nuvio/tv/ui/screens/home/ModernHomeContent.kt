@@ -676,11 +676,13 @@ fun ModernHomeContent(
                 trailerPlaybackTarget,
                 heroTrailerUrlsState,
                 verticalRowListState,
-                isSidebarExpanded
+                isSidebarExpanded,
+                isRapidHorizontalNav
             ) {
                 derivedStateOf {
                     effectiveAutoplayEnabled &&
                         !isSidebarExpanded.value &&
+                        !isRapidHorizontalNav.value &&
                         !verticalRowListState.isScrollInProgress &&
                         trailerPlaybackTarget == FocusedPosterTrailerPlaybackTarget.HERO_MEDIA &&
                         !heroTrailerUrlsState.value.first.isNullOrBlank()
@@ -840,7 +842,10 @@ fun ModernHomeContent(
                         val currentLeadingEdge = offset
                         if (abs(currentLeadingEdge - topInsetPx) < 1f) return 0f
                         val distance = currentLeadingEdge - topInsetPx
-                        if (distance < 0f && currentLeadingEdge >= 0f) return 0f
+                        // When the list can't scroll backwards and the requested distance
+                        // is negative, clamp to 0 to avoid fighting the scroll bounds
+                        // (prevents first-row jank from impossible scroll-up attempts).
+                        if (distance < 0f && !verticalRowListState.canScrollBackward) return 0f
                         return distance
                     }
                 }
