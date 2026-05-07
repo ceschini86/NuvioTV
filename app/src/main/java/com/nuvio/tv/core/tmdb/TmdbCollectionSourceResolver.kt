@@ -146,7 +146,7 @@ class TmdbCollectionSourceResolver @Inject constructor(
     fun parseTmdbId(input: String): Int? {
         val trimmed = input.trim()
         trimmed.toIntOrNull()?.let { return it }
-        return Regex("""(?:list|collection|company|network)/(\d+)""")
+        return Regex("""(?:list|collection|company|network|person)/(\d+)""")
             .find(trimmed)
             ?.groupValues
             ?.getOrNull(1)
