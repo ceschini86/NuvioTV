@@ -462,7 +462,18 @@ class TraktProgressService @Inject constructor(
             watchedShowSeedsState,
             hiddenProgressShowIds
         ) { seeds, _ ->
-            seeds.filter { !isShowHiddenFromProgress(it.contentId) }
+            // Replace IMDB-based seeds with TMDB when sibling mapping is available.
+            // This prevents addon meta resolution from returning anthology data.
+            val currentSiblings = showIdSiblingsMap
+            seeds
+                .filter { !isShowHiddenFromProgress(it.contentId) }
+                .map { seed ->
+                    if (seed.contentId.startsWith("tt") && currentSiblings.isNotEmpty()) {
+                        val siblings = currentSiblings[seed.contentId]
+                        val tmdbSibling = siblings?.firstOrNull { it.startsWith("tmdb:") }
+                        if (tmdbSibling != null) seed.copy(contentId = tmdbSibling) else seed
+                    } else seed
+                }
         }.onStart {
             scope.launch { getWatchedShowSeedsSnapshot(forceRefresh = false) }
         }.distinctUntilChanged()
@@ -1239,25 +1250,18 @@ class TraktProgressService @Inject constructor(
             val episodesMap = mutableMapOf<String, MutableSet<Pair<Int, Int>>>()
             val idLookup = mutableMapOf<String, String>()
             val siblingsMap = mutableMapOf<String, MutableSet<String>>()
+
             items.forEach { item ->
-                val show = item.show ?: return@forEach
-                val ids = show.ids ?: return@forEach
+                val ids = item.show?.ids ?: return@forEach
                 val keys = buildList {
                     ids.imdb?.takeIf { it.isNotBlank() }?.let { add(it) }
                     ids.tmdb?.let { add("tmdb:$it") }
                     ids.trakt?.let { add("trakt:$it") }
                 }
-                if (keys.isEmpty()) return@forEach
-                // Build sibling mapping: each key points to all other keys from the same show.
-                // Track IMDB IDs that appear in multiple shows (e.g. Monsters vs Monster
-                // share the same IMDB but have different TMDB IDs) — these are ambiguous
-                // and must NOT be cross-cached.
                 if (keys.size > 1) {
                     for (key in keys) {
                         val existing = siblingsMap[key]
                         if (existing != null) {
-                            // This key appeared in a previous show entry — mark as ambiguous
-                            // by clearing siblings so it won't be used for cross-caching.
                             existing.clear()
                             existing.add("__ambiguous__")
                         } else {
@@ -1265,6 +1269,40 @@ class TraktProgressService @Inject constructor(
                         }
                     }
                 }
+            }
+            // Collect ambiguous IDs (shared across multiple Trakt entries).
+            val ambiguousIds = siblingsMap.entries
+                .filter { "__ambiguous__" in it.value }
+                .map { it.key }
+                .toSet()
+
+            // Fix seeds that use IMDB as contentId when a TMDB sibling is known.
+            // Addons resolve meta more accurately by TMDB — using IMDB can return
+            // anthology meta (combined seasons from different shows) causing wrong next-up.
+            val fixedWatchedShowSeeds = watchedShowSeeds.map { seed ->
+                if (seed.contentId.startsWith("tt")) {
+                    val siblings = siblingsMap[seed.contentId]
+                    val tmdbSibling = siblings?.firstOrNull { it.startsWith("tmdb:") }
+                    if (tmdbSibling != null) {
+                        seed.copy(contentId = tmdbSibling)
+                    } else {
+                        seed
+                    }
+                } else seed
+            }
+
+            // Second pass: build episodes map and ID lookup, excluding ambiguous IDs
+            // from keys so episodes from different anthology seasons don't get merged
+            // under a shared IMDB ID.
+            items.forEach { item ->
+                val show = item.show ?: return@forEach
+                val ids = show.ids ?: return@forEach
+                val keys = buildList {
+                    ids.imdb?.takeIf { it.isNotBlank() }?.let { add(it) }
+                    ids.tmdb?.let { add("tmdb:$it") }
+                    ids.trakt?.let { add("trakt:$it") }
+                }.filter { it !in ambiguousIds }
+                if (keys.isEmpty()) return@forEach
                 // Resolve a Trakt-accepted path ID: prefer slug, then trakt numeric
                 val traktAccepted = ids.slug?.takeIf { it.isNotBlank() }
                     ?: ids.trakt?.toString()
@@ -1293,12 +1331,12 @@ class TraktProgressService @Inject constructor(
             showIdToTraktPathId = idLookup
             showIdSiblingsMap = siblingsMap
 
-            watchedShowSeedsState.value = watchedShowSeeds
+            watchedShowSeedsState.value = fixedWatchedShowSeeds
             watchedShowSeedsUpdatedAtMs = System.currentTimeMillis()
             hasLoadedWatchedShowSeeds = true
             watchedShowSeedsStale = false
-            trace("watched-shows cache refreshed: size=${watchedShowSeeds.size}")
-            watchedShowSeeds
+            trace("watched-shows cache refreshed: size=${fixedWatchedShowSeeds.size}")
+            fixedWatchedShowSeeds
         }
     }
 

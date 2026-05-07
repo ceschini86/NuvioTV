@@ -466,6 +466,8 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                     // Drop if the series no longer has any watched-episode seeds
                     // (e.g. user unmarked all episodes as watched).
                     if (snapshot.hasLoadedRemoteProgress && cached.contentId !in activeSeedContentIds) return@mapNotNull null
+                    // Skip fully-watched shows (badge confirms all episodes seen)
+                    if (cached.contentId in fullyWatchedSeriesIds.fullyWatchedSeriesIds.value) return@mapNotNull null
                     val currentSeed = currentSeedByContentId[cached.contentId]
                     if (currentSeed != null && cached.seedSeason != null && cached.seedEpisode != null) {
                         val (curSeason, curEpisode) = currentSeed
@@ -1389,6 +1391,11 @@ private suspend fun HomeViewModel.buildLightweightNextUpItems(
                     debug = debug
                 ) ?: run {
                     logNextUpDecision("drop contentId=${progress.contentId} name=${progress.name} reason=buildNextUpItem-null")
+                    return@withPermit
+                }
+                val fullyWatched = fullyWatchedSeriesIds.fullyWatchedSeriesIds.value
+                if (progress.contentId in fullyWatched) {
+                    logNextUpDecision("drop contentId=${progress.contentId} name=${progress.name} reason=fully-watched-badge")
                     return@withPermit
                 }
                 val shouldPublish: Boolean
