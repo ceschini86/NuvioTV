@@ -42,10 +42,13 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -285,6 +288,27 @@ private fun FolderCard(
                         color = NuvioColors.TextSecondary
                     )
                 }
+            }
+
+            // GIF overlay: show on top of cover image or emoji, visible only once loaded
+            val focusGifUrl = if (isFocused && folder.focusGifEnabled) folder.focusGifUrl else null
+            if (!focusGifUrl.isNullOrBlank()) {
+                var gifLoaded by remember(focusGifUrl) { mutableStateOf(false) }
+                val gifAlpha by animateFloatAsState(
+                    targetValue = if (gifLoaded) 1f else 0f,
+                    animationSpec = tween(durationMillis = 200),
+                    label = "gifFadeIn"
+                )
+                AsyncImage(
+                    model = focusGifUrl,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(shape)
+                        .graphicsLayer { alpha = gifAlpha },
+                    contentScale = ContentScale.FillBounds,
+                    onSuccess = { gifLoaded = true }
+                )
             }
 
             if (!folder.hideTitle) {

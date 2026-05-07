@@ -123,14 +123,14 @@ interface TraktApi {
         @Path("section") section: String,
         @Query("type") type: String? = null,
         @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 100
+        @Query("limit") limit: Int = 1000
     ): Response<List<TraktHiddenItemDto>>
 
     @GET("sync/history/episodes")
     suspend fun getEpisodeHistory(
         @Header("Authorization") authorization: String,
         @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 100,
+        @Query("limit") limit: Int = 1000,
         @Query("start_at") startAt: String? = null,
         @Query("end_at") endAt: String? = null
     ): Response<List<TraktUserEpisodeHistoryItemDto>>
@@ -258,7 +258,7 @@ interface TraktApi {
         @Path("type") type: String,
         @Query("extended") extended: String = "full,images",
         @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 50,
+        @Query("limit") limit: Int = 1000,
         @Query("sort_by") sortBy: String? = null,
         @Query("sort_how") sortHow: String? = null
     ): Response<List<TraktListItemDto>>
@@ -318,7 +318,7 @@ interface TraktApi {
         @Path("type") type: String,
         @Query("extended") extended: String = "full,images",
         @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 100,
+        @Query("limit") limit: Int = 1000,
         @Query("sort_by") sortBy: String? = null,
         @Query("sort_how") sortHow: String? = null
     ): Response<List<TraktListItemDto>>
@@ -344,7 +344,7 @@ interface TraktApi {
         @Header("Authorization") authorization: String,
         @Path("type") type: String,
         @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 100
+        @Query("limit") limit: Int = 1000
     ): Response<List<TraktListItemDto>>
 
     @GET("users/{id}/watchlist/{type}/{sort}")
@@ -355,7 +355,7 @@ interface TraktApi {
         @Path("sort") sort: String = "rank",
         @Query("extended") extended: String = "full,images",
         @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 100
+        @Query("limit") limit: Int = 1000
     ): Response<List<TraktListItemDto>>
 
     @POST("sync/watchlist")

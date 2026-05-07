@@ -75,7 +75,8 @@ class TraktProgressService @Inject constructor(
     private val traktSettingsDataStore: TraktSettingsDataStore,
     private val layoutPreferenceDataStore: com.nuvio.tv.data.local.LayoutPreferenceDataStore,
     private val traktEpisodeMappingService: TraktEpisodeMappingService,
-    private val profileManager: ProfileManager
+    private val profileManager: ProfileManager,
+    private val watchedSeriesStateHolder: com.nuvio.tv.data.local.WatchedSeriesStateHolder
 ) {
     companion object {
         private const val TAG = "TraktProgressSvc"
@@ -1119,7 +1120,7 @@ class TraktProgressService @Inject constructor(
     private suspend fun fetchHiddenProgressShowIds(): Set<String> {
         val allIds = mutableSetOf<String>()
         var page = 1
-        val limit = 100
+        val limit = 1000
         while (true) {
             val response = traktAuthService.executeAuthorizedRequest { authHeader ->
                 traktApi.getHiddenItems(
@@ -1664,7 +1665,7 @@ class TraktProgressService @Inject constructor(
         }
         val results = linkedMapOf<String, WatchProgress>()
         var page = 1
-        val pageLimit = 100
+        val pageLimit = 1000
         val maxPages = if (isAllHistoryWindow()) 20 else 5
 
         while (page <= maxPages) {
@@ -1735,7 +1736,9 @@ class TraktProgressService @Inject constructor(
         if (contentId.isBlank()) return null
 
         val lastWatched = parseIsoToMillis(item.watchedAt)
-        val resolvedEpisode = if (applyAddonRemap) {
+        // Skip expensive addon remap for fully watched series — they won't appear in Continue Watching.
+        val isFullyWatched = contentId in watchedSeriesStateHolder.fullyWatchedSeriesIds.value
+        val resolvedEpisode = if (applyAddonRemap && !isFullyWatched) {
             resolveAddonEpisodeProgress(
                 contentId = contentId,
                 season = season,
@@ -1909,7 +1912,9 @@ class TraktProgressService @Inject constructor(
 
         val contentId = normalizeContentId(show.ids)
         if (contentId.isBlank()) return null
-        val resolvedEpisode = if (applyAddonRemap) {
+        // Skip expensive addon remap for fully watched series — they won't appear in Continue Watching.
+        val isFullyWatched = contentId in watchedSeriesStateHolder.fullyWatchedSeriesIds.value
+        val resolvedEpisode = if (applyAddonRemap && !isFullyWatched) {
             resolveAddonEpisodeProgress(
                 contentId = contentId,
                 season = season,

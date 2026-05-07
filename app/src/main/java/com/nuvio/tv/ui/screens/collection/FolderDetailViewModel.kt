@@ -140,6 +140,18 @@ class FolderDetailViewModel @Inject constructor(
     private var activeTrailerPreviewItemId: String? = null
     private var trailerPreviewRequestVersion: Long = 0L
 
+    /** Items for which enrichment was attempted but produced no enriched data. */
+    private val _failedEnrichmentIds = MutableStateFlow<Set<String>>(emptySet())
+    val failedEnrichmentIds: StateFlow<Set<String>> = _failedEnrichmentIds.asStateFlow()
+
+    private val _scrollToTopTrigger = MutableStateFlow(0)
+    val scrollToTopTrigger: StateFlow<Int> = _scrollToTopTrigger.asStateFlow()
+
+    private var adjacentItemPrefetchJob: Job? = null
+    private var pendingAdjacentPrefetchItemId: String? = null
+    private val prefetchedTmdbIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+    private val prefetchedExternalMetaIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
     private val _rowsFocusState = MutableStateFlow(com.nuvio.tv.ui.screens.home.HomeScreenFocusState())
     val rowsFocusState: StateFlow<com.nuvio.tv.ui.screens.home.HomeScreenFocusState> = _rowsFocusState.asStateFlow()
 
@@ -402,7 +414,8 @@ class FolderDetailViewModel @Inject constructor(
                 posterCardCornerRadiusDp = s.posterCardCornerRadiusDp,
                 hideUnreleasedContent = s.hideUnreleasedContent,
                 showFullReleaseDate = s.showFullReleaseDate,
-                movieWatchedStatus = s.movieWatchedStatus
+                movieWatchedStatus = s.movieWatchedStatus,
+                heroEnrichmentEnabled = true
             )
             s.copy(followLayoutHomeState = if (modernPresentation != null) {
                 homeState.copy(modernHomePresentation = modernPresentation)
@@ -908,7 +921,14 @@ class FolderDetailViewModel @Inject constructor(
                 }
             }
 
-            if (enrichment == null && !externalMetaEnabled) return@launch
+            if (enrichment == null && !externalMetaEnabled) {
+                // Mark as failed so the UI can show addon data immediately.
+                if (item.id !in _enrichedPreviews.value) {
+                    _failedEnrichmentIds.value = _failedEnrichmentIds.value + item.id
+                }
+                if (_enrichingItemId.value == item.id) _enrichingItemId.value = null
+                return@launch
+            }
             enrichedItemIds.add(item.id)
 
             // Apply TMDB enrichment if available.
@@ -965,6 +985,11 @@ class FolderDetailViewModel @Inject constructor(
                             imdbRating = meta.imdbRating ?: merged.imdbRating,
                             releaseInfo = meta.releaseInfo?.takeIf { it.isNotBlank() } ?: merged.releaseInfo
                         )
+                    }
+                } else {
+                    // External meta also failed — mark as failed enrichment.
+                    if (item.id !in _enrichedPreviews.value) {
+                        _failedEnrichmentIds.value = _failedEnrichmentIds.value + item.id
                     }
                 }
             }
@@ -1048,6 +1073,129 @@ class FolderDetailViewModel @Inject constructor(
                 tab.copy(catalogRow = row.copy(items = items))
             }
             if (changed) state.copy(tabs = updatedTabs) else state
+        }
+    }
+
+    fun scrollToTop() {
+        _scrollToTopTrigger.value++
+    }
+
+    /**
+     * Preloads enrichment data for an adjacent item (next item in the row) so that
+     * when the user navigates to it, the hero/backdrop data is already available.
+     * Mirrors HomeViewModel.preloadAdjacentItem behavior.
+     */
+    fun preloadAdjacentItem(item: MetaPreview) {
+        if (item.id in enrichedItemIds) return
+        if (item.id in prefetchedTmdbIds || item.id in prefetchedExternalMetaIds) return
+        if (pendingAdjacentPrefetchItemId == item.id) return
+
+        pendingAdjacentPrefetchItemId = item.id
+        adjacentItemPrefetchJob?.cancel()
+        adjacentItemPrefetchJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            kotlinx.coroutines.delay(600)
+            if (pendingAdjacentPrefetchItemId != item.id) return@launch
+            if (item.id in prefetchedTmdbIds || item.id in prefetchedExternalMetaIds) return@launch
+
+            val tmdbSettings = tmdbSettingsDataStore.settings.first()
+            val homeLayout = _uiState.value.homeLayout
+            val tmdbEnabled = tmdbSettings.enabled &&
+                (homeLayout != HomeLayout.MODERN || tmdbSettings.modernHomeEnabled)
+            val externalMetaEnabled = layoutPreferenceDataStore.preferExternalMetaAddonDetail.first()
+
+            if (!tmdbEnabled && !externalMetaEnabled) return@launch
+
+            try {
+                var tmdbEnriched = false
+                if (tmdbEnabled) {
+                    val tmdbId = runCatching { tmdbService.ensureTmdbId(item.id, item.apiType) }.getOrNull()
+                    if (tmdbId != null) {
+                        val enrichment = runCatching {
+                            tmdbMetadataService.fetchEnrichment(
+                                tmdbId = tmdbId,
+                                contentType = item.type,
+                                language = tmdbSettings.language
+                            )
+                        }.getOrNull()
+                        if (enrichment != null) {
+                            prefetchedTmdbIds.add(item.id)
+                            prefetchedExternalMetaIds.add(item.id)
+                            enrichedItemIds.add(item.id)
+                            updateItemInTabs(item.id) { merged ->
+                                var result = merged
+                                if (tmdbSettings.useBasicInfo) {
+                                    val isModern = _uiState.value.homeLayout == HomeLayout.MODERN
+                                    result = result.copy(
+                                        name = if (isModern) enrichment.localizedTitle ?: result.name else result.name,
+                                        description = enrichment.description ?: result.description,
+                                        genres = if (enrichment.genres.isNotEmpty()) enrichment.genres else result.genres
+                                    )
+                                }
+                                if (tmdbSettings.useArtwork) {
+                                    result = result.copy(
+                                        background = enrichment.backdrop ?: result.background,
+                                        logo = enrichment.logo ?: result.logo
+                                    )
+                                }
+                                if (tmdbSettings.useReleaseDates) {
+                                    result = result.copy(
+                                        releaseInfo = enrichment.releaseInfo ?: result.releaseInfo
+                                    )
+                                }
+                                if (tmdbSettings.useDetails) {
+                                    result = result.copy(
+                                        runtime = enrichment.runtimeMinutes?.toString() ?: result.runtime,
+                                        ageRating = enrichment.ageRating ?: result.ageRating,
+                                        status = enrichment.status ?: result.status
+                                    )
+                                }
+                                result
+                            }
+                            val enrichedItem = _uiState.value.tabs
+                                .firstNotNullOfOrNull { tab ->
+                                    tab.catalogRow?.items?.firstOrNull { it.id == item.id }
+                                }
+                            if (enrichedItem != null) {
+                                _enrichedPreviews.update { it + (item.id to enrichedItem) }
+                            }
+                            rebuildFollowLayoutState()
+                            tmdbEnriched = true
+                        }
+                    }
+                }
+                if (!tmdbEnriched && externalMetaEnabled && item.id !in prefetchedExternalMetaIds) {
+                    prefetchedExternalMetaIds.add(item.id)
+                    val result = metaRepository.getMetaFromAllAddons(item.apiType, item.id)
+                        .first { it is com.nuvio.tv.core.network.NetworkResult.Success || it is com.nuvio.tv.core.network.NetworkResult.Error }
+                    if (result is com.nuvio.tv.core.network.NetworkResult.Success) {
+                        enrichedItemIds.add(item.id)
+                        val meta = result.data
+                        updateItemInTabs(item.id) { merged ->
+                            merged.copy(
+                                name = meta.name.takeIf { it.isNotBlank() } ?: merged.name,
+                                description = meta.description?.takeIf { it.isNotBlank() } ?: merged.description,
+                                background = meta.background?.takeIf { it.isNotBlank() } ?: merged.background,
+                                logo = meta.logo?.takeIf { it.isNotBlank() } ?: merged.logo,
+                                genres = meta.genres.takeIf { it.isNotEmpty() } ?: merged.genres,
+                                imdbRating = meta.imdbRating ?: merged.imdbRating,
+                                releaseInfo = meta.releaseInfo?.takeIf { it.isNotBlank() } ?: merged.releaseInfo
+                            )
+                        }
+                        val enrichedItem = _uiState.value.tabs
+                            .firstNotNullOfOrNull { tab ->
+                                tab.catalogRow?.items?.firstOrNull { it.id == item.id }
+                            }
+                        if (enrichedItem != null) {
+                            _enrichedPreviews.update { it + (item.id to enrichedItem) }
+                        }
+                        rebuildFollowLayoutState()
+                    }
+                }
+            } finally {
+                if (pendingAdjacentPrefetchItemId == item.id) {
+                    pendingAdjacentPrefetchItemId = null
+                }
+            }
         }
     }
 

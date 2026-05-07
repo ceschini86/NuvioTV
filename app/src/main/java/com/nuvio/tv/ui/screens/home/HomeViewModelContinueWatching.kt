@@ -464,7 +464,7 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                     if (!cached.hasAired && !showUnairedNextUp) return@mapNotNull null
                     // Drop if the series no longer has any watched-episode seeds
                     // (e.g. user unmarked all episodes as watched).
-                    if (!snapshot.hasLoadedRemoteProgress && cached.contentId !in activeSeedContentIds) return@mapNotNull null
+                    if (snapshot.hasLoadedRemoteProgress && cached.contentId !in activeSeedContentIds) return@mapNotNull null
                     val currentSeed = currentSeedByContentId[cached.contentId]
                     if (currentSeed != null && cached.seedSeason != null && cached.seedEpisode != null) {
                         val (curSeason, curEpisode) = currentSeed

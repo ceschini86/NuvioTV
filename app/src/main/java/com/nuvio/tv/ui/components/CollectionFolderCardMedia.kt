@@ -6,14 +6,13 @@ fun collectionFolderCardImageUrl(
     folder: CollectionFolder,
     isFocused: Boolean
 ): String? {
-    if (!folder.focusGifEnabled) {
-        return firstNonBlank(folder.coverImageUrl)
-    }
-    return if (isFocused) {
+    // When focusGifEnabled is off, the GIF URL acts as a regular poster (priority over cover image).
+    val effectiveCover = if (!folder.focusGifEnabled) {
         firstNonBlank(folder.focusGifUrl, folder.coverImageUrl)
     } else {
-        firstNonBlank(folder.coverImageUrl, folder.focusGifUrl)
+        firstNonBlank(folder.coverImageUrl)
     }
+    return effectiveCover
 }
 
 private fun firstNonBlank(vararg candidates: String?): String? {
