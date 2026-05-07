@@ -630,7 +630,7 @@ internal fun extractYearText(type: ContentType, releaseInfo: String?, released: 
                     }
                 }
                 fmt.format(
-                    java.util.Date(it.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli())
+                    java.util.Date(it.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli())
                 )
             }
         if (full != null) return full

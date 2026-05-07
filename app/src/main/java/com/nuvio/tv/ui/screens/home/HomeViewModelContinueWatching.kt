@@ -131,7 +131,7 @@ internal data class CwMetaSummary(
                         java.time.format.DateTimeFormatter.ISO_LOCAL_DATE
                     )
                     if (date.isAfter(today)) {
-                        date.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+                        date.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
                     } else null
                 } catch (_: java.time.format.DateTimeParseException) { null }
             }
@@ -2491,12 +2491,12 @@ private fun HomeViewModel.publishBadgeUpdate(
 private fun parseEpisodeReleaseDate(raw: String?): LocalDate? {
     if (raw.isNullOrBlank()) return null
     val value = raw.trim()
-    val zone = ZoneOffset.UTC
+    val zone = ZoneId.systemDefault()
 
     return runCatching {
         Instant.parse(value).atZone(zone).toLocalDate()
     }.getOrNull() ?: runCatching {
-        OffsetDateTime.parse(value).toInstant().atZone(zone).toLocalDate()
+        OffsetDateTime.parse(value).atZoneSameInstant(zone).toLocalDate()
     }.getOrNull() ?: runCatching {
         LocalDateTime.parse(value).toLocalDate()
     }.getOrNull() ?: runCatching {
@@ -2511,7 +2511,7 @@ private fun parseEpisodeReleaseDate(raw: String?): LocalDate? {
 private fun parseEpisodeReleaseInstant(raw: String?): Instant? {
     if (raw.isNullOrBlank()) return null
     val value = raw.trim()
-    val zone = ZoneOffset.UTC
+    val zone = ZoneId.systemDefault()
 
     return runCatching {
         Instant.parse(value)
