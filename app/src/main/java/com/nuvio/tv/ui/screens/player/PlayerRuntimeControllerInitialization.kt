@@ -94,7 +94,8 @@ internal fun PlayerRuntimeController.initializePlayer(
         return
     }
 
-    scope.launch {
+    playerInitializationJob?.cancel()
+    playerInitializationJob = scope.launch {
         try {
             if (allowEngineFailover) {
                 startupEngineFailoverTriggered = false
@@ -285,6 +286,10 @@ internal fun PlayerRuntimeController.initializePlayer(
                     .build()
             }
 
+            // Ensure any existing ExoPlayer is fully released before creating a new one
+            // to avoid leaking MediaCodec and hardware decoding resources, preventing player hangs.
+            _exoPlayer?.let { player -> runCatching { player.release() } }
+
             _exoPlayer = if (useLibass) {
                 val playerDataSourceFactory = PlayerPlaybackNetworking.createDataSourceFactory(context, headers)
                 ExoPlayer.Builder(context)
@@ -363,6 +368,21 @@ internal fun PlayerRuntimeController.initializePlayer(
                 prepare()
 
                 addListener(object : Player.Listener {
+                    override fun onPositionDiscontinuity(
+                        oldPosition: Player.PositionInfo,
+                        newPosition: Player.PositionInfo,
+                        reason: Int
+                    ) {
+                        if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                            if (playbackState == Player.STATE_READY) {
+                                // In-buffer seek: player is already ready, flush immediately
+                            } else {
+                                // Out-of-buffer seek: wait for STATE_READY
+                                pendingSeekFlush = true
+                            }
+                        }
+                    }
+
                     override fun onPlaybackStateChanged(playbackState: Int) {
                         val playerDuration = duration
                         if (playerDuration > lastKnownDuration) {
@@ -387,16 +407,19 @@ internal fun PlayerRuntimeController.initializePlayer(
                             }
                         }
                     
-                        
                         if (playbackState == Player.STATE_READY) {
+                            pendingSeekFlush = false
+                            
+                            // Perform hardware flush (pause-delay-play) to prevent A/V desync 
+                            // on initial load, after rebuffering, and after out-of-buffer seeks.
                             if (shouldEnforceAutoplayOnFirstReady) {
                                 shouldEnforceAutoplayOnFirstReady = false
-                                if (!userPausedManually && !isPlaying) {
-                                    if (!playWhenReady) {
-                                        playWhenReady = true
-                                    }
+                                if (!userPausedManually) {
+                                    playWhenReady = true
                                     play()
                                 }
+                            } else if (!userPausedManually) {
+                                play()
                             }
                             tryApplyPendingResumeProgress(this@apply)
                             _uiState.value.pendingSeekPosition?.let { position ->
