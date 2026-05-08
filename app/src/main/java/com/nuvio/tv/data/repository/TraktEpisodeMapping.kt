@@ -84,13 +84,16 @@ private fun remapEpisodeBetweenLists(
     return orderedTargetEpisodes[sourceIndex]
 }
 
+private val NON_ALPHANUMERIC = Regex("[^a-z0-9]+")
+private val COLLAPSED_SPACES = Regex("\\s+")
+
 private fun normalizeEpisodeTitle(title: String?): String {
     return title
         .orEmpty()
         .lowercase()
-        .replace(Regex("[^a-z0-9]+"), " ")
+        .replace(NON_ALPHANUMERIC, " ")
         .trim()
-        .replace(Regex("\\s+"), " ")
+        .replace(COLLAPSED_SPACES, " ")
 }
 
 private fun isUsefulEpisodeTitle(normalizedTitle: String): Boolean {
