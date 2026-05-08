@@ -296,6 +296,11 @@
     <string name="autoplay_reuse_last_link">Ponownie użyj ostatniego linku</string>
     <string name="autoplay_reuse_last_link_sub">Auto-odtwarzaj ostatni działający strumień dla tego samego filmu/odcinka gdy cache jest aktualny</string>
     <string name="autoplay_last_link_cache">Czas ważności cache linku</string>
+    <string name="cache_duration_hour_one">%1$d godzina</string>
+    <string name="cache_duration_hour_other">%1$d godzin</string>
+    <string name="cache_duration_day_one">%1$d dzień</string>
+    <string name="cache_duration_day_other">%1$d dni</string>
+    <string name="cache_duration_days_hours">%1$dd %2$dh</string>
     <string name="autoplay_mode_manual">Ręczny (wybierz strumień)</string>
     <string name="autoplay_mode_first">Auto-odtwarzaj pierwsze źródło</string>
     <string name="autoplay_mode_regex">Auto-odtwarzaj dopasowanie regex</string>
@@ -1598,6 +1603,13 @@
     <string name="appearance_amoled_mode_subtitle">Użyj czystej czerni jako tła aplikacji</string>
     <string name="appearance_amoled_surfaces_mode">Czysto czarne powierzchnie</string>
     <string name="appearance_amoled_surfaces_mode_subtitle">Karty, panele i kontenery również będą czysto czarne</string>
+    <string name="theme_color_crimson">Karmazyn</string>
+    <string name="theme_color_ocean">Ocean</string>
+    <string name="theme_color_violet">Fiolet</string>
+    <string name="theme_color_emerald">Szmaragd</string>
+    <string name="theme_color_amber">Bursztyn</string>
+    <string name="theme_color_rose">Róż</string>
+    <string name="theme_color_white">Biel</string>
     <string name="collections_editor_add_source">Dodaj źródło</string>
     <string name="collections_editor_add_tmdb_source">Dodaj źródło TMDB</string>
     <string name="collections_editor_edit_tmdb_source">Edytuj źródło TMDB</string>
