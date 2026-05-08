@@ -789,7 +789,7 @@ private fun LegacySidebarScaffold(
                                 )
                                 Box(
                                     modifier = Modifier.fillMaxWidth(),
-                                    contentAlignment = Alignment.Center
+                                    contentAlignment = Alignment.CenterStart
                                 ) {
                                     Row(
                                         modifier = Modifier
@@ -839,7 +839,7 @@ private fun LegacySidebarScaffold(
                             .offset(y = 28.dp)
                             .fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
-                        horizontalAlignment = if (isExpanded) Alignment.CenterHorizontally else Alignment.Start
+                        horizontalAlignment = Alignment.Start
                     ) {
                         drawerItems.forEach { item ->
                             LegacySidebarButton(
@@ -1166,7 +1166,9 @@ private fun ModernSidebarScaffold(
             }
         },
         label = "sidebarBloomScale"
-    ) { 1f }
+    ) { expanded ->
+        if (expanded) 1f else 0.9f
+    }
     val sidebarDeflateOffsetX by sidebarTransition.animateDp(
         transitionSpec = {
             if (targetState) {
@@ -1176,7 +1178,9 @@ private fun ModernSidebarScaffold(
             }
         },
         label = "sidebarDeflateOffsetX"
-    ) { 0.dp }
+    ) { expanded ->
+        if (expanded) 0.dp else (-10).dp
+    }
     val sidebarDeflateOffsetY by sidebarTransition.animateDp(
         transitionSpec = {
             if (targetState) {
