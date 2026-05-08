@@ -174,6 +174,7 @@ class HomeViewModel @Inject constructor(
     internal val trailerPreviewAudioUrlsState = mutableStateMapOf<String, String>()
     internal var activeTrailerPreviewItemId: String? = null
     internal var trailerPreviewRequestVersion: Long = 0L
+    internal var trailerPreviewJob: Job? = null
     internal var currentTmdbSettings: TmdbSettings = TmdbSettings()
     internal var currentMdbListSettings: MDBListSettings = MDBListSettings()
     internal var heroEnrichmentJob: Job? = null

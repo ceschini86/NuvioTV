@@ -462,16 +462,19 @@ class TraktProgressService @Inject constructor(
             watchedShowSeedsState,
             hiddenProgressShowIds
         ) { seeds, _ ->
-            // Replace IMDB-based seeds with TMDB when sibling mapping is available.
-            // This prevents addon meta resolution from returning anthology data.
+            // Replace IMDB-based seeds with TMDB ONLY for ambiguous IDs (anthology shows).
+            // Non-ambiguous shows keep their IMDB ID for correct deduplication.
             val currentSiblings = showIdSiblingsMap
             seeds
                 .filter { !isShowHiddenFromProgress(it.contentId) }
                 .map { seed ->
                     if (seed.contentId.startsWith("tt") && currentSiblings.isNotEmpty()) {
                         val siblings = currentSiblings[seed.contentId]
-                        val tmdbSibling = siblings?.firstOrNull { it.startsWith("tmdb:") }
-                        if (tmdbSibling != null) seed.copy(contentId = tmdbSibling) else seed
+                        val isAmbiguous = siblings != null && "__ambiguous__" in siblings
+                        if (isAmbiguous) {
+                            val tmdbSibling = siblings?.firstOrNull { it.startsWith("tmdb:") }
+                            if (tmdbSibling != null) seed.copy(contentId = tmdbSibling) else seed
+                        } else seed
                     } else seed
                 }
         }.onStart {
@@ -1276,11 +1279,12 @@ class TraktProgressService @Inject constructor(
                 .map { it.key }
                 .toSet()
 
-            // Fix seeds that use IMDB as contentId when a TMDB sibling is known.
-            // Addons resolve meta more accurately by TMDB — using IMDB can return
-            // anthology meta (combined seasons from different shows) causing wrong next-up.
+            // Fix seeds that use IMDB as contentId when a TMDB sibling is known
+            // BUT ONLY for ambiguous IDs (anthology shows where one IMDB ID maps to
+            // multiple Trakt entries). Non-ambiguous shows must keep their IMDB ID
+            // so that deduplication against local in-progress items works correctly.
             val fixedWatchedShowSeeds = watchedShowSeeds.map { seed ->
-                if (seed.contentId.startsWith("tt")) {
+                if (seed.contentId.startsWith("tt") && seed.contentId in ambiguousIds) {
                     val siblings = siblingsMap[seed.contentId]
                     val tmdbSibling = siblings?.firstOrNull { it.startsWith("tmdb:") }
                     if (tmdbSibling != null) {

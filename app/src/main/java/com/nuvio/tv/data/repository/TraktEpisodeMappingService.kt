@@ -74,7 +74,8 @@ class TraktEpisodeMappingService @Inject constructor(
         val addonHasEpisode = addonEpisodes.any {
             it.season == requestedSeason && it.episode == requestedEpisode
         }
-        if (addonHasEpisode && hasSameSeasonStructure(addonEpisodes, traktEpisodes)) {
+        val sameStructure = hasSameSeasonStructure(addonEpisodes, traktEpisodes)
+        if (addonHasEpisode && sameStructure) {
             return null
         }
 
