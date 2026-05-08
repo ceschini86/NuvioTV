@@ -789,7 +789,7 @@ private fun LegacySidebarScaffold(
                                 )
                                 Box(
                                     modifier = Modifier.fillMaxWidth(),
-                                    contentAlignment = Alignment.CenterStart
+                                    contentAlignment = Alignment.Center
                                 ) {
                                     Row(
                                         modifier = Modifier
@@ -839,7 +839,7 @@ private fun LegacySidebarScaffold(
                             .offset(y = 28.dp)
                             .fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
-                        horizontalAlignment = Alignment.Start
+                        horizontalAlignment = if (isExpanded) Alignment.CenterHorizontally else Alignment.Start
                     ) {
                         drawerItems.forEach { item ->
                             LegacySidebarButton(
@@ -983,6 +983,7 @@ private fun LegacySidebarButton(
                 Modifier
                     .size(22.dp)
                     .align(Alignment.Center)
+                    .offset(x = 12.dp)
             }
         )
         if (expanded) {
