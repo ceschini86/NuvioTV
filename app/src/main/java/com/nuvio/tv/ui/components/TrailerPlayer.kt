@@ -30,6 +30,7 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MergingMediaSource
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import com.nuvio.tv.data.trailer.YoutubeChunkedDataSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -86,8 +87,17 @@ fun TrailerPlayer(
                     /* bufferForPlaybackAfterRebufferMs = */ 10_000
                 )
                 .build()
+            val trackSelector = DefaultTrackSelector(context).apply {
+                setParameters(
+                    buildUponParameters()
+                        .setMaxVideoSizeSd()
+                        .clearVideoSizeConstraints()
+                        .setForceHighestSupportedBitrate(true)
+                )
+            }
             ExoPlayer.Builder(context)
                 .setLoadControl(loadControl)
+                .setTrackSelector(trackSelector)
                 .setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_ONLY_IF_SEAMLESS)
                 .build()
                 .apply {

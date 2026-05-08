@@ -86,7 +86,11 @@ class TrailerService(
                 return@withContext tmdbSource
             }
             Log.w(TAG, "TMDB path exhausted; no YouTube trailer key resolved for backend /trailer fallback")
-            cache[cacheKey] = NEGATIVE_CACHE
+            // Only cache negative result if tmdbId was available — if null, enrichment
+            // may not have completed yet and a retry with tmdbId could succeed.
+            if (tmdbId != null) {
+                cache[cacheKey] = NEGATIVE_CACHE
+            }
             null
         } catch (e: Exception) {
             Log.e(TAG, "Error fetching trailer for $title: ${e.message}", e)
@@ -238,6 +242,8 @@ class TrailerService(
             }
             Log.d(TAG, "Using backend fallback source for ${summarizeUrl(youtubeUrl)}")
             TrailerPlaybackSource(videoUrl = fallbackUrl)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Error getting trailer from YouTube: ${e.message}", e)
             null
