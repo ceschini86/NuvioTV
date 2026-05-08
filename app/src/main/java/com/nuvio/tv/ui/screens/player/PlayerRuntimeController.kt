@@ -270,6 +270,7 @@ class PlayerRuntimeController(
     internal var skipIntervals: List<SkipInterval> = emptyList()
     internal var skipIntroEnabled: Boolean = true
     internal var autoSkipSegmentTypes: Set<AutoSkipSegmentType> = emptySet()
+    internal var playerSettingsInitialized: Boolean = false
     internal var skipIntroFetchedKey: String? = null
     internal var lastAutoSkippedIntervalKey: String? = null
     internal var lastActiveSkipType: String? = null
