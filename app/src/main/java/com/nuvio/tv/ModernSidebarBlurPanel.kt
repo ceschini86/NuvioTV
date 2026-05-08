@@ -136,7 +136,7 @@ internal fun ModernSidebarBlurPanel(
                 modifier = Modifier
                     .fillMaxWidth()
                     .offset(y = 12.dp),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.CenterStart
             ) {
                 SidebarProfileItem(
                     profileName = activeProfileName,
@@ -148,7 +148,7 @@ internal fun ModernSidebarBlurPanel(
                         if (focused) onDrawerItemFocused(drawerItems.size)
                     },
                     onClick = onSwitchProfile,
-                    modifier = Modifier.fillMaxWidth(0.92f)
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         } else {
@@ -179,8 +179,11 @@ internal fun ModernSidebarBlurPanel(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Column(
-                modifier = Modifier.offset(y = (-12).dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .offset(y = (-12).dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalAlignment = Alignment.Start
             ) {
                 drawerItems.forEachIndexed { index, item ->
                     SidebarNavigationItem(
@@ -198,7 +201,7 @@ internal fun ModernSidebarBlurPanel(
                         },
                         onClick = { onDrawerItemClick(item.route) },
                         modifier = Modifier
-                            .fillMaxWidth(0.92f)
+                            .fillMaxWidth()
                             .focusRequester(drawerItemFocusRequesters.getValue(item.route))
                     )
                 }
@@ -264,7 +267,7 @@ private fun SidebarNavigationItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+                .padding(start = 2.dp, end = 14.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
         Box(
@@ -356,7 +359,7 @@ private fun SidebarProfileItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+                .padding(start = 2.dp, end = 14.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
         Box(

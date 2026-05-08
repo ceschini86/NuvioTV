@@ -1166,9 +1166,7 @@ private fun ModernSidebarScaffold(
             }
         },
         label = "sidebarBloomScale"
-    ) { expanded ->
-        if (expanded) 1f else 0.9f
-    }
+    ) { 1f }
     val sidebarDeflateOffsetX by sidebarTransition.animateDp(
         transitionSpec = {
             if (targetState) {
@@ -1178,9 +1176,7 @@ private fun ModernSidebarScaffold(
             }
         },
         label = "sidebarDeflateOffsetX"
-    ) { expanded ->
-        if (expanded) 0.dp else (-10).dp
-    }
+    ) { 0.dp }
     val sidebarDeflateOffsetY by sidebarTransition.animateDp(
         transitionSpec = {
             if (targetState) {
