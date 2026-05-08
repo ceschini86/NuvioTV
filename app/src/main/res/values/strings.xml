@@ -305,6 +305,13 @@
     <string name="appearance_subtitle">Choose your color theme, font and language</string>
     <string name="appearance_color_theme">Color Theme</string>
     <string name="appearance_color_theme_subtitle">Pick the accent color used across the app</string>
+    <string name="theme_color_crimson">Crimson</string>
+    <string name="theme_color_ocean">Ocean</string>
+    <string name="theme_color_violet">Violet</string>
+    <string name="theme_color_emerald">Emerald</string>
+    <string name="theme_color_amber">Amber</string>
+    <string name="theme_color_rose">Rose</string>
+    <string name="theme_color_white">White</string>
     <string name="appearance_amoled_mode">AMOLED Mode</string>
     <string name="appearance_amoled_mode_subtitle">Use pure black for app backgrounds</string>
     <string name="appearance_amoled_surfaces_mode">Pure Black Surfaces</string>
