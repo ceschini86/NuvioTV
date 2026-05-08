@@ -364,7 +364,6 @@ internal fun PlayerRuntimeController.updateActiveSkipInterval(positionMs: Long) 
     // Without this, autoSkipSegmentTypes is empty on first iterations, causing the
     // skip button to appear instead of auto-skipping.
     if (!playerSettingsInitialized) return
-    }
 
     val positionSec = positionMs / 1000.0
     val active = skipIntervals.find { interval ->
