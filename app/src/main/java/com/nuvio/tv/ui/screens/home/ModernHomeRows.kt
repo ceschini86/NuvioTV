@@ -946,8 +946,17 @@ private fun ModernCarouselCard(
     if (frozenLogoUrl.value.isNullOrBlank() && !item.heroPreview.logo.isNullOrBlank()) {
         frozenLogoUrl.value = item.heroPreview.logo
     }
-    if (!useLandscapeOverlayTreatment && !enrichedLogoUrl.isNullOrBlank() && frozenLogoUrl.value != enrichedLogoUrl) {
-        frozenLogoUrl.value = enrichedLogoUrl
+    if (!enrichedLogoUrl.isNullOrBlank() && frozenLogoUrl.value != enrichedLogoUrl) {
+        // Outside landscape we always pick up the enriched URL so manual artwork
+        // updates land instantly. Inside landscape we still adopt the enriched
+        // URL when there was no logo to begin with — otherwise the card would
+        // permanently fall back to the title text whenever the addon manifest
+        // ships items without a logo (e.g. AIO Metadata for some shows) even
+        // though TMDB has one. Once we have any non-blank value we keep it
+        // frozen to avoid mid-scroll flicker on enrichment refresh.
+        if (!useLandscapeOverlayTreatment || frozenLogoUrl.value.isNullOrBlank()) {
+            frozenLogoUrl.value = enrichedLogoUrl
+        }
     }
     val effectiveLogoUrl = frozenLogoUrl.value
     // Freeze the backdrop URL for landscape cards - prevents image reload when enrichment updates backdrop.
