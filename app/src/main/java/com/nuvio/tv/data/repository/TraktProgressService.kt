@@ -211,6 +211,7 @@ class TraktProgressService @Inject constructor(
     @Volatile
     private var metadataWarmupScheduled: Boolean = false
     private val episodeProgressActivityVersion = AtomicLong(0L)
+    private val mappingSemaphore = Semaphore(8)
 
     private val playbackCacheTtlMs = 30_000L
     private val userStatsCacheTtlMs = Long.MAX_VALUE
@@ -1635,13 +1636,17 @@ class TraktProgressService @Inject constructor(
             val historyDeferred = async { fetchRecentEpisodeHistorySnapshot() }
             val moviesDeferred = async {
                 val playback = getPlayback("movies", force = force, startAt = playbackStartAt)
-                playback.map { item -> async { mapPlaybackMovie(item) } }
+                playback.map { item -> async {
+                    mappingSemaphore.withPermit { mapPlaybackMovie(item) }
+                } }
                     .awaitAll()
                     .filterNotNull()
             }
             val episodesDeferred = async {
                 val playback = getPlayback("episodes", force = force, startAt = playbackStartAt)
-                playback.map { item -> async { mapPlaybackEpisode(item, applyAddonRemap = true) } }
+                playback.map { item -> async {
+                    mappingSemaphore.withPermit { mapPlaybackEpisode(item, applyAddonRemap = true) }
+                } }
                     .awaitAll()
                     .filterNotNull()
             }
@@ -1749,7 +1754,11 @@ class TraktProgressService @Inject constructor(
             if (candidateItems.isNotEmpty()) {
                 val mapped = coroutineScope {
                     candidateItems.map { item ->
-                        async { mapEpisodeHistoryItem(item, applyAddonRemap = true) }
+                        async {
+                            mappingSemaphore.withPermit {
+                                mapEpisodeHistoryItem(item, applyAddonRemap = true)
+                            }
+                        }
                     }.awaitAll()
                 }
                 mapped.filterNotNull().forEach { progress ->
