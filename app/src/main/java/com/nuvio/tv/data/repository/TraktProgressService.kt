@@ -1630,13 +1630,11 @@ class TraktProgressService @Inject constructor(
     }
 
     private suspend fun fetchAllProgressSnapshot(force: Boolean = false): List<WatchProgress> {
-        val t0 = SystemClock.elapsedRealtime()
         val playbackStartAt = recentWatchWindowMs()?.let { windowMs ->
             toTraktUtcDateTime(System.currentTimeMillis() - windowMs)
         }
 
         val (recentCompletedEpisodes, inProgressMovies, inProgressEpisodes) = coroutineScope {
-            val t = SystemClock.elapsedRealtime()
             val historyDeferred = async { fetchRecentEpisodeHistorySnapshot() }
             val moviesDeferred = async {
                 val playback = getPlayback("movies", force = force, startAt = playbackStartAt)
@@ -1657,7 +1655,6 @@ class TraktProgressService @Inject constructor(
             val history = historyDeferred.await()
             val movies = moviesDeferred.await()
             val episodes = episodesDeferred.await()
-            trace("fetchAllProgress fetch took ${SystemClock.elapsedRealtime() - t}ms (history=${history.size} movies=${movies.size} episodes=${episodes.size})")
             Triple(history, movies, episodes)
         }
 
@@ -1704,7 +1701,6 @@ class TraktProgressService @Inject constructor(
         }
 
         val finalSnapshot = mergedByKey.values.sortedByDescending { it.lastWatched }
-        trace("fetchAllProgress done: ${finalSnapshot.size} items in ${SystemClock.elapsedRealtime() - t0}ms total")
         finalSnapshot.take(8).forEach { p ->
             val tag = if (p.source == WatchProgress.SOURCE_TRAKT_PLAYBACK) "PB" else "HI"
             val pct = p.progressPercentage.times(100).toInt()
@@ -1713,7 +1709,6 @@ class TraktProgressService @Inject constructor(
     }
 
     private suspend fun fetchRecentEpisodeHistorySnapshot(): List<WatchProgress> {
-        val t0 = SystemClock.elapsedRealtime()
         val cutoffMs = recentWatchWindowMs()?.let { windowMs ->
             System.currentTimeMillis() - windowMs
         }
@@ -1721,8 +1716,6 @@ class TraktProgressService @Inject constructor(
         var page = 1
         val pageLimit = 1000
         val maxPages = if (isAllHistoryWindow()) 20 else 5
-        var totalItemsFetched = 0
-        var totalMapped = 0
 
         while (page <= maxPages) {
             val response = traktAuthService.executeAuthorizedRequest { authHeader ->
@@ -1737,8 +1730,6 @@ class TraktProgressService @Inject constructor(
             if (!response.isSuccessful) break
             val items = response.body().orEmpty()
             if (items.isEmpty()) break
-            totalItemsFetched += items.size
-            trace("fetchRecentHistory page=$page fetched=${items.size} totalFetched=$totalItemsFetched")
 
             // Filter items first (cheap), then map in parallel (expensive).
             var shouldStop = false
@@ -1770,7 +1761,6 @@ class TraktProgressService @Inject constructor(
                 traktEpisodeMappingService.prefetchAddonEpisodes(uniqueShowIds, concurrency = MAPPING_CONCURRENCY)
 
                 // Map candidates in parallel to speed up videoId resolution.
-                val mapT0 = SystemClock.elapsedRealtime()
                 val mapped = coroutineScope {
                     candidateItems.map { item ->
                         async {
@@ -1780,12 +1770,9 @@ class TraktProgressService @Inject constructor(
                         }
                     }.awaitAll()
                 }
-                val mapMs = SystemClock.elapsedRealtime() - mapT0
-                val count = mapped.filterNotNull().forEach { progress ->
+                mapped.filterNotNull().forEach { progress ->
                     results.putIfAbsent(progress.contentId, progress)
-                }.let { candidateItems.size }
-                totalMapped += count
-                trace("fetchRecentHistory page=$page mapped=$count items in ${mapMs}ms")
+                }
             }
 
             val pageCount = response.headers()["X-Pagination-Page-Count"]?.toIntOrNull()
@@ -1793,9 +1780,6 @@ class TraktProgressService @Inject constructor(
             page += 1
         }
 
-        val totalMs = SystemClock.elapsedRealtime() - t0
-        val uniqueShows = results.values.map { it.contentId }.distinct().size
-        trace("fetchRecentHistory done: ${results.size} items across $uniqueShows unique shows, $totalItemsFetched fetched, ${page} pages in ${totalMs}ms")
         return results.values.toList()
     }
 

@@ -1,15 +1,12 @@
 package com.nuvio.tv.data.repository
 
 import android.util.Log
-import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.data.remote.api.TraktApi
 import com.nuvio.tv.domain.model.Meta
 import com.nuvio.tv.domain.model.Video
 import com.nuvio.tv.domain.repository.MetaRepository
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -227,14 +224,10 @@ class TraktEpisodeMappingService @Inject constructor(
         }
 
         return try {
-            val t0 = System.currentTimeMillis()
             val meta = fetchSeriesMeta(contentId, contentType)
             val addonEpisodes = meta?.videos?.toEpisodeMappingEntries() ?: emptyList()
             if (addonEpisodes.isNotEmpty()) {
                 cacheMutex.withLock { addonEpisodesCache[cacheKey] = addonEpisodes }
-            }
-            if (BuildConfig.DEBUG) {
-                Log.d(TAG, "getAddonEpisodes $cacheKey -> ${addonEpisodes.size} episodes in ${System.currentTimeMillis() - t0}ms")
             }
             deferred.complete(addonEpisodes)
             addonEpisodes
@@ -271,7 +264,6 @@ class TraktEpisodeMappingService @Inject constructor(
             return try { other?.await() ?: emptyList() } catch (_: Exception) { emptyList() }
         }
 
-        val t0 = System.currentTimeMillis()
         val seasonsResponse = traktAuthService.executeAuthorizedRequest { authHeader ->
             traktApi.getShowSeasons(
                 authorization = authHeader,
@@ -314,9 +306,6 @@ class TraktEpisodeMappingService @Inject constructor(
             cacheMutex.withLock {
                 traktEpisodesCache[showLookupId] = traktEpisodes
             }
-        }
-        if (BuildConfig.DEBUG) {
-            Log.d(TAG, "getTraktEpisodes $showLookupId -> ${traktEpisodes.size} episodes in ${System.currentTimeMillis() - t0}ms")
         }
         deferred.complete(traktEpisodes)
         cleanupTraktFlight(showLookupId)
