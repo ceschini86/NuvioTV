@@ -592,6 +592,11 @@
     <string name="autoplay_reuse_last_link">Reuse Last Link</string>
     <string name="autoplay_reuse_last_link_sub">Auto-play your last working stream for this same movie/episode when cache is still valid</string>
     <string name="autoplay_last_link_cache">Last Link Cache Duration</string>
+    <string name="cache_duration_hour_one">%1$d hour</string>
+    <string name="cache_duration_hour_other">%1$d hours</string>
+    <string name="cache_duration_day_one">%1$d day</string>
+    <string name="cache_duration_day_other">%1$d days</string>
+    <string name="cache_duration_days_hours">%1$dd %2$dh</string>
     <string name="autoplay_mode_manual">Manual (choose stream)</string>
     <string name="autoplay_mode_first">Auto-play first source</string>
     <string name="autoplay_mode_regex">Auto-play regex match</string>
