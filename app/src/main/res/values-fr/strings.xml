@@ -303,6 +303,13 @@
     <string name="appearance_subtitle">Choisis ton thème de couleur, ta police et ta langue</string>
     <string name="appearance_color_theme">Thème de couleur</string>
     <string name="appearance_color_theme_subtitle">Choisis la couleur d’accent utilisée dans toute l’application</string>
+    <string name="theme_color_crimson">Cramoisi</string>
+    <string name="theme_color_ocean">Océan</string>
+    <string name="theme_color_violet">Violet</string>
+    <string name="theme_color_emerald">Émeraude</string>
+    <string name="theme_color_amber">Ambre</string>
+    <string name="theme_color_rose">Rose</string>
+    <string name="theme_color_white">Blanc</string>
     <string name="appearance_amoled_mode">Mode AMOLED</string>
     <string name="appearance_amoled_mode_subtitle">Utiliser un noir pur pour les arrière-plans de l’application</string>
     <string name="appearance_amoled_surfaces_mode">Surfaces noir pur</string>
