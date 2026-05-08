@@ -80,6 +80,8 @@ class TraktProgressService @Inject constructor(
 ) {
     companion object {
         private const val TAG = "TraktProgressSvc"
+        private val MAPPING_CONCURRENCY =
+            maxOf(2, minOf(Runtime.getRuntime().availableProcessors() * 2, 16))
     }
 
     private fun trace(message: String) {
@@ -211,7 +213,7 @@ class TraktProgressService @Inject constructor(
     @Volatile
     private var metadataWarmupScheduled: Boolean = false
     private val episodeProgressActivityVersion = AtomicLong(0L)
-    private val mappingSemaphore = Semaphore(8)
+    private val mappingSemaphore = Semaphore(MAPPING_CONCURRENCY)
 
     private val playbackCacheTtlMs = 30_000L
     private val userStatsCacheTtlMs = Long.MAX_VALUE
