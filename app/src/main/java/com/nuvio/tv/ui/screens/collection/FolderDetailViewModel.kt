@@ -990,9 +990,42 @@ class FolderDetailViewModel @Inject constructor(
                             status = finalEnrichment.status ?: result.status
                         )
                     }
+                    // Propagate TMDB-fetched localized trailer YT ids onto the item
+                    // so the trailer pipeline can use them as a fallback when the
+                    // direct TMDB videos lookup misses the user locale (e.g. Trakt
+                    // list items that didn't carry trailers from their addon).
+                    val enrichedYtIds = finalEnrichment.trailers.mapNotNull { it.ytId }.distinct()
+                    if (enrichedYtIds.isNotEmpty() && result.trailerYtIds.isEmpty()) {
+                        result = result.copy(trailerYtIds = enrichedYtIds)
+                    }
                 }
                 result
             }
+            }
+
+            // If the trailer pipeline already ran for this item without a hit and
+            // enrichment just brought localized YT ids, retry now using them as
+            // fallback. Mirrors the behaviour in HomeViewModelPresentationPipeline.
+            if (enrichment != null) {
+                val ytFallback = enrichment.trailers.mapNotNull { it.ytId }.firstOrNull()
+                if (ytFallback != null && !_trailerPreviewUrls.value.containsKey(item.id)) {
+                    trailerPreviewNegativeCache.remove(item.id)
+                    trailerPreviewLoadingIds.remove(item.id)
+                    if (activeTrailerPreviewItemId == item.id) trailerPreviewRequestVersion++
+                    val refreshedItem = _uiState.value.tabs
+                        .firstNotNullOfOrNull { tab ->
+                            tab.catalogRow?.items?.firstOrNull { it.id == item.id }
+                        }
+                    if (refreshedItem != null) {
+                        requestTrailerPreview(
+                            itemId = refreshedItem.id,
+                            title = refreshedItem.name,
+                            releaseInfo = refreshedItem.releaseInfo,
+                            apiType = refreshedItem.apiType,
+                            fallbackYtId = ytFallback
+                        )
+                    }
+                }
             }
 
             // External meta addon fallback when TMDB didn't enrich.
@@ -1034,7 +1067,13 @@ class FolderDetailViewModel @Inject constructor(
         }
     }
 
-    fun requestTrailerPreview(itemId: String, title: String, releaseInfo: String?, apiType: String) {
+    fun requestTrailerPreview(
+        itemId: String,
+        title: String,
+        releaseInfo: String?,
+        apiType: String,
+        fallbackYtId: String? = null
+    ) {
         if (!AppFeaturePolicy.inAppTrailerPlaybackEnabled) return
         if (activeTrailerPreviewItemId != itemId) {
             activeTrailerPreviewItemId = itemId
@@ -1061,13 +1100,27 @@ class FolderDetailViewModel @Inject constructor(
                 return@launch
             }
 
-            if (trailerSource?.videoUrl.isNullOrBlank()) {
+            // Prefer the localized YT id provided by the caller (typically TMDB
+            // enrichment trailers in the user locale) when the direct TMDB videos
+            // lookup didn't find anything for this language and we'd otherwise
+            // fall through to TMDB's en-US fallback.
+            val resolvedSource = if (trailerSource?.videoUrl.isNullOrBlank() && !fallbackYtId.isNullOrBlank()) {
+                trailerService.getTrailerPlaybackSourceFromYouTubeUrl(
+                    youtubeUrl = "https://www.youtube.com/watch?v=$fallbackYtId",
+                    title = title,
+                    year = extractYear(releaseInfo)
+                )
+            } else {
+                trailerSource
+            }
+
+            if (resolvedSource?.videoUrl.isNullOrBlank()) {
                 trailerPreviewNegativeCache.add(itemId)
                 _trailerPreviewUrls.update { it - itemId }
                 _trailerPreviewAudioUrls.update { it - itemId }
             } else {
-                _trailerPreviewUrls.update { it + (itemId to trailerSource.videoUrl) }
-                val audioUrl = trailerSource.audioUrl
+                _trailerPreviewUrls.update { it + (itemId to resolvedSource.videoUrl) }
+                val audioUrl = resolvedSource.audioUrl
                 if (audioUrl.isNullOrBlank()) {
                     _trailerPreviewAudioUrls.update { it - itemId }
                 } else {
