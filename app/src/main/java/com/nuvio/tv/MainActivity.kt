@@ -217,6 +217,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var avatarRepository: AvatarRepository
 
+    @Inject
+    lateinit var trailerPlayerPool: com.nuvio.tv.core.player.TrailerPlayerPool
+
     private lateinit var jankStats: JankStats
 
     @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -368,7 +371,8 @@ class MainActivity : ComponentActivity() {
                 CompositionLocalProvider(
                     LocalBringIntoViewSpec provides bringIntoViewSpec,
                     LocalFastHorizontalNavigationEnabled provides mainUiPrefs.fastHorizontalNavigationEnabled,
-                    LocalRecompositionHighlighterEnabled provides mainUiPrefs.composeHighlighterEnabled
+                    LocalRecompositionHighlighterEnabled provides mainUiPrefs.composeHighlighterEnabled,
+                    com.nuvio.tv.core.player.LocalTrailerPlayerPool provides trailerPlayerPool
                 ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
