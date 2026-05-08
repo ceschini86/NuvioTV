@@ -1761,8 +1761,15 @@ class TraktProgressService @Inject constructor(
                 }
             }
 
-            // Map candidates in parallel to speed up videoId resolution.
+            // Pre-fetch addon episode data for all unique shows so the mapping
+            // phase hits warm caches instead of waiting on per-show network calls.
             if (candidateItems.isNotEmpty()) {
+                val uniqueShowIds = candidateItems
+                    .mapNotNull { normalizeContentId(it.show?.ids).takeIf { id -> id.isNotBlank() } }
+                    .distinct()
+                traktEpisodeMappingService.prefetchAddonEpisodes(uniqueShowIds, concurrency = MAPPING_CONCURRENCY)
+
+                // Map candidates in parallel to speed up videoId resolution.
                 val mapT0 = SystemClock.elapsedRealtime()
                 val mapped = coroutineScope {
                     candidateItems.map { item ->
