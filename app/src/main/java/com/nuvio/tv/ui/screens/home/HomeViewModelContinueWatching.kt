@@ -512,6 +512,7 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                             nextUpItems = cachedNextUpItems
                         )
                     )
+
                     _uiState.update { state ->
                         if (state.continueWatchingItems == initialItems) {
                             state
@@ -1510,16 +1511,16 @@ internal fun mergeContinueWatchingItems(
     inProgressItems: List<ContinueWatchingItem.InProgress>,
     nextUpItems: List<ContinueWatchingItem.NextUp>
 ): List<ContinueWatchingItem> {
-    val inProgressSeriesIds = inProgressItems
+    // Collect ALL in-progress content IDs (not just series) to ensure
+    // release alerts and next-up items never duplicate an in-progress entry.
+    val allInProgressIds = inProgressItems
         .asSequence()
-        .map { it.progress }
-        .filter { isSeriesTypeCW(it.contentType) }
-        .map { it.contentId }
+        .map { it.progress.contentId }
         .filter { it.isNotBlank() }
         .toSet()
 
     val filteredNextUpItems = nextUpItems.filter { item ->
-        item.info.contentId !in inProgressSeriesIds
+        item.info.contentId !in allInProgressIds
     }
 
     val combined = mutableListOf<Pair<Long, ContinueWatchingItem>>()
