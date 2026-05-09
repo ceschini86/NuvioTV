@@ -253,7 +253,7 @@ class TraktEpisodeMappingService @Inject constructor(
         val weOwn = cacheMutex.withLock {
             traktEpisodesCache[showLookupId]?.let { return it }
             if (traktEpisodesInFlight.containsKey(showLookupId)) {
- false
+                false
             } else {
                 traktEpisodesInFlight[showLookupId] = deferred
                 true

@@ -1646,11 +1646,12 @@ class TraktProgressService @Inject constructor(
             }
             val episodesDeferred = async {
                 val playback = getPlayback("episodes", force = force, startAt = playbackStartAt)
-                playback.map { item -> async {
-                    mappingSemaphore.withPermit { mapPlaybackEpisode(item, applyAddonRemap = true) }
-                } }
-                    .awaitAll()
-                    .filterNotNull()
+                
+                playback.map { item ->
+                    async {
+                        mappingSemaphore.withPermit { mapPlaybackEpisode(item, applyAddonRemap = true) }
+                    }
+                }.awaitAll().filterNotNull()
             }
             val history = historyDeferred.await()
             val movies = moviesDeferred.await()
