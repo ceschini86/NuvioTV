@@ -766,7 +766,11 @@ private fun LegacySidebarScaffold(
                         }
                 ) {
                     val isExpanded = drawerValue == DrawerValue.Open
-                    val itemWidth = if (isExpanded) openDrawerItemWidth else 48.dp
+                    val itemWidth by animateDpAsState(
+                        targetValue = if (isExpanded) openDrawerItemWidth else 48.dp,
+                        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+                        label = "legacySidebarItemWidth"
+                    )
 
                     if (isExpanded) {
                         Column(
@@ -839,7 +843,7 @@ private fun LegacySidebarScaffold(
                             .offset(y = 28.dp)
                             .fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
-                        horizontalAlignment = if (isExpanded) Alignment.CenterHorizontally else Alignment.Start
+                        horizontalAlignment = Alignment.Start
                     ) {
                         drawerItems.forEach { item ->
                             LegacySidebarButton(
@@ -862,7 +866,7 @@ private fun LegacySidebarScaffold(
                                     drawerItemFocusRequesters.getValue(item.route)
                                 )
                                     .width(itemWidth)
-                                    .then(if (!isExpanded) Modifier.offset(x = 12.dp) else Modifier)
+                                    .offset(x = 12.dp)
                             )
                         }
                     }
@@ -976,16 +980,10 @@ private fun LegacySidebarButton(
             iconRes = iconRes,
             icon = icon,
             tint = iconTint,
-            modifier = if (expanded) {
-                Modifier
-                    .size(22.dp)
-                    .align(Alignment.CenterStart)
-                    .offset(x = 13.dp)
-            } else {
-                Modifier
-                    .size(22.dp)
-                    .align(Alignment.Center)
-            }
+            modifier = Modifier
+                .size(22.dp)
+                .align(Alignment.CenterStart)
+                .offset(x = 13.dp)
         )
         if (expanded) {
             com.nuvio.tv.ui.components.AutoResizeText(
