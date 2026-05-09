@@ -154,6 +154,8 @@ import com.nuvio.tv.R
 val LocalSidebarExpanded = compositionLocalOf { false }
 val LocalContentFocusRequester = compositionLocalOf { FocusRequester.Default }
 
+private const val SIDEBAR_AUTO_COLLAPSE_DELAY_MS = 4_000L
+
 data class DrawerItem(
     val route: String,
     val label: String,
@@ -706,6 +708,21 @@ private fun LegacySidebarScaffold(
     val contentFocusRequester = remember { FocusRequester() }
     var pendingContentFocusTransfer by remember { mutableStateOf(false) }
     var pendingSidebarFocusRequest by remember { mutableStateOf(false) }
+    // Bumped on every key event the drawer sees so the auto-collapse timer
+    // resets while the user navigates between drawer items.
+    var legacyDrawerInteractionVersion by remember { mutableStateOf(0) }
+
+    // Auto-close the legacy drawer after a short period of inactivity, mirroring
+    // the modern sidebar behaviour. The timer resets every time the user
+    // navigates inside the drawer (legacyDrawerInteractionVersion change).
+    LaunchedEffect(drawerState.currentValue, legacyDrawerInteractionVersion, showSidebar) {
+        if (!showSidebar || drawerState.currentValue != DrawerValue.Open) {
+            return@LaunchedEffect
+        }
+        delay(SIDEBAR_AUTO_COLLAPSE_DELAY_MS)
+        pendingContentFocusTransfer = false
+        drawerState.setValue(DrawerValue.Closed)
+    }
 
     BackHandler(enabled = currentRoute in rootRoutes && drawerState.currentValue == DrawerValue.Closed) {
         pendingSidebarFocusRequest = true
@@ -755,6 +772,9 @@ private fun LegacySidebarScaffold(
                         .padding(12.dp)
                         .selectableGroup()
                         .onPreviewKeyEvent { keyEvent ->
+                            if (keyEvent.type == KeyEventType.KeyDown) {
+                                legacyDrawerInteractionVersion++
+                            }
                             val closeKey = if (isRtl) Key.DirectionLeft else Key.DirectionRight
                             if (keyEvent.key == closeKey && keyEvent.type == KeyEventType.KeyDown) {
                                 drawerState.setValue(DrawerValue.Closed)
@@ -1080,6 +1100,32 @@ private fun ModernSidebarScaffold(
         delay(95L)
         isSidebarExpanded = false
         sidebarCollapsePending = false
+    }
+
+    // Auto-collapse the expanded sidebar after a short period of inactivity.
+    // The timer resets every time focus moves between drawer items, so the
+    // sidebar only folds back up once the user stops navigating it. We keep
+    // pendingContentFocusTransfer = false so the focus stays parked on the
+    // (now collapsed) sidebar pill instead of jumping back into the content.
+    LaunchedEffect(isSidebarExpanded, focusedDrawerIndex, sidebarCollapsePending, showSidebar) {
+        if (!showSidebar || !isSidebarExpanded || sidebarCollapsePending) {
+            return@LaunchedEffect
+        }
+        delay(SIDEBAR_AUTO_COLLAPSE_DELAY_MS)
+        pendingContentFocusTransfer = false
+        sidebarCollapsePending = true
+    }
+
+    // Auto-collapse the floating pill back to icon-only when the user reveals
+    // its label (DPAD UP from content) and then leaves it idle. The DPAD DOWN
+    // path already collapses it instantly, this just covers the case where the
+    // user releases UP and walks away.
+    LaunchedEffect(isFloatingPillIconOnly, keepFloatingPillExpanded, showSidebar, isSidebarExpanded) {
+        if (!showSidebar || isFloatingPillIconOnly || keepFloatingPillExpanded || isSidebarExpanded) {
+            return@LaunchedEffect
+        }
+        delay(SIDEBAR_AUTO_COLLAPSE_DELAY_MS)
+        isFloatingPillIconOnly = true
     }
 
     val sidebarVisible = showSidebar && (isSidebarExpanded || !sidebarCollapsed)
