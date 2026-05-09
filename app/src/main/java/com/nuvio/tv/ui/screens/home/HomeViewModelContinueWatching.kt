@@ -2771,13 +2771,7 @@ internal fun nextUpDismissKey(
     season: Int?,
     episode: Int?
 ): String {
-    return buildString {
-        append(contentId.trim())
-        append("|")
-        append(season ?: -1)
-        append("|")
-        append(episode ?: -1)
-    }
+    return contentId.trim()
 }
 
 internal fun HomeViewModel.removeContinueWatchingPipeline(
