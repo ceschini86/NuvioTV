@@ -138,7 +138,7 @@ class TraktCommentsService @Inject constructor(
                     limit = COMMENTS_LIMIT
                 )
             }
-        } ?: throw IllegalStateException("Trakt comments request failed")
+        } ?: throw IllegalStateException(appContext.getString(com.nuvio.tv.R.string.trakt_comments_error_request_failed))
 
         val comments = when {
             response.code() == 404 -> emptyList()

@@ -2221,4 +2221,9 @@
     <!-- Sélection de profil&#160;: messages overlay PIN -->
     <string name="profile_pin_saved_for_profile">PIN enregistré pour %1$s.</string>
     <string name="profile_pin_lock_removed_for_profile">Verrouillage PIN supprimé pour %1$s.</string>
+
+    <!-- Trakt&#160;: replis erreur Related / commentaires / éléments de liste -->
+    <string name="trakt_related_error_request_failed">Échec du chargement des contenus similaires Trakt</string>
+    <string name="trakt_comments_error_request_failed">Échec de la requête de commentaires Trakt</string>
+    <string name="trakt_library_error_fetch_list_items">Échec de la récupération des éléments de la liste</string>
 </resources>
