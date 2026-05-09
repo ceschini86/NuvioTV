@@ -49,6 +49,7 @@ internal fun PlayerRuntimeController.releasePlayer(flushPlaybackState: Boolean) 
         runCatching { player.playWhenReady = false }
         runCatching { player.pause() }
         runCatching { player.clearVideoSurface() }
+        runCatching { player.clearMediaItems() }
         runCatching { player.stop() }
         runCatching { player.release() }
     }
