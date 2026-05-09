@@ -68,6 +68,7 @@ import javax.inject.Singleton
 @Singleton
 @OptIn(ExperimentalCoroutinesApi::class)
 class TraktProgressService @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
     private val traktApi: TraktApi,
     private val traktAuthService: TraktAuthService,
     private val metaRepository: MetaRepository,
@@ -597,7 +598,7 @@ class TraktProgressService @Inject constructor(
             "contentType=${progress.contentType} title=$title year=$year")
 
         val body = buildHistoryAddRequest(progress, title, year)
-            ?: throw IllegalStateException("Insufficient Trakt IDs to mark watched")
+            ?: throw IllegalStateException(appContext.getString(com.nuvio.tv.R.string.trakt_error_insufficient_ids_mark_watched))
 
         val isSeriesEpisode = isSeriesEpisodeProgress(progress)
         val watchedShowSeedsSnapshot = if (isSeriesEpisode) {
@@ -616,7 +617,7 @@ class TraktProgressService @Inject constructor(
         val response = try {
             traktAuthService.executeAuthorizedWriteRequest { authHeader ->
                 traktApi.addHistory(authHeader, body)
-            } ?: throw IllegalStateException("Trakt request failed")
+            } ?: throw IllegalStateException(appContext.getString(com.nuvio.tv.R.string.trakt_error_request_failed))
         } catch (error: Throwable) {
             if (watchedShowSeedsSnapshot != null) {
                 restoreWatchedShowSeeds(watchedShowSeedsSnapshot)
@@ -668,7 +669,7 @@ class TraktProgressService @Inject constructor(
             if (watchedShowSeedsSnapshot != null) {
                 restoreWatchedShowSeeds(watchedShowSeedsSnapshot)
             }
-            throw IllegalStateException("Failed to mark watched on Trakt ($effectiveResponseCode)")
+            throw IllegalStateException(appContext.getString(com.nuvio.tv.R.string.trakt_error_mark_watched_failed, effectiveResponseCode))
         }
         if (!hasSuccessfulHistoryAdd(responseBody)) {
             trace("markAsWatched: Trakt accepted request with no new history rows (code=$effectiveResponseCode)")

@@ -551,7 +551,7 @@ class CollectionEditorViewModel @Inject constructor(
                 it.copy(
                     traktSearchResults = mapped,
                     traktSearchError = results.exceptionOrNull()?.message
-                        ?: if (mapped.isEmpty()) "No Trakt lists found" else null
+                        ?: if (mapped.isEmpty()) string(R.string.collection_editor_no_trakt_lists_found) else null
                 )
             }
         }
@@ -1062,7 +1062,7 @@ class CollectionEditorViewModel @Inject constructor(
         val rawFolder = _uiState.value.editingFolder ?: return
         if (rawFolder.sources.isEmpty()) return
         val cleanedFolder = rawFolder.copy(
-            title = rawFolder.title.ifBlank { "Untitled" },
+            title = rawFolder.title.ifBlank { string(R.string.collection_editor_untitled_folder) },
             coverImageUrl = rawFolder.coverImageUrl?.ifBlank { null },
             heroBackdropUrl = rawFolder.heroBackdropUrl?.ifBlank { null },
             heroVideoUrl = rawFolder.heroVideoUrl?.ifBlank { null },
@@ -1109,7 +1109,7 @@ class CollectionEditorViewModel @Inject constructor(
         viewModelScope.launch {
             val collection = Collection(
                 id = state.collectionId,
-                title = state.title.ifBlank { "Untitled Collection" },
+                title = state.title.ifBlank { string(R.string.collection_editor_untitled_collection) },
                 backdropImageUrl = state.backdropImageUrl.ifBlank { null },
                 pinToTop = state.pinToTop,
                 focusGlowEnabled = state.focusGlowEnabled,
