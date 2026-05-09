@@ -955,11 +955,21 @@ private fun LegacySidebarButton(
         },
         label = "legacySidebarItemIconTint"
     )
+    val itemScale by animateFloatAsState(
+        targetValue = if (isFocused && expanded) 1.1f else 1f,
+        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+        label = "legacySidebarItemScale"
+    )
 
     Card(
         onClick = onClick,
         modifier = modifier
             .height(52.dp)
+            .graphicsLayer {
+                scaleX = itemScale
+                scaleY = itemScale
+                transformOrigin = TransformOrigin.Center
+            }
             .focusProperties { canFocus = expanded }
             .onFocusChanged { isFocused = it.hasFocus },
         colors = CardDefaults.colors(
@@ -973,7 +983,8 @@ private fun LegacySidebarButton(
                 shape = itemShape
             )
         ),
-        shape = CardDefaults.shape(shape = itemShape)
+        shape = CardDefaults.shape(shape = itemShape),
+        scale = CardDefaults.scale(focusedScale = 1f, pressedScale = 1f)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
         DrawerItemIcon(
