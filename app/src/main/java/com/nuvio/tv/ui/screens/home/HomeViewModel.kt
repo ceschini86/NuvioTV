@@ -294,10 +294,7 @@ class HomeViewModel @Inject constructor(
                     cwEnrichedInProgressOverlay.clear()
                     cwLastBadgeEpisodeKeys = emptySet()
                     _uiState.update {
-                        it.copy(
-                            continueWatchingItems = emptyList(),
-                            layoutPreferencesReady = false
-                        )
+                        it.copy(layoutPreferencesReady = false)
                     }
                     // Reset so the new profile's pipeline signals first completion correctly.
                     _initialCwResolved.value = false
@@ -458,7 +455,6 @@ class HomeViewModel @Inject constructor(
                         cwEnrichedInProgressOverlay.clear()
                         discoveredOlderNextUpItems.clear()
                         cwLastProcessedNextUpContentIds.clear()
-                        _uiState.update { it.copy(continueWatchingItems = emptyList()) }
                         // Clear disk cache for current profile.
                         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                             runCatching { cwEnrichmentCache.saveNextUpSnapshot(emptyList(), force = true) }
@@ -588,11 +584,7 @@ class HomeViewModel @Inject constructor(
                 nextUpItems = nextUpItems
             )
             if (items.isNotEmpty()) {
-                _uiState.update { state ->
-                    if (state.continueWatchingItems.isEmpty()) {
-                        state.copy(continueWatchingItems = items)
-                    } else state
-                }
+                _uiState.update { it.copy(continueWatchingItems = items) }
                 _initialCwResolved.value = true
             }
         }

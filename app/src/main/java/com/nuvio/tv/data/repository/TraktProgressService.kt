@@ -80,6 +80,8 @@ class TraktProgressService @Inject constructor(
 ) {
     companion object {
         private const val TAG = "TraktProgressSvc"
+        private val MAPPING_CONCURRENCY =
+            maxOf(2, minOf(Runtime.getRuntime().availableProcessors() * 2, 16))
     }
 
     private fun trace(message: String) {
@@ -211,6 +213,7 @@ class TraktProgressService @Inject constructor(
     @Volatile
     private var metadataWarmupScheduled: Boolean = false
     private val episodeProgressActivityVersion = AtomicLong(0L)
+    private val mappingSemaphore = Semaphore(MAPPING_CONCURRENCY)
 
     private val playbackCacheTtlMs = 30_000L
     private val userStatsCacheTtlMs = Long.MAX_VALUE
@@ -1635,15 +1638,20 @@ class TraktProgressService @Inject constructor(
             val historyDeferred = async { fetchRecentEpisodeHistorySnapshot() }
             val moviesDeferred = async {
                 val playback = getPlayback("movies", force = force, startAt = playbackStartAt)
-                playback.map { item -> async { mapPlaybackMovie(item) } }
+                playback.map { item -> async {
+                    mappingSemaphore.withPermit { mapPlaybackMovie(item) }
+                } }
                     .awaitAll()
                     .filterNotNull()
             }
             val episodesDeferred = async {
                 val playback = getPlayback("episodes", force = force, startAt = playbackStartAt)
-                playback.map { item -> async { mapPlaybackEpisode(item, applyAddonRemap = true) } }
-                    .awaitAll()
-                    .filterNotNull()
+                
+                playback.map { item ->
+                    async {
+                        mappingSemaphore.withPermit { mapPlaybackEpisode(item, applyAddonRemap = true) }
+                    }
+                }.awaitAll().filterNotNull()
             }
             val history = historyDeferred.await()
             val movies = moviesDeferred.await()
@@ -1745,11 +1753,22 @@ class TraktProgressService @Inject constructor(
                 }
             }
 
-            // Map candidates in parallel to speed up videoId resolution.
+            // Pre-fetch addon episode data for all unique shows so the mapping
+            // phase hits warm caches instead of waiting on per-show network calls.
             if (candidateItems.isNotEmpty()) {
+                val uniqueShowIds = candidateItems
+                    .mapNotNull { normalizeContentId(it.show?.ids).takeIf { id -> id.isNotBlank() } }
+                    .distinct()
+                traktEpisodeMappingService.prefetchAddonEpisodes(uniqueShowIds, concurrency = MAPPING_CONCURRENCY)
+
+                // Map candidates in parallel to speed up videoId resolution.
                 val mapped = coroutineScope {
                     candidateItems.map { item ->
-                        async { mapEpisodeHistoryItem(item, applyAddonRemap = true) }
+                        async {
+                            mappingSemaphore.withPermit {
+                                mapEpisodeHistoryItem(item, applyAddonRemap = true)
+                            }
+                        }
                     }.awaitAll()
                 }
                 mapped.filterNotNull().forEach { progress ->
