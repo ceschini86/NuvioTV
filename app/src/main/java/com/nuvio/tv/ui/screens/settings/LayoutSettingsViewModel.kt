@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.data.local.LayoutPreferenceDataStore
 import com.nuvio.tv.data.local.TraktSettingsDataStore
 import com.nuvio.tv.domain.model.ContinueWatchingSortMode
+import com.nuvio.tv.domain.model.DiscoverLocation
 import com.nuvio.tv.domain.model.FocusedPosterTrailerPlaybackTarget
 import com.nuvio.tv.domain.model.HomeLayout
 import com.nuvio.tv.domain.repository.AddonRepository
@@ -29,7 +30,8 @@ data class LayoutSettingsUiState(
     val modernLandscapePostersEnabled: Boolean = false,
     val modernHeroFullScreenBackdropEnabled: Boolean = false,
     val heroSectionEnabled: Boolean = true,
-    val searchDiscoverEnabled: Boolean = true,
+    val discoverLocation: DiscoverLocation = DiscoverLocation.IN_SEARCH,
+    val lastNonOffDiscoverLocation: DiscoverLocation = DiscoverLocation.IN_SEARCH,
     val posterLabelsEnabled: Boolean = true,
     val catalogAddonNameEnabled: Boolean = true,
     val catalogTypeSuffixEnabled: Boolean = true,
@@ -70,7 +72,7 @@ sealed class LayoutSettingsEvent {
     data class SetModernLandscapePostersEnabled(val enabled: Boolean) : LayoutSettingsEvent()
     data class SetModernHeroFullScreenBackdropEnabled(val enabled: Boolean) : LayoutSettingsEvent()
     data class SetHeroSectionEnabled(val enabled: Boolean) : LayoutSettingsEvent()
-    data class SetSearchDiscoverEnabled(val enabled: Boolean) : LayoutSettingsEvent()
+    data class SetDiscoverLocation(val location: DiscoverLocation) : LayoutSettingsEvent()
     data class SetPosterLabelsEnabled(val enabled: Boolean) : LayoutSettingsEvent()
     data class SetCatalogAddonNameEnabled(val enabled: Boolean) : LayoutSettingsEvent()
     data class SetCatalogTypeSuffixEnabled(val enabled: Boolean) : LayoutSettingsEvent()
@@ -164,8 +166,13 @@ class LayoutSettingsViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            layoutPreferenceDataStore.searchDiscoverEnabled.distinctUntilChanged().collectLatest { enabled ->
-                updateUiStateIfChanged { it.copy(searchDiscoverEnabled = enabled) }
+            layoutPreferenceDataStore.discoverLocation.distinctUntilChanged().collectLatest { location ->
+                updateUiStateIfChanged { it.copy(discoverLocation = location) }
+            }
+        }
+        viewModelScope.launch {
+            layoutPreferenceDataStore.lastNonOffDiscoverLocation.distinctUntilChanged().collectLatest { location ->
+                updateUiStateIfChanged { it.copy(lastNonOffDiscoverLocation = location) }
             }
         }
         viewModelScope.launch {
@@ -293,7 +300,7 @@ class LayoutSettingsViewModel @Inject constructor(
             is LayoutSettingsEvent.SetModernLandscapePostersEnabled -> setModernLandscapePostersEnabled(event.enabled)
             is LayoutSettingsEvent.SetModernHeroFullScreenBackdropEnabled -> setModernHeroFullScreenBackdropEnabled(event.enabled)
             is LayoutSettingsEvent.SetHeroSectionEnabled -> setHeroSectionEnabled(event.enabled)
-            is LayoutSettingsEvent.SetSearchDiscoverEnabled -> setSearchDiscoverEnabled(event.enabled)
+            is LayoutSettingsEvent.SetDiscoverLocation -> setDiscoverLocation(event.location)
             is LayoutSettingsEvent.SetPosterLabelsEnabled -> setPosterLabelsEnabled(event.enabled)
             is LayoutSettingsEvent.SetCatalogAddonNameEnabled -> setCatalogAddonNameEnabled(event.enabled)
             is LayoutSettingsEvent.SetCatalogTypeSuffixEnabled -> setCatalogTypeSuffixEnabled(event.enabled)
@@ -381,10 +388,10 @@ class LayoutSettingsViewModel @Inject constructor(
         }
     }
 
-    private fun setSearchDiscoverEnabled(enabled: Boolean) {
-        if (_uiState.value.searchDiscoverEnabled == enabled) return
+    private fun setDiscoverLocation(location: DiscoverLocation) {
+        if (_uiState.value.discoverLocation == location) return
         viewModelScope.launch {
-            layoutPreferenceDataStore.setSearchDiscoverEnabled(enabled)
+            layoutPreferenceDataStore.setDiscoverLocation(location)
         }
     }
 
