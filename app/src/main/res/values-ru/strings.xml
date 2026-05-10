@@ -425,6 +425,8 @@
     <string name="sub_forced_lang">Принудительные (Forced)</string>
     <string name="sub_preferred_lang">Предпочитаемый язык</string>
     <string name="sub_secondary_lang">Второй предпочитаемый язык</string>
+    <string name="sub_use_forced_subtitles">Использовать принудительные субтитры</string>
+    <string name="sub_use_forced_subtitles_desc">Предпочитать принудительные субтитры, когда язык аудио совпадает с языком субтитров; если они недоступны, ничего не выбирать</string>
     <string name="sub_show_only_preferred_languages">Показывать только предпочитаемые языки</string>
     <string name="sub_show_only_preferred_languages_desc">Скрыть все остальные языки субтитров из списка выбора</string>
     <string name="sub_organization">Сортировка субтитров</string>

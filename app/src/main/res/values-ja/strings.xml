@@ -347,6 +347,8 @@
     <string name="sub_forced_lang">強制</string>
     <string name="sub_preferred_lang">優先言語</string>
     <string name="sub_secondary_lang">第2優先言語</string>
+    <string name="sub_use_forced_subtitles">強制字幕を使用</string>
+    <string name="sub_use_forced_subtitles_desc">音声が字幕言語と一致する場合は強制字幕を優先し、利用できない場合は何も選択しません</string>
     <string name="sub_show_only_preferred_languages">優先言語のみ表示</string>
     <string name="sub_show_only_preferred_languages_desc">選択リストから他のすべての字幕言語を非表示にする</string>
     <string name="sub_organization">字幕の整理</string>
