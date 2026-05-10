@@ -910,7 +910,8 @@ private fun DiscoverLocationRow(
     onFocused: () -> Unit
 ) {
     val sectionEnabled = selectedLocation != DiscoverLocation.OFF
-    val pinnedToSidebar = selectedLocation == DiscoverLocation.IN_SIDEBAR
+    var dialogOpen by remember { mutableStateOf(false) }
+
     CompactToggleRow(
         title = stringResource(R.string.layout_show_discover),
         subtitle = stringResource(R.string.layout_show_discover_sub),
@@ -927,21 +928,129 @@ private fun DiscoverLocationRow(
         onFocused = onFocused
     )
     if (sectionEnabled) {
-        CompactToggleRow(
-            title = stringResource(R.string.layout_discover_pin_to_sidebar),
-            subtitle = stringResource(R.string.layout_discover_pin_to_sidebar_sub),
-            checked = pinnedToSidebar,
-            onToggle = {
-                onLocationSelected(
-                    when (selectedLocation) {
-                        DiscoverLocation.IN_SIDEBAR -> DiscoverLocation.IN_SEARCH
-                        DiscoverLocation.IN_SEARCH -> DiscoverLocation.IN_SIDEBAR
-                        DiscoverLocation.OFF -> error("unreachable: OFF excluded by sectionEnabled")
-                    }
-                )
-            },
+        val currentLabel = when (selectedLocation) {
+            DiscoverLocation.IN_SIDEBAR -> stringResource(R.string.layout_discover_location_in_sidebar)
+            DiscoverLocation.IN_SEARCH -> stringResource(R.string.layout_discover_location_in_search)
+            DiscoverLocation.OFF -> ""
+        }
+        SettingsActionRow(
+            title = stringResource(R.string.layout_discover_location_action),
+            subtitle = currentLabel,
+            onClick = { dialogOpen = true },
             onFocused = onFocused
         )
+    }
+
+    if (dialogOpen) {
+        DiscoverLocationDialog(
+            selectedLocation = selectedLocation,
+            onLocationSelected = { location ->
+                onLocationSelected(location)
+                dialogOpen = false
+            },
+            onDismiss = { dialogOpen = false }
+        )
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun DiscoverLocationDialog(
+    selectedLocation: DiscoverLocation,
+    onLocationSelected: (DiscoverLocation) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val focusRequester = remember { FocusRequester() }
+    val options = listOf(
+        Triple(
+            DiscoverLocation.IN_SEARCH,
+            stringResource(R.string.layout_discover_location_in_search),
+            stringResource(R.string.layout_discover_location_in_search_desc)
+        ),
+        Triple(
+            DiscoverLocation.IN_SIDEBAR,
+            stringResource(R.string.layout_discover_location_in_sidebar),
+            stringResource(R.string.layout_discover_location_in_sidebar_desc)
+        )
+    )
+
+    val effectiveSelected = if (selectedLocation == DiscoverLocation.OFF) {
+        DiscoverLocation.IN_SEARCH
+    } else {
+        selectedLocation
+    }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
+    NuvioDialog(
+        onDismiss = onDismiss,
+        title = stringResource(R.string.layout_discover_location_dialog_title),
+        width = 460.dp,
+        suppressFirstKeyUp = false
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 320.dp)
+        ) {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(vertical = 4.dp)
+            ) {
+                items(
+                    count = options.size,
+                    key = { index -> options[index].first.name }
+                ) { index ->
+                    val (location, title, description) = options[index]
+                    val isSelected = location == effectiveSelected
+
+                    Card(
+                        onClick = { onLocationSelected(location) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (index == 0) Modifier.focusRequester(focusRequester) else Modifier),
+                        colors = CardDefaults.colors(
+                            containerColor = if (isSelected) NuvioColors.FocusBackground else NuvioColors.BackgroundCard,
+                            focusedContainerColor = NuvioColors.FocusBackground
+                        ),
+                        shape = CardDefaults.shape(shape = RoundedCornerShape(10.dp)),
+                        scale = CardDefaults.scale(focusedScale = 1f)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = title,
+                                    color = if (isSelected) NuvioColors.Primary else NuvioColors.TextPrimary,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = description,
+                                    color = NuvioColors.TextSecondary,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            if (isSelected) {
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = stringResource(R.string.cd_selected),
+                                    tint = NuvioColors.Primary,
+                                    modifier = Modifier.height(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
