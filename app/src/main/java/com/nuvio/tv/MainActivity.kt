@@ -841,7 +841,11 @@ private fun LegacySidebarScaffold(
                         }
                 ) {
                     val isExpanded = drawerValue == DrawerValue.Open
-                    val itemWidth = if (isExpanded) openDrawerItemWidth else 48.dp
+                    val itemWidth by animateDpAsState(
+                        targetValue = if (isExpanded) openDrawerItemWidth else 48.dp,
+                        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+                        label = "legacySidebarItemWidth"
+                    )
 
                     if (isExpanded) {
                         Column(
@@ -914,7 +918,7 @@ private fun LegacySidebarScaffold(
                             .offset(y = 28.dp)
                             .fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
-                        horizontalAlignment = if (isExpanded) Alignment.CenterHorizontally else Alignment.Start
+                        horizontalAlignment = Alignment.Start
                     ) {
                         drawerItems.forEach { item ->
                             key(item.route) {
@@ -940,7 +944,9 @@ private fun LegacySidebarScaffold(
                                         .width(itemWidth)
                                         .then(if (!isExpanded) Modifier.offset(x = 12.dp) else Modifier)
                                 )
-                            }
+                                    .width(itemWidth)
+                                    .offset(x = 12.dp)
+                            )
                         }
                     }
                 }
@@ -1028,11 +1034,21 @@ private fun LegacySidebarButton(
         },
         label = "legacySidebarItemIconTint"
     )
+    val itemScale by animateFloatAsState(
+        targetValue = if (isFocused && expanded) 1.1f else 1f,
+        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+        label = "legacySidebarItemScale"
+    )
 
     Card(
         onClick = onClick,
         modifier = modifier
             .height(52.dp)
+            .graphicsLayer {
+                scaleX = itemScale
+                scaleY = itemScale
+                transformOrigin = TransformOrigin.Center
+            }
             .focusProperties { canFocus = expanded }
             .onFocusChanged { isFocused = it.hasFocus },
         colors = CardDefaults.colors(
@@ -1046,23 +1062,18 @@ private fun LegacySidebarButton(
                 shape = itemShape
             )
         ),
-        shape = CardDefaults.shape(shape = itemShape)
+        shape = CardDefaults.shape(shape = itemShape),
+        scale = CardDefaults.scale(focusedScale = 1f, pressedScale = 1f)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
         DrawerItemIcon(
             iconRes = iconRes,
             icon = icon,
             tint = iconTint,
-            modifier = if (expanded) {
-                Modifier
-                    .size(22.dp)
-                    .align(Alignment.CenterStart)
-                    .offset(x = 13.dp)
-            } else {
-                Modifier
-                    .size(22.dp)
-                    .align(Alignment.Center)
-            }
+            modifier = Modifier
+                .size(22.dp)
+                .align(Alignment.CenterStart)
+                .offset(x = 13.dp)
         )
         if (expanded) {
             com.nuvio.tv.ui.components.AutoResizeText(
