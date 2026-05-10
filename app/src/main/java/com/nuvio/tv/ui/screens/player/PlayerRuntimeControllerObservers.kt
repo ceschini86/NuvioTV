@@ -351,6 +351,7 @@ internal fun PlayerRuntimeController.observeSubtitleSettings() {
             val wasEnabled = skipIntroEnabled
             skipIntroEnabled = settings.skipIntroEnabled
             autoSkipSegmentTypes = settings.autoSkipSegmentTypes
+            playerSettingsInitialized = true
             if (!skipIntroEnabled) {
                 if (skipIntervals.isNotEmpty() || _uiState.value.activeSkipInterval != null) {
                     skipIntervals = emptyList()
