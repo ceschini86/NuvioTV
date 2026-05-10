@@ -1103,7 +1103,7 @@ private fun subtitleTrackMatchesLanguage(track: TrackInfo, target: String): Bool
     val haystack = listOfNotNull(track.name, track.language, track.trackId)
         .joinToString(" ")
         .lowercase(Locale.ROOT)
-    return (normalizedTarget.isNotBlank() && haystack.contains(normalizedTarget)) ||
+    return languageCodeAppearsInHaystack(haystack, normalizedTarget) ||
         (targetName.isNotBlank() && haystack.contains(targetName))
 }
 
@@ -1114,8 +1114,14 @@ private fun audioTrackMatchesLanguage(track: TrackInfo, target: String): Boolean
     val haystack = listOfNotNull(track.name, track.language, track.trackId)
         .joinToString(" ")
         .lowercase(Locale.ROOT)
-    return (normalizedTarget.isNotBlank() && haystack.contains(normalizedTarget)) ||
+    return languageCodeAppearsInHaystack(haystack, normalizedTarget) ||
         (targetName.isNotBlank() && haystack.contains(targetName))
+}
+
+private fun languageCodeAppearsInHaystack(haystack: String, normalizedTarget: String): Boolean {
+    if (normalizedTarget.isBlank()) return false
+    return Regex("(^|[^a-z0-9])${Regex.escape(normalizedTarget)}([^a-z0-9]|$)")
+        .containsMatchIn(haystack)
 }
 
 private fun subtitleTrackMatchesSelectedAudioLanguage(
@@ -1150,13 +1156,10 @@ internal fun selectedAudioLanguageTarget(track: TrackInfo): String? {
     val haystack = listOfNotNull(track.name, track.trackId)
         .joinToString(" ")
         .lowercase(Locale.ROOT)
-    val tokens = haystack
-        .split(Regex("[^a-z0-9]+"))
-        .filter { it.isNotBlank() }
     return AVAILABLE_SUBTITLE_LANGUAGES.firstOrNull { language ->
         val code = language.code.lowercase(Locale.ROOT)
         val name = languageCodeToName(language.code).lowercase(Locale.ROOT)
-        tokens.contains(code) || (name.isNotBlank() && haystack.contains(name))
+        languageCodeAppearsInHaystack(haystack, code) || (name.isNotBlank() && haystack.contains(name))
     }?.code
 }
 
@@ -1168,11 +1171,13 @@ private fun addonSubtitleIsForced(subtitle: Subtitle): Boolean {
 
 private fun addonSubtitleMatchesLanguage(subtitle: Subtitle, target: String): Boolean {
     if (PlayerSubtitleUtils.matchesLanguageCode(subtitle.lang, target)) return true
+    val normalizedTarget = PlayerSubtitleUtils.normalizeLanguageCode(target)
     val targetName = languageCodeToName(target).lowercase(Locale.ROOT)
     val haystack = listOf(subtitle.lang, subtitle.id, subtitle.url, subtitle.addonName)
         .joinToString(" ")
         .lowercase(Locale.ROOT)
-    return targetName.isNotBlank() && haystack.contains(targetName)
+    return languageCodeAppearsInHaystack(haystack, normalizedTarget) ||
+        (targetName.isNotBlank() && haystack.contains(targetName))
 }
 
 private fun addonSubtitleMatchesSelectedAudioLanguage(
