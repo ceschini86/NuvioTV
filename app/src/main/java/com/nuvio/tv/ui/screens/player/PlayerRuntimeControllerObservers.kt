@@ -167,15 +167,16 @@ internal fun PlayerRuntimeController.filterToVisibleAddonSubtitles(
     if (!style.showOnlyPreferredLanguages) return subtitles
 
     val preferredTargets = when (PlayerSubtitleUtils.normalizeLanguageCode(style.preferredLanguage)) {
-        "none" -> if (style.useForcedSubtitles) {
-            selectedAudioTrackForSubtitleMatching(_uiState.value)
-                ?.takeIf { selectedAudioMatchesResolvedPreferredAudio(it) }
-                ?.let { selectedAudioLanguageTarget(it) }
-                ?.let(::listOf)
-                ?: emptyList()
-        } else {
-            emptyList()
-        }
+        "none" -> listOfNotNull(
+            style.secondaryPreferredLanguage?.takeIf { it.isNotBlank() },
+            if (style.useForcedSubtitles) {
+                selectedAudioTrackForSubtitleMatching(_uiState.value)
+                    ?.takeIf { selectedAudioMatchesResolvedPreferredAudio(it) }
+                    ?.let { selectedAudioLanguageTarget(it) }
+            } else {
+                null
+            }
+        )
         else -> listOfNotNull(
             style.preferredLanguage,
             style.secondaryPreferredLanguage?.takeIf { it.isNotBlank() }
@@ -186,7 +187,8 @@ internal fun PlayerRuntimeController.filterToVisibleAddonSubtitles(
     if (preferredTargets.isEmpty()) {
         return if (
             style.useForcedSubtitles &&
-            PlayerSubtitleUtils.normalizeLanguageCode(style.preferredLanguage) == "none"
+            PlayerSubtitleUtils.normalizeLanguageCode(style.preferredLanguage) == "none" &&
+            selectedAudioTrackForSubtitleMatching(_uiState.value) == null
         ) {
             subtitles
         } else {

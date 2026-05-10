@@ -1097,21 +1097,33 @@ private fun findBestForcedSubtitleTrackIndex(
 }
 
 private fun subtitleTrackMatchesLanguage(track: TrackInfo, target: String): Boolean {
-    if (PlayerSubtitleUtils.matchesLanguageCode(track.language, target)) return true
-    val normalizedTarget = PlayerSubtitleUtils.normalizeLanguageCode(target)
-    val targetName = languageCodeToName(target).lowercase(Locale.ROOT)
-    val haystack = listOfNotNull(track.name, track.language, track.trackId)
-        .joinToString(" ")
-        .lowercase(Locale.ROOT)
-    return languageCodeAppearsInHaystack(haystack, normalizedTarget) ||
-        (targetName.isNotBlank() && haystack.contains(targetName))
+    return trackMatchesLanguage(
+        name = track.name,
+        language = track.language,
+        trackId = track.trackId,
+        target = target
+    )
 }
 
 private fun audioTrackMatchesLanguage(track: TrackInfo, target: String): Boolean {
-    if (PlayerSubtitleUtils.matchesLanguageCode(track.language, target)) return true
+    return trackMatchesLanguage(
+        name = track.name,
+        language = track.language,
+        trackId = track.trackId,
+        target = target
+    )
+}
+
+private fun trackMatchesLanguage(
+    name: String?,
+    language: String?,
+    trackId: String?,
+    target: String
+): Boolean {
+    if (PlayerSubtitleUtils.matchesLanguageCode(language, target)) return true
     val normalizedTarget = PlayerSubtitleUtils.normalizeLanguageCode(target)
     val targetName = languageCodeToName(target).lowercase(Locale.ROOT)
-    val haystack = listOfNotNull(track.name, track.language, track.trackId)
+    val haystack = listOfNotNull(name, language, trackId)
         .joinToString(" ")
         .lowercase(Locale.ROOT)
     return languageCodeAppearsInHaystack(haystack, normalizedTarget) ||
@@ -1124,8 +1136,20 @@ internal fun PlayerRuntimeController.selectedAudioMatchesResolvedPreferredAudio(
 
 private fun languageCodeAppearsInHaystack(haystack: String, normalizedTarget: String): Boolean {
     if (normalizedTarget.isBlank()) return false
-    return Regex("(^|[^a-z0-9])${Regex.escape(normalizedTarget)}([^a-z0-9]|$)")
-        .containsMatchIn(haystack)
+    var searchFrom = 0
+    while (searchFrom <= haystack.length - normalizedTarget.length) {
+        val matchIndex = haystack.indexOf(normalizedTarget, startIndex = searchFrom)
+        if (matchIndex < 0) return false
+
+        val before = matchIndex - 1
+        val after = matchIndex + normalizedTarget.length
+        val startsAtBoundary = before < 0 || !haystack[before].isLetterOrDigit()
+        val endsAtBoundary = after >= haystack.length || !haystack[after].isLetterOrDigit()
+        if (startsAtBoundary && endsAtBoundary) return true
+
+        searchFrom = matchIndex + 1
+    }
+    return false
 }
 
 private fun subtitleTrackMatchesSelectedAudioLanguage(
