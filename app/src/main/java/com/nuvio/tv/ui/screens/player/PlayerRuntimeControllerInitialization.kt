@@ -51,6 +51,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 private const val STARTUP_SUBTITLE_PREFETCH_TIMEOUT_MS = 20_000L
 private const val MPV_AFR_SETTLE_DELAY_MS = 2_000L
+private const val AUDIO_DELAY_REFRESH_DEBOUNCE_MS = 120L
+private const val PLAYER_RELEASE_TIMEOUT_MS = 3000L
+private const val PLAYER_REBUILD_SETTLE_DELAY_MS = 120L
 
 internal data class StartupSubtitlePreparation(
     val fetchedSubtitles: List<Subtitle>,
@@ -81,6 +84,25 @@ private suspend fun PlayerRuntimeController.resolveCurrentStreamMimeType(
     )
 }
 
+private fun PlayerRuntimeController.disposeExoPlayerBeforeRebuild() {
+    notifyAudioSessionUpdate(false)
+    try {
+        currentMediaSession?.release()
+        currentMediaSession = null
+    } catch (_: Exception) {
+    }
+    _exoPlayer?.let { player ->
+        runCatching { player.playWhenReady = false }
+        runCatching { player.pause() }
+        runCatching { player.stop() }
+        runCatching { player.clearMediaItems() }
+        runCatching { player.clearVideoSurface() }
+        runCatching { player.release() }
+    }
+    _exoPlayer = null
+    playbackSpeedAwareAudioSink = null
+}
+
 @androidx.annotation.OptIn(UnstableApi::class)
 internal fun PlayerRuntimeController.initializePlayer(
     url: String,
@@ -105,8 +127,13 @@ internal fun PlayerRuntimeController.initializePlayer(
                 userPausedManually = true
                 shouldEnforceAutoplayOnFirstReady = false
             }
-            hasTriedAudioPcmFallback = false
+            val applyPcmFallbackOnStartup = pendingAudioPcmFallbackRebuild
+            val applyDv7FallbackOnStartup = forceDv7ToHevc
+            if (!applyPcmFallbackOnStartup) {
+                hasTriedAudioPcmFallback = false
+            }
             hasTriedDv7HevcFallback = false
+            forceDv7ToHevc = false
             mpvDelayStartAfterAfrSwitch = false
             val playerSettings = playerSettingsDataStore.playerSettings.first()
             rememberAudioDelayPerDeviceEnabled = playerSettings.rememberAudioDelayPerDevice
@@ -267,7 +294,7 @@ internal fun PlayerRuntimeController.initializePlayer(
                 playbackSpeedProvider = { _uiState.value.playbackSpeed },
                 onPlaybackSpeedAwareAudioSinkCreated = { playbackSpeedAwareAudioSink = it }
             ).setExtensionRendererMode(playerSettings.decoderPriority)
-                .setMapDV7ToHevc(playerSettings.mapDV7ToHevc || forceDv7ToHevc)
+                .setMapDV7ToHevc(playerSettings.mapDV7ToHevc || applyDv7FallbackOnStartup)
 
             if (showLoadingStatus) _uiState.update { it.copy(loadingMessage = context.getString(R.string.player_loading_building)) }
             val buildDefaultPlayer = {
@@ -281,14 +308,13 @@ internal fun PlayerRuntimeController.initializePlayer(
                     .setMediaSourceFactory(DefaultMediaSourceFactory(playerDataSourceFactory, extractorsFactory))
                     .setRenderersFactory(renderersFactory)
                     .setLoadControl(loadControl)
-                    .setReleaseTimeoutMs(3000)
+                    .setReleaseTimeoutMs(PLAYER_RELEASE_TIMEOUT_MS)
                     .setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF)
                     .build()
             }
 
-            // Ensure any existing ExoPlayer is fully released before creating a new one
-            // to avoid leaking MediaCodec and hardware decoding resources, preventing player hangs.
-            _exoPlayer?.let { player -> runCatching { player.release() } }
+            disposeExoPlayerBeforeRebuild()
+            delay(PLAYER_REBUILD_SETTLE_DELAY_MS)
 
             _exoPlayer = if (useLibass) {
                 val playerDataSourceFactory = PlayerPlaybackNetworking.createDataSourceFactory(context, headers)
@@ -296,7 +322,7 @@ internal fun PlayerRuntimeController.initializePlayer(
                     .setLoadControl(loadControl)
                     .setTrackSelector(trackSelector!!)
                     .setMediaSourceFactory(DefaultMediaSourceFactory(playerDataSourceFactory, extractorsFactory))
-                    .setReleaseTimeoutMs(3000)
+                    .setReleaseTimeoutMs(PLAYER_RELEASE_TIMEOUT_MS)
                     .setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF)
                     .buildWithAssSupportCompat(
                         context = context,
@@ -319,7 +345,16 @@ internal fun PlayerRuntimeController.initializePlayer(
                     .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
                     .build()
                 setAudioAttributes(audioAttributes, true)
-                setPlaybackSpeed(_uiState.value.playbackSpeed)
+                val startupSpeed = if ((applyPcmFallbackOnStartup || hasTriedAudioPcmFallback) && _uiState.value.playbackSpeed == 1f) {
+                    1.00001f
+                } else {
+                    _uiState.value.playbackSpeed
+                }
+                setPlaybackSpeed(startupSpeed)
+                if (applyPcmFallbackOnStartup) {
+                    pendingAudioPcmFallbackRebuild = false
+                    hasTriedAudioPcmFallback = true
+                }
 
                 
                 if (playerSettings.skipSilence) {
