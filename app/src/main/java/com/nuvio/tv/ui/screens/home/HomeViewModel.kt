@@ -24,6 +24,7 @@ import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogDescriptor
 import com.nuvio.tv.domain.model.CatalogRow
 import com.nuvio.tv.domain.model.Collection
+import com.nuvio.tv.domain.model.ContinueWatchingSortMode
 import com.nuvio.tv.domain.model.LibraryEntryInput
 import com.nuvio.tv.domain.model.Meta
 import com.nuvio.tv.domain.model.MetaPreview
@@ -223,6 +224,8 @@ class HomeViewModel @Inject constructor(
     internal var posterStatusObservationEnabled: Boolean = false
     @Volatile
     internal var externalMetaPrefetchEnabled: Boolean = false
+    @Volatile
+    internal var continueWatchingSortMode: ContinueWatchingSortMode = ContinueWatchingSortMode.DEFAULT
     internal val startupStartedAtMs: Long = SystemClock.elapsedRealtime()
     @Volatile
     internal var startupGracePeriodActive: Boolean = true
@@ -257,6 +260,7 @@ class HomeViewModel @Inject constructor(
             observeLayoutPreferences()
             observeModernHomePresentation()
             observeExternalMetaPrefetchPreference()
+            observeContinueWatchingSortMode()
             loadHomeCatalogOrderPreference()
             loadFollowAddonsOrder()
             loadDisabledHomeCatalogPreference()
@@ -358,6 +362,18 @@ class HomeViewModel @Inject constructor(
     private fun observeModernHomePresentation() = observeModernHomePresentationPipeline()
 
     private fun observeExternalMetaPrefetchPreference() = observeExternalMetaPrefetchPreferencePipeline()
+
+    private fun observeContinueWatchingSortMode() {
+        viewModelScope.launch {
+            layoutPreferenceDataStore.continueWatchingSortMode
+                .distinctUntilChanged()
+                .collect { mode ->
+                    continueWatchingSortMode = mode
+                    // Clear caches so the new sort is applied immediately on next pipeline run
+                    clearAllCwInMemoryCaches()
+                }
+        }
+    }
 
     private fun observeBlurUnwatchedEpisodes() {
         viewModelScope.launch {
@@ -581,7 +597,8 @@ class HomeViewModel @Inject constructor(
             }
             val items = mergeContinueWatchingItems(
                 inProgressItems = inProgressItems,
-                nextUpItems = nextUpItems
+                nextUpItems = nextUpItems,
+                mode = continueWatchingSortMode
             )
             if (items.isNotEmpty()) {
                 _uiState.update { it.copy(continueWatchingItems = items) }
