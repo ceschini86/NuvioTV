@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.data.local.LayoutPreferenceDataStore
 import com.nuvio.tv.data.local.TraktSettingsDataStore
+import com.nuvio.tv.domain.model.ContinueWatchingSortMode
 import com.nuvio.tv.domain.model.FocusedPosterTrailerPlaybackTarget
 import com.nuvio.tv.domain.model.HomeLayout
 import com.nuvio.tv.domain.repository.AddonRepository
@@ -50,7 +51,8 @@ data class LayoutSettingsUiState(
     val hideUnreleasedContent: Boolean = false,
     val showFullReleaseDate: Boolean = true,
     val nextUpFromFurthestEpisode: Boolean = true,
-    val showUnairedNextUp: Boolean = true
+    val showUnairedNextUp: Boolean = true,
+    val continueWatchingSortMode: ContinueWatchingSortMode = ContinueWatchingSortMode.DEFAULT
 )
 
 data class CatalogInfo(
@@ -91,6 +93,7 @@ sealed class LayoutSettingsEvent {
     data class SetShowFullReleaseDate(val enabled: Boolean) : LayoutSettingsEvent()
     data class SetNextUpFromFurthestEpisode(val enabled: Boolean) : LayoutSettingsEvent()
     data class SetShowUnairedNextUp(val enabled: Boolean) : LayoutSettingsEvent()
+    data class SetContinueWatchingSortMode(val mode: ContinueWatchingSortMode) : LayoutSettingsEvent()
     data object ResetPosterCardStyle : LayoutSettingsEvent()
 }
 
@@ -270,6 +273,13 @@ class LayoutSettingsViewModel @Inject constructor(
                 updateUiStateIfChanged { it.copy(showUnairedNextUp = enabled) }
             }
         }
+        viewModelScope.launch {
+            layoutPreferenceDataStore.continueWatchingSortMode
+                .distinctUntilChanged()
+                .collect { mode ->
+                    updateUiStateIfChanged { it.copy(continueWatchingSortMode = mode) }
+                }
+        }
         loadAvailableCatalogs()
     }
 
@@ -305,6 +315,7 @@ class LayoutSettingsViewModel @Inject constructor(
             is LayoutSettingsEvent.SetShowFullReleaseDate -> setShowFullReleaseDate(event.enabled)
             is LayoutSettingsEvent.SetNextUpFromFurthestEpisode -> setNextUpFromFurthestEpisode(event.enabled)
             is LayoutSettingsEvent.SetShowUnairedNextUp -> setShowUnairedNextUp(event.enabled)
+            is LayoutSettingsEvent.SetContinueWatchingSortMode -> setContinueWatchingSortMode(event.mode)
             LayoutSettingsEvent.ResetPosterCardStyle -> resetPosterCardStyle()
         }
     }
@@ -516,6 +527,13 @@ class LayoutSettingsViewModel @Inject constructor(
         if (_uiState.value.showUnairedNextUp == enabled) return
         viewModelScope.launch {
             layoutPreferenceDataStore.setShowUnairedNextUp(enabled)
+        }
+    }
+
+    private fun setContinueWatchingSortMode(mode: ContinueWatchingSortMode) {
+        if (_uiState.value.continueWatchingSortMode == mode) return
+        viewModelScope.launch {
+            layoutPreferenceDataStore.setContinueWatchingSortMode(mode)
         }
     }
 
