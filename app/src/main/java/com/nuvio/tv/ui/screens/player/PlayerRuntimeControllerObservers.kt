@@ -169,6 +169,7 @@ internal fun PlayerRuntimeController.filterToVisibleAddonSubtitles(
     val preferredTargets = when (PlayerSubtitleUtils.normalizeLanguageCode(style.preferredLanguage)) {
         "none" -> if (style.useForcedSubtitles) {
             selectedAudioTrackForSubtitleMatching(_uiState.value)
+                ?.takeIf { selectedAudioMatchesResolvedPreferredAudio(it) }
                 ?.let { selectedAudioLanguageTarget(it) }
                 ?.let(::listOf)
                 ?: emptyList()

@@ -1118,6 +1118,10 @@ private fun audioTrackMatchesLanguage(track: TrackInfo, target: String): Boolean
         (targetName.isNotBlank() && haystack.contains(targetName))
 }
 
+internal fun PlayerRuntimeController.selectedAudioMatchesResolvedPreferredAudio(track: TrackInfo): Boolean {
+    return mpvPreferredAudioLanguages.any { target -> audioTrackMatchesLanguage(track, target) }
+}
+
 private fun languageCodeAppearsInHaystack(haystack: String, normalizedTarget: String): Boolean {
     if (normalizedTarget.isBlank()) return false
     return Regex("(^|[^a-z0-9])${Regex.escape(normalizedTarget)}([^a-z0-9]|$)")
@@ -1320,7 +1324,9 @@ internal fun PlayerRuntimeController.tryAutoSelectPreferredSubtitleFromAvailable
         !useForcedSubtitles -> null
         primaryTarget != null && selectedAudioTrack != null && audioTrackMatchesLanguage(selectedAudioTrack, primaryTarget) ->
             primaryTarget
-        primaryTarget == null && selectedAudioTrack != null ->
+        primaryTarget == null &&
+            selectedAudioTrack != null &&
+            selectedAudioMatchesResolvedPreferredAudio(selectedAudioTrack) ->
             selectedAudioLanguageTarget(selectedAudioTrack)
         else -> null
     }
