@@ -100,7 +100,7 @@ internal fun LazyListScope.subtitleSettingsItems(
         } else {
             AVAILABLE_SUBTITLE_LANGUAGES.find {
                 it.code == playerSettings.subtitleStyle.preferredLanguage
-            }?.displayName ?: "English"
+            }?.displayName ?: stringResource(R.string.language_english)
         }
 
         NavigationSettingsItem(

@@ -317,6 +317,8 @@ internal fun PlayerRuntimeController.observeSubtitleSettings() {
             nextEpisodeThresholdModeSetting = settings.nextEpisodeThresholdMode
             nextEpisodeThresholdPercentSetting = settings.nextEpisodeThresholdPercent
             nextEpisodeThresholdMinutesBeforeEndSetting = settings.nextEpisodeThresholdMinutesBeforeEnd
+            stillWatchingEnabledSetting = settings.stillWatchingEnabled
+            stillWatchingEpisodeThresholdSetting = settings.stillWatchingEpisodeThreshold
             val previousMpvHardwareDecodeMode = mpvHardwareDecodeModeSetting
             mpvHardwareDecodeModeSetting = settings.mpvHardwareDecodeMode
             if (isUsingMpvEngine() && previousMpvHardwareDecodeMode != mpvHardwareDecodeModeSetting) {
@@ -422,6 +424,38 @@ internal fun PlayerRuntimeController.loadSavedProgressFor(season: Int?, episode:
     }
 }
 
+/**
+ * Suspend variant of [loadSavedProgressFor] that completes the DB read inline
+ * instead of launching a fire-and-forget coroutine.
+ *
+ * This MUST be called **before** [initializePlayer] inside [preparePlaybackBeforeStart]
+ * so that [pendingResumeProgress] is guaranteed to be set by the time ExoPlayer's
+ * `STATE_READY` callback fires.  The fire-and-forget version races against the
+ * player lifecycle and can lose the resume position entirely.
+ */
+internal suspend fun PlayerRuntimeController.loadSavedProgressSuspend(season: Int?, episode: Int?) {
+    if (contentId == null) return
+
+    pendingResumeProgress = null
+    val progress = if (season != null && episode != null) {
+        watchProgressRepository.getEpisodeProgress(contentId, season, episode).firstOrNull()
+    } else {
+        watchProgressRepository.getProgress(contentId).firstOrNull()
+    }
+
+    progress?.let { saved ->
+        if (saved.isInProgress()) {
+            pendingResumeProgress = saved
+            Log.d(
+                PlayerRuntimeController.TAG,
+                "loadSavedProgressSuspend: set pendingResumeProgress " +
+                    "position=${saved.position} duration=${saved.duration} " +
+                    "percent=${saved.progressPercent} S${season}E${episode}"
+            )
+        }
+    }
+}
+
 internal fun PlayerRuntimeController.fetchSkipIntervals(id: String?, season: Int?, episode: Int?) {
     if (!skipIntroEnabled) return
     if (id.isNullOrBlank()) return
@@ -520,7 +554,7 @@ internal fun PlayerRuntimeController.retryCurrentStreamFromStartAfter416() {
         }.onFailure { e ->
             _uiState.update {
                 it.copy(
-                    error = e.toDisplayMessage(),
+                    error = e.toDisplayMessage(context),
                     showLoadingOverlay = false,
                     showPauseOverlay = false
                 )

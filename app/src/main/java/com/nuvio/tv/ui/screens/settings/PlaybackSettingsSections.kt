@@ -129,6 +129,8 @@ internal fun PlaybackSettingsSections(
     onSetNextEpisodeThresholdMinutesBeforeEnd: (Float) -> Unit,
     onSetStreamAutoPlayTimeoutSeconds: (Int) -> Unit,
     onSetReuseLastLinkEnabled: (Boolean) -> Unit,
+    onSetStillWatchingEnabled: (Boolean) -> Unit,
+    onSetStillWatchingEpisodeThreshold: (Int) -> Unit,
     onSetShowPlayerLoadingStatus: (Boolean) -> Unit,
     onSetLoadingOverlayEnabled: (Boolean) -> Unit,
     onSetPauseOverlayEnabled: (Boolean) -> Unit,
@@ -493,6 +495,8 @@ internal fun PlaybackSettingsSections(
                 onSetNextEpisodeThresholdMinutesBeforeEnd = onSetNextEpisodeThresholdMinutesBeforeEnd,
                 onSetStreamAutoPlayTimeoutSeconds = onSetStreamAutoPlayTimeoutSeconds,
                 onSetReuseLastLinkEnabled = onSetReuseLastLinkEnabled,
+                onSetStillWatchingEnabled = onSetStillWatchingEnabled,
+                onSetStillWatchingEpisodeThreshold = onSetStillWatchingEpisodeThreshold,
                 onItemFocused = { focusedSection = PlaybackSection.STREAM_SELECTION }
             )
 
@@ -1017,7 +1021,7 @@ private fun PlayerPreferenceDialog(
     }
 
     val options = listOf(
-        Triple(PlayerPreference.INTERNAL, stringResource(R.string.playback_player_internal), "Use NuvioTV's built-in player"),
+        Triple(PlayerPreference.INTERNAL, stringResource(R.string.playback_player_internal), stringResource(R.string.playback_player_internal_desc)),
         Triple(PlayerPreference.EXTERNAL, stringResource(R.string.playback_player_external), stringResource(R.string.playback_player_external_desc)),
         Triple(PlayerPreference.ASK_EVERY_TIME, stringResource(R.string.playback_player_ask), stringResource(R.string.playback_player_ask_desc))
     )

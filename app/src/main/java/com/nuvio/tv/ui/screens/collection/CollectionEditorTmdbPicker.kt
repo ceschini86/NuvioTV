@@ -362,9 +362,9 @@ private fun TmdbBasicSourceForm(
             onValueChange = onInputChange,
             placeholder = when (uiState.tmdbBuilderMode) {
                 TmdbBuilderMode.LIST -> "https://www.themoviedb.org/list/8504994 or 8504994"
-                TmdbBuilderMode.NETWORK -> "213 for Netflix, 49 for HBO, 2739 for Disney+"
-                TmdbBuilderMode.COLLECTION -> "10 for Star Wars Collection"
-                TmdbBuilderMode.PRODUCTION -> "Marvel Studios, 420, or company URL"
+                TmdbBuilderMode.NETWORK -> stringResource(R.string.collections_editor_tmdb_network_placeholder_example)
+                TmdbBuilderMode.COLLECTION -> stringResource(R.string.collections_editor_tmdb_collection_placeholder_example)
+                TmdbBuilderMode.PRODUCTION -> stringResource(R.string.collections_editor_tmdb_company_placeholder_example)
                 TmdbBuilderMode.PERSON,
                 TmdbBuilderMode.DIRECTOR -> stringResource(R.string.collections_editor_tmdb_person_placeholder)
                 else -> stringResource(R.string.collections_editor_tmdb_id_or_url)
@@ -721,23 +721,24 @@ private fun TmdbQuickChips(
     }
 }
 
+@Composable
 private fun tmdbGenreQuickChips(mediaType: TmdbCollectionMediaType): List<Pair<String, String>> {
     return when (mediaType) {
         TmdbCollectionMediaType.MOVIE -> listOf(
-            "Action" to "28",
-            "Adventure" to "12",
-            "Animation" to "16",
-            "Comedy" to "35",
-            "Horror" to "27",
-            "Sci-Fi" to "878"
+            stringResource(R.string.collections_editor_tmdb_genre_action) to "28",
+            stringResource(R.string.collections_editor_tmdb_genre_adventure) to "12",
+            stringResource(R.string.collections_editor_tmdb_genre_animation) to "16",
+            stringResource(R.string.collections_editor_tmdb_genre_comedy) to "35",
+            stringResource(R.string.collections_editor_tmdb_genre_horror) to "27",
+            stringResource(R.string.collections_editor_tmdb_genre_scifi) to "878"
         )
         TmdbCollectionMediaType.TV -> listOf(
-            "Drama" to "18",
-            "Comedy" to "35",
-            "Animation" to "16",
-            "Crime" to "80",
-            "Sci-Fi" to "10765",
-            "Reality" to "10764"
+            stringResource(R.string.collections_editor_tmdb_genre_drama) to "18",
+            stringResource(R.string.collections_editor_tmdb_genre_comedy) to "35",
+            stringResource(R.string.collections_editor_tmdb_genre_animation) to "16",
+            stringResource(R.string.collections_editor_tmdb_genre_crime) to "80",
+            stringResource(R.string.collections_editor_tmdb_genre_scifi) to "10765",
+            stringResource(R.string.collections_editor_tmdb_genre_reality) to "10764"
         )
     }
 }

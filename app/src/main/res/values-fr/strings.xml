@@ -975,6 +975,14 @@
     <string name="profile_pin_overlay_back_hint">Appuie sur « Retour » pour annuler</string>
 
 
+    <!-- Assistant d’installation des addons (mode essentiel) -->
+    <string name="essential_addon_setup_title">Installer un addon</string>
+    <string name="essential_addon_setup_subtitle">Installe un addon pour commencer à diffuser. Tu pourras en ajouter d’autres plus tard depuis Addons.</string>
+    <string name="essential_addon_show_qr">Afficher le QR</string>
+    <!-- Repli éditeur de collection -->
+    <string name="collection_editor_no_trakt_lists_found">Aucune liste Trakt trouvée</string>
+    <string name="collection_editor_untitled_folder">Sans titre</string>
+    <string name="collection_editor_untitled_collection">Collection sans titre</string>
     <!-- AddonManagerScreen -->
     <string name="addon_title">Addons</string>
     <string name="addon_readonly_notice">Utilise les addons du profil principal et ne peut pas être modifié</string>
@@ -1204,7 +1212,7 @@
     <string name="pause_back_to_details">Retour aux détails</string>
     <string name="pause_as_character">dans le rôle de %1$s</string>
 
-    <!-- NextEpisodeCardOverlay -->
+    <!-- PostPlayOverlay -->
     <string name="next_episode_label">Épisode suivant</string>
     <string name="next_episode_finding_source">Recherche de la source…</string>
     <string name="next_episode_playing_via">Lecture via %1$s dans %2$ds</string>
@@ -1926,7 +1934,60 @@
     <string name="experience_mode_confirm_essential_subtitle">Les écrans de configuration avancée seront masqués, mais tes paramètres enregistrés restent inchangés. Tu peux revenir en arrière à tout moment.</string>
     <string name="experience_mode_confirm_essential_title">Passer en mode essentiel&#160;?</string>
     <string name="experience_mode_essential">Essentiel</string>
+    <string name="experience_mode_advanced">Avancé</string>
+    <string name="experience_mode_choose_title">Choisis ton expérience Nuvio</string>
+    <string name="experience_mode_choose_subtitle">Commence simple ou débloque toutes les options. Tu peux changer à tout moment.</string>
+    <string name="experience_mode_essential_card_subtitle">Configuration ciblée, addons, options de lecture de base, Trakt et paramètres de compte.</string>
+    <string name="experience_mode_advanced_card_subtitle">Tous les paramètres&#160;: mise en page, ordre des catalogues, collections, plug-ins et diagnostics.</string>
     <string name="experience_mode_group_title">Mode d’expérience</string>
+    <string name="essential_addon_continue_for_now">Continuer pour l’instant</string>
+    <string name="essential_playback_basics">Lecture (essentiel)</string>
+    <string name="essential_subtitles_and_audio">Sous-titres et audio</string>
+    <string name="essential_stream_selection">Sélection du flux</string>
+    <string name="stream_auto_play_first_stream">Premier flux</string>
+    <string name="stream_auto_play_manual_short">Manuel</string>
+    <string name="stream_auto_play_smart_match">Correspondance intelligente</string>
+    <string name="essential_subtitle_language">Langue des sous-titres</string>
+    <string name="essential_audio_language">Langue audio</string>
+    <string name="audio_lang_media_default">Par défaut du média</string>
+    <string name="essential_playback_header_title">Lecture</string>
+    <string name="essential_playback_header_subtitle">Préférences simples de lecture, sous-titres, audio et P2P.</string>
+    <string name="essential_stream_selection_subtitle">Choisis manuellement ou lance automatiquement le premier flux disponible.</string>
+    <string name="essential_autoplay_next_episode">Lecture automatique de l’épisode suivant</string>
+    <string name="essential_autoplay_next_episode_subtitle">Enchaîne vers l’épisode suivant à la fin d’un flux.</string>
+    <string name="essential_p2p_streams">Flux P2P</string>
+    <string name="essential_p2p_streams_subtitle">Autoriser les sources de flux pair-à-pair.</string>
+    <string name="essential_subtitle_language_subtitle">Langue préférée pour les sous-titres.</string>
+    <string name="essential_audio_language_subtitle">Langue audio préférée.</string>
+    <!-- Messages d’erreur compte / connexion -->
+    <string name="account_error_incorrect_pin">PIN incorrect.</string>
+    <string name="account_error_sync_code_expired">Le code de synchronisation a expiré.</string>
+    <string name="account_error_invalid_sync_code">Code de synchronisation invalide.</string>
+    <string name="account_error_sync_code_not_found">Code de synchronisation introuvable.</string>
+    <string name="account_error_device_already_linked">Cet appareil est déjà associé.</string>
+    <string name="account_error_generic_retry">Une erreur est survenue. Réessaie.</string>
+    <string name="account_error_invalid_credentials">Adresse e-mail ou mot de passe incorrect.</string>
+    <string name="account_error_email_not_confirmed">Confirme d’abord ton adresse e-mail.</string>
+    <string name="account_error_email_already_registered">Un compte avec cette adresse existe déjà.</string>
+    <string name="account_error_invalid_email">Saisis une adresse e-mail valide.</string>
+    <string name="account_error_password_too_short">Le mot de passe est trop court.</string>
+    <string name="account_error_password_too_weak">Le mot de passe est trop faible.</string>
+    <string name="account_error_signup_disabled">Les inscriptions sont actuellement désactivées.</string>
+    <string name="account_error_rate_limited">Trop de tentatives. Réessaie plus tard.</string>
+    <string name="account_error_qr_login_expired">La connexion par QR code a expiré. Réessaie.</string>
+    <string name="account_error_invalid_qr_login">Code de connexion QR invalide.</string>
+    <string name="account_error_qr_login_other_device">Cette connexion QR a été demandée depuis un autre appareil.</string>
+    <string name="account_error_qr_login_outdated">Le service de connexion QR est obsolète. Réapplique la configuration SQL TV login.</string>
+    <string name="account_error_qr_login_missing_setup">Le backend de connexion QR n’est pas configuré. Mets à jour la configuration SQL TV login.</string>
+    <string name="account_error_qr_login_misconfigured">L’URL de connexion QR est mal configurée.</string>
+    <string name="account_error_qr_login_invalid_request">La requête de connexion QR est invalide. Réessaie.</string>
+    <string name="account_error_no_internet">Aucune connexion Internet.</string>
+    <string name="account_error_connection_timeout">Délai de connexion dépassé. Réessaie.</string>
+    <string name="account_error_connection_refused">Impossible de se connecter au serveur.</string>
+    <string name="account_error_not_authenticated">Connecte-toi d’abord.</string>
+    <string name="account_error_service_unavailable">Service indisponible. Réessaie plus tard.</string>
+    <string name="account_error_invalid_request">Requête invalide. Vérifie tes informations.</string>
+    <string name="account_error_unexpected">Une erreur inattendue s’est produite.</string>
     <string name="experience_mode_switch_to_advanced">Passer en mode avancé</string>
     <string name="experience_mode_switch_to_advanced_header_subtitle">Passe en mode avancé pour accéder à l’ensemble des paramètres.</string>
     <string name="experience_mode_switch_to_advanced_subtitle">Afficher la disposition complète, les plugins, les intégrations, les catalogues, les collections et les réglages fins.</string>
@@ -1936,4 +1997,174 @@
     <string name="settings_experience_subtitle">Essentiel ou avancé</string>
     <string name="profile_custom_avatar_web_panel_note">Les URL d’avatar personnalisé peuvent être configurées depuis le panneau web Nuvio.</string>
     <string name="tv_channel_continue_watching">Continuer à regarder</string>
+
+    <!-- Repli titre catalogue voir tout -->
+    <string name="catalog_see_all_title_fallback">Catalogue</string>
+
+    <!-- Éditeur de collection : catégories d’emoji -->
+    <string name="collections_editor_emoji_category_streaming">Streaming</string>
+    <string name="collections_editor_emoji_category_genres">Genres</string>
+    <string name="collections_editor_emoji_category_sports">Sports</string>
+    <string name="collections_editor_emoji_category_music">Musique</string>
+    <string name="collections_editor_emoji_category_nature">Nature</string>
+    <string name="collections_editor_emoji_category_animals">Animaux</string>
+    <string name="collections_editor_emoji_category_food">Cuisine</string>
+    <string name="collections_editor_emoji_category_travel">Voyage</string>
+    <string name="collections_editor_emoji_category_people">Personnes</string>
+    <string name="collections_editor_emoji_category_objects">Objets</string>
+    <string name="collections_editor_emoji_category_flags">Drapeaux</string>
+    <string name="collections_editor_emoji_category_symbols">Symboles</string>
+    <!-- Éditeur de collection : exemples de placeholder + genres TMDB -->
+    <string name="collections_editor_tmdb_network_placeholder_example">213 pour Netflix, 49 pour HBO, 2739 pour Disney+</string>
+    <string name="collections_editor_tmdb_collection_placeholder_example">10 pour la collection Star Wars</string>
+    <string name="collections_editor_tmdb_company_placeholder_example">Marvel Studios, 420, ou URL d’une société</string>
+    <string name="collections_editor_tmdb_genre_action">Action</string>
+    <string name="collections_editor_tmdb_genre_adventure">Aventure</string>
+    <string name="collections_editor_tmdb_genre_animation">Animation</string>
+    <string name="collections_editor_tmdb_genre_comedy">Comédie</string>
+    <string name="collections_editor_tmdb_genre_horror">Horreur</string>
+    <string name="collections_editor_tmdb_genre_scifi">Science-fiction</string>
+    <string name="collections_editor_tmdb_genre_drama">Drame</string>
+    <string name="collections_editor_tmdb_genre_crime">Policier</string>
+    <string name="collections_editor_tmdb_genre_reality">Téléréalité</string>
+    <!-- Préréglages regex de lecture automatique -->
+    <string name="autoplay_regex_preset_any_1080p_plus">1080p ou supérieur</string>
+    <string name="autoplay_regex_preset_4k_remux">4K / Remux</string>
+    <string name="autoplay_regex_preset_1080p_standard">1080p standard</string>
+    <string name="autoplay_regex_preset_720p_smaller">720p ou inférieur</string>
+    <string name="autoplay_regex_preset_web_sources">Sources WEB</string>
+    <string name="autoplay_regex_preset_bluray_quality">Qualité BluRay</string>
+    <string name="autoplay_regex_preset_hevc_x265">HEVC / x265</string>
+    <string name="autoplay_regex_preset_avc_x264">AVC / x264</string>
+    <string name="autoplay_regex_preset_hdr_dolby_vision">HDR / Dolby Vision</string>
+    <string name="autoplay_regex_preset_dolby_atmos_dts">Dolby Atmos / DTS</string>
+    <string name="autoplay_regex_preset_english">Anglais</string>
+    <string name="autoplay_regex_preset_no_cam_ts">Sans CAM/TS</string>
+    <string name="autoplay_regex_preset_no_remux_hdr">Sans REMUX/HDR</string>
+
+    <!-- Sections paramètres lecture -->
+    <string name="playback_player_internal_desc">Utiliser le lecteur intégré de NuvioTV</string>
+
+    <!-- Lecteur : torrent + pistes -->
+    <string name="player_torrent_peer_info">%1$d sources · %2$d pairs</string>
+    <string name="player_torrent_buffered_status">%1$s en mémoire tampon · %2$s · %3$s</string>
+    <string name="player_torrent_status">%1$s · %2$s</string>
+    <string name="player_torrent_stats">%1$d pairs · %2$d sources · %3$d&#160;%%</string>
+    <string name="player_torrent_connecting_peers">Connexion aux pairs…</string>
+    <string name="player_track_audio_fallback">Audio %1$d</string>
+    <string name="player_track_subtitle_fallback">Sous-titres %1$d</string>
+
+    <!-- Lecteur : récupération d’erreur -->
+    <string name="player_error_stream_blocked">\n\nLa source du flux est bloquée ou restreinte. Essaie une autre source.</string>
+    <string name="player_error_stream_removed">\n\nLe lien du flux a expiré ou a été supprimé. Essaie une autre source.</string>
+    <string name="player_error_stream_expired">\n\nLe lien du flux a expiré. Essaie une autre source.</string>
+    <string name="player_error_stream_rate_limited">\n\nTrop de requêtes vers la source du flux. Patiente un instant et réessaie.</string>
+    <string name="player_error_stream_unavailable">\n\nLe serveur du flux est actuellement indisponible. Essaie une autre source.</string>
+    <string name="player_error_source_invalid_content">Erreur de source&#160;: la source du flux a renvoyé du contenu invalide ou non lisible. Le lien a peut-être expiré ou le serveur a renvoyé une page d’erreur au lieu de la vidéo.\n\nEssaie une autre source. [%1$s]</string>
+    <string name="player_error_decoder">Erreur de décodeur</string>
+    <string name="player_error_unsupported_format">Ce flux utilise un format que ton appareil ne prend peut-être pas en charge. Essaie une autre source. [%1$s]</string>
+    <string name="player_error_initialize_failed">Échec de l’initialisation du lecteur</string>
+    <string name="player_error_mpv_surface_failed">Échec de l’initialisation de la surface libmpv</string>
+    <string name="player_error_mpv_playback_failed">Échec de l’initialisation de la lecture libmpv</string>
+    <string name="player_error_torrent">Erreur de torrent&#160;: %1$s</string>
+    <string name="player_error_playback_fallback">Erreur de lecture</string>
+    <!-- Sous-titres : récupération horloge -->
+    <string name="subtitle_timing_file_no_lines">Aucune ligne de sous-titre trouvée dans ce fichier.</string>
+    <string name="subtitle_timing_load_lines_failed">Échec du chargement des lignes de sous-titres.</string>
+    <string name="subtitle_download_failed_http">Échec du téléchargement des sous-titres (HTTP %1$d)</string>
+    <string name="subtitle_download_empty_content">Le téléchargement des sous-titres a retourné un contenu vide.</string>
+
+    <!-- Erreurs d’import de collection -->
+    <string name="collections_import_error_empty_input">Entrée vide</string>
+    <string name="collections_import_error_expected_array">Format invalide&#160;: tableau attendu</string>
+    <string name="collections_import_error_empty_array">Tableau vide&#160;: aucune collection trouvée</string>
+    <string name="collections_import_error_missing_id">Collection %1$d&#160;: \"id\" manquant ou invalide</string>
+    <string name="collections_import_error_missing_title">Collection \"%1$s\"&#160;: \"title\" manquant ou invalide</string>
+    <string name="collections_import_error_folders_array">Collection \"%1$s\"&#160;: \"folders\" doit être un tableau</string>
+    <string name="collections_import_error_folder_invalid">Collection \"%1$s\", dossier %2$d&#160;: format invalide</string>
+    <string name="collections_import_error_folder_missing_id">Collection \"%1$s\", dossier %2$d&#160;: \"id\" manquant</string>
+    <string name="collections_import_error_folder_missing_title">Collection \"%1$s\", dossier \"%2$s\"&#160;: \"title\" manquant</string>
+    <string name="collections_import_error_sources_array">Collection \"%1$s\", dossier \"%2$s\"&#160;: \"sources\" doit être un tableau</string>
+    <string name="collections_import_error_invalid_tile_shape">Collection \"%1$s\", dossier \"%2$s\"&#160;: tileShape \"%3$s\" invalide</string>
+    <string name="collections_import_error_source_invalid">Collection \"%1$s\", dossier \"%2$s\", source %3$d&#160;: format invalide</string>
+    <string name="collections_import_error_source_required_fields">Collection \"%1$s\", dossier \"%2$s\", source %3$d&#160;: champs requis manquants</string>
+    <string name="collections_import_error_missing_tmdb_type">Collection \"%1$s\", dossier \"%2$s\", source %3$d&#160;: type de source TMDB manquant</string>
+    <string name="collections_import_error_missing_trakt_list_id">Collection \"%1$s\", dossier \"%2$s\", source %3$d&#160;: ID de liste Trakt manquant</string>
+    <string name="collections_import_error_json_parse">Erreur d’analyse JSON&#160;: %1$s</string>
+
+    <!-- Messages bibliothèque -->
+    <string name="library_synced">Bibliothèque synchronisée</string>
+    <string name="library_error_refresh_failed">Échec de l’actualisation de la bibliothèque</string>
+    <string name="library_list_created">Liste créée</string>
+    <string name="library_error_invalid_list">Liste invalide</string>
+    <string name="library_list_updated">Liste mise à jour</string>
+    <string name="library_error_save_list_failed">Échec de l’enregistrement de la liste</string>
+    <string name="library_list_deleted">Liste supprimée</string>
+    <string name="library_error_delete_list_failed">Échec de la suppression de la liste</string>
+    <string name="library_list_order_updated">Ordre des listes mis à jour</string>
+    <string name="library_error_reorder_lists_failed">Échec du réordonnancement des listes</string>
+    <string name="library_list_fallback_title">Liste</string>
+    <!-- Étiquettes de confidentialité bibliothèque (mappage depuis la valeur API) -->
+    <string name="library_privacy_private">Privée</string>
+    <string name="library_privacy_link">Lien</string>
+    <string name="library_privacy_friends">Amis</string>
+    <string name="library_privacy_public">Publique</string>
+
+    <!-- Erreurs Trakt -->
+    <string name="trakt_error_auth_required">Authentification Trakt requise</string>
+    <string name="trakt_library_error_request_failed">Échec de la requête Trakt</string>
+    <string name="trakt_library_error_create_list_failed">Échec de la création de la liste</string>
+    <string name="trakt_library_error_update_list_failed">Échec de la mise à jour de la liste</string>
+    <string name="trakt_library_error_delete_list_failed">Échec de la suppression de la liste</string>
+    <string name="trakt_library_error_reorder_lists_failed">Échec du réordonnancement des listes</string>
+    <string name="trakt_library_error_fetch_watchlist_movies">Échec de la récupération des films de la watchlist</string>
+    <string name="trakt_library_error_fetch_watchlist_shows">Échec de la récupération des séries de la watchlist</string>
+    <string name="trakt_library_error_fetch_personal_lists">Échec de la récupération des listes personnelles</string>
+    <string name="trakt_library_error_add_watchlist_failed">Échec de l’ajout à la watchlist</string>
+    <string name="trakt_library_error_remove_watchlist_failed">Échec du retrait de la watchlist</string>
+    <string name="trakt_library_error_add_to_list_failed">Échec de l’ajout à la liste</string>
+    <string name="trakt_library_error_remove_from_list_failed">Échec du retrait de la liste</string>
+    <string name="trakt_library_error_missing_compatible_ids">Identifiants compatibles manquants pour l’opération de liste Trakt</string>
+    <string name="trakt_library_error_auth_expired">Authentification Trakt expirée</string>
+    <string name="trakt_library_error_list_not_found">Liste Trakt introuvable</string>
+    <string name="trakt_library_error_list_limit_reached">Limite de listes Trakt atteinte. Mise à niveau requise.</string>
+    <string name="trakt_error_insufficient_ids_mark_watched">Identifiants Trakt insuffisants pour marquer comme vu</string>
+    <string name="trakt_error_request_failed">Échec de la requête Trakt</string>
+    <string name="trakt_error_mark_watched_failed">Échec du marquage comme vu sur Trakt (%1$d)</string>
+
+    <!-- Erreurs détails / poster options -->
+    <string name="detail_error_update_library_failed">Échec de la mise à jour de la bibliothèque</string>
+    <string name="detail_error_load_lists_failed">Échec du chargement des listes</string>
+    <string name="detail_error_update_lists_failed">Échec de la mise à jour des listes</string>
+    <string name="detail_error_update_watched_failed">Échec de la mise à jour du statut vu</string>
+    <string name="detail_error_update_episode_watched_failed">Échec de la mise à jour du statut vu de l’épisode</string>
+    <string name="poster_options_error_load_lists_failed">Échec du chargement des listes</string>
+    <string name="poster_options_error_update_lists_failed">Échec de la mise à jour des listes</string>
+
+    <!-- Erreurs de recherche -->
+    <string name="search_error_load_addons_failed">Échec du chargement des addons</string>
+    <string name="search_error_failed">Échec de la recherche</string>
+
+    <!-- Replis flux / TMDB / addons -->
+    <string name="stream_unknown">Flux inconnu</string>
+    <string name="stream_embedded_group">Flux intégrés</string>
+    <string name="stream_embedded_fallback_name">Flux intégré</string>
+    <string name="stream_quality_unknown">Inconnu</string>
+    <string name="stream_addon_unknown">Inconnu</string>
+    <string name="tmdb_unknown_entity">Inconnu</string>
+    <string name="web_tmdb_company_fallback">Société TMDB %1$d</string>
+    <string name="web_tmdb_collection_fallback">Collection TMDB %1$d</string>
+    <string name="web_error_invalid_request_body">Corps de requête invalide</string>
+
+    <!-- Repli langue préférée des sous-titres -->
+    <string name="language_english">Anglais</string>
+
+    <!-- Erreurs supporters / contributeurs / sponsors -->
+    <string name="supporters_error_load">Impossible de charger les supporters.</string>
+    <string name="contributors_error_load">Impossible de charger les contributeurs.</string>
+    <string name="sponsors_error_load">Impossible de charger les sponsors.</string>
+    <string name="contributors_error_api_not_configured">L’API contributeurs n’est pas configurée.</string>
+    <string name="contributors_error_api_http">Erreur API contributeurs&#160;: %1$d</string>
+    <string name="supporters_error_api_http">Erreur API dons&#160;: %1$d</string>
+    <string name="sponsors_error_api_http">Erreur API sponsors&#160;: %1$d</string>
 </resources>

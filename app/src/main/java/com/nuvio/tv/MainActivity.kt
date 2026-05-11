@@ -158,6 +158,8 @@ import kotlinx.coroutines.launch
 val LocalSidebarExpanded = compositionLocalOf { false }
 val LocalContentFocusRequester = compositionLocalOf { FocusRequester.Default }
 
+private const val SIDEBAR_AUTO_COLLAPSE_DELAY_MS = 4_000L
+
 data class DrawerItem(
     val route: String,
     val label: String,
@@ -774,6 +776,21 @@ private fun LegacySidebarScaffold(
     val contentFocusRequester = remember { FocusRequester() }
     var pendingContentFocusTransfer by remember { mutableStateOf(false) }
     var pendingSidebarFocusRequest by remember { mutableStateOf(false) }
+    // Bumped on every key event the drawer sees so the auto-collapse timer
+    // resets while the user navigates between drawer items.
+    var legacyDrawerInteractionVersion by remember { mutableStateOf(0) }
+
+    // Auto-close the legacy drawer after a short period of inactivity, mirroring
+    // the modern sidebar behaviour. The timer resets every time the user
+    // navigates inside the drawer (legacyDrawerInteractionVersion change).
+    LaunchedEffect(drawerState.currentValue, legacyDrawerInteractionVersion, showSidebar) {
+        if (!showSidebar || drawerState.currentValue != DrawerValue.Open) {
+            return@LaunchedEffect
+        }
+        delay(SIDEBAR_AUTO_COLLAPSE_DELAY_MS)
+        pendingContentFocusTransfer = false
+        drawerState.setValue(DrawerValue.Closed)
+    }
 
     BackHandler(enabled = currentRoute in rootRoutes && drawerState.currentValue == DrawerValue.Closed) {
         pendingSidebarFocusRequest = true
@@ -830,6 +847,9 @@ private fun LegacySidebarScaffold(
                         .padding(12.dp)
                         .selectableGroup()
                         .onPreviewKeyEvent { keyEvent ->
+                            if (keyEvent.type == KeyEventType.KeyDown) {
+                                legacyDrawerInteractionVersion++
+                            }
                             val closeKey = if (isRtl) Key.DirectionLeft else Key.DirectionRight
                             if (keyEvent.key == closeKey && keyEvent.type == KeyEventType.KeyDown) {
                                 drawerState.setValue(DrawerValue.Closed)
@@ -841,7 +861,11 @@ private fun LegacySidebarScaffold(
                         }
                 ) {
                     val isExpanded = drawerValue == DrawerValue.Open
-                    val itemWidth = if (isExpanded) openDrawerItemWidth else 48.dp
+                    val itemWidth by animateDpAsState(
+                        targetValue = if (isExpanded) openDrawerItemWidth else 48.dp,
+                        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+                        label = "legacySidebarItemWidth"
+                    )
 
                     if (isExpanded) {
                         Column(
@@ -914,7 +938,7 @@ private fun LegacySidebarScaffold(
                             .offset(y = 28.dp)
                             .fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
-                        horizontalAlignment = if (isExpanded) Alignment.CenterHorizontally else Alignment.Start
+                        horizontalAlignment = Alignment.Start
                     ) {
                         drawerItems.forEach { item ->
                             key(item.route) {
@@ -938,13 +962,13 @@ private fun LegacySidebarScaffold(
                                         drawerItemFocusRequesters.getValue(item.route)
                                     )
                                         .width(itemWidth)
-                                        .then(if (!isExpanded) Modifier.offset(x = 12.dp) else Modifier)
+                                        .offset(x = 12.dp)
                                 )
-                            }
                         }
                     }
                 }
             }
+        }
         }
     ) {
         val contentStartPadding by animateDpAsState(
@@ -1028,11 +1052,21 @@ private fun LegacySidebarButton(
         },
         label = "legacySidebarItemIconTint"
     )
+    val itemScale by animateFloatAsState(
+        targetValue = if (isFocused && expanded) 1.1f else 1f,
+        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+        label = "legacySidebarItemScale"
+    )
 
     Card(
         onClick = onClick,
         modifier = modifier
             .height(52.dp)
+            .graphicsLayer {
+                scaleX = itemScale
+                scaleY = itemScale
+                transformOrigin = TransformOrigin.Center
+            }
             .focusProperties { canFocus = expanded }
             .onFocusChanged { isFocused = it.hasFocus },
         colors = CardDefaults.colors(
@@ -1046,23 +1080,18 @@ private fun LegacySidebarButton(
                 shape = itemShape
             )
         ),
-        shape = CardDefaults.shape(shape = itemShape)
+        shape = CardDefaults.shape(shape = itemShape),
+        scale = CardDefaults.scale(focusedScale = 1f, pressedScale = 1f)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
         DrawerItemIcon(
             iconRes = iconRes,
             icon = icon,
             tint = iconTint,
-            modifier = if (expanded) {
-                Modifier
-                    .size(22.dp)
-                    .align(Alignment.CenterStart)
-                    .offset(x = 13.dp)
-            } else {
-                Modifier
-                    .size(22.dp)
-                    .align(Alignment.Center)
-            }
+            modifier = Modifier
+                .size(22.dp)
+                .align(Alignment.CenterStart)
+                .offset(x = 13.dp)
         )
         if (expanded) {
             com.nuvio.tv.ui.components.AutoResizeText(
@@ -1157,6 +1186,32 @@ private fun ModernSidebarScaffold(
         delay(95L)
         isSidebarExpanded = false
         sidebarCollapsePending = false
+    }
+
+    // Auto-collapse the expanded sidebar after a short period of inactivity.
+    // The timer resets every time focus moves between drawer items, so the
+    // sidebar only folds back up once the user stops navigating it. We keep
+    // pendingContentFocusTransfer = false so the focus stays parked on the
+    // (now collapsed) sidebar pill instead of jumping back into the content.
+    LaunchedEffect(isSidebarExpanded, focusedDrawerIndex, sidebarCollapsePending, showSidebar) {
+        if (!showSidebar || !isSidebarExpanded || sidebarCollapsePending) {
+            return@LaunchedEffect
+        }
+        delay(SIDEBAR_AUTO_COLLAPSE_DELAY_MS)
+        pendingContentFocusTransfer = false
+        sidebarCollapsePending = true
+    }
+
+    // Auto-collapse the floating pill back to icon-only when the user reveals
+    // its label (DPAD UP from content) and then leaves it idle. The DPAD DOWN
+    // path already collapses it instantly, this just covers the case where the
+    // user releases UP and walks away.
+    LaunchedEffect(isFloatingPillIconOnly, keepFloatingPillExpanded, showSidebar, isSidebarExpanded) {
+        if (!showSidebar || isFloatingPillIconOnly || keepFloatingPillExpanded || isSidebarExpanded) {
+            return@LaunchedEffect
+        }
+        delay(SIDEBAR_AUTO_COLLAPSE_DELAY_MS)
+        isFloatingPillIconOnly = true
     }
 
     val sidebarVisible = showSidebar && (isSidebarExpanded || !sidebarCollapsed)

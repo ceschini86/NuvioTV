@@ -328,7 +328,7 @@ class SearchViewModel @Inject constructor(
             val addons = try {
                 addonRepository.getInstalledAddons().first()
             } catch (e: Exception) {
-                _uiState.update { it.copy(isSearching = false, error = e.message ?: "Failed to load addons") }
+                _uiState.update { it.copy(isSearching = false, error = e.message ?: context.getString(com.nuvio.tv.R.string.search_error_load_addons_failed)) }
                 return@launch
             }
 
@@ -449,7 +449,7 @@ class SearchViewModel @Inject constructor(
                     pendingCatalogResponses = (pendingCatalogResponses - 1).coerceAtLeast(0)
                     // Ignore per-catalog errors unless we have nothing to show.
                     if (catalogsMap.isEmpty()) {
-                        _uiState.update { it.copy(error = result.message ?: "Search failed") }
+                        _uiState.update { it.copy(error = result.message ?: context.getString(com.nuvio.tv.R.string.search_error_failed)) }
                     }
                     scheduleCatalogRowsUpdate()
                 }

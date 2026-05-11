@@ -454,8 +454,15 @@ private fun FolderListItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                val shapeLabel = stringResource(
+                    when (folder.tileShape) {
+                        com.nuvio.tv.domain.model.PosterShape.POSTER -> R.string.collections_editor_shape_poster
+                        com.nuvio.tv.domain.model.PosterShape.LANDSCAPE -> R.string.collections_editor_shape_wide
+                        com.nuvio.tv.domain.model.PosterShape.SQUARE -> R.string.collections_editor_shape_square
+                    }
+                )
                 Text(
-                    text = "${folder.tileShape.name.lowercase().replaceFirstChar { it.uppercase() }} - ${stringResource(R.string.collections_editor_source_count, folder.sources.size)}",
+                    text = "$shapeLabel - ${stringResource(R.string.collections_editor_source_count, folder.sources.size)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = NuvioColors.TextTertiary
                 )

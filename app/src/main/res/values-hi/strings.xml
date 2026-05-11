@@ -778,7 +778,7 @@
     <string name="pause_back_to_details">डिटेल्स पर वापस जाएँ</string>
     <string name="pause_as_character">%1$s के रूप में</string>
 
-    <!-- NextEpisodeCardOverlay -->
+    <!-- PostPlayOverlay -->
     <string name="next_episode_label">अगला एपिसोड</string>
     <string name="next_episode_finding_source">सोर्स खोजा जा रहा है…</string>
     <string name="next_episode_playing_via">%1$s के माध्यम से %2$ds में चल रहा है</string>

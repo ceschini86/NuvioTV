@@ -144,6 +144,10 @@ class PlayerViewModel @Inject constructor(
         controller.onEvent(event)
     }
 
+    fun consumePendingExitReason() {
+        controller.consumePendingExitReason()
+    }
+
     override fun onCleared() {
         controller.onCleared()
         // Allow the trailer player to be re-created when returning to home screen.
