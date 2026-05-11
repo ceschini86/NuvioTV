@@ -944,13 +944,11 @@ private fun LegacySidebarScaffold(
                                         .width(itemWidth)
                                         .then(if (!isExpanded) Modifier.offset(x = 12.dp) else Modifier)
                                 )
-                                    .width(itemWidth)
-                                    .offset(x = 12.dp)
-                            )
                         }
                     }
                 }
             }
+        }
         }
     ) {
         val contentStartPadding by animateDpAsState(
