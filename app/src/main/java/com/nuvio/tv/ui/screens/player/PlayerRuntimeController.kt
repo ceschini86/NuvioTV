@@ -335,6 +335,7 @@ class PlayerRuntimeController(
     internal var isReleasingPlayer: Boolean = false
     internal var cachedDecoderPriority: Int = 1
     internal var hasTriedAudioPcmFallback: Boolean = false
+    internal var pendingAudioPcmFallbackRebuild: Boolean = false
     internal var hasTriedDv7HevcFallback: Boolean = false
     internal var forceDv7ToHevc: Boolean = false
     internal var startupRetryCount: Int = 0
@@ -380,9 +381,11 @@ class PlayerRuntimeController(
         }
 
     init {
-        if (!navigationArgs.startFromBeginning) {
-            loadSavedProgressFor(currentSeason, currentEpisode)
-        }
+        // NOTE: Saved watch progress is loaded inside preparePlaybackBeforeStart()
+        // via loadSavedProgressSuspend() — NOT here.  Loading it in the init block
+        // was a fire-and-forget coroutine that raced against initializePlayer(),
+        // causing the resume seek to be silently lost when ExoPlayer's STATE_READY
+        // fired before the DB read completed.
         fetchParentalGuide(contentId, contentType, currentSeason, currentEpisode)
         observeSubtitleSettings()
         fetchMetaDetails(contentId, contentType)
