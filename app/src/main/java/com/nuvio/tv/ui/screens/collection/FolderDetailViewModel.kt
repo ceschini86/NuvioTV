@@ -8,6 +8,7 @@ import com.nuvio.tv.R
 import com.nuvio.tv.core.build.AppFeaturePolicy
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.tmdb.TmdbCollectionSourceResolver
+import com.nuvio.tv.core.util.isUnreleased
 import com.nuvio.tv.core.trakt.TraktPublicListSourceResolver
 import com.nuvio.tv.data.trailer.TrailerService
 import com.nuvio.tv.data.local.CollectionsDataStore
@@ -532,7 +533,7 @@ class FolderDetailViewModel @Inject constructor(
                             val tabs = state.tabs.toMutableList()
                             if (tabIndex < tabs.size) {
                                 tabs[tabIndex] = tabs[tabIndex].copy(
-                                    catalogRow = result.data,
+                                    catalogRow = result.data.filteredForRelease(state.hideUnreleasedContent),
                                     isLoading = false
                                 )
                             }
@@ -621,7 +622,13 @@ class FolderDetailViewModel @Inject constructor(
                             val currentTab = s.tabs.getOrNull(tabIndex)
                             val currentRow = currentTab?.catalogRow ?: return@update s
                             val existingIds = currentRow.items.map { "${it.apiType}:${it.id}" }.toHashSet()
-                            val newItems = result.data.items.filter { "${it.apiType}:${it.id}" !in existingIds }
+                            val incomingFiltered = if (s.hideUnreleasedContent) {
+                                val today = java.time.LocalDate.now()
+                                result.data.items.filterNot { it.isUnreleased(today) }
+                            } else {
+                                result.data.items
+                            }
+                            val newItems = incomingFiltered.filter { "${it.apiType}:${it.id}" !in existingIds }
                             val mergedItems = currentRow.items + newItems
                             val hasMore = if (newItems.isEmpty()) false else result.data.hasMore
 
@@ -766,16 +773,17 @@ class FolderDetailViewModel @Inject constructor(
                         _uiState.update { s ->
                             val tabs = s.tabs.toMutableList()
                             val currentRow = tabs.getOrNull(tabIndex)?.catalogRow
+                            val filteredData = result.data.filteredForRelease(s.hideUnreleasedContent)
                             val row = if (append && currentRow != null) {
                                 val existingIds = currentRow.items.map { "${it.apiType}:${it.id}" }.toHashSet()
-                                val newItems = result.data.items.filter { "${it.apiType}:${it.id}" !in existingIds }
-                                result.data.copy(
+                                val newItems = filteredData.items.filter { "${it.apiType}:${it.id}" !in existingIds }
+                                filteredData.copy(
                                     items = currentRow.items + newItems,
-                                    hasMore = result.data.hasMore && newItems.isNotEmpty(),
+                                    hasMore = filteredData.hasMore && newItems.isNotEmpty(),
                                     isLoading = false
                                 )
                             } else {
-                                result.data
+                                filteredData
                             }
                             if (tabIndex < tabs.size) tabs[tabIndex] = tabs[tabIndex].copy(catalogRow = row, isLoading = false)
                             s.copy(tabs = tabs)
@@ -823,16 +831,17 @@ class FolderDetailViewModel @Inject constructor(
                         _uiState.update { s ->
                             val tabs = s.tabs.toMutableList()
                             val currentRow = tabs.getOrNull(tabIndex)?.catalogRow
+                            val filteredData = result.data.filteredForRelease(s.hideUnreleasedContent)
                             val row = if (append && currentRow != null) {
                                 val existingIds = currentRow.items.map { "${it.apiType}:${it.id}" }.toHashSet()
-                                val newItems = result.data.items.filter { "${it.apiType}:${it.id}" !in existingIds }
-                                result.data.copy(
+                                val newItems = filteredData.items.filter { "${it.apiType}:${it.id}" !in existingIds }
+                                filteredData.copy(
                                     items = currentRow.items + newItems,
-                                    hasMore = result.data.hasMore && newItems.isNotEmpty(),
+                                    hasMore = filteredData.hasMore && newItems.isNotEmpty(),
                                     isLoading = false
                                 )
                             } else {
-                                result.data
+                                filteredData
                             }
                             if (tabIndex < tabs.size) tabs[tabIndex] = tabs[tabIndex].copy(catalogRow = row, isLoading = false)
                             s.copy(tabs = tabs)
@@ -1278,4 +1287,12 @@ class FolderDetailViewModel @Inject constructor(
         }
     }
 
+}
+
+/** Drops unreleased items from a freshly-loaded row when the user toggle is on. */
+private fun CatalogRow.filteredForRelease(hideUnreleased: Boolean): CatalogRow {
+    if (!hideUnreleased) return this
+    val today = java.time.LocalDate.now()
+    val filtered = items.filterNot { it.isUnreleased(today) }
+    return if (filtered.size == items.size) this else copy(items = filtered)
 }
