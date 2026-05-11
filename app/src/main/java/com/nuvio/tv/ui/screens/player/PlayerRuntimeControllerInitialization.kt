@@ -530,7 +530,7 @@ internal fun PlayerRuntimeController.initializePlayer(
                         if (isReleasingPlayer && error.errorCode == PlaybackException.ERROR_CODE_TIMEOUT) {
                             return
                         }
-                        val detailedError = error.toDisplayMessage()
+                        val detailedError = error.toDisplayMessage(context)
 
                         // If the codec crashed while the app is in the background (e.g. another
                         // app reclaimed the hardware decoder), don't run the retry chain — each
@@ -588,7 +588,7 @@ internal fun PlayerRuntimeController.initializePlayer(
         } catch (e: Exception) {
             if (
                 maybeAutoSwitchInternalPlayerOnStartupError(
-                    detailedError = e.message ?: "Failed to initialize player",
+                    detailedError = e.message ?: context.getString(com.nuvio.tv.R.string.player_error_initialize_failed),
                     allowEngineFailover = allowEngineFailover
                 )
             ) {
@@ -596,7 +596,7 @@ internal fun PlayerRuntimeController.initializePlayer(
             }
             _uiState.update {
                 it.copy(
-                    error = e.toDisplayMessage("Failed to initialize player"),
+                    error = e.toDisplayMessage(context, context.getString(com.nuvio.tv.R.string.player_error_initialize_failed)),
                     showLoadingOverlay = false
                 )
             }

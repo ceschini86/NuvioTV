@@ -1884,7 +1884,7 @@ class MetaDetailsViewModel @Inject constructor(
                 showMessage(message)
             }.onFailure { error ->
                 showMessage(
-                    message = error.message ?: "Failed to update library",
+                    message = error.message ?: context.getString(com.nuvio.tv.R.string.detail_error_update_library_failed),
                     isError = true
                 )
             }
@@ -1909,11 +1909,11 @@ class MetaDetailsViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         pickerPending = false,
-                        pickerError = error.message ?: "Failed to load lists",
+                        pickerError = error.message ?: context.getString(com.nuvio.tv.R.string.detail_error_load_lists_failed),
                         showListPicker = false
                     )
                 }
-                showMessage(error.message ?: "Failed to load lists", isError = true)
+                showMessage(error.message ?: context.getString(com.nuvio.tv.R.string.detail_error_load_lists_failed), isError = true)
             }
         }
     }
@@ -1956,10 +1956,10 @@ class MetaDetailsViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         pickerPending = false,
-                        pickerError = error.message ?: "Failed to update lists"
+                        pickerError = error.message ?: context.getString(com.nuvio.tv.R.string.detail_error_update_lists_failed)
                     )
                 }
-                showMessage(error.message ?: "Failed to update lists", isError = true)
+                showMessage(error.message ?: context.getString(com.nuvio.tv.R.string.detail_error_update_lists_failed), isError = true)
             }
         }
     }
@@ -1991,7 +1991,7 @@ class MetaDetailsViewModel @Inject constructor(
                 }
             }.onFailure { error ->
                 showMessage(
-                    message = error.message ?: "Failed to update watched status",
+                    message = error.message ?: context.getString(com.nuvio.tv.R.string.detail_error_update_watched_failed),
                     isError = true
                 )
             }
@@ -2023,7 +2023,7 @@ class MetaDetailsViewModel @Inject constructor(
                 }
             }.onFailure { error ->
                 showMessage(
-                    message = error.message ?: "Failed to update episode watched status",
+                    message = error.message ?: context.getString(com.nuvio.tv.R.string.detail_error_update_episode_watched_failed),
                     isError = true
                 )
             }

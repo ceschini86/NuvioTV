@@ -531,7 +531,7 @@ internal fun PlayerRuntimeController.retryCurrentStreamFromStartAfter416() {
         }.onFailure { e ->
             _uiState.update {
                 it.copy(
-                    error = e.toDisplayMessage(),
+                    error = e.toDisplayMessage(context),
                     showLoadingOverlay = false,
                     showPauseOverlay = false
                 )
