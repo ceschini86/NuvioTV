@@ -221,7 +221,7 @@ fun EssentialAddonSetupScreen(
                 shape = ButtonDefaults.shape(RoundedCornerShape(50))
             ) {
                 Text(
-                    text = "Continue for now",
+                    text = stringResource(R.string.essential_addon_continue_for_now),
                     modifier = Modifier.padding(horizontal = 18.dp, vertical = 6.dp)
                 )
             }
