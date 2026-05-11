@@ -942,7 +942,7 @@ private fun LegacySidebarScaffold(
                                         drawerItemFocusRequesters.getValue(item.route)
                                     )
                                         .width(itemWidth)
-                                        .then(if (!isExpanded) Modifier.offset(x = 12.dp) else Modifier)
+                                        .offset(x = 12.dp)
                                 )
                         }
                     }
