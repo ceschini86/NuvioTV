@@ -471,7 +471,7 @@ internal fun PlayerRuntimeController.initializePlayer(
                         if (playbackState == Player.STATE_ENDED) {
                             emitCompletionScrobbleStop(progressPercent = 99.5f)
                             saveWatchProgress()
-                            resetNextEpisodeCardState(clearEpisode = false)
+                            resetPostPlayStateAfterPlaybackEnded()
                         }
                     }
 
