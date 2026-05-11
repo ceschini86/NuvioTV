@@ -242,7 +242,7 @@ class StreamRepositoryImpl @Inject constructor(
                             val quality = result.quality?.takeIf { it.isNotBlank() }
 
                             // Only show quality in the name field as "Name - resolution"
-                            val qualityLabel = quality ?: "Unknown"
+                            val qualityLabel = quality ?: context.getString(com.nuvio.tv.R.string.stream_quality_unknown)
                             val displayName = buildString {
                                 append(baseName ?: baseTitle ?: scraperName)
                                 if (!toString().contains(qualityLabel)) {
@@ -333,7 +333,7 @@ class StreamRepositoryImpl @Inject constructor(
         val addonResult = addonRepository.fetchAddon(baseUrl)
         val addonName = when (addonResult) {
             is NetworkResult.Success -> addonResult.data.displayName
-            else -> "Unknown"
+            else -> context.getString(com.nuvio.tv.R.string.stream_addon_unknown)
         }
         val addonLogo = when (addonResult) {
             is NetworkResult.Success -> addonResult.data.logo

@@ -2206,4 +2206,8 @@
     <string name="supporters_error_api_http">Donations API error: %1$d</string>
     <string name="sponsors_error_api_http">Sponsors API error: %1$d</string>
 
+    <!-- Contributor role badges -->
+    <string name="contributor_role_translator">Translator</string>
+    <string name="contributor_role_maintainer">Maintainer</string>
+
 </resources>

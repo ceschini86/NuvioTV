@@ -2147,7 +2147,7 @@
     <string name="stream_unknown">Flux inconnu</string>
     <string name="stream_embedded_group">Flux intégrés</string>
     <string name="stream_embedded_fallback_name">Flux intégré</string>
-    <string name="stream_quality_unknown">Inconnu</string>
+    <string name="stream_quality_unknown">Inconnue</string>
     <string name="stream_addon_unknown">Inconnu</string>
     <string name="tmdb_unknown_entity">Inconnu</string>
     <string name="web_tmdb_company_fallback">Société TMDB %1$d</string>
@@ -2165,4 +2165,8 @@
     <string name="contributors_error_api_http">Erreur API contributeurs&#160;: %1$d</string>
     <string name="supporters_error_api_http">Erreur API dons&#160;: %1$d</string>
     <string name="sponsors_error_api_http">Erreur API sponsors&#160;: %1$d</string>
+
+    <!-- Badges de rôle des contributeurs -->
+    <string name="contributor_role_translator">Traducteur</string>
+    <string name="contributor_role_maintainer">Mainteneur</string>
 </resources>
