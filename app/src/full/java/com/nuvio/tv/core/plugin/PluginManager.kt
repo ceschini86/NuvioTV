@@ -230,6 +230,8 @@ class PluginManager @Inject constructor(
     
     // Flow of plugins enabled state
     val pluginsEnabled: Flow<Boolean> = dataStore.pluginsEnabled
+
+    val groupStreamsByRepository: Flow<Boolean> = dataStore.groupStreamsByRepository
     
     private val syncScope = kotlinx.coroutines.CoroutineScope(
         kotlinx.coroutines.SupervisorJob() + Dispatchers.IO
@@ -624,6 +626,10 @@ class PluginManager @Inject constructor(
     suspend fun setPluginsEnabled(enabled: Boolean) {
         dataStore.setPluginsEnabled(enabled)
     }
+
+    suspend fun setGroupStreamsByRepository(enabled: Boolean) {
+        dataStore.setGroupStreamsByRepository(enabled)
+    }
     
     /**
      * Execute all enabled scrapers for a given media
@@ -680,7 +686,7 @@ class PluginManager @Inject constructor(
         mediaType: String,
         season: Int? = null,
         episode: Int? = null
-    ): Flow<Pair<String, List<LocalScraperResult>>> = channelFlow {
+    ): Flow<Pair<ScraperInfo, List<LocalScraperResult>>> = channelFlow {
         val enabledList = enabledScrapers.first()
             .filter { it.supportsType(mediaType) }
         
@@ -705,7 +711,7 @@ class PluginManager @Inject constructor(
                 try {
                     val results = executeScraperWithSingleFlight(scraper, tmdbId, mediaType, season, episode)
                     if (results.isNotEmpty()) {
-                        send(scraper.name to results)
+                        send(scraper to results)
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Scraper ${scraper.name} failed in streaming: ${e.message}")

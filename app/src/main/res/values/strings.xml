@@ -1496,6 +1496,10 @@
     <string name="plugin_providers_section">Providers (%1$d)</string>
     <string name="plugin_title">Plugins</string>
     <string name="plugin_subtitle">Manage local scrapers and providers</string>
+    <string name="plugin_enable_plugins_title">Enable plugin providers globally</string>
+    <string name="plugin_enable_plugins_subtitle">Use plugin providers during stream discovery</string>
+    <string name="plugin_group_by_repository_title">Group plugin providers by repository</string>
+    <string name="plugin_group_by_repository_subtitle">In Streams, show one provider per repository instead of one per source</string>
     <string name="plugin_add_repository">Add repository</string>
     <string name="plugin_add_btn">Add</string>
     <string name="plugin_manage_from_phone_title">Manage from phone</string>

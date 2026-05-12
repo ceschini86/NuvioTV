@@ -492,10 +492,21 @@ class StreamScreenViewModel @Inject constructor(
 
         val pluginNames = try {
             if (pluginManager.pluginsEnabled.first()) {
-                pluginManager.enabledScrapers.first()
+                val groupByRepository = pluginManager.groupStreamsByRepository.first()
+                val scrapers = pluginManager.enabledScrapers.first()
                     .filter { it.supportsType(contentType) }
-                    .map { it.name }
-                    .distinct()
+                if (groupByRepository) {
+                    val repositoriesById = pluginManager.repositories.first().associateBy { it.id }
+                    scrapers
+                        .map { scraper ->
+                            repositoriesById[scraper.repositoryId]?.name?.takeIf { it.isNotBlank() } ?: scraper.name
+                        }
+                        .distinct()
+                } else {
+                    scrapers
+                        .map { it.name }
+                        .distinct()
+                }
             } else {
                 emptyList()
             }
