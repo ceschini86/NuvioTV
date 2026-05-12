@@ -57,7 +57,7 @@ internal fun PlayerRuntimeController.applyAudioAmplification(db: Int) {
     val isActiveNow = gainAudioProcessor.isGainEnabled()
 
     if (wasActive != isActiveNow && !isUsingMpvEngine()) {
-        // Force ExoPlayer to rebuild the audio pipeline so the processor is correctly added or removed
+        playbackSpeedAwareAudioSink?.notifyAudioProcessingRequirementChanged()
         _exoPlayer?.let { player ->
             player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().build()
         }
