@@ -558,6 +558,8 @@
     <string name="sub_forced_lang">Kényszerített feliratok</string>
     <string name="sub_preferred_lang">Elsődleges nyelv</string>
     <string name="sub_secondary_lang">Másodlagos nyelv</string>
+    <string name="sub_use_forced_subtitles">Kényszerített feliratok használata</string>
+    <string name="sub_use_forced_subtitles_desc">Kényszerített feliratok előnyben részesítése, ha a hang nyelve egyezik a felirat nyelvével; ha nincs ilyen, ne válasszon semmit</string>
     <string name="sub_show_only_preferred_languages">Csak az elsődleges nyelvek mutatása</string>
     <string name="sub_show_only_preferred_languages_desc">Elrejti a többi feliratnyelvet a kiválasztó listából</string>
     <string name="sub_organization">Feliratok rendezése</string>

@@ -191,7 +191,7 @@
     <string name="episodes_open_comments">Otevřít komentáře k epizodě</string>
     <string name="play_manually">Přehrát ručně</string>
     <string name="episodes_season_actions">Akce sezóny</string>
-    
+
 <!-- MetaDetailsViewModel -->
 <string name="detail_added_to_library">Přidáno do knihovny</string>
 <string name="detail_removed_from_library">Odebráno z knihovny</string>
@@ -263,7 +263,7 @@
 <string name="tmdb_entity_empty_title">Žádné tituly nenalezeny</string>
 <string name="tmdb_entity_empty_subtitle">TMDB aktuálně nemá pro tento výběr žádné procházetelné tituly.</string>
 <string name="episodes_unavailable">Nedostupné</string>
-    
+
 <!-- Status labels for series -->
 <string name="series_status_ended">Ukončeno</string>
 <string name="series_status_continuing">Pokračující</string>
@@ -274,7 +274,7 @@
 <string name="series_status_rumored">Fáma</string>
 <string name="series_status_in_production">Ve výrobě</string>
 <string name="series_status_post_production">Postprodukce</string>
-    
+
 <!-- Status labels for movies -->
 <string name="movie_status_ended">Ukončeno</string>
 <string name="movie_status_continuing">Pokračující</string>
@@ -583,6 +583,8 @@
 <string name="sub_forced_lang">Vynucené</string>
 <string name="sub_preferred_lang">Preferovaný jazyk</string>
 <string name="sub_secondary_lang">Sekundární preferovaný jazyk</string>
+<string name="sub_use_forced_subtitles">Použít vynucené titulky</string>
+<string name="sub_use_forced_subtitles_desc">Upřednostnit vynucené titulky, když zvuk odpovídá jazyku titulků; pokud nejsou dostupné, nevybrat nic</string>
 <string name="sub_show_only_preferred_languages">Zobrazit pouze preferované jazyky</string>
 <string name="sub_show_only_preferred_languages_desc">Skrýt všechny ostatní jazyky titulků ze seznamu výběru</string>
 <string name="sub_organization">Organizace titulků</string>

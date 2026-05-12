@@ -409,6 +409,8 @@
     <string name="sub_forced_lang">Prisiljeni</string>
     <string name="sub_preferred_lang">Prednostni jezik</string>
     <string name="sub_secondary_lang">Sekundarni prednostni jezik</string>
+    <string name="sub_use_forced_subtitles">Uporabi vsiljene podnapise</string>
+    <string name="sub_use_forced_subtitles_desc">Prednostno uporabi vsiljene podnapise, ko se zvok ujema z jezikom podnapisov; če niso na voljo, ne izberi ničesar</string>
     <string name="sub_show_only_preferred_languages">Prikaži samo želene jezike</string>
     <string name="sub_show_only_preferred_languages_desc">Skrij vse druge jezike podnapisov s seznama izbire</string>
     <string name="sub_organization">Organizacija podnapisov</string>
