@@ -147,6 +147,7 @@ fun FolderEditorContent(
     }
 
     if (uiState.showEmojiPicker) {
+        BackHandler { viewModel.hideEmojiPicker() }
         EmojiPickerContent(
             selectedEmoji = folder.coverEmoji,
             onSelect = { emoji ->
@@ -172,6 +173,7 @@ fun FolderEditorContent(
         genrePickerCatalog != null &&
         genrePickerCatalog.genreOptions.isNotEmpty()
     ) {
+        BackHandler { viewModel.hideGenrePicker() }
         GenrePickerContent(
             title = genrePickerCatalog.catalogName,
             selectedGenre = genrePickerSource.genre,
@@ -185,6 +187,8 @@ fun FolderEditorContent(
         )
         return
     }
+
+    BackHandler { viewModel.cancelFolderEdit() }
 
     val titleFocusRequester = remember { FocusRequester() }
 
