@@ -128,11 +128,19 @@ internal fun PlayerRuntimeController.loadSourceStreams(forceRefresh: Boolean) {
                     val allStreams = addonStreams.flatMap { it.streams }
                     val availableAddons = addonStreams.map { it.addonName }
                     _uiState.update {
+                        val selectedAddon = it.sourceSelectedAddonFilter?.takeIf { selected ->
+                            selected in availableAddons
+                        }
+                        val filteredStreams = if (selectedAddon == null) {
+                            allStreams
+                        } else {
+                            allStreams.filter { stream -> stream.addonName == selectedAddon }
+                        }
                         it.copy(
                             isLoadingSourceStreams = false,
                             sourceAllStreams = allStreams,
-                            sourceSelectedAddonFilter = null,
-                            sourceFilteredStreams = allStreams,
+                            sourceSelectedAddonFilter = selectedAddon,
+                            sourceFilteredStreams = filteredStreams,
                             sourceAvailableAddons = availableAddons,
                             sourceChips = mergeSourceChipStatuses(
                                 existing = it.sourceChips,
@@ -198,10 +206,25 @@ private suspend fun PlayerRuntimeController.updateSourceChipsForFetchStart(
 
     val pluginNames = try {
         if (pluginManager.pluginsEnabled.first()) {
-            pluginManager.enabledScrapers.first()
-                .filter { it.supportsType(type) }
-                .map { it.name }
-                .distinct()
+            val mediaType = when (type.lowercase()) {
+                "series", "tv", "show" -> "tv"
+                else -> type.lowercase()
+            }
+            val groupByRepository = pluginManager.groupStreamsByRepository.first()
+            val scrapers = pluginManager.enabledScrapers.first()
+                .filter { it.supportsType(mediaType) }
+            if (groupByRepository) {
+                val repositoriesById = pluginManager.repositories.first().associateBy { it.id }
+                scrapers
+                    .map { scraper ->
+                        repositoriesById[scraper.repositoryId]?.name?.takeIf { it.isNotBlank() } ?: scraper.name
+                    }
+                    .distinct()
+            } else {
+                scrapers
+                    .map { it.name }
+                    .distinct()
+            }
         } else {
             emptyList()
         }
