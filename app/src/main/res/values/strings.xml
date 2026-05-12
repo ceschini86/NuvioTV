@@ -2264,4 +2264,9 @@
     <string name="profile_pin_saved_for_profile">PIN saved for %1$s.</string>
     <string name="profile_pin_lock_removed_for_profile">PIN lock removed for %1$s.</string>
 
+    <!-- Trakt: Related / comments / list items error fallbacks -->
+    <string name="trakt_related_error_request_failed">Trakt related request failed</string>
+    <string name="trakt_comments_error_request_failed">Trakt comments request failed</string>
+    <string name="trakt_library_error_fetch_list_items">Failed to fetch list items</string>
+
 </resources>

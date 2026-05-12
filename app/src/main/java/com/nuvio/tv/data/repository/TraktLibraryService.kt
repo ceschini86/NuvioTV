@@ -626,7 +626,7 @@ class TraktLibraryService @Inject constructor(
                     sortBy = sortBy?.takeIf { it.isNotBlank() },
                     sortHow = sortHow?.takeIf { it.isNotBlank() }
                 )
-            } ?: throw IllegalStateException("Failed to fetch list items")
+            } ?: throw IllegalStateException(appContext.getString(com.nuvio.tv.R.string.trakt_library_error_fetch_list_items))
         }
         return items.mapNotNull { mapListItem(listKey = listKey, item = it) }
     }
