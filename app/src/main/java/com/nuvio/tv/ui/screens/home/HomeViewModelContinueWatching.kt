@@ -1119,16 +1119,10 @@ private fun deduplicateInProgress(items: List<WatchProgress>): List<WatchProgres
 }
 
 private fun shouldTreatAsInProgressForContinueWatching(progress: WatchProgress): Boolean {
-    if (progress.isInProgress()) return true
     if (progress.isCompleted()) return false
+    if (progress.isInProgress() && progress.progressPercentage >= 0.02f) return true
 
-    // Rewatch edge case: a started replay can be below the default 2% "in progress"
-    // threshold, but should still suppress Next Up and appear as resume.
-    val hasStartedPlayback = progress.position > 0L || progress.progressPercent?.let { it > 0f } == true
-    val result = hasStartedPlayback &&
-        progress.source != WatchProgress.SOURCE_TRAKT_HISTORY &&
-        progress.source != WatchProgress.SOURCE_TRAKT_SHOW_PROGRESS
-    return result
+    return false
 }
 
 private fun shouldUseAsCompletedSeed(progress: WatchProgress): Boolean {
@@ -1563,11 +1557,11 @@ internal fun mergeContinueWatchingItems(
     nextUpItems: List<ContinueWatchingItem.NextUp>,
     mode: ContinueWatchingSortMode = ContinueWatchingSortMode.DEFAULT
 ): List<ContinueWatchingItem> {
-    // Collect ALL in-progress content IDs (not just series) to ensure
-    // release alerts and next-up items never duplicate an in-progress entry.
     val allInProgressIds = inProgressItems
         .asSequence()
-        .map { it.progress.contentId }
+        .map { it.progress }
+        .filter { isSeriesTypeCW(it.contentType) }
+        .map { it.contentId }
         .filter { it.isNotBlank() }
         .toSet()
 
