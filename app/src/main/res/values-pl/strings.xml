@@ -2179,4 +2179,49 @@
     <string name="web_error_invalid_request_body">Nieprawidłowa treść żądania</string>
     <string name="web_tmdb_collection_fallback">Kolekcja TMDB %1$d</string>
     <string name="web_tmdb_company_fallback">Firma TMDB %1$d</string>
+
+    <string name="network_error_empty_response_body">Pusta treść odpowiedzi</string>
+    <string name="network_error_unknown">Wystąpił nieznany błąd</string>
+
+    <string name="network_fast_error_script_path_missing">fast.com: nie znaleziono ścieżki skryptu</string>
+    <string name="network_fast_error_token_missing">fast.com: nie znaleziono tokenu w pakiecie</string>
+
+    <string name="torrent_error_add_failed">Nie udało się dodać torrenta</string>
+    <string name="torrent_error_binary_missing">Nie znaleziono pliku TorrServer w %1$s</string>
+    <string name="torrent_error_process_died">Proces TorrServer zakończył się przy starcie (kod wyjścia %1$d)</string>
+    <string name="torrent_error_start_timeout">TorrServer nie uruchomił się w ciągu %1$ds</string>
+
+    <string name="player_torrent_starting_engine">Uruchamianie silnika P2P…</string>
+    <string name="player_torrent_rebuffer_status">%1$s zbuforowane</string>
+    <string name="player_stream_error_invalid_external_url">Nieprawidłowy zewnętrzny URL</string>
+    <string name="player_stream_error_open_external_link_failed">Nie można otworzyć zewnętrznego linku</string>
+    <string name="player_stream_error_invalid_url">Nieprawidłowy URL strumienia</string>
+    <string name="player_stream_error_missing_content_type">Brak typu zawartości</string>
+
+    <string name="meta_error_detail_no_metadata_for_id">nie zwrócił metadanych dla tego id</string>
+    <string name="meta_error_detail_addon_unreachable">nie można połączyć się z serwerem dodatku</string>
+    <string name="meta_error_detail_addon_connection_failed">połączenie z dodatkiem nie powiodło się</string>
+    <string name="meta_error_detail_addon_timeout">żądanie do dodatku przekroczyło limit czasu</string>
+    <string name="meta_error_detail_addon_cleartext_blocked">dodatek używa niezabezpieczonego połączenia HTTP zablokowanego przez Android</string>
+    <string name="meta_error_detail_addon_request_failed">żądanie do dodatku nie powiodło się</string>
+
+    <string name="stream_error_detail_no_streams_for_id">nie zwrócił strumieni dla tego id</string>
+    <string name="stream_error_detail_addon_unreachable">nie można połączyć się z serwerem dodatku</string>
+    <string name="stream_error_detail_addon_connection_failed">połączenie z dodatkiem nie powiodło się</string>
+    <string name="stream_error_detail_addon_timeout">żądanie do dodatku przekroczyło limit czasu</string>
+    <string name="stream_error_detail_addon_cleartext_blocked">dodatek używa niezabezpieczonego połączenia HTTP zablokowanego przez Android</string>
+    <string name="stream_error_detail_addon_request_failed">żądanie do dodatku nie powiodło się</string>
+    <string name="stream_error_fetch_failed">Nie udało się pobrać strumieni</string>
+
+    <string name="trakt_library_error_paginated_fetch_failed">Stronicowane pobieranie Trakt nie powiodło się (%1$d)</string>
+    <string name="trakt_library_error_fetch_list_items">Nie udało się pobrać elementów listy</string>
+    <string name="trakt_related_error_request_failed">Żądanie powiązanych z Trakt nie powiodło się</string>
+    <string name="trakt_comments_error_request_failed">Żądanie komentarzy Trakt nie powiodło się</string>
+
+    <string name="home_poster_lists_error_load_failed">Nie udało się załadować list</string>
+    <string name="home_poster_lists_error_update_failed">Nie udało się zaktualizować list</string>
+
+    <string name="profile_pin_saved_for_profile">PIN zapisany dla %1$s.</string>
+    <string name="profile_pin_lock_removed_for_profile">Blokada PIN usunięta dla %1$s.</string>
+    <string name="profile_pin_save_error">Nie udało się zapisać PIN. Spróbuj ponownie.</string>
 </resources>
