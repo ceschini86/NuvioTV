@@ -2223,5 +2223,4 @@
 
     <string name="profile_pin_saved_for_profile">PIN zapisany dla %1$s.</string>
     <string name="profile_pin_lock_removed_for_profile">Blokada PIN usunięta dla %1$s.</string>
-    <string name="profile_pin_save_error">Nie udało się zapisać PIN. Spróbuj ponownie.</string>
 </resources>
