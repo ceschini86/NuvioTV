@@ -636,6 +636,8 @@
     <string name="sub_forced_lang">Zorunlu</string>
     <string name="sub_preferred_lang">Tercih Edilen Dil</string>
     <string name="sub_secondary_lang">İkinci Tercih Edilen Dil</string>
+    <string name="sub_use_forced_subtitles">Zorunlu altyazıları kullan</string>
+    <string name="sub_use_forced_subtitles_desc">Ses altyazı diliyle eşleştiğinde zorunlu altyazıları tercih et; yoksa hiçbir şey seçme</string>
     <string name="sub_show_only_preferred_languages">Yalnızca tercih edilen dilleri göster</string>
     <string name="sub_show_only_preferred_languages_desc">Diğer tüm altyazı dillerini seçim listesinden gizle</string>
     <string name="sub_organization">Altyazı Ayarları</string>

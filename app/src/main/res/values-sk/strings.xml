@@ -436,6 +436,8 @@
     <string name="sub_forced_lang">Vynútené</string>
     <string name="sub_preferred_lang">Preferovaný jazyk</string>
     <string name="sub_secondary_lang">Sekundárny preferovaný jazyk</string>
+    <string name="sub_use_forced_subtitles">Použiť vynútené titulky</string>
+    <string name="sub_use_forced_subtitles_desc">Uprednostniť vynútené titulky, keď sa zvuk zhoduje s jazykom titulkov; ak nie sú dostupné, nevybrať nič</string>
     <string name="sub_show_only_preferred_languages">Zobraziť iba preferované jazyky</string>
     <string name="sub_show_only_preferred_languages_desc">Skryť všetky ostatné jazyky titulkov zo zoznamu výberu</string>
     <string name="sub_organization">Usporiadanie titulkov</string>

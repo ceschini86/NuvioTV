@@ -260,6 +260,8 @@
     <string name="sub_forced_lang">Forzado</string>
     <string name="sub_preferred_lang">Idioma preferido</string>
     <string name="sub_secondary_lang">Idioma preferido secundario</string>
+    <string name="sub_use_forced_subtitles">Usar subtítulos forzados</string>
+    <string name="sub_use_forced_subtitles_desc">Preferir subtítulos forzados cuando el audio coincida con el idioma de subtítulos; si no están disponibles, no seleccionar nada</string>
     <string name="sub_show_only_preferred_languages">Mostrar solo idiomas preferidos</string>
     <string name="sub_show_only_preferred_languages_desc">Ocultar todos los demás idiomas de subtítulos de la lista de selección</string>
     <string name="sub_organization">Organización de subtítulos</string>

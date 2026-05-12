@@ -121,6 +121,7 @@ val AVAILABLE_SUBTITLE_LANGUAGES = listOf(
 data class SubtitleStyleSettings(
     val preferredLanguage: String = "en",
     val secondaryPreferredLanguage: String? = null,
+    val useForcedSubtitles: Boolean = false,
     val showOnlyPreferredLanguages: Boolean = false,
     val size: Int = 120, // Percentage (50-200)
     val verticalOffset: Int = 5, // Percentage from bottom (-20 to 50)
@@ -370,6 +371,7 @@ class PlayerSettingsDataStore @Inject constructor(
     // Subtitle style settings keys
     private val subtitlePreferredLanguageKey = stringPreferencesKey("subtitle_preferred_language")
     private val subtitleSecondaryLanguageKey = stringPreferencesKey("subtitle_secondary_language")
+    private val subtitleUseForcedSubtitlesKey = booleanPreferencesKey("subtitle_use_forced_subtitles")
     private val subtitleShowOnlyPreferredLanguagesKey = booleanPreferencesKey("subtitle_show_only_preferred_languages")
     private val subtitleSizeKey = intPreferencesKey("subtitle_size")
     private val subtitleVerticalOffsetKey = intPreferencesKey("subtitle_vertical_offset")
@@ -453,6 +455,25 @@ class PlayerSettingsDataStore @Inject constructor(
                         normalizeSelectableLanguageCode(secondarySubtitleLanguage)
                     if (normalizedSecondarySubtitleLanguage != secondarySubtitleLanguage) {
                         prefs[subtitleSecondaryLanguageKey] = normalizedSecondarySubtitleLanguage
+                    }
+                }
+
+                val normalizedPreferredSubtitleLanguage =
+                    preferredSubtitleLanguage?.let(::normalizeSelectableLanguageCode)
+                val normalizedSecondarySubtitleLanguage =
+                    secondarySubtitleLanguage?.let(::normalizeSelectableLanguageCode)
+                when {
+                    normalizedPreferredSubtitleLanguage == SUBTITLE_LANGUAGE_FORCED -> {
+                        prefs[subtitleUseForcedSubtitlesKey] = true
+                        val migratedPreferred = normalizedSecondarySubtitleLanguage
+                            ?.takeUnless { it == SUBTITLE_LANGUAGE_FORCED || it == "none" }
+                            ?: "en"
+                        prefs[subtitlePreferredLanguageKey] = migratedPreferred
+                        prefs.remove(subtitleSecondaryLanguageKey)
+                    }
+                    normalizedSecondarySubtitleLanguage == SUBTITLE_LANGUAGE_FORCED -> {
+                        prefs[subtitleUseForcedSubtitlesKey] = true
+                        prefs.remove(subtitleSecondaryLanguageKey)
                     }
                 }
             }
@@ -552,11 +573,16 @@ class PlayerSettingsDataStore @Inject constructor(
                 addonSubtitleStartupMode = parseAddonSubtitleStartupMode(prefs[addonSubtitleStartupModeKey]),
                 resizeMode = (prefs[resizeModeKey] ?: 0).coerceIn(0, 4),
                 subtitleStyle = SubtitleStyleSettings(
-                    preferredLanguage = normalizeSelectableLanguageCode(
-                        prefs[subtitlePreferredLanguageKey] ?: "en"
+                    preferredLanguage = normalizeSubtitlePreferredLanguageForRead(
+                        prefs[subtitlePreferredLanguageKey],
+                        prefs[subtitleSecondaryLanguageKey]
                     ),
                     secondaryPreferredLanguage = prefs[subtitleSecondaryLanguageKey]
-                        ?.let(::normalizeSelectableLanguageCode),
+                        ?.let(::normalizeSelectableLanguageCode)
+                        ?.takeUnless { it == SUBTITLE_LANGUAGE_FORCED },
+                    useForcedSubtitles = (prefs[subtitleUseForcedSubtitlesKey] ?: false) ||
+                        prefs[subtitlePreferredLanguageKey]?.let(::normalizeSelectableLanguageCode) == SUBTITLE_LANGUAGE_FORCED ||
+                        prefs[subtitleSecondaryLanguageKey]?.let(::normalizeSelectableLanguageCode) == SUBTITLE_LANGUAGE_FORCED,
                     showOnlyPreferredLanguages = prefs[subtitleShowOnlyPreferredLanguagesKey] ?: false,
                     size = prefs[subtitleSizeKey] ?: 100,
                     verticalOffset = prefs[subtitleVerticalOffsetKey] ?: 5,
@@ -925,6 +951,21 @@ class PlayerSettingsDataStore @Inject constructor(
         }
     }
 
+    private fun normalizeSubtitlePreferredLanguageForRead(
+        preferredLanguage: String?,
+        secondaryLanguage: String?
+    ): String {
+        val preferred = preferredLanguage
+            ?.let(::normalizeSelectableLanguageCode)
+            ?: return "en"
+        if (preferred != SUBTITLE_LANGUAGE_FORCED) return preferred
+
+        return secondaryLanguage
+            ?.let(::normalizeSelectableLanguageCode)
+            ?.takeUnless { it == SUBTITLE_LANGUAGE_FORCED || it == "none" }
+            ?: "en"
+    }
+
     suspend fun setMapDV7ToHevc(enabled: Boolean) {
         store().edit { prefs ->
             prefs[mapDV7ToHevcKey] = enabled
@@ -975,6 +1016,12 @@ class PlayerSettingsDataStore @Inject constructor(
             } else {
                 prefs.remove(subtitleSecondaryLanguageKey)
             }
+        }
+    }
+
+    suspend fun setUseForcedSubtitles(enabled: Boolean) {
+        store().edit { prefs ->
+            prefs[subtitleUseForcedSubtitlesKey] = enabled
         }
     }
 
