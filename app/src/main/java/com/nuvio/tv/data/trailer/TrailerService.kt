@@ -63,6 +63,15 @@ class TrailerService(
         tmdbId: String? = null,
         type: String? = null
     ): TrailerPlaybackSource? = withContext(Dispatchers.IO) {
+        // Respect the user's "Disable Trailers in TMDB Enrichment" toggle. The
+        // TMDB path below is the only trailer source surfaced through this
+        // function, so when the toggle is off, return no trailer at all rather
+        // than silently falling through to TMDB's /videos endpoint. See #1647.
+        if (!tmdbSettingsDataStore.settings.first().useTrailers) {
+            Log.d(TAG, "Trailers disabled in TMDB enrichment settings; skipping lookup")
+            return@withContext null
+        }
+
         val cacheKey = "$title|$year|$tmdbId|$type"
 
         cache[cacheKey]?.let { cached ->
@@ -74,7 +83,8 @@ class TrailerService(
         try {
             Log.d(TAG, "Searching trailer: title=$title, year=$year, tmdbId=$tmdbId, type=$type")
 
-            // 1) TMDB-first path (independent of TMDB enrichment settings).
+            // TMDB-first path. Gated on `useTrailers` above so the
+            // user's toggle in TMDB enrichment settings is honored.
             val tmdbSource = getTrailerPlaybackSourceFromTmdbId(
                 tmdbId = tmdbId,
                 type = type,
@@ -119,6 +129,10 @@ class TrailerService(
         tmdbId: String?,
         type: String?
     ): String? = withContext(Dispatchers.IO) {
+        // Same gate as getTrailerPlaybackSource — see #1647.
+        if (!tmdbSettingsDataStore.settings.first().useTrailers) {
+            return@withContext null
+        }
         val numericTmdbId = tmdbId?.toIntOrNull() ?: return@withContext null
         val mediaType = normalizeTmdbMediaType(type)
         val tmdbLanguage = getPreferredTmdbTrailerLanguage()
