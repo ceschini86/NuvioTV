@@ -2171,4 +2171,59 @@
     <!-- Badges de rôle des contributeurs -->
     <string name="contributor_role_translator">Traducteur</string>
     <string name="contributor_role_maintainer">Mainteneur</string>
+
+    <!-- Erreurs réseau / safe API -->
+    <string name="network_error_empty_response_body">Réponse vide</string>
+    <string name="network_error_unknown">Une erreur inconnue est survenue</string>
+
+    <!-- Paramètres réseau&#160;: erreurs fast.com -->
+    <string name="network_fast_error_script_path_missing">fast.com&#160;: chemin du script introuvable</string>
+    <string name="network_fast_error_token_missing">fast.com&#160;: jeton introuvable dans le bundle</string>
+
+    <!-- Service torrent / erreurs binaire TorrServer -->
+    <string name="torrent_error_add_failed">Échec de l’ajout du torrent</string>
+    <string name="torrent_error_binary_missing">Binaire TorrServer introuvable à %1$s</string>
+    <string name="torrent_error_process_died">Le processus TorrServer s’est arrêté au démarrage (code de sortie %1$d)</string>
+    <string name="torrent_error_start_timeout">TorrServer n’a pas démarré dans les %1$ds</string>
+
+    <!-- Lecteur&#160;: erreurs flux / lien externe -->
+    <string name="player_torrent_starting_engine">Démarrage du moteur P2P…</string>
+    <string name="player_torrent_rebuffer_status">%1$s en mémoire tampon</string>
+    <string name="player_stream_error_invalid_external_url">URL externe invalide</string>
+    <string name="player_stream_error_open_external_link_failed">Impossible d’ouvrir le lien externe</string>
+    <string name="player_stream_error_invalid_url">URL de flux invalide</string>
+    <string name="player_stream_error_missing_content_type">Type de contenu manquant</string>
+
+    <!-- Repository méta&#160;: fragments d’erreur addon -->
+    <string name="meta_error_detail_no_metadata_for_id">n’a renvoyé aucune métadonnée pour cet identifiant</string>
+    <string name="meta_error_detail_addon_unreachable">impossible de joindre le serveur de l’addon</string>
+    <string name="meta_error_detail_addon_connection_failed">la connexion à l’addon a échoué</string>
+    <string name="meta_error_detail_addon_timeout">la requête vers l’addon a expiré</string>
+    <string name="meta_error_detail_addon_cleartext_blocked">l’addon utilise une connexion HTTP non sécurisée bloquée par Android</string>
+    <string name="meta_error_detail_addon_request_failed">la requête vers l’addon a échoué</string>
+
+    <!-- Repository flux&#160;: fragments d’erreur addon + récupération -->
+    <string name="stream_error_detail_no_streams_for_id">n’a renvoyé aucun flux pour cet identifiant</string>
+    <string name="stream_error_detail_addon_unreachable">impossible de joindre le serveur de l’addon</string>
+    <string name="stream_error_detail_addon_connection_failed">la connexion à l’addon a échoué</string>
+    <string name="stream_error_detail_addon_timeout">la requête vers l’addon a expiré</string>
+    <string name="stream_error_detail_addon_cleartext_blocked">l’addon utilise une connexion HTTP non sécurisée bloquée par Android</string>
+    <string name="stream_error_detail_addon_request_failed">la requête vers l’addon a échoué</string>
+    <string name="stream_error_fetch_failed">Échec de la récupération des flux</string>
+
+    <!-- Trakt&#160;: récupération paginée + commentaires -->
+    <string name="trakt_library_error_paginated_fetch_failed">Échec de la requête paginée Trakt (%1$d)</string>
+
+    <!-- Accueil&#160;: erreurs sélecteur de listes (appui long sur poster) -->
+    <string name="home_poster_lists_error_load_failed">Échec du chargement des listes</string>
+    <string name="home_poster_lists_error_update_failed">Échec de la mise à jour des listes</string>
+
+    <!-- Sélection de profil&#160;: messages overlay PIN -->
+    <string name="profile_pin_saved_for_profile">PIN enregistré pour %1$s.</string>
+    <string name="profile_pin_lock_removed_for_profile">Verrouillage PIN supprimé pour %1$s.</string>
+
+    <!-- Trakt&#160;: replis erreur Related / commentaires / éléments de liste -->
+    <string name="trakt_related_error_request_failed">Échec du chargement des contenus similaires Trakt</string>
+    <string name="trakt_comments_error_request_failed">Échec de la requête de commentaires Trakt</string>
+    <string name="trakt_library_error_fetch_list_items">Échec de la récupération des éléments de la liste</string>
 </resources>

@@ -626,7 +626,7 @@ class TraktLibraryService @Inject constructor(
                     sortBy = sortBy?.takeIf { it.isNotBlank() },
                     sortHow = sortHow?.takeIf { it.isNotBlank() }
                 )
-            } ?: throw IllegalStateException("Failed to fetch list items")
+            } ?: throw IllegalStateException(appContext.getString(com.nuvio.tv.R.string.trakt_library_error_fetch_list_items))
         }
         return items.mapNotNull { mapListItem(listKey = listKey, item = it) }
     }
@@ -893,7 +893,7 @@ class TraktLibraryService @Inject constructor(
         while (true) {
             val response = fetch(currentPage)
             if (!response.isSuccessful) {
-                throw IllegalStateException("Trakt paginated fetch failed (${response.code()})")
+                throw IllegalStateException(appContext.getString(com.nuvio.tv.R.string.trakt_library_error_paginated_fetch_failed, response.code()))
             }
             allItems.addAll(response.body().orEmpty())
             val pageCount = response.headers()["X-Pagination-Page-Count"]?.toIntOrNull() ?: 1
