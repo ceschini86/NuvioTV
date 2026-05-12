@@ -521,7 +521,9 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                     )
 
                     _uiState.update { state ->
-                        if (state.continueWatchingItems == initialItems) {
+                        if (initialItems.isEmpty() && state.continueWatchingItems.isNotEmpty()) {
+                            state
+                        } else if (state.continueWatchingItems == initialItems) {
                             state
                         } else {
                             state.copy(continueWatchingItems = initialItems)
@@ -1017,8 +1019,8 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                 )
 
                 _uiState.update { state ->
-                    // Don't overwrite cached CW with empty data while waiting for Trakt.
-                    if (normalItems.isEmpty() && useTraktProgress && items.isEmpty() && state.continueWatchingItems.isNotEmpty()) {
+                    // Don't overwrite cached CW with empty data while sources are still loading.
+                    if (normalItems.isEmpty() && state.continueWatchingItems.isNotEmpty()) {
                         state
                     } else if (state.continueWatchingItems == normalItems) {
                         state
