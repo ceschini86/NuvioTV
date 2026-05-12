@@ -459,6 +459,8 @@
 <string name="sub_forced_lang">Forzati</string>
 <string name="sub_preferred_lang">Lingua preferita</string>
 <string name="sub_secondary_lang">Seconda lingua preferita</string>
+<string name="sub_use_forced_subtitles">Usa sottotitoli forzati</string>
+<string name="sub_use_forced_subtitles_desc">Preferisci i sottotitoli forzati quando l’audio corrisponde alla lingua dei sottotitoli; se non disponibili, non selezionare nulla</string>
     <string name="sub_show_only_preferred_languages">Mostra solo lingue preferite</string>
     <string name="sub_show_only_preferred_languages_desc">Nascondi tutte le altre lingue dei sottotitoli dall\'elenco di selezione</string>
 <string name="sub_organization">Organizzazione sottotitoli</string>
@@ -1088,7 +1090,7 @@
 <string name="pause_back_to_details">Torna ai dettagli</string>
 <string name="pause_as_character">nel ruolo di %1$s</string>
 
-    <!-- NextEpisodeCardOverlay -->
+    <!-- PostPlayOverlay -->
 <string name="next_episode_label">Prossimo Episodio</string>
 <string name="next_episode_finding_source">Recupero sorgenti…</string>
 <string name="next_episode_playing_via">Riproducendo tramite %1$s in %2$ds</string>

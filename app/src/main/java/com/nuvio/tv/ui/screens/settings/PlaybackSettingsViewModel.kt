@@ -178,6 +178,10 @@ class PlaybackSettingsViewModel @Inject constructor(
         playerSettingsDataStore.setSubtitleSecondaryLanguage(language)
     }
 
+    suspend fun setUseForcedSubtitles(enabled: Boolean) {
+        playerSettingsDataStore.setUseForcedSubtitles(enabled)
+    }
+
     suspend fun setSubtitleShowOnlyPreferredLanguages(enabled: Boolean) {
         playerSettingsDataStore.setSubtitleShowOnlyPreferredLanguages(enabled)
     }
@@ -282,6 +286,14 @@ class PlaybackSettingsViewModel @Inject constructor(
 
     suspend fun setStreamAutoPlayTimeoutSeconds(seconds: Int) {
         playerSettingsDataStore.setStreamAutoPlayTimeoutSeconds(seconds)
+    }
+
+    suspend fun setStillWatchingEnabled(enabled: Boolean) {
+        playerSettingsDataStore.setStillWatchingEnabled(enabled)
+    }
+
+    suspend fun setStillWatchingEpisodeThreshold(threshold: Int) {
+        playerSettingsDataStore.setStillWatchingEpisodeThreshold(threshold)
     }
 
     suspend fun setNextEpisodeThresholdMode(mode: NextEpisodeThresholdMode) {

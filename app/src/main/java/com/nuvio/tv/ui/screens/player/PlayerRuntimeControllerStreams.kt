@@ -37,7 +37,6 @@ internal fun PlayerRuntimeController.showEpisodesPanel() {
         )
     }
 
-    
     val desiredSeason = currentSeason ?: _uiState.value.episodesSelectedSeason
     if (_uiState.value.episodesAll.isNotEmpty() && desiredSeason != null) {
         selectEpisodesSeason(desiredSeason)
@@ -370,9 +369,9 @@ private fun PlayerRuntimeController.openExternalStreamInBrowser(
     if (externalUrl.isNullOrBlank()) {
         _uiState.update {
             if (fromEpisodePanel) {
-                it.copy(episodeStreamsError = "Invalid external URL")
+                it.copy(episodeStreamsError = context.getString(com.nuvio.tv.R.string.player_stream_error_invalid_external_url))
             } else {
-                it.copy(sourceStreamsError = "Invalid external URL")
+                it.copy(sourceStreamsError = context.getString(com.nuvio.tv.R.string.player_stream_error_invalid_external_url))
             }
         }
         return true
@@ -404,9 +403,9 @@ private fun PlayerRuntimeController.openExternalStreamInBrowser(
     }.onFailure { error ->
         _uiState.update {
             if (fromEpisodePanel) {
-                it.copy(episodeStreamsError = error.message ?: "Unable to open external link")
+                it.copy(episodeStreamsError = error.message ?: context.getString(com.nuvio.tv.R.string.player_stream_error_open_external_link_failed))
             } else {
-                it.copy(sourceStreamsError = error.message ?: "Unable to open external link")
+                it.copy(sourceStreamsError = error.message ?: context.getString(com.nuvio.tv.R.string.player_stream_error_open_external_link_failed))
             }
         }
     }
@@ -454,7 +453,7 @@ internal fun PlayerRuntimeController.switchToSourceStream(stream: Stream) {
         applyStreamMetadata(stream)
         currentFilename = stream.behaviorHints?.filename ?: navigationArgs.filename
         showStreamSourceIndicator(stream)
-        resetNextEpisodeCardState(clearEpisode = false)
+        resetPostPlayOverlayState(clearEpisode = false)
         launchTorrentSourceStream(stream, infoHash, loadSavedProgress = true)
         persistTorrentStreamForReuse(stream)
         return
@@ -462,7 +461,7 @@ internal fun PlayerRuntimeController.switchToSourceStream(stream: Stream) {
 
     val url = stream.getStreamUrl()
     if (url.isNullOrBlank()) {
-        _uiState.update { it.copy(sourceStreamsError = "Invalid stream URL") }
+        _uiState.update { it.copy(sourceStreamsError = context.getString(com.nuvio.tv.R.string.player_stream_error_invalid_url)) }
         return
     }
 
@@ -511,7 +510,7 @@ internal fun PlayerRuntimeController.switchToSourceStream(stream: Stream) {
         )
     }
     showStreamSourceIndicator(stream)
-    resetNextEpisodeCardState(clearEpisode = false)
+    resetPostPlayOverlayState(clearEpisode = false)
 
     preparePlaybackBeforeStart(
         url = url,
@@ -607,7 +606,6 @@ internal fun PlayerRuntimeController.loadEpisodesIfNeeded() {
             }
 
             NetworkResult.Loading -> {
-                
             }
         }
     }
@@ -624,7 +622,7 @@ internal fun PlayerRuntimeController.buildEpisodeRequestKey(type: String, video:
 internal fun PlayerRuntimeController.loadStreamsForEpisode(video: Video, forceRefresh: Boolean) {
     val type = contentType
     if (type.isNullOrBlank()) {
-        _uiState.update { it.copy(episodeStreamsError = "Missing content type") }
+        _uiState.update { it.copy(episodeStreamsError = context.getString(com.nuvio.tv.R.string.player_stream_error_missing_content_type)) }
         return
     }
 
@@ -734,7 +732,11 @@ internal fun PlayerRuntimeController.reloadEpisodeStreams() {
     }
 }
 
-internal fun PlayerRuntimeController.switchToEpisodeStream(stream: Stream, forcedTargetVideo: Video? = null) {
+internal fun PlayerRuntimeController.switchToEpisodeStream(
+    stream: Stream,
+    forcedTargetVideo: Video? = null,
+    isAutoPlay: Boolean = false
+) {
     if (openExternalStreamInBrowser(stream = stream, fromEpisodePanel = true)) {
         return
     }
@@ -742,6 +744,10 @@ internal fun PlayerRuntimeController.switchToEpisodeStream(stream: Stream, force
     // Torrent streams: delegate to torrent-aware path
     if (stream.isTorrent()) {
         val infoHash = stream.infoHash ?: return
+        consecutiveAutoPlayCount = nextConsecutiveAutoPlayCount(
+            currentCount = consecutiveAutoPlayCount,
+            isAutoPlay = isAutoPlay,
+        )
         stopTorrentStream()
         switchToEpisodeStreamCommon(stream, forcedTargetVideo)
         launchTorrentSourceStream(stream, infoHash, loadSavedProgress = true)
@@ -751,15 +757,22 @@ internal fun PlayerRuntimeController.switchToEpisodeStream(stream: Stream, force
 
     val url = stream.getStreamUrl()
     if (url.isNullOrBlank()) {
-        _uiState.update { it.copy(episodeStreamsError = "Invalid stream URL") }
+        _uiState.update { it.copy(episodeStreamsError = context.getString(com.nuvio.tv.R.string.player_stream_error_invalid_url)) }
         return
     }
+
+    consecutiveAutoPlayCount = nextConsecutiveAutoPlayCount(
+        currentCount = consecutiveAutoPlayCount,
+        isAutoPlay = isAutoPlay,
+    )
 
     // Stop any active torrent before switching to HTTP stream
     stopTorrentStream()
 
     nextEpisodeAutoPlayJob?.cancel()
     nextEpisodeAutoPlayJob = null
+    stillWatchingPromptJob?.cancel()
+    stillWatchingPromptJob = null
 
     flushPlaybackSnapshotForSwitchOrExit()
 
@@ -818,11 +831,8 @@ internal fun PlayerRuntimeController.switchToEpisodeStream(stream: Stream, force
 
             activeSkipInterval = null,
             skipIntervalDismissed = false,
-            showNextEpisodeCard = false,
-            nextEpisodeCardDismissed = false,
-            nextEpisodeAutoPlaySearching = false,
-            nextEpisodeAutoPlaySourceName = null,
-            nextEpisodeAutoPlayCountdownSec = null
+            postPlayMode = null,
+            postPlayDismissedForCurrentEpisode = false,
         )
     }
     showStreamSourceIndicator(stream)
@@ -834,7 +844,6 @@ internal fun PlayerRuntimeController.switchToEpisodeStream(stream: Stream, force
     skipIntervals = emptyList()
     skipIntroFetchedKey = null
     lastActiveSkipType = null
-
 
     fetchParentalGuide(contentId, contentType, currentSeason, currentEpisode)
     fetchSkipIntervals(contentId, currentSeason, currentEpisode)
@@ -855,6 +864,8 @@ private fun PlayerRuntimeController.switchToEpisodeStreamCommon(
 ) {
     nextEpisodeAutoPlayJob?.cancel()
     nextEpisodeAutoPlayJob = null
+    stillWatchingPromptJob?.cancel()
+    stillWatchingPromptJob = null
     flushPlaybackSnapshotForSwitchOrExit()
 
     val targetVideo = forcedTargetVideo
@@ -905,11 +916,8 @@ private fun PlayerRuntimeController.switchToEpisodeStreamCommon(
 
             activeSkipInterval = null,
             skipIntervalDismissed = false,
-            showNextEpisodeCard = false,
-            nextEpisodeCardDismissed = false,
-            nextEpisodeAutoPlaySearching = false,
-            nextEpisodeAutoPlaySourceName = null,
-            nextEpisodeAutoPlayCountdownSec = null
+            postPlayMode = null,
+            postPlayDismissedForCurrentEpisode = false,
         )
     }
     showStreamSourceIndicator(stream)
@@ -945,16 +953,31 @@ internal fun PlayerRuntimeController.showEpisodeStreamPicker(video: Video, force
     loadStreamsForEpisode(video = video, forceRefresh = forceRefresh)
 }
 
-internal fun PlayerRuntimeController.playNextEpisode() {
+internal fun PlayerRuntimeController.playNextEpisode(userInitiated: Boolean = false) {
     val nextVideo = nextEpisodeVideo ?: return
     val type = contentType ?: return
 
     val state = _uiState.value
-    if (state.nextEpisode?.hasAired == false) {
+    val nextInfo = state.nextEpisode ?: return
+    if (!nextInfo.hasAired) {
         return
     }
-    if (state.nextEpisodeAutoPlaySearching || state.nextEpisodeAutoPlayCountdownSec != null) {
+    val activeAutoPlay = state.postPlayMode as? PostPlayMode.AutoPlay
+    if (activeAutoPlay != null &&
+        (activeAutoPlay.searching || activeAutoPlay.countdownSec != null)
+    ) {
         return
+    }
+
+    val episodeForMode = state.nextEpisode ?: nextInfo
+    _uiState.update {
+        it.copy(
+            postPlayMode = PostPlayMode.AutoPlay(
+                nextEpisode = episodeForMode,
+                searching = true,
+            ),
+            postPlayDismissedForCurrentEpisode = false,
+        )
     }
 
     nextEpisodeAutoPlayJob?.cancel()
@@ -967,10 +990,6 @@ internal fun PlayerRuntimeController.playNextEpisode() {
                         playerSettings.streamAutoPlayNextEpisodeEnabled ||
                             playerSettings.streamAutoPlayPreferBingeGroupForNextEpisode
                         )
-            // When the only reason for auto-selecting in MANUAL mode is the
-            // binge-group preference (next-episode auto-play is off), fall
-            // back to the stream picker if no binge-group match is found
-            // instead of picking the first available stream.
             val bingeGroupOnlyManualMode =
                 shouldAutoSelectInManualMode &&
                     !playerSettings.streamAutoPlayNextEpisodeEnabled &&
@@ -978,25 +997,12 @@ internal fun PlayerRuntimeController.playNextEpisode() {
             if (playerSettings.streamAutoPlayMode == StreamAutoPlayMode.MANUAL && !shouldAutoSelectInManualMode) {
                 _uiState.update {
                     it.copy(
-                        showNextEpisodeCard = false,
-                        nextEpisodeCardDismissed = true,
-                        nextEpisodeAutoPlaySearching = false,
-                        nextEpisodeAutoPlaySourceName = null,
-                        nextEpisodeAutoPlayCountdownSec = null
+                        postPlayMode = null,
+                        postPlayDismissedForCurrentEpisode = true,
                     )
                 }
                 showEpisodeStreamPicker(video = nextVideo, forceRefresh = true)
                 return@launch
-            }
-
-            _uiState.update {
-                it.copy(
-                    showNextEpisodeCard = true,
-                    nextEpisodeCardDismissed = false,
-                    nextEpisodeAutoPlaySearching = true,
-                    nextEpisodeAutoPlaySourceName = null,
-                    nextEpisodeAutoPlayCountdownSec = null
-                )
             }
 
             val installedAddons = addonRepository.getInstalledAddons().first()
@@ -1055,7 +1061,7 @@ internal fun PlayerRuntimeController.playNextEpisode() {
 
             val timeoutSeconds = playerSettings.streamAutoPlayTimeoutSeconds
 
-            val innerJob = scope.launch {
+            val innerJob = launch {
                 streamRepository.getStreamsFromAllAddons(
                     type = type,
                     videoId = nextVideo.id,
@@ -1130,35 +1136,36 @@ internal fun PlayerRuntimeController.playNextEpisode() {
             if (streamToPlay != null) {
                 val sourceName = (streamToPlay.name?.takeIf { it.isNotBlank() } ?: streamToPlay.addonName).trim()
                 for (remaining in 3 downTo 1) {
-                    _uiState.update {
-                        it.copy(
-                            showNextEpisodeCard = true,
-                            nextEpisodeCardDismissed = false,
-                            nextEpisodeAutoPlaySearching = false,
-                            nextEpisodeAutoPlaySourceName = sourceName,
-                            nextEpisodeAutoPlayCountdownSec = remaining
+                    _uiState.update { current ->
+                        val episodeForMode = current.nextEpisode ?: nextInfo
+                        current.copy(
+                            postPlayMode = PostPlayMode.AutoPlay(
+                                nextEpisode = episodeForMode,
+                                searching = false,
+                                sourceName = sourceName,
+                                countdownSec = remaining,
+                            ),
+                            postPlayDismissedForCurrentEpisode = false,
                         )
                     }
                     delay(1000)
                 }
                 _uiState.update {
                     it.copy(
-                        showNextEpisodeCard = false,
-                        nextEpisodeCardDismissed = true,
-                        nextEpisodeAutoPlaySearching = false,
-                        nextEpisodeAutoPlaySourceName = null,
-                        nextEpisodeAutoPlayCountdownSec = null
+                        postPlayMode = null,
+                        postPlayDismissedForCurrentEpisode = true,
                     )
                 }
-                switchToEpisodeStream(stream = streamToPlay, forcedTargetVideo = nextVideo)
+                switchToEpisodeStream(
+                    stream = streamToPlay,
+                    forcedTargetVideo = nextVideo,
+                    isAutoPlay = !userInitiated
+                )
             } else {
                 _uiState.update {
                     it.copy(
-                        showNextEpisodeCard = false,
-                        nextEpisodeCardDismissed = true,
-                        nextEpisodeAutoPlaySearching = false,
-                        nextEpisodeAutoPlaySourceName = null,
-                        nextEpisodeAutoPlayCountdownSec = null
+                        postPlayMode = null,
+                        postPlayDismissedForCurrentEpisode = true,
                     )
                 }
                 showEpisodeStreamPicker(
@@ -1171,11 +1178,8 @@ internal fun PlayerRuntimeController.playNextEpisode() {
         } catch (e: Exception) {
             _uiState.update {
                 it.copy(
-                    showNextEpisodeCard = false,
-                    nextEpisodeCardDismissed = true,
-                    nextEpisodeAutoPlaySearching = false,
-                    nextEpisodeAutoPlaySourceName = null,
-                    nextEpisodeAutoPlayCountdownSec = null
+                    postPlayMode = null,
+                    postPlayDismissedForCurrentEpisode = true,
                 )
             }
             showEpisodeStreamPicker(video = nextVideo, forceRefresh = false)

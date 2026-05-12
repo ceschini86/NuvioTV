@@ -981,9 +981,11 @@ private fun EpisodeOptionsDialog(
 fun SeasonOptionsDialog(
     season: Int,
     isFullyWatched: Boolean,
+    hasPreviousSeasons: Boolean = false,
     onDismiss: () -> Unit,
     onMarkSeasonWatched: () -> Unit,
-    onMarkSeasonUnwatched: () -> Unit
+    onMarkSeasonUnwatched: () -> Unit,
+    onMarkPreviousSeasonsWatched: () -> Unit = {}
 ) {
     val primaryFocusRequester = remember { FocusRequester() }
 
@@ -1007,6 +1009,19 @@ fun SeasonOptionsDialog(
             )
         ) {
             Text(if (isFullyWatched) stringResource(R.string.episodes_mark_season_unwatched) else stringResource(R.string.episodes_mark_season_watched))
+        }
+
+        if (hasPreviousSeasons && season > 0) {
+            Button(
+                onClick = onMarkPreviousSeasonsWatched,
+                colors = ButtonDefaults.colors(
+                    containerColor = NuvioColors.BackgroundCard,
+                    contentColor = NuvioColors.TextPrimary
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.episodes_mark_previous_seasons_watched))
+            }
         }
     }
 }

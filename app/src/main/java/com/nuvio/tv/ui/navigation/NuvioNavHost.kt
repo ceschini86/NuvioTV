@@ -24,12 +24,14 @@ import com.nuvio.tv.ui.screens.home.HomeScreen
 import com.nuvio.tv.ui.screens.addon.AddonManagerScreen
 import com.nuvio.tv.ui.screens.addon.CatalogOrderScreen
 import com.nuvio.tv.ui.screens.library.LibraryScreen
+import com.nuvio.tv.ui.screens.player.PlayerExitReason
 import com.nuvio.tv.ui.screens.player.PlayerScreen
 import com.nuvio.tv.ui.screens.plugin.PluginScreen
 import com.nuvio.tv.ui.screens.search.DiscoverScreen
 import com.nuvio.tv.ui.screens.search.SearchScreen
 import com.nuvio.tv.ui.screens.settings.AboutScreen
 import com.nuvio.tv.ui.screens.settings.LayoutSettingsScreen
+import com.nuvio.tv.ui.screens.settings.LicensesAttributionsScreen
 import com.nuvio.tv.ui.screens.settings.PlaybackSettingsScreen
 import com.nuvio.tv.ui.screens.settings.SettingsScreen
 import com.nuvio.tv.ui.screens.settings.SupportersContributorsScreen
@@ -266,10 +268,14 @@ fun NuvioNavHost(
             val returnFocusEpisode by savedState.getStateFlow(
                 "returnFocusEpisode", detailArgs?.getString("returnFocusEpisode")?.toIntOrNull()
             ).collectAsState()
+            val heroRestoreToken by savedState.getStateFlow(
+                "heroRestoreToken", 0
+            ).collectAsState()
             val heroBackdropUrl = detailArgs?.getString("heroBackdropUrl")?.takeIf { it.isNotBlank() }
             MetaDetailsScreen(
                 returnFocusSeason = returnFocusSeason,
                 returnFocusEpisode = returnFocusEpisode,
+                heroRestoreToken = heroRestoreToken,
                 heroBackdropUrl = heroBackdropUrl,
                 onBackPress = {
                     if (returnToHomeOnBack) {
@@ -807,7 +813,7 @@ fun NuvioNavHost(
                         }
                     }
                 },
-                onPlaybackEnded = { nextVideoId, nextSeason, nextEpisode ->
+                onPlaybackEnded = { nextVideoId, nextSeason, nextEpisode, exitReason ->
                     val args = backStackEntry.arguments
                     val contentType = args?.getString("contentType").orEmpty()
                     val contentId = args?.getString("contentId").orEmpty()
@@ -838,10 +844,23 @@ fun NuvioNavHost(
                             popUpTo(Screen.Player.route) { inclusive = true }
                         }
                     } else {
-                        // No next episode — pop back to detail (or home if detail not on stack)
-                        val poppedToDetail = navController.popBackStack(Screen.Detail.route, inclusive = false)
-                        if (!poppedToDetail) {
-                            navController.popBackStack(Screen.Stream.route, inclusive = true)
+                        if (exitReason == PlayerExitReason.StillWatchingPrompt) {
+                            val detailEntry = navController.currentBackStack.value
+                                .lastOrNull { it.destination.route?.startsWith("detail/") == true }
+                            if (detailEntry != null) {
+                                detailEntry.savedStateHandle["returnFocusSeason"] = null
+                                detailEntry.savedStateHandle["returnFocusEpisode"] = null
+                                val token = (detailEntry.savedStateHandle.get<Int>("heroRestoreToken") ?: 0) + 1
+                                detailEntry.savedStateHandle["heroRestoreToken"] = token
+                                navController.popBackStack(Screen.Detail.route, inclusive = false)
+                            } else {
+                                navController.popBackStack(Screen.Stream.route, inclusive = true)
+                            }
+                        } else {
+                            val poppedToDetail = navController.popBackStack(Screen.Detail.route, inclusive = false)
+                            if (!poppedToDetail) {
+                                navController.popBackStack(Screen.Stream.route, inclusive = true)
+                            }
                         }
                     }
                 },
@@ -931,6 +950,9 @@ fun NuvioNavHost(
                 onNavigateToManageProfiles = { navController.navigate(Screen.ManageProfiles.route) },
                 onNavigateToSupportersContributors = {
                     navController.navigate(Screen.SupportersContributors.route)
+                },
+                onNavigateToLicensesAttributions = {
+                    navController.navigate(Screen.LicensesAttributions.route)
                 }
             )
         }
@@ -972,12 +994,21 @@ fun NuvioNavHost(
                 onBackPress = { navController.popBackStack() },
                 onNavigateToSupportersContributors = {
                     navController.navigate(Screen.SupportersContributors.route)
+                },
+                onNavigateToLicensesAttributions = {
+                    navController.navigate(Screen.LicensesAttributions.route)
                 }
             )
         }
 
         composable(Screen.SupportersContributors.route) {
             SupportersContributorsScreen(
+                onBackPress = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.LicensesAttributions.route) {
+            LicensesAttributionsScreen(
                 onBackPress = { navController.popBackStack() }
             )
         }

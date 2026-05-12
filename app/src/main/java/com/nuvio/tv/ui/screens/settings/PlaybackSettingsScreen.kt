@@ -249,6 +249,12 @@ fun PlaybackSettingsContent(
                     coroutineScope.launch { viewModel.setStreamAutoPlayTimeoutSeconds(seconds) }
                 },
                 onSetReuseLastLinkEnabled = { enabled -> coroutineScope.launch { viewModel.setStreamReuseLastLinkEnabled(enabled) } },
+                onSetStillWatchingEnabled = { enabled ->
+                    coroutineScope.launch { viewModel.setStillWatchingEnabled(enabled) }
+                },
+                onSetStillWatchingEpisodeThreshold = { threshold ->
+                    coroutineScope.launch { viewModel.setStillWatchingEpisodeThreshold(threshold) }
+                },
                 onSetShowPlayerLoadingStatus = { enabled -> coroutineScope.launch { viewModel.setShowPlayerLoadingStatus(enabled) } },
                 onSetLoadingOverlayEnabled = { enabled -> coroutineScope.launch { viewModel.setLoadingOverlayEnabled(enabled) } },
                 onSetPauseOverlayEnabled = { enabled -> coroutineScope.launch { viewModel.setPauseOverlayEnabled(enabled) } },
@@ -281,6 +287,7 @@ fun PlaybackSettingsContent(
                 onSetSubtitleSize = { newSize -> coroutineScope.launch { viewModel.setSubtitleSize(newSize) } },
                 onSetSubtitleVerticalOffset = { newOffset -> coroutineScope.launch { viewModel.setSubtitleVerticalOffset(newOffset) } },
                 onSetSubtitleBold = { bold -> coroutineScope.launch { viewModel.setSubtitleBold(bold) } },
+                onSetUseForcedSubtitles = { enabled -> coroutineScope.launch { viewModel.setUseForcedSubtitles(enabled) } },
                 onSetSubtitleShowOnlyPreferredLanguages = { enabled ->
                     coroutineScope.launch { viewModel.setSubtitleShowOnlyPreferredLanguages(enabled) }
                 },

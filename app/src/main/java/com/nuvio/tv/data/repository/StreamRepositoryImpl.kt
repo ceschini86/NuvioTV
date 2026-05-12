@@ -131,7 +131,7 @@ class StreamRepositoryImpl @Inject constructor(
                             attemptedFailures += StreamAttemptFailure(
                                 addonName = addon.displayName,
                                 kind = StreamFailureKind.REQUEST_FAILED,
-                                detail = e.message ?: "the addon request failed"
+                                detail = e.message ?: context.getString(com.nuvio.tv.R.string.stream_error_detail_addon_request_failed)
                             )
                         } finally {
                             completedJobs++
@@ -194,7 +194,7 @@ class StreamRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             Log.e(TAG, "Failed to fetch streams: ${e.message}", e)
-            emit(NetworkResult.Error(e.message ?: "Failed to fetch streams"))
+            emit(NetworkResult.Error(e.message ?: context.getString(com.nuvio.tv.R.string.stream_error_fetch_failed)))
         }
     }
 
@@ -242,7 +242,7 @@ class StreamRepositoryImpl @Inject constructor(
                             val quality = result.quality?.takeIf { it.isNotBlank() }
 
                             // Only show quality in the name field as "Name - resolution"
-                            val qualityLabel = quality ?: "Unknown"
+                            val qualityLabel = quality ?: context.getString(com.nuvio.tv.R.string.stream_quality_unknown)
                             val displayName = buildString {
                                 append(baseName ?: baseTitle ?: scraperName)
                                 if (!toString().contains(qualityLabel)) {
@@ -333,7 +333,7 @@ class StreamRepositoryImpl @Inject constructor(
         val addonResult = addonRepository.fetchAddon(baseUrl)
         val addonName = when (addonResult) {
             is NetworkResult.Success -> addonResult.data.displayName
-            else -> "Unknown"
+            else -> context.getString(com.nuvio.tv.R.string.stream_addon_unknown)
         }
         val addonLogo = when (addonResult) {
             is NetworkResult.Success -> addonResult.data.logo
@@ -425,7 +425,7 @@ class StreamRepositoryImpl @Inject constructor(
         return StreamAttemptFailure(
             addonName = addon.displayName,
             kind = StreamFailureKind.MISSING,
-            detail = "returned no streams for this id"
+            detail = context.getString(com.nuvio.tv.R.string.stream_error_detail_no_streams_for_id)
         )
     }
 
@@ -435,15 +435,15 @@ class StreamRepositoryImpl @Inject constructor(
         }
         val normalizedReason = when {
             error.message.contains("Unable to resolve host", ignoreCase = true) ->
-                "could not reach the addon server"
+                context.getString(com.nuvio.tv.R.string.stream_error_detail_addon_unreachable)
             error.message.contains("Failed to connect", ignoreCase = true) ->
-                "connection to the addon failed"
+                context.getString(com.nuvio.tv.R.string.stream_error_detail_addon_connection_failed)
             error.message.contains("timeout", ignoreCase = true) ->
-                "the addon request timed out"
+                context.getString(com.nuvio.tv.R.string.stream_error_detail_addon_timeout)
             error.message.contains("CLEARTEXT communication", ignoreCase = true) ->
-                "the addon uses an insecure HTTP connection blocked by Android"
+                context.getString(com.nuvio.tv.R.string.stream_error_detail_addon_cleartext_blocked)
             error.message.isBlank() ->
-                "the addon request failed"
+                context.getString(com.nuvio.tv.R.string.stream_error_detail_addon_request_failed)
             else -> error.message.replaceFirstChar { char ->
                 if (char.isLowerCase()) char.titlecase() else char.toString()
             }

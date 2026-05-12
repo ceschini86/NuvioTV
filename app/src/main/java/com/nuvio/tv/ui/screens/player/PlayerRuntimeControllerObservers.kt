@@ -167,7 +167,16 @@ internal fun PlayerRuntimeController.filterToVisibleAddonSubtitles(
     if (!style.showOnlyPreferredLanguages) return subtitles
 
     val preferredTargets = when (PlayerSubtitleUtils.normalizeLanguageCode(style.preferredLanguage)) {
-        "none" -> listOfNotNull(style.secondaryPreferredLanguage?.takeIf { it.isNotBlank() })
+        "none" -> listOfNotNull(
+            style.secondaryPreferredLanguage?.takeIf { it.isNotBlank() },
+            if (style.useForcedSubtitles) {
+                selectedAudioTrackForSubtitleMatching(_uiState.value)
+                    ?.takeIf { selectedAudioMatchesResolvedPreferredAudio(it) }
+                    ?.let { selectedAudioLanguageTarget(it) }
+            } else {
+                null
+            }
+        )
         else -> listOfNotNull(
             style.preferredLanguage,
             style.secondaryPreferredLanguage?.takeIf { it.isNotBlank() }
@@ -175,7 +184,17 @@ internal fun PlayerRuntimeController.filterToVisibleAddonSubtitles(
     }.map { PlayerSubtitleUtils.normalizeLanguageCode(it) }
         .distinct()
 
-    if (preferredTargets.isEmpty()) return emptyList()
+    if (preferredTargets.isEmpty()) {
+        return if (
+            style.useForcedSubtitles &&
+            PlayerSubtitleUtils.normalizeLanguageCode(style.preferredLanguage) == "none" &&
+            selectedAudioTrackForSubtitleMatching(_uiState.value) == null
+        ) {
+            subtitles
+        } else {
+            emptyList()
+        }
+    }
 
     return subtitles.filter { subtitle ->
         preferredTargets.any { target ->
@@ -298,6 +317,8 @@ internal fun PlayerRuntimeController.observeSubtitleSettings() {
             nextEpisodeThresholdModeSetting = settings.nextEpisodeThresholdMode
             nextEpisodeThresholdPercentSetting = settings.nextEpisodeThresholdPercent
             nextEpisodeThresholdMinutesBeforeEndSetting = settings.nextEpisodeThresholdMinutesBeforeEnd
+            stillWatchingEnabledSetting = settings.stillWatchingEnabled
+            stillWatchingEpisodeThresholdSetting = settings.stillWatchingEpisodeThreshold
             val previousMpvHardwareDecodeMode = mpvHardwareDecodeModeSetting
             mpvHardwareDecodeModeSetting = settings.mpvHardwareDecodeMode
             if (isUsingMpvEngine() && previousMpvHardwareDecodeMode != mpvHardwareDecodeModeSetting) {
@@ -324,11 +345,13 @@ internal fun PlayerRuntimeController.observeSubtitleSettings() {
             )
             val subtitlePreferenceChanged =
                 lastSubtitlePreferredLanguage != settings.subtitleStyle.preferredLanguage ||
-                    lastSubtitleSecondaryLanguage != settings.subtitleStyle.secondaryPreferredLanguage
+                    lastSubtitleSecondaryLanguage != settings.subtitleStyle.secondaryPreferredLanguage ||
+                    lastUseForcedSubtitles != settings.subtitleStyle.useForcedSubtitles
             if (subtitlePreferenceChanged) {
                 if (!subtitleDisabledByPersistedPreference && !subtitleAddonRestoredByPersistedPreference) autoSubtitleSelected = false
                 lastSubtitlePreferredLanguage = settings.subtitleStyle.preferredLanguage
                 lastSubtitleSecondaryLanguage = settings.subtitleStyle.secondaryPreferredLanguage
+                lastUseForcedSubtitles = settings.subtitleStyle.useForcedSubtitles
                 tryAutoSelectPreferredSubtitleFromAvailableTracks()
             }
 
@@ -397,6 +420,38 @@ internal fun PlayerRuntimeController.loadSavedProgressFor(season: Int?, episode:
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Suspend variant of [loadSavedProgressFor] that completes the DB read inline
+ * instead of launching a fire-and-forget coroutine.
+ *
+ * This MUST be called **before** [initializePlayer] inside [preparePlaybackBeforeStart]
+ * so that [pendingResumeProgress] is guaranteed to be set by the time ExoPlayer's
+ * `STATE_READY` callback fires.  The fire-and-forget version races against the
+ * player lifecycle and can lose the resume position entirely.
+ */
+internal suspend fun PlayerRuntimeController.loadSavedProgressSuspend(season: Int?, episode: Int?) {
+    if (contentId == null) return
+
+    pendingResumeProgress = null
+    val progress = if (season != null && episode != null) {
+        watchProgressRepository.getEpisodeProgress(contentId, season, episode).firstOrNull()
+    } else {
+        watchProgressRepository.getProgress(contentId).firstOrNull()
+    }
+
+    progress?.let { saved ->
+        if (saved.isInProgress()) {
+            pendingResumeProgress = saved
+            Log.d(
+                PlayerRuntimeController.TAG,
+                "loadSavedProgressSuspend: set pendingResumeProgress " +
+                    "position=${saved.position} duration=${saved.duration} " +
+                    "percent=${saved.progressPercent} S${season}E${episode}"
+            )
         }
     }
 }
@@ -499,7 +554,7 @@ internal fun PlayerRuntimeController.retryCurrentStreamFromStartAfter416() {
         }.onFailure { e ->
             _uiState.update {
                 it.copy(
-                    error = e.toDisplayMessage(),
+                    error = e.toDisplayMessage(context),
                     showLoadingOverlay = false,
                     showPauseOverlay = false
                 )

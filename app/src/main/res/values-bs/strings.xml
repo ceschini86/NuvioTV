@@ -426,6 +426,8 @@
     <string name="sub_forced_lang">Forced</string>
     <string name="sub_preferred_lang">Preferirani Jezik</string>
     <string name="sub_secondary_lang">Sekundarni Preferirani Jezik</string>
+    <string name="sub_use_forced_subtitles">Koristi prisilne titlove</string>
+    <string name="sub_use_forced_subtitles_desc">Daj prednost prisilnim titlovima kada jezik zvuka odgovara jeziku titlova; ako nisu dostupni, ne odabiri ništa</string>
     <string name="sub_show_only_preferred_languages">Prikaži samo preferirane jezike</string>
     <string name="sub_show_only_preferred_languages_desc">Sakrij sve ostale jezike titlova sa liste za odabir</string>
     <string name="sub_organization">Organizacija Titlova</string>
@@ -1034,7 +1036,7 @@
     <string name="pause_back_to_details">Nazad na detalje</string>
     <string name="pause_as_character">kao %1$s</string>
 
-    <!-- NextEpisodeCardOverlay -->
+    <!-- PostPlayOverlay -->
     <string name="next_episode_label">Sljedeća Epizoda</string>
     <string name="next_episode_finding_source">Traženje izvora…</string>
     <string name="next_episode_playing_via">Pokretanje preko %1$s za %2$ds</string>

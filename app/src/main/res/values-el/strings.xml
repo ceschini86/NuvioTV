@@ -547,6 +547,8 @@
     <string name="sub_forced_lang">Εξαναγκασμένος</string>
     <string name="sub_preferred_lang">Προτιμώμενη γλώσσα</string>
     <string name="sub_secondary_lang">Δευτερεύουσα προτιμώμενη γλώσσα</string>
+    <string name="sub_use_forced_subtitles">Χρήση εξαναγκασμένων υποτίτλων</string>
+    <string name="sub_use_forced_subtitles_desc">Προτίμηση εξαναγκασμένων υποτίτλων όταν ο ήχος ταιριάζει με τη γλώσσα υποτίτλων· αν δεν είναι διαθέσιμοι, μην επιλέξετε τίποτα</string>
     <string name="sub_show_only_preferred_languages">Εμφάνιση μόνο προτιμώμενων γλωσσών</string>
     <string name="sub_show_only_preferred_languages_desc">Απόκρυψη όλων των άλλων γλωσσών υποτίτλων από τη λίστα επιλογής</string>
     <string name="sub_organization">Οργάνωση υπότιτλων</string>
@@ -1195,7 +1197,7 @@
     <string name="pause_back_to_details">Επιστροφή σε λεπτομέρειες</string>
     <string name="pause_as_character">ως %1$s</string>
 
-    <!-- NextEpisodeCardOverlay -->
+    <!-- PostPlayOverlay -->
     <string name="next_episode_label">Επόμενο επεισόδιο</string>
     <string name="next_episode_finding_source">Αναζήτηση πηγής…</string>
     <string name="next_episode_playing_via">Παίζει μέσω %1$s σε %2$d δευτ.</string>

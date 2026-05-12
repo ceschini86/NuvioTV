@@ -551,6 +551,8 @@
     <string name="sub_forced_lang">Forçadas</string>
     <string name="sub_preferred_lang">Idioma preferido</string>
     <string name="sub_secondary_lang">Idioma secundário preferido</string>
+    <string name="sub_use_forced_subtitles">Usar legendas forçadas</string>
+    <string name="sub_use_forced_subtitles_desc">Preferir legendas forçadas quando o áudio corresponder ao idioma da legenda; se indisponíveis, não selecionar nada</string>
     <string name="sub_show_only_preferred_languages">Mostrar apenas idiomas preferidos</string>
     <string name="sub_show_only_preferred_languages_desc">Ocultar todos os outros idiomas de legendas da lista de seleção</string>
     <string name="sub_organization">Organização de legendas</string>
@@ -1215,7 +1217,7 @@
     <string name="pause_back_to_details">Voltar para detalhes</string>
     <string name="pause_as_character">como %1$s</string>
 
-    <!-- NextEpisodeCardOverlay -->
+    <!-- PostPlayOverlay -->
     <string name="next_episode_label">Próximo Episódio</string>
     <string name="next_episode_finding_source">Buscando fonte…</string>
     <string name="next_episode_playing_via">Reproduzindo: %1$s em %2$ds</string>
