@@ -168,7 +168,7 @@ fun TraktScreen(
             if (uiState.mode == TraktConnectionMode.CONNECTED) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    text = stringResource(R.string.trakt_connected_as, uiState.username ?: "Trakt user"),
+                    text = stringResource(R.string.trakt_connected_as, uiState.username ?: stringResource(R.string.trakt_user_fallback)),
                     style = MaterialTheme.typography.titleMedium,
                     color = Color(0xFF7CFF9B)
                 )
