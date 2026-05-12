@@ -336,7 +336,9 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                     synchronized(discoveredOlderNextUpItems) {
                         discoveredOlderNextUpItems.removeAll { it.info.contentId !in activeSeedContentIds }
                     }
-                    cwEnrichedNextUpOverlay.keys.removeAll { it !in activeSeedContentIds }
+                    synchronized(cwEnrichedNextUpOverlay) {
+                        cwEnrichedNextUpOverlay.keys.removeAll { it !in activeSeedContentIds }
+                    }
                 }
 
                 debug.logStart(

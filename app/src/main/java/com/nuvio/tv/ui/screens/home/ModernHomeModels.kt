@@ -181,10 +181,10 @@ class ModernCarouselRowBuildCache {
     var continueWatchingUpcomingLabel: String = ""
     var continueWatchingUseLandscapePosters: Boolean = false
     var continueWatchingRow: HeroCarouselRow? = null
-    internal val catalogRows = mutableMapOf<String, ModernCatalogRowBuildCacheEntry>()
-    internal val collectionRows = mutableMapOf<String, ModernCollectionRowBuildCacheEntry>()
+    internal val catalogRows = java.util.concurrent.ConcurrentHashMap<String, ModernCatalogRowBuildCacheEntry>()
+    internal val collectionRows = java.util.concurrent.ConcurrentHashMap<String, ModernCollectionRowBuildCacheEntry>()
     // per-item cache: rowKey -> (itemId -> cached carousel item + source MetaPreview)
-    internal val catalogItemCache = mutableMapOf<String, MutableMap<String, CachedCarouselItem>>()
+    internal val catalogItemCache = java.util.concurrent.ConcurrentHashMap<String, MutableMap<String, CachedCarouselItem>>()
 }
 
 internal data class CachedCarouselItem(
