@@ -28,7 +28,7 @@ internal suspend fun PlayerRuntimeController.startTorrentStream(
     _uiState.update {
         it.copy(
             showLoadingOverlay = true,
-            loadingMessage = "Starting P2P engine...",
+            loadingMessage = context.getString(com.nuvio.tv.R.string.player_torrent_starting_engine),
             loadingProgress = null,
             isTorrentStream = true
         )

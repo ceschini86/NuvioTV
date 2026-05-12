@@ -130,7 +130,7 @@ private fun ConnectionStatusBadge(type: ConnectionType) {
     }
 }
 
-private suspend fun fetchFastComUrls(): List<String> = withContext(Dispatchers.IO) {
+private suspend fun fetchFastComUrls(context: android.content.Context): List<String> = withContext(Dispatchers.IO) {
     // 1. Load fast.com page to find the app JS bundle URL
     val html = (URL("https://fast.com").openConnection() as HttpURLConnection).run {
         connectTimeout = 10_000
@@ -139,7 +139,7 @@ private suspend fun fetchFastComUrls(): List<String> = withContext(Dispatchers.I
         inputStream.bufferedReader().use { it.readText() }.also { disconnect() }
     }
     val scriptPath = Regex("""<script src="(/app[^"]+\.js)"""").find(html)?.groupValues?.get(1)
-        ?: throw Exception("fast.com: script path not found")
+        ?: throw Exception(context.getString(com.nuvio.tv.R.string.network_fast_error_script_path_missing))
 
     // 2. Extract the API token from the JS bundle
     val js = (URL("https://fast.com$scriptPath").openConnection() as HttpURLConnection).run {
@@ -149,7 +149,7 @@ private suspend fun fetchFastComUrls(): List<String> = withContext(Dispatchers.I
         inputStream.bufferedReader().use { it.readText() }.also { disconnect() }
     }
     val token = Regex("""token:"([^"]+)"""").find(js)?.groupValues?.get(1)
-        ?: throw Exception("fast.com: token not found in bundle")
+        ?: throw Exception(context.getString(com.nuvio.tv.R.string.network_fast_error_token_missing))
 
     // 3. Fetch CDN URLs from the speed-test API
     val apiJson = (URL("https://api.fast.com/netflix/speedtest/v2?https=true&token=$token&urlCount=15")
@@ -210,7 +210,7 @@ fun AdvancedSettingsContent(
                 // ── Download: parallel streams from fast.com for 10 s ────────
                 testState = NetworkTestState.TestingDownload
                 val (totalBytes, elapsed) = withContext(Dispatchers.IO) {
-                    val urls = fetchFastComUrls()
+                    val urls = fetchFastComUrls(context)
                     val deadline = System.currentTimeMillis() + 10_000L
                     val startTime = System.currentTimeMillis()
 
