@@ -858,7 +858,10 @@ private class SubtitleOffsetRenderersFactory(
             .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
             .setAudioProcessors(arrayOf(gainAudioProcessor))
             .build()
-        val playbackSpeedAwareAudioSink = PlaybackSpeedAwareAudioSink(baseAudioSink)
+        val playbackSpeedAwareAudioSink = PlaybackSpeedAwareAudioSink(
+            sink = baseAudioSink,
+            forceAudioProcessingPcmProvider = gainAudioProcessor::isGainEnabled
+        )
         playbackSpeedAwareAudioSink.setInitialPlaybackSpeed(playbackSpeedProvider())
         onPlaybackSpeedAwareAudioSinkCreated(playbackSpeedAwareAudioSink)
         return playbackSpeedAwareAudioSink
