@@ -256,9 +256,10 @@ class HomeViewModel @Inject constructor(
         observeStartupAuthNotice()
         viewModelScope.launch {
             profileManager.activeProfileReady.first { it }
-            watchedSeriesStateHolder.loadFromDisk()
             observeLayoutPreferences()
             observeModernHomePresentation()
+            loadContinueWatching()
+            watchedSeriesStateHolder.loadFromDisk()
             observeExternalMetaPrefetchPreference()
             observeContinueWatchingSortMode()
             loadHomeCatalogOrderPreference()
@@ -271,7 +272,6 @@ class HomeViewModel @Inject constructor(
             observeBlurUnwatchedEpisodes()
             observeMemoryOnlyVerticalScroll()
             observeProgressSourceChanges()
-            loadContinueWatching()
             observeCollections()
             observeInstalledAddons()
 
@@ -365,10 +365,15 @@ class HomeViewModel @Inject constructor(
 
     private fun observeContinueWatchingSortMode() {
         viewModelScope.launch {
+            var initial = true
             layoutPreferenceDataStore.continueWatchingSortMode
                 .distinctUntilChanged()
                 .collect { mode ->
                     continueWatchingSortMode = mode
+                    if (initial) {
+                        initial = false
+                        return@collect
+                    }
                     // Clear caches so the new sort is applied immediately on next pipeline run
                     clearAllCwInMemoryCaches()
                 }
@@ -598,7 +603,7 @@ class HomeViewModel @Inject constructor(
             val items = mergeContinueWatchingItems(
                 inProgressItems = inProgressItems,
                 nextUpItems = nextUpItems,
-                mode = continueWatchingSortMode
+                mode = layoutPreferenceDataStore.continueWatchingSortMode.first()
             )
             if (items.isNotEmpty()) {
                 _uiState.update { it.copy(continueWatchingItems = items) }

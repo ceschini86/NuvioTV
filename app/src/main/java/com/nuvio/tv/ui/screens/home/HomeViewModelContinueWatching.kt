@@ -521,7 +521,9 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                     )
 
                     _uiState.update { state ->
-                        if (state.continueWatchingItems == initialItems) {
+                        if (initialItems.isEmpty() && state.continueWatchingItems.isNotEmpty()) {
+                            state
+                        } else if (state.continueWatchingItems == initialItems) {
                             state
                         } else {
                             state.copy(continueWatchingItems = initialItems)
@@ -1017,8 +1019,8 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                 )
 
                 _uiState.update { state ->
-                    // Don't overwrite cached CW with empty data while waiting for Trakt.
-                    if (normalItems.isEmpty() && useTraktProgress && items.isEmpty() && state.continueWatchingItems.isNotEmpty()) {
+                    // Don't overwrite cached CW with empty data while sources are still loading.
+                    if (normalItems.isEmpty() && state.continueWatchingItems.isNotEmpty()) {
                         state
                     } else if (state.continueWatchingItems == normalItems) {
                         state
@@ -1119,16 +1121,14 @@ private fun deduplicateInProgress(items: List<WatchProgress>): List<WatchProgres
 }
 
 private fun shouldTreatAsInProgressForContinueWatching(progress: WatchProgress): Boolean {
-    if (progress.isInProgress()) return true
     if (progress.isCompleted()) return false
+    if (progress.isInProgress() && progress.progressPercentage >= 0.02f) return true
 
-    // Rewatch edge case: a started replay can be below the default 2% "in progress"
-    // threshold, but should still suppress Next Up and appear as resume.
-    val hasStartedPlayback = progress.position > 0L || progress.progressPercent?.let { it > 0f } == true
-    val result = hasStartedPlayback &&
+    val hasStartedPlayback = progress.position > 0L ||
+        progress.progressPercent?.let { it > 0f } == true
+    return hasStartedPlayback &&
         progress.source != WatchProgress.SOURCE_TRAKT_HISTORY &&
         progress.source != WatchProgress.SOURCE_TRAKT_SHOW_PROGRESS
-    return result
 }
 
 private fun shouldUseAsCompletedSeed(progress: WatchProgress): Boolean {
@@ -1563,11 +1563,11 @@ internal fun mergeContinueWatchingItems(
     nextUpItems: List<ContinueWatchingItem.NextUp>,
     mode: ContinueWatchingSortMode = ContinueWatchingSortMode.DEFAULT
 ): List<ContinueWatchingItem> {
-    // Collect ALL in-progress content IDs (not just series) to ensure
-    // release alerts and next-up items never duplicate an in-progress entry.
     val allInProgressIds = inProgressItems
         .asSequence()
-        .map { it.progress.contentId }
+        .map { it.progress }
+        .filter { isSeriesTypeCW(it.contentType) }
+        .map { it.contentId }
         .filter { it.isNotBlank() }
         .toSet()
 
