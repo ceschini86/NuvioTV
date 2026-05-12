@@ -1124,7 +1124,11 @@ private fun shouldTreatAsInProgressForContinueWatching(progress: WatchProgress):
     if (progress.isCompleted()) return false
     if (progress.isInProgress() && progress.progressPercentage >= 0.02f) return true
 
-    return false
+    val hasStartedPlayback = progress.position > 0L ||
+        progress.progressPercent?.let { it > 0f } == true
+    return hasStartedPlayback &&
+        progress.source != WatchProgress.SOURCE_TRAKT_HISTORY &&
+        progress.source != WatchProgress.SOURCE_TRAKT_SHOW_PROGRESS
 }
 
 private fun shouldUseAsCompletedSeed(progress: WatchProgress): Boolean {
