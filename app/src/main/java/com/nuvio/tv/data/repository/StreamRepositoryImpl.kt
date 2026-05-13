@@ -11,7 +11,10 @@ import com.nuvio.tv.data.mapper.toDomain
 import com.nuvio.tv.data.remote.api.AddonApi
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.AddonStreams
+import com.nuvio.tv.domain.model.LocalScraperResult
+import com.nuvio.tv.domain.model.PluginRepository
 import com.nuvio.tv.domain.model.ProxyHeaders
+import com.nuvio.tv.domain.model.ScraperInfo
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.model.StreamBehaviorHints
 import com.nuvio.tv.domain.repository.AddonRepository
@@ -171,7 +174,15 @@ class StreamRepositoryImpl @Inject constructor(
 
                 // Emit results as they arrive
                 for (result in resultChannel) {
-                    accumulatedResults.add(result)
+                    val existingIndex = accumulatedResults.indexOfFirst { it.addonName == result.addonName }
+                    if (existingIndex >= 0) {
+                        val existing = accumulatedResults[existingIndex]
+                        accumulatedResults[existingIndex] = existing.copy(
+                            streams = (existing.streams + result.streams).distinctBy { it.dedupKey() }
+                        )
+                    } else {
+                        accumulatedResults.add(result)
+                    }
                     emit(NetworkResult.Success(accumulatedResults.toList()))
                     Log.d(TAG, "Emitted ${accumulatedResults.size} addon(s), latest: ${result.addonName} with ${result.streams.size} streams")
                 }
@@ -225,61 +236,29 @@ class StreamRepositoryImpl @Inject constructor(
         Log.d(TAG, "Streaming plugins for TMDB: $tmdbId, type: $mediaType")
 
         try {
+            val groupByRepository = pluginManager.groupStreamsByRepository.first()
+            val repositoriesById = if (groupByRepository) {
+                pluginManager.repositories.first().associateBy { it.id }
+            } else {
+                emptyMap()
+            }
+
             // Collect streaming results from each scraper
             pluginManager.executeScrapersStreaming(
                 tmdbId = tmdbId,
                 mediaType = mediaType,
                 season = season,
                 episode = episode
-            ).collect { (scraperName, results) ->
+            ).collect { (scraper, results) ->
                 if (results.isNotEmpty()) {
+                    val addonName = scraper.pluginAddonName(groupByRepository, repositoriesById)
                     val addonStreams = AddonStreams(
-                        addonName = scraperName,
+                        addonName = addonName,
                         addonLogo = null,
-                        streams = results.map { result ->
-                            val baseTitle = result.title.takeIf { it.isNotBlank() }
-                            val baseName = result.name?.takeIf { it.isNotBlank() }
-                            val quality = result.quality?.takeIf { it.isNotBlank() }
-
-                            // Only show quality in the name field as "Name - resolution"
-                            val qualityLabel = quality ?: context.getString(com.nuvio.tv.R.string.stream_quality_unknown)
-                            val displayName = buildString {
-                                append(baseName ?: baseTitle ?: scraperName)
-                                if (!toString().contains(qualityLabel)) {
-                                    append(" - ").append(qualityLabel)
-                                }
-                            }.takeIf { it.isNotBlank() }
-
-                            // Title stays clean — no quality appended
-                            val displayTitle = (baseTitle ?: baseName ?: scraperName)
-                                .takeIf { it.isNotBlank() }
-
-                            Stream(
-                                name = displayName,
-                                title = displayTitle,
-                                url = result.url,
-                                addonName = scraperName,
-                                addonLogo = null,
-                                description = buildDescription(result),
-                                behaviorHints = result.headers?.let { headers ->
-                                    StreamBehaviorHints(
-                                        notWebReady = null,
-                                        bingeGroup = null,
-                                        countryWhitelist = null,
-                                        proxyHeaders = ProxyHeaders(request = headers, response = null)
-                                    )
-                                },
-                                infoHash = result.infoHash,
-                                fileIdx = null,
-                                ytId = null,
-                                externalUrl = null,
-                                quality = quality,
-                                qualityValue = parseQualityValue(quality)
-                            )
-                        }
+                        streams = results.map { result -> result.toPluginStream(scraper, addonName) }
                     )
                     resultChannel.send(addonStreams)
-                    Log.d(TAG, "Streamed ${results.size} results from $scraperName")
+                    Log.d(TAG, "Streamed ${results.size} results from ${scraper.name}")
                 }
             }
         } catch (e: Exception) {
@@ -289,6 +268,54 @@ class StreamRepositoryImpl @Inject constructor(
             onComplete()
         }
     }
+
+    private fun ScraperInfo.pluginAddonName(
+        groupByRepository: Boolean,
+        repositoriesById: Map<String, PluginRepository>
+    ): String {
+        if (!groupByRepository) return name
+        return repositoriesById[repositoryId]?.name?.takeIf { it.isNotBlank() } ?: name
+    }
+
+    private fun LocalScraperResult.toPluginStream(scraper: ScraperInfo, addonName: String): Stream {
+        val baseTitle = title.takeIf { it.isNotBlank() }
+        val baseName = name?.takeIf { it.isNotBlank() }
+        val quality = quality?.takeIf { it.isNotBlank() }
+        val qualityLabel = quality ?: context.getString(com.nuvio.tv.R.string.stream_quality_unknown)
+        val displayName = buildString {
+            append(baseName ?: baseTitle ?: scraper.name)
+            if (!toString().contains(qualityLabel)) {
+                append(" - ").append(qualityLabel)
+            }
+        }.takeIf { it.isNotBlank() }
+        val displayTitle = (baseTitle ?: baseName ?: scraper.name).takeIf { it.isNotBlank() }
+
+        return Stream(
+            name = displayName,
+            title = displayTitle,
+            url = url,
+            addonName = addonName,
+            addonLogo = null,
+            description = buildDescription(this),
+            behaviorHints = headers?.let { headers ->
+                StreamBehaviorHints(
+                    notWebReady = null,
+                    bingeGroup = null,
+                    countryWhitelist = null,
+                    proxyHeaders = ProxyHeaders(request = headers, response = null)
+                )
+            },
+            infoHash = infoHash,
+            fileIdx = null,
+            ytId = null,
+            externalUrl = null,
+            quality = quality,
+            qualityValue = parseQualityValue(quality)
+        )
+    }
+
+    private fun Stream.dedupKey(): String =
+        infoHash?.lowercase() ?: url ?: externalUrl ?: ytId ?: "${addonName}:${name}:${title}"
 
     /**
      * Build a description string from scraper result

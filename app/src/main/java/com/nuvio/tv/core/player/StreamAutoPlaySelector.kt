@@ -12,9 +12,17 @@ object StreamAutoPlaySelector {
         installedOrder: List<String>
     ): List<AddonStreams> {
         if (streams.isEmpty()) return streams
+        if (installedOrder.isEmpty()) return streams
 
-        val (addonEntries, pluginEntries) = streams.partition { it.addonName in installedOrder }
-        val orderedAddons = addonEntries.sortedBy { installedOrder.indexOf(it.addonName) }
+        val addonRankByName = HashMap<String, Int>(installedOrder.size)
+        installedOrder.forEachIndexed { index, addonName ->
+            if (addonName !in addonRankByName) {
+                addonRankByName[addonName] = index
+            }
+        }
+
+        val (addonEntries, pluginEntries) = streams.partition { it.addonName in addonRankByName }
+        val orderedAddons = addonEntries.sortedBy { addonRankByName.getValue(it.addonName) }
         return orderedAddons + pluginEntries
     }
 

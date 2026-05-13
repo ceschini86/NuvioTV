@@ -52,12 +52,12 @@ internal fun PlayerRuntimeController.skipInterval(interval: SkipInterval): Boole
 
 internal fun PlayerRuntimeController.applyAudioAmplification(db: Int) {
     val clampedDb = db.coerceIn(AUDIO_AMPLIFICATION_MIN_DB, AUDIO_AMPLIFICATION_MAX_DB)
-    val wasActive = gainAudioProcessor.isActive()
+    val wasActive = gainAudioProcessor.isGainEnabled()
     gainAudioProcessor.setGainDb(clampedDb)
-    val isActiveNow = gainAudioProcessor.isActive()
+    val isActiveNow = gainAudioProcessor.isGainEnabled()
 
     if (wasActive != isActiveNow && !isUsingMpvEngine()) {
-        // Force ExoPlayer to rebuild the audio pipeline so the processor is correctly added or removed
+        playbackSpeedAwareAudioSink?.notifyAudioProcessingRequirementChanged()
         _exoPlayer?.let { player ->
             player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().build()
         }

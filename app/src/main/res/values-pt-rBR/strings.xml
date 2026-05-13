@@ -186,7 +186,8 @@
     <string name="episodes_mark_unwatched">Marcar como não assistido</string>
     <string name="episodes_mark_season_watched">Marcar temporada como assistida</string>
     <string name="episodes_mark_season_unwatched">Marcar temporada como não assistida</string>
-    <string name="episodes_mark_previous_watched">Marcar temporadas anteriores como assistidas</string>
+    <string name="episodes_mark_previous_watched">Marcar episódios anteriores desta temporada como assistidos</string>
+    <string name="episodes_mark_previous_seasons_watched">Marcar temporadas anteriores como assistidas</string>
     <string name="episodes_play">Assistir</string>
     <string name="episodes_open_comments">Ver comentários do episódio</string>
     <string name="play_manually">Assistir manualmente</string>
@@ -203,6 +204,7 @@
     <string name="detail_all_episodes_watched">Todos os episódios já foram assistidos</string>
     <string name="detail_no_watched_episodes">Nenhum episódio assistido nesta temporada</string>
     <string name="detail_all_previous_watched">Todos os episódios anteriores já foram assistidos</string>
+    <string name="detail_all_previous_seasons_watched">Todas as temporadas anteriores já assistidas</string>
     <string name="detail_marked_episodes_watched">%1$d episódios marcados como assistidos</string>
     <string name="detail_marked_episodes_unwatched">%1$d episódios desmarcados</string>
     <string name="detail_marked_previous_watched">%1$d episódios anteriores marcados</string>
@@ -305,6 +307,13 @@
     <string name="appearance_subtitle">Escolha o tema, fonte e idioma</string>
     <string name="appearance_color_theme">Tema de Cores</string>
     <string name="appearance_color_theme_subtitle">Escolha a cor de destaque usada no aplicativo</string>
+    <string name="theme_color_crimson">Carmesim</string>
+    <string name="theme_color_ocean">Oceano</string>
+    <string name="theme_color_violet">Violeta</string>
+    <string name="theme_color_emerald">Esmeralda</string>
+    <string name="theme_color_amber">Âmbar</string>
+    <string name="theme_color_rose">Rosa</string>
+    <string name="theme_color_white">Branco</string>
     <string name="appearance_amoled_mode">Modo AMOLED</string>
     <string name="appearance_amoled_mode_subtitle">Usar preto puro no plano de fundo do aplicativo</string>
     <string name="appearance_amoled_surfaces_mode">Superfícies em Preto Puro</string>
@@ -324,6 +333,29 @@
     <string name="about_privacy_policy_subtitle">Ler nossa política de privacidade</string>
     <string name="about_supporters_contributors">Apoiadores &amp; Colaboradores</string>
     <string name="about_supporters_contributors_subtitle">Reconhecimento e créditos do projeto</string>
+    <string name="about_licenses_attributions">Licenças e Atribuições</string>
+    <string name="about_licenses_attributions_subtitle">Fontes de dados, agradecimentos e licenças Android</string>
+    <string name="licenses_attributions_title">Licenças e Atribuições</string>
+    <string name="licenses_attributions_subtitle">Provedores de dados, créditos de serviços e licenças de reprodução Android usadas pelo Nuvio TV.</string>
+    <string name="licenses_attributions_section_app">LICENÇA DO APP</string>
+    <string name="licenses_attributions_section_data">DADOS e SERVIÇOS</string>
+    <string name="licenses_attributions_section_playback">LICENÇAS DE REPRODUÇÃO ANDROID</string>
+    <string name="licenses_attributions_nuvio_title">Nuvio TV</string>
+    <string name="licenses_attributions_nuvio_body">O código-fonte e os termos de licença estão disponíveis no repositório do projeto. Licenciado sob a GNU General Public License v3.0.</string>
+    <string name="licenses_attributions_tmdb_title">The Movie Database (TMDB)</string>
+    <string name="licenses_attributions_tmdb_body">O Nuvio utiliza a API do TMDB para metadados de filmes e séries, artes, trailers, elenco, detalhes de produção, coleções e recomendações. Este produto usa a API do TMDB, mas não é endossado ou certificado pelo TMDB.</string>
+    <string name="licenses_attributions_trakt_title">Trakt</string>
+    <string name="licenses_attributions_trakt_body">O Nuvio conecta-se ao Trakt para autenticação de contas, histórico de assistidos, sincronização de progresso, dados de biblioteca, avaliações, listas e comentários. O Nuvio não é afiliado nem endossado pelo Trakt.</string>
+    <string name="licenses_attributions_mdblist_title">MDBList</string>
+    <string name="licenses_attributions_mdblist_body">O Nuvio utiliza o MDBList para avaliações e dados de provedores de pontuação externa. O Nuvio não é afiliado nem endossado pelo MDBList.</string>
+    <string name="licenses_attributions_introdb_title">IntroDB</string>
+    <string name="licenses_attributions_introdb_body">O Nuvio utiliza a API do IntroDB para introduções, recaps, créditos e marcações de prévias fornecidas pela comunidade, usadas nos controles de pular. O Nuvio não é afiliado nem endossado pelo IntroDB.</string>
+    <string name="licenses_attributions_imdb_title">IMDb Conjuntos de Dados Não-Comerciais</string>
+    <string name="licenses_attributions_imdb_body">O Nuvio utiliza conjuntos de dados não-comerciais do IMDb, incluindo title.ratings.tsv.gz, para avaliações e contagem de votos do IMDb. Informações cortesia do IMDb (https://www.imdb.com). Usado com permissão. Os dados do IMDb são para uso pessoal e não-comercial sob os termos do IMDb.</string>
+    <string name="licenses_attributions_exoplayer_title">AndroidX Media3 ExoPlayer 1.8.0</string>
+    <string name="licenses_attributions_exoplayer_body">Usado como motor de reprodução Android. Licenciado sob a Apache License, Versão 2.0.</string>
+    <string name="licenses_attributions_libmpv_title">libmpv / libmpv-android</string>
+    <string name="licenses_attributions_libmpv_body">Usado como motor de reprodução Android. O wrapper libmpv-android é licenciado sob a licença MIT; mpv/libmpv e componentes nativos incluídos mantêm seus termos de licença originais.</string>
         
     <!-- SettingsScreen categories -->3
     <string name="settings_experience">Experiência</string>
@@ -346,7 +378,60 @@
     <string name="settings_advanced">Avançado</string>
     <string name="settings_advanced_subtitle">Desempenho, navegação, cache e diagnóstico</string>
     <string name="experience_mode_essential">Essencial</string>
+    <string name="experience_mode_advanced">Avançado</string>
+    <string name="experience_mode_choose_title">Escolha sua experiência Nuvio</string>
+    <string name="experience_mode_choose_subtitle">Simples ou completo, mude a qualquer hora</string>
+    <string name="experience_mode_essential_card_subtitle">Configuração básica, add-ons e Trakt</string>
+    <string name="experience_mode_advanced_card_subtitle">Configurações, layout, catálogo e diagnósticos</string>
     <string name="experience_mode_group_title">Modo de experiência</string>
+        <string name="essential_addon_continue_for_now">Continuar por enquanto</string>
+    <string name="essential_playback_basics">Reprodução básica</string>
+    <string name="essential_subtitles_and_audio">Legendas e áudio</string>
+    <string name="essential_stream_selection">Seleção de stream</string>
+    <string name="stream_auto_play_first_stream">Primeiro stream</string>
+    <string name="stream_auto_play_manual_short">Manual</string>
+    <string name="stream_auto_play_smart_match">Correspondência inteligente</string>
+    <string name="essential_subtitle_language">Idioma da legenda</string>
+    <string name="essential_audio_language">Idioma do áudio</string>
+    <string name="audio_lang_media_default">Padrão da mídia</string>
+    <string name="essential_playback_header_title">Reprodução</string>
+    <string name="essential_playback_header_subtitle">Reprodução simples, legenda, áudio e P2P</string>
+    <string name="essential_stream_selection_subtitle">Escolha manual ou auto do primeiro stream</string>
+    <string name="essential_autoplay_next_episode">Auto reproduzir próximo episódio</string>
+    <string name="essential_autoplay_next_episode_subtitle">Ir ao próximo episódio após terminar</string>
+    <string name="essential_p2p_streams">Streams P2P</string>
+    <string name="essential_p2p_streams_subtitle">Permitir fontes P2P</string>
+    <string name="essential_subtitle_language_subtitle">Idioma preferido da legenda</string>
+    <string name="essential_audio_language_subtitle">Idioma preferido do áudio</string>
+    <!-- Account / sign-in error messages -->
+    <string name="account_error_incorrect_pin">PIN incorreto</string>
+    <string name="account_error_sync_code_expired">Código expirado</string>
+    <string name="account_error_invalid_sync_code">Código inválido</string>
+    <string name="account_error_sync_code_not_found">Código não encontrado</string>
+    <string name="account_error_device_already_linked">Dispositivo já vinculado</string>
+    <string name="account_error_generic_retry">Erro. Tente novamente</string>
+    <string name="account_error_invalid_credentials">Email ou senha incorretos</string>
+    <string name="account_error_email_not_confirmed">Confirme seu email primeiro</string>
+    <string name="account_error_email_already_registered">Email já registrado</string>
+    <string name="account_error_invalid_email">Digite um email válido</string>
+    <string name="account_error_password_too_short">Senha muito curta</string>
+    <string name="account_error_password_too_weak">Senha muito fraca</string>
+    <string name="account_error_signup_disabled">Cadastro desativado</string>
+    <string name="account_error_rate_limited">Muitas tentativas. Tente depois</string>
+    <string name="account_error_qr_login_expired">Login QR expirado</string>
+    <string name="account_error_invalid_qr_login">Código QR inválido</string>
+    <string name="account_error_qr_login_other_device">QR solicitado em outro dispositivo</string>
+    <string name="account_error_qr_login_outdated">Serviço QR desatualizado</string>
+    <string name="account_error_qr_login_missing_setup">Configuração QR ausente</string>
+    <string name="account_error_qr_login_misconfigured">URL QR mal configurada</string>
+    <string name="account_error_qr_login_invalid_request">Solicitação QR inválida</string>
+    <string name="account_error_no_internet">Sem conexão</string>
+    <string name="account_error_connection_timeout">Tempo de conexão esgotado</string>
+    <string name="account_error_connection_refused">Servidor não responde</string>
+    <string name="account_error_not_authenticated">Faça login primeiro</string>
+    <string name="account_error_service_unavailable">Serviço indisponível</string>
+    <string name="account_error_invalid_request">Solicitação inválida</string>
+    <string name="account_error_unexpected">Erro inesperado</string>
     <string name="experience_mode_switch_to_essential">Mudar para Essencial</string>
     <string name="experience_mode_switch_to_essential_subtitle">Oculta as telas de configuração avançada sem alterar seus ajustes salvos.</string>
     <string name="experience_mode_switch_to_advanced">Mudar para Avançado</string>
@@ -546,56 +631,61 @@
     <string name="audio_decoder_controls">Define uso de hardware ou software</string>
     
     <!-- PlaybackSubtitleSettings -->
-    <string name="sub_section">Legendas</string>
-    <string name="sub_not_set">Não configurado</string>
+        <string name="sub_section">Legendas</string>
+    <string name="sub_not_set">Não definido</string>
     <string name="sub_forced_lang">Forçadas</string>
     <string name="sub_preferred_lang">Idioma preferido</string>
-    <string name="sub_secondary_lang">Idioma secundário preferido</string>
+    <string name="sub_secondary_lang">Idioma secundário</string>
     <string name="sub_use_forced_subtitles">Usar legendas forçadas</string>
-    <string name="sub_use_forced_subtitles_desc">Preferir legendas forçadas quando o áudio corresponder ao idioma da legenda; se indisponíveis, não selecionar nada</string>
-    <string name="sub_show_only_preferred_languages">Mostrar apenas idiomas preferidos</string>
-    <string name="sub_show_only_preferred_languages_desc">Ocultar todos os outros idiomas de legendas da lista de seleção</string>
+    <string name="sub_use_forced_subtitles_desc">Preferir forçadas se áudio igual</string>
+    <string name="sub_show_only_preferred_languages">Mostrar só idiomas preferidos</string>
+    <string name="sub_show_only_preferred_languages_desc">Ocultar outros idiomas de legenda</string>
     <string name="sub_organization">Organização de legendas</string>
     <string name="sub_size">Tamanho</string>
     <string name="sub_vertical_offset">Altura da legenda</string>
     <string name="sub_bold">Negrito</string>
-    <string name="sub_bold_sub">Usar fonte em negrito nas legendas</string>
+    <string name="sub_bold_sub">Usar fonte em negrito</string>
     <string name="sub_text_color">Cor do texto</string>
-    <string name="sub_bg_color">Cor do fundo</string>
+    <string name="sub_bg_color">Cor de fundo</string>
     <string name="sub_outline">Contorno</string>
-    <string name="sub_outline_sub">Adicionar contorno ao texto para melhor leitura</string>
+    <string name="sub_outline_sub">Adicionar contorno ao texto</string>
     <string name="sub_outline_color">Cor do contorno</string>
-    <string name="sub_advanced_section">Renderização Avançada</string>
+    <string name="sub_advanced_section">Renderização avançada</string>
     <string name="sub_libass">Usar libass para ASS/SSA</string>
-    <string name="sub_libass_sub">Experimental: renderização avançada ASS/SSA (estilos, posicionamento e animações).</string>
+    <string name="sub_libass_sub">Experimental: estilos e animações ASS/SSA</string>
     <string name="sub_libass_mode">Modo de renderização Libass</string>
     <string name="sub_mode_overlay_gl">Sobreposição OpenGL (Recomendado)</string>
-    <string name="sub_mode_overlay_gl_sub">Melhor com HDR. Renderiza legendas em segundo plano.</string>
+    <string name="sub_mode_overlay_gl_sub">Melhor com HDR, renderiza em segundo plano</string>
     <string name="sub_mode_overlay_canvas">Sobreposição Canvas</string>
     <string name="sub_mode_effects_gl">Efeitos OpenGL</string>
-    <string name="sub_mode_effects_gl_sub">Suporte a animações pelo Media3. Mais rápido que Canvas.</string>
+    <string name="sub_mode_effects_gl_sub">Animações Media3, mais rápido que Canvas</string>
     <string name="sub_mode_effects_canvas">Efeitos Canvas</string>
-    <string name="sub_mode_effects_canvas_sub">Suporte a animações pelo Media3 com renderização Canvas.</string>
+    <string name="sub_mode_effects_canvas_sub">Animações Media3 com Canvas</string>
     <string name="sub_mode_standard">Padrão (Cues)</string>
-    <string name="sub_mode_standard_sub">Renderização básica sem animações. Máxima compatibilidade.</string>
+    <string name="sub_mode_standard_sub">Renderização básica sem animações</string>
     <string name="sub_org_none">Nenhuma (ordem padrão)</string>
     <string name="sub_org_by_lang">Por idioma</string>
     <string name="sub_org_by_addon">Por addon</string>
-    <string name="sub_org_none_desc">Mostra legendas na ordem fornecida pelos addons.</string>
-    <string name="sub_org_by_lang_desc">Agrupar legendas por idioma.</string>
-    <string name="sub_org_by_addon_desc">Agrupar legendas pela fonte (addon).</string>
-    <string name="sub_startup_mode_title">Carregamento de Legendas</string>
+    <string name="sub_org_none_desc">Mostrar na ordem padrão dos addons</string>
+    <string name="sub_org_by_lang_desc">Agrupar por idioma</string>
+    <string name="sub_org_by_addon_desc">Agrupar por addon</string>
+    <string name="sub_startup_mode_title">Carregamento de legendas</string>
     <string name="sub_startup_mode_fast">Início rápido</string>
     <string name="sub_startup_mode_preferred">Idiomas preferidos</string>
     <string name="sub_startup_mode_all">Todas as legendas</string>
-    <string name="sub_startup_mode_fast_desc">Início imediato; selecionar legendas pode recarregar o player.</string>
-    <string name="sub_startup_mode_preferred_desc">Busca legendas dos idiomas preferidos antes de iniciar.</string>
-    <string name="sub_startup_mode_all_desc">Busca todas as legendas antes de iniciar. Início mais lento.</string>
+    <string name="sub_startup_mode_fast_desc">Início imediato, pode recarregar player</string>
+    <string name="sub_startup_mode_preferred_desc">Busca idiomas preferidos antes de iniciar</string>
+    <string name="sub_startup_mode_all_desc">Busca todas antes de iniciar, mais lento</string>
 
     <!-- PlaybackAutoPlaySettings -->
     <string name="autoplay_reuse_last_link">Reutilizar último link</string>
     <string name="autoplay_reuse_last_link_sub">Use o último link válido se o cache estiver ativo.</string>
     <string name="autoplay_last_link_cache">Duração do cache do link</string>
+    <string name="cache_duration_hour_one">%1$d hora</string>
+    <string name="cache_duration_hour_other">%1$d horas</string>
+    <string name="cache_duration_day_one">%1$d dia</string>
+    <string name="cache_duration_day_other">%1$d dias</string>
+    <string name="cache_duration_days_hours">%1$dd %2$dh</string>
     <string name="autoplay_mode_manual">Manual (escolher fonte)</string>
     <string name="autoplay_mode_first">Reproduzir automaticamente a primeira fonte</string>
     <string name="autoplay_mode_regex">Reprodução Automática pelo regex</string>
@@ -669,8 +759,14 @@
     <string name="layout_classic_focus_gradient_sub">Mescla cores da arte na lateral do Visual Clássico</string>
     <string name="layout_show_hero">Mostrar Destaque</string>
     <string name="layout_show_hero_sub">Exiba o banner de destaque no topo da home.</string>
-    <string name="layout_show_discover">Mostrar "Descobrir" na busca</string>
-    <string name="layout_show_discover_sub">Exiba sugestões quando a busca estiver vazia.</string>
+    <string name="layout_show_discover">Mostrar/Ocultar Descobrir</string>
+    <string name="layout_show_discover_sub">Adiciona seção Descobrir para navegação</string>
+    <string name="layout_discover_location_action">Local do Descobrir</string>
+    <string name="layout_discover_location_dialog_title">Local do Descobrir</string>
+    <string name="layout_discover_location_in_search">Mostrar na Busca</string>
+    <string name="layout_discover_location_in_search_desc">Descobrir aparece dentro da aba Busca</string>
+    <string name="layout_discover_location_in_sidebar">Mostrar no Painel Lateral</string>
+    <string name="layout_discover_location_in_sidebar_desc">Descobrir terá item próprio no painel lateral</string>
     <string name="layout_poster_labels">Títulos nos pôsteres</string>
     <string name="layout_poster_labels_sub">Exiba os títulos abaixo das imagens e grades.</string>
     <string name="layout_addon_name">Nome do addon</string>
@@ -693,6 +789,12 @@
     <string name="layout_next_up_furthest_episode_sub">Usa o episódio mais avançado. Desative para rever.</string>
     <string name="layout_show_unaired_next_up">Mostrar episódios não lançados</string>
     <string name="layout_show_unaired_next_up_sub">Exibe futuros episódios no Continuar Assistindo</string>
+    <string name="layout_cw_sort_mode">Ordem de exibição</string>
+    <string name="layout_cw_sort_mode_sub">Como organizar Continuar Assistindo</string>
+    <string name="layout_cw_sort_default">Padrão</string>
+    <string name="layout_cw_sort_default_desc">Ordenar todos por mais recentes</string>
+    <string name="layout_cw_sort_streaming">Estilo streaming</string>
+    <string name="layout_cw_sort_streaming_desc">Lançados primeiro, futuros no fim</string>
     <string name="layout_trailer_button">Botão de Trailer</string>
     <string name="layout_trailer_button_sub">Exiba o botão nos detalhes, se disponível.</string>
     <string name="layout_prefer_external_meta">Priorizar metadados externos</string>
@@ -940,6 +1042,7 @@
     <string name="profile_addons">addons</string>
     <string name="profile_plugins">plugins</string>
     <string name="profile_choose_avatar">Escolher Avatar</string>
+    <string name="profile_custom_avatar_web_panel_note">URLs de avatar personalizados podem ser configurados pelo painel web do Nuvio.</string>
     <string name="profile_avatar_none_selected">Nenhum avatar selecionado</string>
     <string name="profile_avatar_focus_hint">Selecione um avatar para ver o nome.</string>
     <string name="profile_avatar_category_all">Todos</string>
@@ -985,8 +1088,16 @@
     <string name="profile_pin_overlay_forgot_hint">Esqueceu o PIN? Redefina-o pelo site do Nuvio na sua conta.</string>
     <string name="profile_pin_overlay_back_hint">Pressione "Voltar" para cancelar.</string>
 
-    
-    <!-- AddonManagerScreen -->
+   
+     <!-- Essential addon setup wizard -->
+    <string name="essential_addon_setup_title">Configurar add-ons</string>
+    <string name="essential_addon_setup_subtitle">Instale um add-on para começar a assistir. Você pode adicionar mais depois em Addons.</string>
+    <string name="essential_addon_show_qr">Mostrar QR</string>
+    <!-- Collection editor fallbacks -->
+    <string name="collection_editor_no_trakt_lists_found">Nenhuma lista Trakt encontrada</string>
+    <string name="collection_editor_untitled_folder">Sem título</string>
+    <string name="collection_editor_untitled_collection">Coleção sem título</string>
+     <!-- AddonManagerScreen -->
     <string name="addon_title">Addons</string>
     <string name="addon_readonly_notice">Estes addons pertencem ao perfil principal e não podem ser alterados.</string>
     <string name="addon_install_title">Instalar addon</string>
@@ -1224,6 +1335,14 @@
     <string name="next_episode_play">Reproduzir</string>
     <string name="next_episode_unaired">Ainda não estreou</string>
     <string name="next_episode_not_aired_yet">O próximo episódio ainda não foi exibido</string>
+    <string name="still_watching_title">Você ainda está assistindo?</string>
+    <string name="still_watching_continue">Reproduzir</string>
+    <string name="still_watching_exit">Sair</string>
+    <string name="still_watching_countdown">Parando em %1$d</string>
+    <string name="still_watching_setting_title">Você ainda está assistindo?</string>
+    <string name="still_watching_setting_sub">Aviso após episódios auto-reproduzidos seguidos</string>
+    <string name="still_watching_threshold_title">Limite de episódios</string>
+    <string name="still_watching_threshold_sub">Número de episódios auto-reproduzidos antes do aviso</string>
     <string name="skip_intro">Pular Abertura</string>
     <string name="skip_ending">Pular Encerramento</string>
     <string name="skip_recap">Pular Resumo</string>
@@ -1535,7 +1654,7 @@
     <string name="search_no_results_title">Nenhum resultado</string>
     <string name="search_no_results_subtitle">Tente buscar com palavras diferentes</string>
     <string name="discover_disabled_title">Descobrir desativado</string>
-    <string name="discover_disabled_subtitle">Ative o recurso Descobrir nas configurações</string>
+    <string name="discover_disabled_subtitle">Ative o Descobrir nas configurações de Layout</string>
 
     <!-- Library -->
     <string name="library_list_create_dialog_title">Criar Lista</string>
@@ -1775,6 +1894,8 @@
     <string name="collections_editor_tmdb_mode_public_list">Lista Pública</string>
     <string name="collections_editor_tmdb_mode_production">Produção</string>
     <string name="collections_editor_tmdb_mode_network">Rede/Canal</string>
+    <string name="collections_editor_tmdb_mode_person">Pessoa</string>
+    <string name="collections_editor_tmdb_mode_director">Diretor</string>
     <string name="collections_editor_tmdb_mode_custom">Personalizado</string>
     <string name="collections_editor_tmdb_person_credits">Créditos de Pessoa</string>
     <string name="collections_editor_tmdb_director_credits">Créditos de Diretor</string>
@@ -1784,11 +1905,15 @@
     <string name="collections_editor_tmdb_help_production">Busque pelo nome do estúdio ou cole o ID/URL de uma empresa do TMDB para adicionar diretamente.</string>
     <string name="collections_editor_tmdb_help_network">Insira o ID de uma rede. Redes comuns estão disponíveis em Predefinições e filtros rápidos.</string>
     <string name="collections_editor_tmdb_help_collection">Busque pelo nome de uma coleção de filmes ou cole o ID da coleção do TMDB.</string>
+    <string name="collections_editor_tmdb_help_person">Digite um ID ou URL de pessoa no TMDB para criar uma linha a partir dos créditos do elenco.</string>
+    <string name="collections_editor_tmdb_help_director">Digite um ID ou URL de pessoa no TMDB para criar uma linha a partir dos créditos de direção.</string>
     <string name="collections_editor_tmdb_help_discover">Crie uma fileira dinâmica do TMDB usando filtros opcionais. Deixe os campos vazios quando não precisar de um filtro.</string>
     <string name="collections_editor_tmdb_search_helper">Exemplos: Marvel Studios, 420, ou https://www.themoviedb.org/company/420.</string>
     <string name="collections_editor_tmdb_collection_helper">Exemplo: Star Wars Collection, Harry Potter Collection, ou a URL da coleção.</string>
     <string name="collections_editor_tmdb_network_helper">Exemplos de IDs: Netflix 213, HBO 49, Disney+ 2739.</string>
     <string name="collections_editor_tmdb_list_helper">Exemplo: https://www.themoviedb.org/list/8504994 ou 8504994.</string>
+    <string name="collections_editor_tmdb_person_id">ID da pessoa</string>
+    <string name="collections_editor_tmdb_person_helper">Exemplo: https://www.themoviedb.org/person/31-tom-hanks ou 31.</string>
     <string name="collections_editor_tmdb_title_helper">Exibido como o nome da fileira/aba. Se estiver em branco, o Nuvio criará um baseado na fonte.</string>
     <string name="collections_editor_tmdb_quick_genres">Gêneros rápidos</string>
     <string name="collections_editor_tmdb_quick_languages">Idiomas rápidos</string>
@@ -1845,6 +1970,7 @@
     <string name="collections_editor_tmdb_placeholder_collection">10 para Star Wars Collection</string>
     <string name="collections_editor_tmdb_placeholder_company">Marvel Studios, 420, ou URL da empresa</string>
     <string name="collections_editor_tmdb_placeholder_network">213 para Netflix, 49 para HBO, 2739 para Disney+</string>
+    <string name="collections_editor_tmdb_person_placeholder">31 para Tom Hanks, ou URL da pessoa</string>
     <string name="collections_editor_trakt_id_placeholder">https://trakt.tv/lists/123456 ou 123456</string>
     <string name="collections_editor_url_short_placeholder">https://...</string>
     <string name="collections_editor_tmdb_genres_movie_placeholder">28,12</string>
@@ -1904,6 +2030,8 @@
     <string name="collection_editor_folder_count_other">%1$d itens</string>
     <string name="collections_editor_tmdb_movie_title_placeholder">Filmes da Marvel, Originais Netflix, Pixar</string>
     <string name="collections_editor_tmdb_tv_title_placeholder">Melhores Filmes de Ação, Doramas Coreanos, Animações de 2024</string>
+    <string name="collections_editor_tmdb_person_title_placeholder">Filmes de Tom Hanks, Atores favoritos</string>
+    <string name="collections_editor_tmdb_director_title_placeholder">Filmes de Christopher Nolan, Diretores favoritos</string>
     <string name="collections_editor_tmdb_keywords_placeholder">9715 para super-herói</string>
     <string name="collections_editor_tmdb_companies_placeholder">420 para Marvel Studios</string>
     <string name="collections_editor_tmdb_networks_placeholder">213 para Netflix</string>
@@ -1911,5 +2039,234 @@
     <string name="cast_error_load_details_for">Não foi possível carregar detalhes para %1$s</string>
     <string name="tmdb_entity_error_load_named">Não foi possível carregar %1$s</string>
     <string name="tmdb_entity_error_load">Não foi possível carregar a entidade TMDB</string>
-    
+
+    <!-- Catalog see-all fallback -->
+    <string name="catalog_see_all_title_fallback">Catálogo</string>
+
+    <!-- Collection editor: emoji categories -->
+    <string name="collections_editor_emoji_category_streaming">Streaming</string>
+    <string name="collections_editor_emoji_category_genres">Gêneros</string>
+    <string name="collections_editor_emoji_category_sports">Esportes</string>
+    <string name="collections_editor_emoji_category_music">Música</string>
+    <string name="collections_editor_emoji_category_nature">Natureza</string>
+    <string name="collections_editor_emoji_category_animals">Animais</string>
+    <string name="collections_editor_emoji_category_food">Comida</string>
+    <string name="collections_editor_emoji_category_travel">Viagem</string>
+    <string name="collections_editor_emoji_category_people">Pessoas</string>
+    <string name="collections_editor_emoji_category_objects">Objetos</string>
+    <string name="collections_editor_emoji_category_flags">Bandeiras</string>
+    <string name="collections_editor_emoji_category_symbols">Símbolos</string>
+    <!-- Collection editor: TMDB picker placeholders + genres -->
+    <string name="collections_editor_tmdb_network_placeholder_example">213 para Netflix, 49 para HBO, 2739 para Disney+</string>
+    <string name="collections_editor_tmdb_collection_placeholder_example">10 para Coleção Star Wars</string>
+    <string name="collections_editor_tmdb_company_placeholder_example">Marvel Studios, 420 ou URL da empresa</string>
+    <string name="collections_editor_tmdb_genre_action">Ação</string>
+    <string name="collections_editor_tmdb_genre_adventure">Aventura</string>
+    <string name="collections_editor_tmdb_genre_animation">Animação</string>
+    <string name="collections_editor_tmdb_genre_comedy">Comédia</string>
+    <string name="collections_editor_tmdb_genre_horror">Terror</string>
+    <string name="collections_editor_tmdb_genre_scifi">Ficção científica</string>
+    <string name="collections_editor_tmdb_genre_drama">Drama</string>
+    <string name="collections_editor_tmdb_genre_crime">Crime</string>
+    <string name="collections_editor_tmdb_genre_reality">Reality</string>
+    <!-- Auto-play regex presets -->
+    <string name="autoplay_regex_preset_any_1080p_plus">Qualquer 1080p+</string>
+    <string name="autoplay_regex_preset_4k_remux">4K / Remux</string>
+    <string name="autoplay_regex_preset_1080p_standard">1080p Padrão</string>
+    <string name="autoplay_regex_preset_720p_smaller">720p / Menor</string>
+    <string name="autoplay_regex_preset_web_sources">Fontes WEB</string>
+    <string name="autoplay_regex_preset_bluray_quality">Qualidade BluRay</string>
+    <string name="autoplay_regex_preset_hevc_x265">HEVC / x265</string>
+    <string name="autoplay_regex_preset_avc_x264">AVC / x264</string>
+    <string name="autoplay_regex_preset_hdr_dolby_vision">HDR / Dolby Vision</string>
+    <string name="autoplay_regex_preset_dolby_atmos_dts">Dolby Atmos / DTS</string>
+    <string name="autoplay_regex_preset_english">Inglês</string>
+    <string name="autoplay_regex_preset_no_cam_ts">Sem CAM/TS</string>
+    <string name="autoplay_regex_preset_no_remux_hdr">Sem REMUX/HDR</string>
+
+    <!-- Playback settings sections -->
+    <string name="playback_player_internal_desc">Usar player interno do NuvioTV</string>
+
+    <!-- Player runtime: torrent overlay + tracks -->
+    <string name="player_torrent_peer_info">%1$d seeds · %2$d peers</string>
+    <string name="player_torrent_buffered_status">%1$s armazenado · %2$s · %3$s</string>
+    <string name="player_torrent_status">%1$s · %2$s</string>
+    <string name="player_torrent_stats">%1$d peers · %2$d seeds · %3$d%%</string>
+    <string name="player_torrent_connecting_peers">Conectando a peers…</string>
+    <string name="player_track_audio_fallback">Áudio %1$d</string>
+    <string name="player_track_subtitle_fallback">Legenda %1$d</string>
+
+    <!-- Player runtime: error recovery -->
+    <string name="player_error_stream_blocked">\n\nA fonte do stream está bloqueada ou restrita. Tente outra fonte.</string>
+    <string name="player_error_stream_removed">\n\nO link expirou ou foi removido. Tente outra fonte.</string>
+    <string name="player_error_stream_expired">\n\nO link expirou. Tente outra fonte.</string>
+    <string name="player_error_stream_rate_limited">\n\nMuitos pedidos à fonte. Aguarde e tente novamente.</string>
+    <string name="player_error_stream_unavailable">\n\nServidor indisponível. Tente outra fonte.</string>
+    <string name="player_error_source_invalid_content">Erro de fonte: conteúdo inválido ou não reproduzível. O link pode ter expirado ou o servidor retornou uma página de erro.\n\nTente outra fonte. [%1$s]</string>
+    <string name="player_error_decoder">Erro de decodificação</string>
+    <string name="player_error_unsupported_format">Formato não suportado pelo dispositivo. Tente outra fonte. [%1$s]</string>
+    <string name="player_error_initialize_failed">Falha ao inicializar player</string>
+    <string name="player_error_mpv_surface_failed">Falha ao inicializar superfície libmpv</string>
+    <string name="player_error_mpv_playback_failed">Falha ao inicializar reprodução libmpv</string>
+    <string name="player_error_torrent">Erro de torrent: %1$s</string>
+    <string name="player_error_playback_fallback">Erro de reprodução</string>
+    <!-- Subtitle timing recovery -->
+    <string name="subtitle_timing_file_no_lines">Nenhuma linha de legenda encontrada</string>
+    <string name="subtitle_timing_load_lines_failed">Falha ao carregar linhas de legenda</string>
+    <string name="subtitle_download_failed_http">Falha no download da legenda (HTTP %1$d)</string>
+    <string name="subtitle_download_empty_content">Download retornou conteúdo vazio</string>
+
+    <!-- Collection import errors -->
+    <string name="collections_import_error_empty_input">Entrada vazia</string>
+    <string name="collections_import_error_expected_array">Formato inválido: esperado array</string>
+    <string name="collections_import_error_empty_array">Array vazio: nenhuma coleção encontrada</string>
+    <string name="collections_import_error_missing_id">Coleção %1$d: "id" ausente ou inválido</string>
+    <string name="collections_import_error_missing_title">Coleção "%1$s": "title" ausente ou inválido</string>
+    <string name="collections_import_error_folders_array">Coleção "%1$s": "folders" deve ser array</string>
+    <string name="collections_import_error_folder_invalid">Coleção "%1$s", pasta %2$d: formato inválido</string>
+    <string name="collections_import_error_folder_missing_id">Coleção "%1$s", pasta %2$d: "id" ausente</string>
+    <string name="collections_import_error_folder_missing_title">Coleção "%1$s", pasta "%2$s": "title" ausente</string>
+    <string name="collections_import_error_sources_array">Coleção "%1$s", pasta "%2$s": "sources" deve ser array</string>
+    <string name="collections_import_error_invalid_tile_shape">Coleção "%1$s", pasta "%2$s": tileShape inválido "%3$s"</string>
+    <string name="collections_import_error_source_invalid">Coleção "%1$s", pasta "%2$s", fonte %3$d: formato inválido</string>
+    <string name="collections_import_error_source_required_fields">Coleção "%1$s", pasta "%2$s", fonte %3$d: campos obrigatórios ausentes</string>
+    <string name="collections_import_error_missing_tmdb_type">Coleção "%1$s", pasta "%2$s", fonte %3$d: tipo TMDB ausente</string>
+    <string name="collections_import_error_missing_trakt_list_id">Coleção "%1$s", pasta "%2$s", fonte %3$d: ID de lista Trakt ausente</string>
+    <string name="collections_import_error_json_parse">Erro de parse JSON: %1$s</string>
+
+    <!-- Library messages -->
+    <string name="library_synced">Biblioteca sincronizada</string>
+    <string name="library_error_refresh_failed">Falha ao atualizar biblioteca</string>
+    <string name="library_list_created">Lista criada</string>
+    <string name="library_error_invalid_list">Lista inválida</string>
+    <string name="library_list_updated">Lista atualizada</string>
+    <string name="library_error_save_list_failed">Falha ao salvar lista</string>
+    <string name="library_list_deleted">Lista excluída</string>
+    <string name="library_error_delete_list_failed">Falha ao excluir lista</string>
+    <string name="library_list_order_updated">Ordem das listas atualizada</string>
+    <string name="library_error_reorder_lists_failed">Falha ao reordenar listas</string>
+    <string name="library_list_fallback_title">Lista</string>
+    <!-- Library privacy display labels (mapped from API value, not used as a key) -->
+    <string name="library_privacy_private">Privada</string>
+    <string name="library_privacy_link">Link</string>
+    <string name="library_privacy_friends">Amigos</string>
+    <string name="library_privacy_public">Pública</string>
+
+    <!-- Trakt errors -->
+    <string name="trakt_error_auth_required">Autenticação Trakt necessária</string>
+    <string name="trakt_library_error_request_failed">Falha na requisição Trakt</string>
+    <string name="trakt_library_error_create_list_failed">Falha ao criar lista</string>
+    <string name="trakt_library_error_update_list_failed">Falha ao atualizar lista</string>
+    <string name="trakt_library_error_delete_list_failed">Falha ao excluir lista</string>
+    <string name="trakt_library_error_reorder_lists_failed">Falha ao reordenar listas</string>
+    <string name="trakt_library_error_fetch_watchlist_movies">Falha ao buscar filmes da watchlist</string>
+    <string name="trakt_library_error_fetch_watchlist_shows">Falha ao buscar séries da watchlist</string>
+    <string name="trakt_library_error_fetch_personal_lists">Falha ao buscar listas pessoais</string>
+    <string name="trakt_library_error_add_watchlist_failed">Falha ao adicionar à watchlist</string>
+    <string name="trakt_library_error_remove_watchlist_failed">Falha ao remover da watchlist</string>
+    <string name="trakt_library_error_add_to_list_failed">Falha ao adicionar à lista</string>
+    <string name="trakt_library_error_remove_from_list_failed">Falha ao remover da lista</string>
+    <string name="trakt_library_error_missing_compatible_ids">IDs compatíveis ausentes para operação Trakt</string>
+    <string name="trakt_library_error_auth_expired">Autenticação Trakt expirada</string>
+    <string name="trakt_library_error_list_not_found">Lista Trakt não encontrada</string>
+    <string name="trakt_library_error_list_limit_reached">Limite de listas Trakt atingido. Atualização necessária.</string>
+    <string name="trakt_error_insufficient_ids_mark_watched">IDs Trakt insuficientes para marcar como assistido</string>
+    <string name="trakt_error_request_failed">Falha na requisição Trakt</string>
+    <string name="trakt_error_mark_watched_failed">Falha ao marcar como assistido no Trakt (%1$d)</string>
+
+    <!-- Detail / poster options errors -->
+    <string name="detail_error_update_library_failed">Falha ao atualizar biblioteca</string>
+    <string name="detail_error_load_lists_failed">Falha ao carregar listas</string>
+    <string name="detail_error_update_lists_failed">Falha ao atualizar listas</string>
+    <string name="detail_error_update_watched_failed">Falha ao atualizar status de assistido</string>
+    <string name="detail_error_update_episode_watched_failed">Falha ao atualizar status de episódio assistido</string>
+    <string name="poster_options_error_load_lists_failed">Falha ao carregar listas</string>
+    <string name="poster_options_error_update_lists_failed">Falha ao atualizar listas</string>
+
+    <!-- Search errors -->
+    <string name="search_error_load_addons_failed">Falha ao carregar addons</string>
+    <string name="search_error_failed">Falha na busca</string>
+
+    <!-- Stream / TMDB / addons fallbacks -->
+    <string name="stream_unknown">Stream desconhecido</string>
+    <string name="stream_embedded_group">Streams embutidos</string>
+    <string name="stream_embedded_fallback_name">Stream embutido</string>
+    <string name="stream_quality_unknown">Desconhecido</string>
+    <string name="stream_addon_unknown">Desconhecido</string>
+    <string name="tmdb_unknown_entity">Desconhecido</string>
+    <string name="web_tmdb_company_fallback">Empresa TMDB %1$d</string>
+    <string name="web_tmdb_collection_fallback">Coleção TMDB %1$d</string>
+    <string name="web_error_invalid_request_body">Corpo de requisição inválido</string>
+
+    <!-- Subtitle preferred language fallback -->
+    <string name="language_english">Inglês</string>
+
+    <!-- Supporters / contributors / sponsors errors -->
+    <string name="supporters_error_load">Não foi possível carregar apoiadores.</string>
+    <string name="contributors_error_load">Não foi possível carregar contribuidores.</string>
+    <string name="sponsors_error_load">Não foi possível carregar patrocinadores.</string>
+    <string name="contributors_error_api_not_configured">API de contribuidores não configurada.</string>
+    <string name="contributors_error_api_http">Erro na API de contribuidores: %1$d</string>
+    <string name="supporters_error_api_http">Erro na API de doações: %1$d</string>
+    <string name="sponsors_error_api_http">Erro na API de patrocinadores: %1$d</string>
+
+    <!-- Contributor role badges -->
+    <string name="contributor_role_translator">Tradutor</string>
+    <string name="contributor_role_maintainer">Mantenedor</string>
+
+    <!-- Network / safe API errors -->
+    <string name="network_error_empty_response_body">Corpo de resposta vazio</string>
+    <string name="network_error_unknown">Erro desconhecido ocorreu</string>
+
+    <!-- Network settings: fast.com errors -->
+    <string name="network_fast_error_script_path_missing">fast.com: caminho do script não encontrado</string>
+    <string name="network_fast_error_token_missing">fast.com: token não encontrado no pacote</string>
+
+    <!-- Torrent service / TorrServer binary errors -->
+    <string name="torrent_error_add_failed">Falha ao adicionar torrent</string>
+    <string name="torrent_error_binary_missing">Binário TorrServer não encontrado em %1$s</string>
+    <string name="torrent_error_process_died">Processo TorrServer morreu na inicialização (código %1$d)</string>
+    <string name="torrent_error_start_timeout">TorrServer não iniciou em %1$ds</string>
+
+    <!-- Player runtime: stream / external link errors -->
+    <string name="player_torrent_starting_engine">Iniciando motor P2P…</string>
+    <string name="player_torrent_rebuffer_status">%1$s armazenado</string>
+    <string name="player_stream_error_invalid_external_url">URL externo inválido</string>
+    <string name="player_stream_error_open_external_link_failed">Não foi possível abrir link externo</string>
+    <string name="player_stream_error_invalid_url">URL de stream inválido</string>
+    <string name="player_stream_error_missing_content_type">Tipo de conteúdo ausente</string>
+
+    <!-- Meta repository: addon detail error fragments -->
+    <string name="meta_error_detail_no_metadata_for_id">nenhum metadata retornado para este id</string>
+    <string name="meta_error_detail_addon_unreachable">não foi possível alcançar servidor do addon</string>
+    <string name="meta_error_detail_addon_connection_failed">falha na conexão com addon</string>
+    <string name="meta_error_detail_addon_timeout">requisição ao addon expirou</string>
+    <string name="meta_error_detail_addon_cleartext_blocked">addon usa conexão HTTP insegura bloqueada pelo Android</string>
+    <string name="meta_error_detail_addon_request_failed">requisição ao addon falhou</string>
+
+    <!-- Stream repository: addon detail error fragments + fetch -->
+    <string name="stream_error_detail_no_streams_for_id">nenhum stream retornado para este id</string>
+    <string name="stream_error_detail_addon_unreachable">não foi possível alcançar servidor do addon</string>
+    <string name="stream_error_detail_addon_connection_failed">falha na conexão com addon</string>
+    <string name="stream_error_detail_addon_timeout">requisição ao addon expirou</string>
+    <string name="stream_error_detail_addon_cleartext_blocked">addon usa conexão HTTP insegura bloqueada pelo Android</string>
+    <string name="stream_error_detail_addon_request_failed">requisição ao addon falhou</string>
+    <string name="stream_error_fetch_failed">Falha ao buscar streams</string>
+
+    <!-- Trakt: paginated fetch + comments -->
+    <string name="trakt_library_error_paginated_fetch_failed">Falha na busca paginada Trakt (%1$d)</string>
+
+    <!-- Home: poster long-press list picker errors -->
+    <string name="home_poster_lists_error_load_failed">Falha ao carregar listas</string>
+    <string name="home_poster_lists_error_update_failed">Falha ao atualizar listas</string>
+
+    <!-- Profile selection: PIN overlay messages -->
+    <string name="profile_pin_saved_for_profile">PIN salvo para %1$s.</string>
+    <string name="profile_pin_lock_removed_for_profile">Bloqueio PIN removido para %1$s.</string>
+
+    <!-- Trakt: Related / comments / list items error fallbacks -->
+    <string name="trakt_related_error_request_failed">Falha na requisição relacionada ao Trakt</string>
+    <string name="trakt_comments_error_request_failed">Falha na requisição de comentários Trakt</string>
+    <string name="trakt_library_error_fetch_list_items">Falha ao buscar itens da lista</string>
+
 </resources>

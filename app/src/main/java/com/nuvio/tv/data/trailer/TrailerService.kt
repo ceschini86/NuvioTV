@@ -63,6 +63,19 @@ class TrailerService(
         tmdbId: String? = null,
         type: String? = null
     ): TrailerPlaybackSource? = withContext(Dispatchers.IO) {
+        // Read the TMDB settings once and reuse for both the "Disable Trailers"
+        // gate and the trailer language lookup below. The gate respects the
+        // user's "Disable Trailers in TMDB Enrichment" toggle: the TMDB path
+        // below is the only trailer source surfaced through this function,
+        // so when the toggle is off we return no trailer at all rather than
+        // silently falling through to TMDB's /videos endpoint. See #1647.
+        val tmdbSettings = runCatching { tmdbSettingsDataStore.settings.first() }.getOrNull()
+        if (tmdbSettings?.useTrailers != true) {
+            Log.d(TAG, "Trailers disabled in TMDB enrichment settings; skipping lookup")
+            return@withContext null
+        }
+        val tmdbLanguage = normalizeTmdbTrailerLanguage(tmdbSettings.language)
+
         val cacheKey = "$title|$year|$tmdbId|$type"
 
         cache[cacheKey]?.let { cached ->
@@ -74,12 +87,14 @@ class TrailerService(
         try {
             Log.d(TAG, "Searching trailer: title=$title, year=$year, tmdbId=$tmdbId, type=$type")
 
-            // 1) TMDB-first path (independent of TMDB enrichment settings).
+            // TMDB-first path. Gated on `useTrailers` above so the
+            // user's toggle in TMDB enrichment settings is honored.
             val tmdbSource = getTrailerPlaybackSourceFromTmdbId(
                 tmdbId = tmdbId,
                 type = type,
                 title = title,
-                year = year
+                year = year,
+                languageOverride = tmdbLanguage
             )
             if (tmdbSource != null) {
                 cache[cacheKey] = tmdbSource
@@ -119,9 +134,17 @@ class TrailerService(
         tmdbId: String?,
         type: String?
     ): String? = withContext(Dispatchers.IO) {
+        // Parse the id first so an invalid/null tmdbId short-circuits without
+        // touching the settings DataStore at all.
         val numericTmdbId = tmdbId?.toIntOrNull() ?: return@withContext null
+        // Read settings once and use for both the "Disable Trailers" gate and
+        // the trailer language. See #1647 for the gate rationale.
+        val tmdbSettings = runCatching { tmdbSettingsDataStore.settings.first() }.getOrNull()
+        if (tmdbSettings?.useTrailers != true) {
+            return@withContext null
+        }
         val mediaType = normalizeTmdbMediaType(type)
-        val tmdbLanguage = getPreferredTmdbTrailerLanguage()
+        val tmdbLanguage = normalizeTmdbTrailerLanguage(tmdbSettings.language)
         val tmdbResults = when (mediaType) {
             "movie" -> fetchTmdbMovieVideos(numericTmdbId, tmdbLanguage)
             "tv" -> fetchTmdbTvVideos(numericTmdbId, tmdbLanguage)
@@ -142,11 +165,12 @@ class TrailerService(
         tmdbId: String?,
         type: String?,
         title: String? = null,
-        year: String? = null
+        year: String? = null,
+        languageOverride: String? = null
     ): TrailerPlaybackSource? = withContext(Dispatchers.IO) {
         val numericTmdbId = tmdbId?.toIntOrNull() ?: return@withContext null
         val mediaType = normalizeTmdbMediaType(type)
-        val tmdbLanguage = getPreferredTmdbTrailerLanguage()
+        val tmdbLanguage = languageOverride ?: getPreferredTmdbTrailerLanguage()
         Log.d(
             TAG,
             "TMDB trailer lookup start: tmdbId=$numericTmdbId type=${mediaType ?: "unknown"} language=$tmdbLanguage"
