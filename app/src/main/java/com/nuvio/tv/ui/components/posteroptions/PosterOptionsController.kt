@@ -15,6 +15,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
@@ -112,23 +113,31 @@ class PosterOptionsController @Inject constructor(
     }
 
     fun show(item: MetaPreview, addonBaseUrl: String?) {
-        _state.update { current ->
-            current.copy(
-                target = item,
-                addonBaseUrl = addonBaseUrl.orEmpty(),
-                isInLibrary = false,
-                isWatched = false,
-                isLibraryPending = false,
-                isWatchedPending = false
-            )
-        }
-        targetFlow.value = item
+        val launchScope = this.scope ?: return
+        launchScope.launch {
+            val initialIsInLibrary = runCatching {
+                libraryRepository.isInLibrary(item.id, item.apiType).first()
+            }.getOrDefault(false)
+            val initialIsWatched = runCatching {
+                watchProgressRepository.isWatched(item.id, videoId = item.imdbId).first()
+            }.getOrDefault(false)
 
-        // Resolve TMDB→IMDB in the background so the dialog observes — and writes — under
-        // the same canonical id the details screen uses. Without this, adding from a
-        // TMDB-rooted screen (cast filmography, TMDB lists) and then again from details
-        // creates duplicate library/watched entries (the storage key-matches exactly).
-        scope?.launch {
+            _state.update { current ->
+                current.copy(
+                    target = item,
+                    addonBaseUrl = addonBaseUrl.orEmpty(),
+                    isInLibrary = initialIsInLibrary,
+                    isWatched = initialIsWatched,
+                    isLibraryPending = false,
+                    isWatchedPending = false
+                )
+            }
+            targetFlow.value = item
+
+            // Resolve TMDB→IMDB in the background so the dialog observes — and writes — under
+            // the same canonical id the details screen uses. Without this, adding from a
+            // TMDB-rooted screen (cast filmography, TMDB lists) and then again from details
+            // creates duplicate library/watched entries (the storage key-matches exactly).
             val canonical = canonicalize(item)
             if (canonical.id != item.id && _state.value.target?.id == item.id) {
                 _state.update { it.copy(target = canonical) }
