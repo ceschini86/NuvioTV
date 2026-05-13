@@ -409,6 +409,8 @@
     <string name="sub_forced_lang">Prisiljeni</string>
     <string name="sub_preferred_lang">Prednostni jezik</string>
     <string name="sub_secondary_lang">Sekundarni prednostni jezik</string>
+    <string name="sub_use_forced_subtitles">Uporabi vsiljene podnapise</string>
+    <string name="sub_use_forced_subtitles_desc">Prednostno uporabi vsiljene podnapise, ko se zvok ujema z jezikom podnapisov; če niso na voljo, ne izberi ničesar</string>
     <string name="sub_show_only_preferred_languages">Prikaži samo želene jezike</string>
     <string name="sub_show_only_preferred_languages_desc">Skrij vse druge jezike podnapisov s seznama izbire</string>
     <string name="sub_organization">Organizacija podnapisov</string>
@@ -989,7 +991,7 @@
     <string name="pause_cast_label">Zasedba</string>
     <string name="pause_back_to_details">Nazaj na podrobnosti</string>
     <string name="pause_as_character">kot %1$s</string>
-	<!-- NextEpisodeCardOverlay -->
+	<!-- PostPlayOverlay -->
     <string name="next_episode_label">Naslednja epizoda</string>
 	<string name="next_episode_finding_source">Iskanje vira…</string>
     <string name="next_episode_playing_via">Predvajanje prek %1$s čez %2$ds</string>

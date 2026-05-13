@@ -214,6 +214,8 @@
     <string name="sub_forced_lang">Forțat</string>
     <string name="sub_preferred_lang">Limba preferată</string>
     <string name="sub_secondary_lang">Limba preferată secundară</string>
+    <string name="sub_use_forced_subtitles">Folosește subtitrări forțate</string>
+    <string name="sub_use_forced_subtitles_desc">Preferă subtitrările forțate când sunetul corespunde limbii subtitrării; dacă nu sunt disponibile, nu selecta nimic</string>
     <string name="sub_show_only_preferred_languages">Afișează doar limbile preferate</string>
     <string name="sub_show_only_preferred_languages_desc">Ascunde toate celelalte limbi de subtitrare din lista de selecție</string>
     <string name="sub_organization">Organizarea subtitrărilor</string>
@@ -631,7 +633,7 @@
     <string name="pause_back_to_details">Înapoi la detalii</string>
     <string name="pause_as_character">ca %1$s</string>
 
-    <!-- NextEpisodeCardOverlay -->
+    <!-- PostPlayOverlay -->
     <string name="next_episode_label">Următorul episod</string>
     <string name="next_episode_finding_source">Se caută sursa…</string>
     <string name="next_episode_playing_via">Se redă prin %1$s în %2$ds</string>

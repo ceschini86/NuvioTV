@@ -614,7 +614,7 @@ fun SearchScreen(
                     uiState.error != null && uiState.catalogRows.isEmpty() -> {
                         item {
                             ErrorState(
-                                message = uiState.error ?: "Search failed",
+                                message = uiState.error ?: stringResource(R.string.search_error_failed),
                                 onRetry = { viewModel.onEvent(SearchEvent.Retry) }
                             )
                         }

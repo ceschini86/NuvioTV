@@ -310,7 +310,7 @@ fun ProfileSelectionScreen(
                                         is SetProfilePinResult.Success -> {
                                             pinOverlayState = null
                                             pinOverlayError = null
-                                            pinActionMessage = "PIN saved for ${activePinOverlay.profile.name}."
+                                            pinActionMessage = context.getString(R.string.profile_pin_saved_for_profile, activePinOverlay.profile.name)
                                         }
                                         is SetProfilePinResult.CurrentPinRequired -> {
                                             pinOverlayState = ProfilePinOverlayState.VerifyCurrentForChange(
@@ -378,7 +378,7 @@ fun ProfileSelectionScreen(
                                     if (success) {
                                         pinOverlayError = null
                                         pinOverlayState = null
-                                        pinActionMessage = "PIN lock removed for ${activePinOverlay.profile.name}."
+                                        pinActionMessage = context.getString(R.string.profile_pin_lock_removed_for_profile, activePinOverlay.profile.name)
                                     } else {
                                         pinOverlayError = context.getString(R.string.profile_pin_incorrect)
                                     }

@@ -34,6 +34,7 @@ import kotlinx.coroutines.launch
  * wires [show] to each card's `onLongPress`.
  */
 class PosterOptionsController @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
     private val libraryRepository: LibraryRepository,
     private val watchProgressRepository: WatchProgressRepository,
     private val tmdbService: TmdbService
@@ -228,7 +229,7 @@ class PosterOptionsController @Inject constructor(
                 _state.update { current ->
                     current.copy(
                         listPickerPending = false,
-                        listPickerError = error.message ?: "Failed to load lists"
+                        listPickerError = error.message ?: appContext.getString(com.nuvio.tv.R.string.poster_options_error_load_lists_failed)
                     )
                 }
             }
@@ -278,7 +279,7 @@ class PosterOptionsController @Inject constructor(
                 _state.update {
                     it.copy(
                         listPickerPending = false,
-                        listPickerError = error.message ?: "Failed to update lists"
+                        listPickerError = error.message ?: appContext.getString(com.nuvio.tv.R.string.poster_options_error_update_lists_failed)
                     )
                 }
             }

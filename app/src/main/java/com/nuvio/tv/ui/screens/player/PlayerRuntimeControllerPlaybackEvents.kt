@@ -55,14 +55,14 @@ internal fun PlayerRuntimeController.skipInterval(interval: SkipInterval): Boole
 internal fun PlayerRuntimeController.applyAudioAmplification(db: Int) {
     val clampedDb = db.coerceIn(AUDIO_AMPLIFICATION_MIN_DB, AUDIO_AMPLIFICATION_MAX_DB)
     val isAudioPathActive = ffmpegAudioRenderer?.isAudioPathActive() == true
-    val wasActive = gainAudioProcessor.isActive()
+    val wasActive = gainAudioProcessor.isGainEnabled()
     gainAudioProcessor.setGainDb(
         if (isAudioPathActive) clampedDb else AUDIO_AMPLIFICATION_MIN_DB
     )
-    val isActiveNow = gainAudioProcessor.isActive()
+    val isActiveNow = gainAudioProcessor.isGainEnabled()
 
     if (wasActive != isActiveNow && !isUsingMpvEngine()) {
-        // Force ExoPlayer to rebuild the audio pipeline so the processor is correctly added or removed
+        playbackSpeedAwareAudioSink?.notifyAudioProcessingRequirementChanged()
         _exoPlayer?.let { player ->
             player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().build()
         }
@@ -108,6 +108,26 @@ internal fun PlayerRuntimeController.updateAudioControlAvailability(
             isCenterMixAvailable = isCenterMixAvailable
         )
     }
+}
+
+internal fun PlayerRuntimeController.resetPostPlayStateAfterPlaybackEnded() {
+    if (!shouldResetPostPlayStateAfterPlaybackEnded(
+            state = _uiState.value,
+            hasInFlightNextEpisodeAutoPlay = nextEpisodeAutoPlayJob?.isActive == true
+        )
+    ) {
+        return
+    }
+    resetPostPlayOverlayState(clearEpisode = false)
+}
+
+internal fun shouldResetPostPlayStateAfterPlaybackEnded(
+    state: PlayerUiState,
+    hasInFlightNextEpisodeAutoPlay: Boolean
+): Boolean {
+    if (state.postPlayMode?.blocksNaturalCompletion() == true) return false
+    if (hasInFlightNextEpisodeAutoPlay) return false
+    return true
 }
 
 internal fun PlayerRuntimeController.startProgressUpdates() {
@@ -157,14 +177,14 @@ internal fun PlayerRuntimeController.startProgressUpdates() {
                     updateMpvAvailableTracks()
                     tryAutoSelectPreferredSubtitleFromAvailableTracks()
                     updateActiveSkipInterval(pos)
-                    evaluateNextEpisodeCardVisibility(
+                    evaluatePostPlayOverlayVisibility(
                         positionMs = pos,
                         durationMs = playerDuration
                     )
                     if (ended && !wasEnded) {
                         emitCompletionScrobbleStop(progressPercent = 99.5f)
                         saveWatchProgress()
-                        resetNextEpisodeCardState(clearEpisode = false)
+                        resetPostPlayStateAfterPlaybackEnded()
                     }
                 }
                 delay(500)
@@ -204,7 +224,7 @@ internal fun PlayerRuntimeController.startProgressUpdates() {
                     }
                 }
                 updateActiveSkipInterval(pos)
-                evaluateNextEpisodeCardVisibility(
+                evaluatePostPlayOverlayVisibility(
                     positionMs = pos,
                     durationMs = playerDuration.coerceAtLeast(0L)
                 )
@@ -218,7 +238,7 @@ internal fun PlayerRuntimeController.startProgressUpdates() {
                         val runtime = Runtime.getRuntime()
                         val usedMb = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
                         val maxMb = runtime.maxMemory() / (1024 * 1024)
-                        Log.d(PlayerRuntimeController.TAG, "BUFFER: ahead=${bufAhead}s, loading=$loading, heap=${usedMb}/${maxMb}MB, pos=${pos / 1000}s")
+                        Log.d(PlayerRuntimeController.TAG, "BUFFER: ahead=${bufAhead}s, loading=$loading, heap=$usedMb/${maxMb}MB, pos=${pos / 1000}s")
                     }
                 }
             }
@@ -255,8 +275,7 @@ internal fun PlayerRuntimeController.saveWatchProgressIfNeeded() {
     // typically error/warning messages or "stream not ready" placeholders that
     // would incorrectly mark content as watched when the user exits.
     if (duration in 1..59999) return
-    
-    
+
     if (kotlin.math.abs(currentPosition - lastSavedPosition) >= saveThresholdMs) {
         lastSavedPosition = currentPosition
         saveWatchProgressInternal(currentPosition, duration, syncRemote = false)
@@ -287,9 +306,8 @@ internal fun PlayerRuntimeController.getEffectiveDuration(position: Long): Long 
 }
 
 internal fun PlayerRuntimeController.saveWatchProgressInternal(position: Long, duration: Long, syncRemote: Boolean = true) {
-    
     if (contentId.isNullOrEmpty() || contentType.isNullOrEmpty()) return
-    
+
     if (position < 1000) return
 
     val fallbackPercent = if (duration <= 0L) 5f else null
@@ -753,15 +771,15 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             resetSubtitleAutoSyncState()
             rememberInternalSubtitleSelection(event.index)
             selectSubtitleTrack(event.index)
-            _uiState.update { 
+            _uiState.update {
                 it.copy(
                     showSubtitleOverlay = true,
                     showSubtitleStylePanel = false,
                     showSubtitleTimingDialog = false,
                     showSubtitleDelayOverlay = false,
                     showControls = true,
-                    selectedAddonSubtitle = null 
-                ) 
+                    selectedAddonSubtitle = null
+                )
             }
         }
         PlayerEvent.OnDisableSubtitles -> {
@@ -776,7 +794,7 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             resetSubtitleAutoSyncState()
             rememberSubtitleDisabled()
             disableSubtitles()
-            _uiState.update { 
+            _uiState.update {
                 it.copy(
                     showSubtitleOverlay = true,
                     showSubtitleStylePanel = false,
@@ -785,7 +803,7 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
                     showControls = true,
                     selectedAddonSubtitle = null,
                     selectedSubtitleTrackIndex = -1
-                ) 
+                )
             }
         }
         is PlayerEvent.OnSelectAddonSubtitle -> {
@@ -817,13 +835,13 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
                         .build()
                 }
             }
-            _uiState.update { 
+            _uiState.update {
                 it.copy(
                     playbackSpeed = event.speed,
                     showSpeedDialog = false,
                     showSubtitleTimingDialog = false,
                     showSubtitleDelayOverlay = false
-                ) 
+                )
             }
         }
         PlayerEvent.OnToggleControls -> {
@@ -1003,16 +1021,16 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             switchToSourceStream(event.stream)
         }
         PlayerEvent.OnDismissTransientOverlay -> {
-            _uiState.update { 
+            _uiState.update {
                 it.copy(
-                    showAudioOverlay = false, 
-                    showSubtitleOverlay = false, 
+                    showAudioOverlay = false,
+                    showSubtitleOverlay = false,
                     showSubtitleStylePanel = false,
                     showSubtitleTimingDialog = false,
                     showSpeedDialog = false,
                     showSubtitleDelayOverlay = false,
                     showMoreDialog = false
-                ) 
+                )
             }
             scheduleHideControls()
         }
@@ -1021,7 +1039,7 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             hasRetriedCurrentStreamAfter416 = false
             resetErrorRetryState()
             clearPendingEngineSwitchTrackPreference()
-            resetNextEpisodeCardState(clearEpisode = false)
+            resetPostPlayOverlayState(clearEpisode = false)
             _uiState.update { state ->
                 state.copy(
                     error = null,
@@ -1082,21 +1100,20 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             _uiState.update { it.copy(skipIntervalDismissed = true) }
         }
         PlayerEvent.OnPlayNextEpisode -> {
-            playNextEpisode()
+            playNextEpisode(userInitiated = true)
         }
         PlayerEvent.OnDismissNextEpisodeCard -> {
             nextEpisodeAutoPlayJob?.cancel()
             nextEpisodeAutoPlayJob = null
             _uiState.update {
                 it.copy(
-                    showNextEpisodeCard = false,
-                    nextEpisodeCardDismissed = true,
-                    nextEpisodeAutoPlaySearching = false,
-                    nextEpisodeAutoPlaySourceName = null,
-                    nextEpisodeAutoPlayCountdownSec = null
+                    postPlayMode = null,
+                    postPlayDismissedForCurrentEpisode = true,
                 )
             }
         }
+        PlayerEvent.OnStillWatchingContinue -> onStillWatchingContinue()
+        PlayerEvent.OnDismissStillWatchingPrompt -> onDismissStillWatchingPrompt()
         is PlayerEvent.OnSetSubtitleSize -> {
             scope.launch { playerSettingsDataStore.setSubtitleSize(event.size) }
         }

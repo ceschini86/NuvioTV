@@ -200,6 +200,7 @@ fun MetaDetailsScreen(
     viewModel: MetaDetailsViewModel = hiltViewModel(),
     returnFocusSeason: Int? = null,
     returnFocusEpisode: Int? = null,
+    heroRestoreToken: Int = 0,
     heroBackdropUrl: String? = null,
     onBackPress: () -> Unit,
     onNavigateToCastDetail: (personId: Int, personName: String, preferCrew: Boolean) -> Unit = { _, _, _ -> },
@@ -434,6 +435,7 @@ fun MetaDetailsScreen(
                         episode = returnFocusEpisode
                     ),
                     lastFocusedEpisodeIdBySeason = viewModel.lastFocusedEpisodeIdBySeason,
+                    heroRestoreToken = heroRestoreToken,
                     seasons = uiState.seasons,
                     selectedSeason = uiState.selectedSeason,
                     episodesForSeason = uiState.episodesForSeason,
@@ -556,6 +558,9 @@ fun MetaDetailsScreen(
                     },
                     onMarkPreviousEpisodesWatched = { video ->
                         viewModel.onEvent(MetaDetailsEvent.OnMarkPreviousEpisodesWatched(video))
+                    },
+                    onMarkPreviousSeasonsWatched = { season ->
+                        viewModel.onEvent(MetaDetailsEvent.OnMarkPreviousSeasonsWatched(season))
                     },
                     isSeasonFullyWatched = { season ->
                         viewModel.isSeasonFullyWatched(season)
@@ -752,6 +757,7 @@ private fun MetaDetailsContent(
     meta: Meta,
     detailReturnEpisodeFocusRequest: DetailReturnEpisodeFocusRequest? = null,
     lastFocusedEpisodeIdBySeason: MutableMap<Int, String>,
+    heroRestoreToken: Int = 0,
     seasons: List<Int>,
     selectedSeason: Int,
     episodesForSeason: List<Video>,
@@ -799,6 +805,7 @@ private fun MetaDetailsContent(
     onMarkSeasonWatched: (Int) -> Unit,
     onMarkSeasonUnwatched: (Int) -> Unit,
     onMarkPreviousEpisodesWatched: (Video) -> Unit,
+    onMarkPreviousSeasonsWatched: (Int) -> Unit,
     isSeasonFullyWatched: (Int) -> Boolean,
     trailerUrl: String?,
     trailerAudioUrl: String?,
@@ -978,6 +985,13 @@ private fun MetaDetailsContent(
         pendingRestoreMoreLikeItemId = null
         pendingRestoreCollectionItemId = null
         pendingRestoreCompanyId = companyId
+    }
+
+    LaunchedEffect(heroRestoreToken) {
+        if (heroRestoreToken > 0) {
+            markHeroRestore()
+            restoreFocusToken += 1
+        }
     }
 
     DisposableEffect(
@@ -1930,9 +1944,13 @@ private fun MetaDetailsContent(
         }
 
         seasonOptionsDialogSeason?.let { season ->
+            val hasPreviousSeasons = remember(season, seasons) {
+                seasons.any { it != 0 && it < season }
+            }
             SeasonOptionsDialog(
                 season = season,
                 isFullyWatched = isSeasonFullyWatched(season),
+                hasPreviousSeasons = hasPreviousSeasons,
                 onDismiss = { seasonOptionsDialogSeason = null },
                 onMarkSeasonWatched = {
                     onMarkSeasonWatched(season)
@@ -1940,6 +1958,10 @@ private fun MetaDetailsContent(
                 },
                 onMarkSeasonUnwatched = {
                     onMarkSeasonUnwatched(season)
+                    seasonOptionsDialogSeason = null
+                },
+                onMarkPreviousSeasonsWatched = {
+                    onMarkPreviousSeasonsWatched(season)
                     seasonOptionsDialogSeason = null
                 }
             )
