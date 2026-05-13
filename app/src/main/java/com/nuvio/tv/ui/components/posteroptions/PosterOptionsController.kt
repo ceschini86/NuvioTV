@@ -47,6 +47,7 @@ class PosterOptionsController @Inject constructor(
 
     private var scope: CoroutineScope? = null
     private var bound = false
+    private var showJob: kotlinx.coroutines.Job? = null
 
     @OptIn(ExperimentalCoroutinesApi::class)
     fun bind(scope: CoroutineScope) {
@@ -114,11 +115,8 @@ class PosterOptionsController @Inject constructor(
 
     fun show(item: MetaPreview, addonBaseUrl: String?) {
         val launchScope = this.scope ?: return
-        launchScope.launch {
-            // Resolve TMDB→IMDB before the membership lookups so the initial state
-            // matches what toggleDefault would read and write. Without this, items
-            // shown from a TMDB-rooted screen (cast filmography, TMDB lists) would
-            // miss the storage entry that was previously written under the IMDB id.
+        showJob?.cancel()
+        showJob = launchScope.launch {
             val canonical = canonicalize(item)
             val initialIsInLibrary = runCatching {
                 libraryRepository.isInLibrary(canonical.id, canonical.apiType).first()
@@ -162,6 +160,8 @@ class PosterOptionsController @Inject constructor(
     }
 
     fun dismiss() {
+        showJob?.cancel()
+        showJob = null
         targetFlow.value = null
         _state.update { it.copy(target = null) }
     }

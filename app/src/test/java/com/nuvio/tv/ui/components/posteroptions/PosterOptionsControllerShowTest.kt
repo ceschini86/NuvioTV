@@ -89,6 +89,40 @@ class PosterOptionsControllerShowTest {
     }
 
     @Test
+    fun `successive show calls leave state with the latest item only`() = runTest {
+        val context = mockk<Context>(relaxed = true)
+        val libraryRepository = mockk<LibraryRepository>(relaxed = true) {
+            every { sourceMode } returns flowOf(LibrarySourceMode.LOCAL)
+            every { listTabs } returns flowOf(emptyList())
+            every { isInLibrary(any(), any()) } returns flowOf(false)
+        }
+        val watchProgressRepository = mockk<WatchProgressRepository>(relaxed = true) {
+            every { isWatched(any(), any(), any(), any()) } returns flowOf(false)
+        }
+        val tmdbService = mockk<TmdbService>(relaxed = true) {
+            coEvery { tmdbToImdb(111, "movie") } coAnswers {
+                kotlinx.coroutines.delay(50)
+                "tt0000001"
+            }
+            coEvery { tmdbToImdb(222, "movie") } returns "tt0000002"
+        }
+        val controller = PosterOptionsController(
+            appContext = context,
+            libraryRepository = libraryRepository,
+            watchProgressRepository = watchProgressRepository,
+            tmdbService = tmdbService
+        )
+        controller.bind(this)
+
+        controller.show(samplePreview(id = "tmdb:111"), addonBaseUrl = null)
+        controller.show(samplePreview(id = "tmdb:222"), addonBaseUrl = null)
+        advanceUntilIdle()
+
+        val state = controller.state.value
+        assertEquals("tt0000002", state.target?.id)
+    }
+
+    @Test
     fun `show with TMDB-rooted item resolves library state against canonical IMDB id`() = runTest {
         val context = mockk<Context>(relaxed = true)
         val tmdbId = "tmdb:12345"

@@ -621,7 +621,9 @@ fun FolderEditorContent(
                     }
                 }
                 val addonCatalogInfo = addonSource?.let { src ->
-                    uiState.addonCatalogInfoByKey["${src.addonId}|${src.type}|${src.catalogId}"]
+                    val exactKey = "${src.addonId}|${src.type}|${src.catalogId}"
+                    uiState.addonCatalogInfoByKey[exactKey]
+                        ?: uiState.addonCatalogInfoByKey["${src.addonId}|${src.type}|${src.catalogId.substringBefore(",")}"]
                 }
                 val isMissing = addonSource != null && catalog == null && addonCatalogInfo == null
                 val sourceKey = collectionSourceKey(source)
