@@ -399,10 +399,15 @@ internal fun PlayerRuntimeController.initializePlayer(
                     )
                 )
                 if (showLoadingStatus) _uiState.update { it.copy(loadingMessage = context.getString(R.string.player_loading_starting)) }
+                val isTunneledPlayback = playerSettings.tunnelingEnabled
                 // Always start paused — playback begins in onRenderedFirstFrame()
                 // so audio and video start in perfect sync. Without this, the
                 // audio renderer races ahead by 1-2s while the video decoder
                 // is still decoding the first I-frame.
+                //
+                // Exception: tunneled playback bypasses the normal video
+                // rendering pipeline so onRenderedFirstFrame() never fires.
+                // In that case we fall back to starting on STATE_READY.
                 playWhenReady = false
                 prepare()
 
@@ -453,9 +458,29 @@ internal fun PlayerRuntimeController.initializePlayer(
                             // for onRenderedFirstFrame() to ensure A/V sync.
                             // After the first frame is visible, rebuffer events
                             // can resume playback normally.
+                            //
+                            // Exception: tunneled playback never fires
+                            // onRenderedFirstFrame(), so we must start here.
                             if (shouldEnforceAutoplayOnFirstReady) {
                                 shouldEnforceAutoplayOnFirstReady = false
-                                // Playback will start in onRenderedFirstFrame().
+                                if (isTunneledPlayback) {
+                                    // Tunneled mode — onRenderedFirstFrame() won't
+                                    // fire; treat STATE_READY as the sync point.
+                                    hasRenderedFirstFrame = true
+                                    if (!startPaused && !userPausedManually) {
+                                        playWhenReady = true
+                                        play()
+                                    }
+                                    _uiState.update {
+                                        it.copy(
+                                            showLoadingOverlay = false,
+                                            loadingMessage = null,
+                                            loadingProgress = if (it.loadingProgress != null) 1f else null,
+                                            showPlayerEngineSwitchInfo = false
+                                        )
+                                    }
+                                }
+                                // Non-tunneled: playback will start in onRenderedFirstFrame().
                             } else if (!userPausedManually && hasRenderedFirstFrame) {
                                 play()
                             }
