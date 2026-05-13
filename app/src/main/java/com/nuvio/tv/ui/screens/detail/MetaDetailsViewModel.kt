@@ -705,7 +705,12 @@ class MetaDetailsViewModel @Inject constructor(
             awards = null,
             language = enrichment.language,
             links = emptyList(),
-            trailers = enrichment.trailers
+            // Honor the "Disable Trailers in TMDB Enrichment" toggle even on
+            // this synthetic fallback meta (issue #1647). The main enrichment
+            // merge at the bottom of applyMetaWithEnrichment already gates on
+            // settings.useTrailers; without the same gate here, the fallback
+            // path would smuggle TMDB trailers in unconditionally.
+            trailers = if (settings.useTrailers) enrichment.trailers else emptyList()
         )
         applyMetaWithEnrichment(meta)
         return true
