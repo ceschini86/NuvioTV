@@ -399,7 +399,11 @@ internal fun PlayerRuntimeController.initializePlayer(
                     )
                 )
                 if (showLoadingStatus) _uiState.update { it.copy(loadingMessage = context.getString(R.string.player_loading_starting)) }
-                playWhenReady = !startPaused
+                // Always start paused — playback begins in onRenderedFirstFrame()
+                // so audio and video start in perfect sync. Without this, the
+                // audio renderer races ahead by 1-2s while the video decoder
+                // is still decoding the first I-frame.
+                playWhenReady = false
                 prepare()
 
                 addListener(object : Player.Listener {
@@ -445,15 +449,14 @@ internal fun PlayerRuntimeController.initializePlayer(
                         if (playbackState == Player.STATE_READY) {
                             pendingSeekFlush = false
                             
-                            // Perform hardware flush (pause-delay-play) to prevent A/V desync 
-                            // on initial load, after rebuffering, and after out-of-buffer seeks.
+                            // Don't auto-play on the initial STATE_READY — wait
+                            // for onRenderedFirstFrame() to ensure A/V sync.
+                            // After the first frame is visible, rebuffer events
+                            // can resume playback normally.
                             if (shouldEnforceAutoplayOnFirstReady) {
                                 shouldEnforceAutoplayOnFirstReady = false
-                                if (!userPausedManually) {
-                                    playWhenReady = true
-                                    play()
-                                }
-                            } else if (!userPausedManually) {
+                                // Playback will start in onRenderedFirstFrame().
+                            } else if (!userPausedManually && hasRenderedFirstFrame) {
                                 play()
                             }
                             tryApplyPendingResumeProgress(this@apply)
@@ -507,6 +510,12 @@ internal fun PlayerRuntimeController.initializePlayer(
 
                     override fun onRenderedFirstFrame() {
                         hasRenderedFirstFrame = true
+                        // Start playback now that the first video frame is
+                        // visible — audio and video begin in perfect sync.
+                        if (!startPaused && !userPausedManually) {
+                            playWhenReady = true
+                            play()
+                        }
                         resetErrorRetryState()
                         // Restore speed after PCM fallback — audio sink is already
                         // configured in PCM mode and won't revert to passthrough.
