@@ -115,16 +115,21 @@ class PosterOptionsController @Inject constructor(
     fun show(item: MetaPreview, addonBaseUrl: String?) {
         val launchScope = this.scope ?: return
         launchScope.launch {
+            // Resolve TMDB→IMDB before the membership lookups so the initial state
+            // matches what toggleDefault would read and write. Without this, items
+            // shown from a TMDB-rooted screen (cast filmography, TMDB lists) would
+            // miss the storage entry that was previously written under the IMDB id.
+            val canonical = canonicalize(item)
             val initialIsInLibrary = runCatching {
-                libraryRepository.isInLibrary(item.id, item.apiType).first()
+                libraryRepository.isInLibrary(canonical.id, canonical.apiType).first()
             }.getOrDefault(false)
             val initialIsWatched = runCatching {
-                watchProgressRepository.isWatched(item.id, videoId = item.imdbId).first()
+                watchProgressRepository.isWatched(canonical.id, videoId = canonical.imdbId).first()
             }.getOrDefault(false)
 
             _state.update { current ->
                 current.copy(
-                    target = item,
+                    target = canonical,
                     addonBaseUrl = addonBaseUrl.orEmpty(),
                     isInLibrary = initialIsInLibrary,
                     isWatched = initialIsWatched,
@@ -132,17 +137,7 @@ class PosterOptionsController @Inject constructor(
                     isWatchedPending = false
                 )
             }
-            targetFlow.value = item
-
-            // Resolve TMDB→IMDB in the background so the dialog observes — and writes — under
-            // the same canonical id the details screen uses. Without this, adding from a
-            // TMDB-rooted screen (cast filmography, TMDB lists) and then again from details
-            // creates duplicate library/watched entries (the storage key-matches exactly).
-            val canonical = canonicalize(item)
-            if (canonical.id != item.id && _state.value.target?.id == item.id) {
-                _state.update { it.copy(target = canonical) }
-                targetFlow.value = canonical
-            }
+            targetFlow.value = canonical
         }
     }
 

@@ -9,13 +9,12 @@ import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.repository.LibraryRepository
 import com.nuvio.tv.domain.repository.WatchProgressRepository
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -89,6 +88,41 @@ class PosterOptionsControllerShowTest {
         assertEquals(true, state.isWatched)
     }
 
+    @Test
+    fun `show with TMDB-rooted item resolves library state against canonical IMDB id`() = runTest {
+        val context = mockk<Context>(relaxed = true)
+        val tmdbId = "tmdb:12345"
+        val imdbId = "tt0987654"
+        val libraryRepository = mockk<LibraryRepository>(relaxed = true) {
+            every { sourceMode } returns flowOf(LibrarySourceMode.LOCAL)
+            every { listTabs } returns flowOf(emptyList())
+            // The item is stored under the canonical IMDB id; a query under the
+            // raw TMDB id would miss.
+            every { isInLibrary(tmdbId, any()) } returns flowOf(false)
+            every { isInLibrary(imdbId, any()) } returns flowOf(true)
+        }
+        val watchProgressRepository = mockk<WatchProgressRepository>(relaxed = true) {
+            every { isWatched(any(), any(), any(), any()) } returns flowOf(false)
+        }
+        val tmdbService = mockk<TmdbService>(relaxed = true) {
+            coEvery { tmdbToImdb(12345, "movie") } returns imdbId
+        }
+        val controller = PosterOptionsController(
+            appContext = context,
+            libraryRepository = libraryRepository,
+            watchProgressRepository = watchProgressRepository,
+            tmdbService = tmdbService
+        )
+        controller.bind(this)
+
+        controller.show(samplePreview(id = tmdbId), addonBaseUrl = null)
+        advanceUntilIdle()
+
+        val state = controller.state.value
+        assertEquals(true, state.isInLibrary)
+        assertEquals(imdbId, state.target?.id)
+    }
+
     private fun newController(isInLibrary: Boolean, isWatched: Boolean): PosterOptionsController {
         val context = mockk<Context>(relaxed = true)
         val libraryRepository = mockk<LibraryRepository>(relaxed = true) {
@@ -108,8 +142,8 @@ class PosterOptionsControllerShowTest {
         )
     }
 
-    private fun samplePreview(): MetaPreview = MetaPreview(
-        id = "tt1234567",
+    private fun samplePreview(id: String = "tt1234567"): MetaPreview = MetaPreview(
+        id = id,
         type = ContentType.MOVIE,
         name = "Sample Movie",
         poster = null,
