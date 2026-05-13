@@ -778,7 +778,6 @@
     <string name="layout_section_detail">Página de Detalles</string>
     <string name="layout_section_detail_desc">Ajustes para las pantallas de detalles y episodios.</string>
     <string name="layout_section_continue_watching_desc">Configuraciones para la sección "Continuar viendo".</string>
-    <string name="layout_section_continue_watching_desc">Configuraciones para la sección Continuar viendo.</string>
     <string name="layout_use_episode_thumbnails_cw">Usar miniaturas de episodios en "Continuar viendo"</string>
     <string name="layout_use_episode_thumbnails_cw_sub">Usa miniaturas de episodios como imagen predeterminada. Cuando está desactivado, se usa el fondo.</string>
     <string name="layout_blur_unwatched">Desenfocar Episodios No Vistos</string>
