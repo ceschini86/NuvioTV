@@ -15,6 +15,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
@@ -46,6 +47,7 @@ class PosterOptionsController @Inject constructor(
 
     private var scope: CoroutineScope? = null
     private var bound = false
+    private var showJob: kotlinx.coroutines.Job? = null
 
     @OptIn(ExperimentalCoroutinesApi::class)
     fun bind(scope: CoroutineScope) {
@@ -112,28 +114,28 @@ class PosterOptionsController @Inject constructor(
     }
 
     fun show(item: MetaPreview, addonBaseUrl: String?) {
-        _state.update { current ->
-            current.copy(
-                target = item,
-                addonBaseUrl = addonBaseUrl.orEmpty(),
-                isInLibrary = false,
-                isWatched = false,
-                isLibraryPending = false,
-                isWatchedPending = false
-            )
-        }
-        targetFlow.value = item
-
-        // Resolve TMDB→IMDB in the background so the dialog observes — and writes — under
-        // the same canonical id the details screen uses. Without this, adding from a
-        // TMDB-rooted screen (cast filmography, TMDB lists) and then again from details
-        // creates duplicate library/watched entries (the storage key-matches exactly).
-        scope?.launch {
+        val launchScope = this.scope ?: return
+        showJob?.cancel()
+        showJob = launchScope.launch {
             val canonical = canonicalize(item)
-            if (canonical.id != item.id && _state.value.target?.id == item.id) {
-                _state.update { it.copy(target = canonical) }
-                targetFlow.value = canonical
+            val initialIsInLibrary = runCatching {
+                libraryRepository.isInLibrary(canonical.id, canonical.apiType).first()
+            }.getOrDefault(false)
+            val initialIsWatched = runCatching {
+                watchProgressRepository.isWatched(canonical.id, videoId = canonical.imdbId).first()
+            }.getOrDefault(false)
+
+            _state.update { current ->
+                current.copy(
+                    target = canonical,
+                    addonBaseUrl = addonBaseUrl.orEmpty(),
+                    isInLibrary = initialIsInLibrary,
+                    isWatched = initialIsWatched,
+                    isLibraryPending = false,
+                    isWatchedPending = false
+                )
             }
+            targetFlow.value = canonical
         }
     }
 
@@ -158,6 +160,8 @@ class PosterOptionsController @Inject constructor(
     }
 
     fun dismiss() {
+        showJob?.cancel()
+        showJob = null
         targetFlow.value = null
         _state.update { it.copy(target = null) }
     }
