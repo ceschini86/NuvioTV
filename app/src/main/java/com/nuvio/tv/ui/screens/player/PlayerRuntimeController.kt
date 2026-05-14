@@ -18,6 +18,7 @@ import com.nuvio.tv.data.local.PlayerSettings
 import com.nuvio.tv.data.local.PlayerSettingsDataStore
 import com.nuvio.tv.data.local.DeviceLocalPlayerPreferences
 import com.nuvio.tv.data.local.StreamLinkCacheDataStore
+import com.nuvio.tv.data.local.BingeGroupCacheDataStore
 import com.nuvio.tv.data.local.StreamAutoPlayMode
 import com.nuvio.tv.data.repository.ParentalGuideRepository
 import com.nuvio.tv.data.repository.SkipIntroRepository
@@ -59,6 +60,7 @@ class PlayerRuntimeController(
     internal val playerSettingsDataStore: PlayerSettingsDataStore,
     internal val deviceLocalPlayerPreferences: DeviceLocalPlayerPreferences,
     internal val streamLinkCacheDataStore: StreamLinkCacheDataStore,
+    internal val bingeGroupCacheDataStore: BingeGroupCacheDataStore,
     internal val layoutPreferenceDataStore: com.nuvio.tv.data.local.LayoutPreferenceDataStore,
     internal val watchedItemsPreferences: com.nuvio.tv.data.local.WatchedItemsPreferences,
     internal val trackPreferenceDataStore: com.nuvio.tv.data.local.TrackPreferenceDataStore,

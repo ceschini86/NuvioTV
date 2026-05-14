@@ -15,6 +15,7 @@ import com.nuvio.tv.data.local.PlayerPreference
 import com.nuvio.tv.data.local.PlayerSettingsDataStore
 import com.nuvio.tv.data.local.StreamAutoPlayMode
 import com.nuvio.tv.data.local.StreamLinkCacheDataStore
+import com.nuvio.tv.data.local.BingeGroupCacheDataStore
 import com.nuvio.tv.domain.model.AddonStreams
 import com.nuvio.tv.domain.model.Meta
 import com.nuvio.tv.domain.model.Stream
@@ -52,6 +53,7 @@ class StreamScreenViewModel @Inject constructor(
     private val metaRepository: MetaRepository,
     private val playerSettingsDataStore: PlayerSettingsDataStore,
     private val streamLinkCacheDataStore: StreamLinkCacheDataStore,
+    private val bingeGroupCacheDataStore: BingeGroupCacheDataStore,
     private val torrentSettings: TorrentSettings,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -271,6 +273,7 @@ class StreamScreenViewModel @Inject constructor(
 
             val installedAddons = addonRepository.getInstalledAddons().first()
             val installedAddonOrder = installedAddons.map { it.displayName }
+            val persistedBingeGroup = contentId?.let { bingeGroupCacheDataStore.get(it) }
 
             fun applySuccess(addonStreamGroups: List<AddonStreams>, isAllLoaded: Boolean) {
                 val orderedAddonStreams = StreamAutoPlaySelector.orderAddonStreams(
@@ -297,7 +300,9 @@ class StreamScreenViewModel @Inject constructor(
                         source = playerSettings.streamAutoPlaySource,
                         installedAddonNames = installedAddonOrder.toSet(),
                         selectedAddons = playerSettings.streamAutoPlaySelectedAddons,
-                        selectedPlugins = playerSettings.streamAutoPlaySelectedPlugins
+                        selectedPlugins = playerSettings.streamAutoPlaySelectedPlugins,
+                        preferredBingeGroup = persistedBingeGroup,
+                        preferBingeGroupInSelection = persistedBingeGroup != null
                     )
                 }
                 if (selectedAutoPlayStream != null) {
@@ -754,6 +759,12 @@ class StreamScreenViewModel @Inject constructor(
                     videoSize = playbackInfo.videoSize,
                     bingeGroup = playbackInfo.bingeGroup
                 )
+                // Persist binge group per-content for cross-episode reuse.
+                val bg = playbackInfo.bingeGroup
+                val cid = playbackInfo.contentId
+                if (bg != null && !cid.isNullOrBlank()) {
+                    bingeGroupCacheDataStore.save(cid, bg)
+                }
             }
         }
 

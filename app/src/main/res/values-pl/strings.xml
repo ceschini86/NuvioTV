@@ -1162,6 +1162,12 @@
     <string name="trakt_comments_dialog_subtitle">Wybierz, czy strony metadanych mają pokazywać recenzje Trakt gdy konto jest połączone.</string>
     <string name="trakt_comments_now_shown">Recenzje Trakt na stronach metadanych są teraz widoczne</string>
     <string name="trakt_comments_now_hidden">Recenzje Trakt na stronach metadanych są teraz ukryte</string>
+    <string name="trakt_more_like_this_source_title">Źródło „Podobne"</string>
+    <string name="trakt_more_like_this_source_subtitle">Wybierz skąd pobierane są rekomendacje na stronach szczegółów</string>
+    <string name="trakt_more_like_this_source_dialog_title">Źródło „Podobne"</string>
+    <string name="trakt_more_like_this_source_dialog_subtitle">Wybierz źródło rekomendacji wyświetlanych na stronach szczegółów.</string>
+    <string name="trakt_more_like_this_source_trakt">Trakt</string>
+    <string name="trakt_more_like_this_source_tmdb">TMDB</string>
 
     <string name="network_speed_test_run">Uruchom test prędkości</string>
     <string name="network_speed_test_running">Trwa test prędkości</string>

@@ -969,6 +969,12 @@
     <string name="trakt_comments_dialog_subtitle">Choose whether metadata pages should show Trakt reviews when your account is connected.</string>
     <string name="trakt_comments_now_shown">Trakt reviews on metadata pages are now shown</string>
     <string name="trakt_comments_now_hidden">Trakt reviews on metadata pages are now hidden</string>
+    <string name="trakt_more_like_this_source_title">More Like This source</string>
+    <string name="trakt_more_like_this_source_subtitle">Choose where recommendations come from on detail pages</string>
+    <string name="trakt_more_like_this_source_dialog_title">More Like This source</string>
+    <string name="trakt_more_like_this_source_dialog_subtitle">Select the source for recommendations shown on detail pages.</string>
+    <string name="trakt_more_like_this_source_trakt">Trakt</string>
+    <string name="trakt_more_like_this_source_tmdb">TMDB</string>
     <string name="trakt_cached_label">Cached</string>
     <string name="trakt_stat_movies">Movies</string>
     <string name="trakt_stat_shows">Shows</string>

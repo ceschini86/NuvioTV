@@ -922,13 +922,6 @@ class FolderDetailViewModel @Inject constructor(
         }
         if (item.id in enrichedItemIds) return
 
-        // Check if any enrichment source is active — if so, signal enriching immediately
-        // so hero content hides until enrichment completes.
-        val viewMode = _uiState.value.viewMode
-        if (viewMode == FolderViewMode.FOLLOW_LAYOUT && _uiState.value.homeLayout == HomeLayout.MODERN) {
-            _enrichingItemId.value = item.id
-        }
-
         enrichFocusJob?.cancel()
         enrichFocusJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             kotlinx.coroutines.delay(350)
@@ -937,7 +930,20 @@ class FolderDetailViewModel @Inject constructor(
             val tmdbEnabled = tmdbSettings.enabled &&
                 (homeLayout != HomeLayout.MODERN || tmdbSettings.modernHomeEnabled)
             val externalMetaEnabled = layoutPreferenceDataStore.preferExternalMetaAddonDetail.first()
+
+            // Only signal enriching if at least one source is active and we're
+            // in modern follow-layout mode — prevents hero from hiding indefinitely
+            // when no enrichment source can provide data.
+            val viewMode = _uiState.value.viewMode
+            val willEnrich = tmdbEnabled || externalMetaEnabled
+            if (willEnrich && viewMode == FolderViewMode.FOLLOW_LAYOUT && homeLayout == HomeLayout.MODERN) {
+                _enrichingItemId.value = item.id
+            }
+
             if (!tmdbEnabled && !externalMetaEnabled) {
+                // No enrichment source is active — mark as failed so the hero
+                // shows addon data immediately instead of waiting indefinitely.
+                _failedEnrichmentIds.value = _failedEnrichmentIds.value + item.id
                 if (_enrichingItemId.value == item.id) _enrichingItemId.value = null
                 return@launch
             }
