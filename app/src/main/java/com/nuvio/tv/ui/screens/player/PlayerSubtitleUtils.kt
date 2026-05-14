@@ -65,7 +65,7 @@ internal object PlayerSubtitleUtils {
         // Keep generic fallback below explicit regional aliases so specific tracks still win.
         if (candidate.isGeneric && !desired.isGeneric) return LANGUAGE_MATCH_GENERIC_FALLBACK
         if (!candidate.isGeneric && desired.isGeneric) {
-            return if (candidate.base in setOf("pt", "es")) {
+            return if (candidate.base == "pt" || candidate.base == "es") {
                 LANGUAGE_MATCH_RELATED_VARIANT
             } else {
                 LANGUAGE_MATCH_GENERIC_FALLBACK
@@ -95,9 +95,6 @@ internal object PlayerSubtitleUtils {
         val code = raw.lowercase(Locale.ROOT).replace('_', '-')
         val override = LANGUAGE_OVERRIDES[code]?.lowercase(Locale.ROOT)
         val canonicalCode = if (code == "pt-pt") code else override ?: code
-        val compact = canonicalCode.replace(Regex("[^a-z0-9]+"), "")
-        val text = searchableLanguageText(raw)
-
         fun result(
             tag: String,
             base: String = tag.substringBefore('-'),
@@ -137,15 +134,18 @@ internal object PlayerSubtitleUtils {
             "nl", "dut", "nld" -> return result("nl", generic = true)
             "en", "eng" -> return result("en", generic = true)
             "ar", "ara" -> return result("ar", generic = true)
-            "fa", "fas", "per" -> return result("fa")
-            "he", "iw" -> return result("he")
-            "id", "in" -> return result("id")
-            "ms", "msa", "may" -> return result("ms")
-            "jv", "jw" -> return result("jv")
-            "fil", "tl" -> return result("fil")
-            "el", "gr" -> return result("el")
-            "ro", "mo" -> return result("ro")
+            "fa", "fas", "per" -> return result("fa", generic = true)
+            "he", "iw" -> return result("he", generic = true)
+            "id", "in" -> return result("id", generic = true)
+            "ms", "msa", "may" -> return result("ms", generic = true)
+            "jv", "jw" -> return result("jv", generic = true)
+            "fil", "tl" -> return result("fil", generic = true)
+            "el", "gr" -> return result("el", generic = true)
+            "ro", "mo" -> return result("ro", generic = true)
         }
+
+        val compact = canonicalCode.replace(Regex("[^a-z0-9]+"), "")
+        val text = searchableLanguageText(raw)
 
         if (compact in setOf("ptbr", "pob") ||
             text.containsAny(
