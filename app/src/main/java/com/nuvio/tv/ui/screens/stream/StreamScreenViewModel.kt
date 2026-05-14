@@ -273,7 +273,9 @@ class StreamScreenViewModel @Inject constructor(
 
             val installedAddons = addonRepository.getInstalledAddons().first()
             val installedAddonOrder = installedAddons.map { it.displayName }
-            val persistedBingeGroup = contentId?.let { bingeGroupCacheDataStore.get(it) }
+            val persistedBingeGroup = if (playerSettings.streamAutoPlayPreferBingeGroupForNextEpisode) {
+                contentId?.let { bingeGroupCacheDataStore.get(it) }
+            } else null
 
             fun applySuccess(addonStreamGroups: List<AddonStreams>, isAllLoaded: Boolean) {
                 val orderedAddonStreams = StreamAutoPlaySelector.orderAddonStreams(
