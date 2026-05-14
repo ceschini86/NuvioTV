@@ -244,7 +244,7 @@ object NetworkModule {
     @Named("parentalGuide")
     fun provideParentalGuideRetrofit(okHttpClient: OkHttpClient, moshi: Moshi): Retrofit =
         Retrofit.Builder()
-            .baseUrl(BuildConfig.PARENTAL_GUIDE_API_URL.ifEmpty { "https://localhost/" })
+            .baseUrl("https://api.imdbapi.dev/")
             .client(okHttpClient)
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
