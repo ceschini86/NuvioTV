@@ -330,6 +330,16 @@ private fun PlayerRuntimeController.applyStreamMetadata(stream: Stream) {
     currentVideoWidth = null
     currentVideoHeight = null
     currentVideoBitrate = null
+
+    // Persist binge group per content so subsequent episode plays
+    // (from CW, Details, or next-episode) can reuse the same source group.
+    val bg = stream.behaviorHints?.bingeGroup
+    val cid = contentId
+    if (bg != null && cid != null) {
+        scope.launch(kotlinx.coroutines.NonCancellable) {
+            bingeGroupCacheDataStore.save(cid, bg)
+        }
+    }
 }
 
 private fun PlayerRuntimeController.persistSelectedStreamForReuse(
