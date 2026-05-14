@@ -293,7 +293,7 @@ internal fun PlayerRuntimeController.saveWatchProgressInternal(position: Long, d
         progressPercent = fallbackPercent
     )
 
-    scope.launch {
+    scope.launch(kotlinx.coroutines.NonCancellable) {
         watchProgressRepository.saveProgress(progress, syncRemote = syncRemote)
     }
 }

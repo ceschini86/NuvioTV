@@ -10,8 +10,11 @@ import com.nuvio.tv.data.local.WatchProgressPreferences
 import com.nuvio.tv.data.remote.supabase.SupabaseWatchProgress
 import com.nuvio.tv.domain.model.WatchProgress
 import io.github.jan.supabase.postgrest.Postgrest
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
@@ -32,6 +35,32 @@ class WatchProgressSyncService @Inject constructor(
     private val traktSettingsDataStore: TraktSettingsDataStore,
     private val profileManager: ProfileManager
 ) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * Timestamp (epoch ms) of the last successful push to remote.
+     * Used by [WatchProgressPreferences.mergeRemoteEntries] to protect local entries
+     * that were created after the last push - these haven't reached remote yet,
+     * so their absence from a pull response does NOT mean they were deleted on
+     * another device.
+     */
+    @Volatile
+    var lastSuccessfulPushMs: Long = 0L
+        private set
+
+    /** Called after a successful push to record the sync point. */
+    fun markPushSucceeded() {
+        val now = System.currentTimeMillis()
+        lastSuccessfulPushMs = now
+        scope.launch {
+            watchProgressPreferences.setLastSuccessfulPushMs(now)
+        }
+    }
+
+    /** Restores persisted push timestamp on startup. */
+    suspend fun restoreLastPushTimestamp() {
+        lastSuccessfulPushMs = watchProgressPreferences.getLastSuccessfulPushMs()
+    }
     private suspend fun <T> withJwtRefreshRetry(block: suspend () -> T): T {
         return try {
             block()
@@ -123,6 +152,7 @@ class WatchProgressSyncService @Inject constructor(
             }
 
             Log.d(TAG, "Pushed ${entries.size} watch progress entries to remote for profile $profileId")
+            markPushSucceeded()
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to push watch progress to remote", e)
@@ -161,6 +191,7 @@ class WatchProgressSyncService @Inject constructor(
             }
 
             Log.d(TAG, "Pushed single watch progress entry to remote for profile $profileId (key=$key)")
+            markPushSucceeded()
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to push single watch progress to remote", e)
