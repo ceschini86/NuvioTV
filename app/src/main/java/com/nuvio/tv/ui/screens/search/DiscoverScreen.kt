@@ -35,6 +35,7 @@ import kotlin.math.roundToInt
 @Composable
 fun DiscoverScreen(
     viewModel: SearchViewModel = hiltViewModel(),
+    showBuiltInHeader: Boolean = true,
     onNavigateToDetail: (String, String, String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -92,6 +93,7 @@ fun DiscoverScreen(
                 watchedMovieIds = watchedMovieIds,
                 watchedSeriesIds = watchedSeriesIds,
                 focusResults = false,
+                showBuiltInHeader = showBuiltInHeader,
                 firstItemFocusRequester = discoverFirstItemFocusRequester,
                 focusedItemIndex = discoverFocusedItemIndex,
                 shouldRestoreFocusedItem = restoreDiscoverFocus,
