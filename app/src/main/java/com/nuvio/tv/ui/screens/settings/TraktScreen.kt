@@ -57,6 +57,7 @@ import com.nuvio.tv.R
 import com.nuvio.tv.core.qr.QrCodeGenerator
 import com.nuvio.tv.data.local.TraktSettingsDataStore
 import com.nuvio.tv.data.local.WatchProgressSource
+import com.nuvio.tv.data.local.MoreLikeThisSourcePreference
 import com.nuvio.tv.data.repository.TraktProgressService
 import com.nuvio.tv.domain.model.LibrarySourceMode
 import com.nuvio.tv.ui.components.NuvioDialog
@@ -76,6 +77,7 @@ fun TraktScreen(
     var showCommentsDialog by remember { mutableStateOf(false) }
     var showWatchProgressDialog by remember { mutableStateOf(false) }
     var showLibrarySourceDialog by remember { mutableStateOf(false) }
+    var showMoreLikeThisSourceDialog by remember { mutableStateOf(false) }
     val strAllHistory = stringResource(R.string.trakt_all_history)
     val strDaysFormat = stringResource(R.string.trakt_days_format)
     val strWatchProgressTrakt = stringResource(R.string.trakt_watch_progress_source_trakt)
@@ -101,6 +103,14 @@ fun TraktScreen(
     }
     val enabledFormatter: (Boolean) -> String = { enabled ->
         if (enabled) strSettingOn else strSettingOff
+    }
+    val strMoreLikeThisTrakt = stringResource(R.string.trakt_more_like_this_source_trakt)
+    val strMoreLikeThisTmdb = stringResource(R.string.trakt_more_like_this_source_tmdb)
+    val moreLikeThisSourceFormatter: (MoreLikeThisSourcePreference) -> String = { source ->
+        when (source) {
+            MoreLikeThisSourcePreference.TRAKT -> strMoreLikeThisTrakt
+            MoreLikeThisSourcePreference.TMDB -> strMoreLikeThisTmdb
+        }
     }
     val continueWatchingDayOptions = remember {
         listOf(
@@ -320,6 +330,12 @@ fun TraktScreen(
                         subtitle = stringResource(R.string.trakt_comments_subtitle),
                         value = enabledFormatter(uiState.showMetaComments),
                         onClick = { showCommentsDialog = true }
+                    )
+                    SettingsActionRow(
+                        title = stringResource(R.string.trakt_more_like_this_source_title),
+                        subtitle = stringResource(R.string.trakt_more_like_this_source_subtitle),
+                        value = moreLikeThisSourceFormatter(uiState.moreLikeThisSource),
+                        onClick = { showMoreLikeThisSourceDialog = true }
                     )
                 }
 
@@ -602,6 +618,59 @@ fun TraktScreen(
                 ) {
                     Button(
                         onClick = { showCommentsDialog = false },
+                        colors = ButtonDefaults.colors(
+                            containerColor = NuvioColors.BackgroundCard,
+                            contentColor = NuvioColors.TextPrimary
+                        )
+                    ) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+            }
+        }
+    }
+
+    if (showMoreLikeThisSourceDialog) {
+        NuvioDialog(
+            onDismiss = { showMoreLikeThisSourceDialog = false },
+            title = stringResource(R.string.trakt_more_like_this_source_dialog_title),
+            subtitle = stringResource(R.string.trakt_more_like_this_source_dialog_subtitle),
+            width = 620.dp,
+            suppressFirstKeyUp = false
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(
+                    onClick = {
+                        viewModel.onMoreLikeThisSourceSelected(MoreLikeThisSourcePreference.TRAKT)
+                        showMoreLikeThisSourceDialog = false
+                    },
+                    colors = ButtonDefaults.colors(
+                        containerColor = if (uiState.moreLikeThisSource == MoreLikeThisSourcePreference.TRAKT) NuvioColors.Primary else NuvioColors.BackgroundCard,
+                        contentColor = if (uiState.moreLikeThisSource == MoreLikeThisSourcePreference.TRAKT) Color.Black else NuvioColors.TextPrimary
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(R.string.trakt_more_like_this_source_trakt))
+                }
+                Button(
+                    onClick = {
+                        viewModel.onMoreLikeThisSourceSelected(MoreLikeThisSourcePreference.TMDB)
+                        showMoreLikeThisSourceDialog = false
+                    },
+                    colors = ButtonDefaults.colors(
+                        containerColor = if (uiState.moreLikeThisSource == MoreLikeThisSourcePreference.TMDB) NuvioColors.Primary else NuvioColors.BackgroundCard,
+                        contentColor = if (uiState.moreLikeThisSource == MoreLikeThisSourcePreference.TMDB) Color.Black else NuvioColors.TextPrimary
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(R.string.trakt_more_like_this_source_tmdb))
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Button(
+                        onClick = { showMoreLikeThisSourceDialog = false },
                         colors = ButtonDefaults.colors(
                             containerColor = NuvioColors.BackgroundCard,
                             contentColor = NuvioColors.TextPrimary

@@ -132,6 +132,7 @@ class MetaDetailsViewModel @Inject constructor(
     private var hideUnreleasedContent = false
     private var traktCommentsEnabled = false
     private var traktAuthenticated = false
+    private var moreLikeThisSourcePreference = com.nuvio.tv.data.local.MoreLikeThisSourcePreference.TRAKT
 
     /** Content ID used for watch-progress and watched-items lookups.
      *  Starts as the navigation [itemId] (which may be "tmdb:123") and is
@@ -181,6 +182,11 @@ class MetaDetailsViewModel @Inject constructor(
     }
 
     private fun observeTraktCommentsAvailability() {
+        viewModelScope.launch {
+            traktSettingsDataStore.moreLikeThisSource.collectLatest { source ->
+                moreLikeThisSourcePreference = source
+            }
+        }
         viewModelScope.launch {
             combine(
                 traktSettingsDataStore.showMetaComments,
@@ -1103,6 +1109,7 @@ class MetaDetailsViewModel @Inject constructor(
 
     private fun shouldLoadTraktMoreLikeThis(meta: Meta): Boolean {
         if (!traktAuthenticated) return false
+        if (moreLikeThisSourcePreference == com.nuvio.tv.data.local.MoreLikeThisSourcePreference.TMDB) return false
         return when (meta.type) {
             ContentType.MOVIE -> true
             ContentType.SERIES, ContentType.TV -> true
