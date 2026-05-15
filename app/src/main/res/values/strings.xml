@@ -1188,7 +1188,7 @@
     <string name="stream_no_streams_hint">Try installing more addons to find streams</string>
     <string name="stream_finding_source">Finding stream source</string>
     <string name="debrid_resolving_stream">Resolving debrid stream</string>
-    <string name="debrid_stale_stream">This cached debrid stream is no longer available. Refreshing streams.</string>
+    <string name="debrid_stale_stream">This cached debrid stream is no longer available.</string>
     <string name="debrid_missing_api_key">Add your debrid API key in Settings to use Direct Debrid.</string>
     <string name="debrid_resolution_failed">Could not resolve this debrid stream.</string>
     <string name="stream_type_torrent">Torrent</string>
