@@ -304,6 +304,7 @@ class StartupSyncService @Inject constructor(
 
             val isTraktConnected = traktAuthDataStore.isEffectivelyAuthenticated.first()
             val shouldUseSupabaseWatchProgressSync = watchProgressSyncService.shouldUseSupabaseWatchProgressSync()
+            watchProgressSyncService.restoreLastPushTimestamp()
             Log.d(
                 TAG,
                 "Watch progress sync: isTraktConnected=$isTraktConnected shouldUseSupabaseWatchProgressSync=$shouldUseSupabaseWatchProgressSync"
@@ -340,7 +341,10 @@ class StartupSyncService @Inject constructor(
                 try {
                     val remoteEntries = watchProgressSyncService.pullFromRemote().getOrElse { throw it }
                     Log.d(TAG, "Pulled ${remoteEntries.size} watch progress entries from remote")
-                    watchProgressPreferences.mergeRemoteEntries(remoteEntries.toMap())
+                    watchProgressPreferences.mergeRemoteEntries(
+                        remoteEntries.toMap(),
+                        lastSuccessfulPushMs = watchProgressSyncService.lastSuccessfulPushMs
+                    )
                     watchProgressRepository.hasCompletedInitialPull = true
                     Log.d(TAG, "Merged local watch progress with ${remoteEntries.size} remote entries")
                 } catch (e: Exception) {
@@ -365,7 +369,10 @@ class StartupSyncService @Inject constructor(
                 try {
                     val remoteEntries = watchProgressSyncService.pullFromRemote().getOrElse { throw it }
                     Log.d(TAG, "Pulled ${remoteEntries.size} watch progress entries from remote")
-                    watchProgressPreferences.mergeRemoteEntries(remoteEntries.toMap())
+                    watchProgressPreferences.mergeRemoteEntries(
+                        remoteEntries.toMap(),
+                        lastSuccessfulPushMs = watchProgressSyncService.lastSuccessfulPushMs
+                    )
                     watchProgressRepository.hasCompletedInitialPull = true
                     Log.d(TAG, "Merged local watch progress with ${remoteEntries.size} remote entries")
                 } catch (e: Exception) {

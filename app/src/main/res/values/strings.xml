@@ -973,6 +973,12 @@
     <string name="trakt_comments_dialog_subtitle">Choose whether metadata pages should show Trakt reviews when your account is connected.</string>
     <string name="trakt_comments_now_shown">Trakt reviews on metadata pages are now shown</string>
     <string name="trakt_comments_now_hidden">Trakt reviews on metadata pages are now hidden</string>
+    <string name="trakt_more_like_this_source_title">More Like This source</string>
+    <string name="trakt_more_like_this_source_subtitle">Choose where recommendations come from on detail pages</string>
+    <string name="trakt_more_like_this_source_dialog_title">More Like This source</string>
+    <string name="trakt_more_like_this_source_dialog_subtitle">Select the source for recommendations shown on detail pages.</string>
+    <string name="trakt_more_like_this_source_trakt">Trakt</string>
+    <string name="trakt_more_like_this_source_tmdb">TMDB</string>
     <string name="trakt_cached_label">Cached</string>
     <string name="trakt_stat_movies">Movies</string>
     <string name="trakt_stat_shows">Shows</string>
@@ -1798,6 +1804,9 @@
 
     <!-- Collection Management -->
     <string name="collections_header">Collections</string>
+    <string name="collections_delete_confirm_title">Delete Collection?</string>
+    <string name="collections_delete_confirm">Delete</string>
+    <string name="collections_delete_confirm_subtitle">This will permanently delete \"%1$s\". This cannot be undone.</string>
     <string name="collections_empty">No collections yet. Create one to organize your catalogs.</string>
     <string name="collections_new">New Collection</string>
     <string name="collections_import">Import</string>
@@ -2042,6 +2051,8 @@
     <string name="collection_editor_trakt_name_placeholder">Weekend Watch, Award Winners</string>
     <string name="collection_editor_folder_count_one">%1$d item</string>
     <string name="collection_editor_folder_count_other">%1$d items</string>
+    <string name="collections_editor_delete_folder_title">Delete Folder?</string>
+    <string name="collections_editor_delete_folder_subtitle">This will permanently delete \"%1$s\" and its contents.</string>
     <string name="collections_editor_tmdb_movie_title_placeholder">Marvel Movies, Netflix Originals, Pixar</string>
     <string name="collections_editor_tmdb_tv_title_placeholder">Best Action Movies, Korean Dramas, 2024 Animation</string>
     <string name="collections_editor_tmdb_person_title_placeholder">Tom Hanks Movies, Favorite Actors</string>

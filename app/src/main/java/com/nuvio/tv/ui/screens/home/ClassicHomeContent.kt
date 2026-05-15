@@ -249,11 +249,27 @@ fun ClassicHomeContent(
         .apply { value = trailerPreviewAudioUrls }
     var focusedArtwork by remember { mutableStateOf<ClassicFocusArtwork?>(null) }
     val latestOnItemFocus by rememberUpdatedState(onItemFocus)
+    val latestOnRequestTrailerPreview by rememberUpdatedState(onRequestTrailerPreview)
 
-    val handleMetaFocus: (MetaPreview) -> Unit = remember(uiState.classicFocusGradientEnabled, uiState.focusedPosterBackdropExpandEnabled) {
+    // Track focused catalog item for trailer preview requests (mirrors ModernHomeContent behavior).
+    var focusedCatalogItem by remember { mutableStateOf<MetaPreview?>(null) }
+    if (uiState.focusedPosterBackdropTrailerEnabled) {
+        LaunchedEffect(focusedCatalogItem) {
+            val item = focusedCatalogItem ?: return@LaunchedEffect
+            if (trailerPreviewUrls.containsKey(item.id)) return@LaunchedEffect
+            delay(150)
+            if (focusedCatalogItem?.id != item.id) return@LaunchedEffect
+            latestOnRequestTrailerPreview(item)
+        }
+    }
+
+    val handleMetaFocus: (MetaPreview) -> Unit = remember(uiState.classicFocusGradientEnabled, uiState.focusedPosterBackdropExpandEnabled, uiState.focusedPosterBackdropTrailerEnabled) {
         { item ->
             if (uiState.classicFocusGradientEnabled) {
                 focusedArtwork = item.toClassicFocusArtwork(uiState.focusedPosterBackdropExpandEnabled)
+            }
+            if (uiState.focusedPosterBackdropTrailerEnabled) {
+                focusedCatalogItem = item
             }
             latestOnItemFocus(item)
         }

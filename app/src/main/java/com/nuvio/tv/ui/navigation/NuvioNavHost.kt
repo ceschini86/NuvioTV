@@ -926,6 +926,7 @@ fun NuvioNavHost(
 
         composable(Screen.Discover.route) {
             DiscoverScreen(
+                showBuiltInHeader = !hideBuiltInHeaders,
                 onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
                     navController.navigate(Screen.Detail.createRoute(itemId, itemType, addonBaseUrl))
                 }

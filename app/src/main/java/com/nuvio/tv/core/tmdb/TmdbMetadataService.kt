@@ -1007,13 +1007,20 @@ class TmdbMetadataService(
     ): String? {
         if (images.isEmpty()) return null
         val languageCode = normalizedLanguage.substringBefore("-")
-        val regionCode = normalizedLanguage.substringAfter("-", "").uppercase(Locale.US).takeIf { it.length == 2 }
+        val explicitRegion = normalizedLanguage.substringAfter("-", "").uppercase(Locale.US).takeIf { it.length == 2 }
+        val regionCode = explicitRegion
+            ?: LANGUAGE_DEFAULT_REGION[languageCode]
             ?: DEFAULT_LANGUAGE_REGIONS[languageCode]
+        // Once we have any region (explicit like fr-FR, or inferred for a bare "fr" via
+        // the default-region map), skip the "same language, any other region" tier so a
+        // sibling locale (e.g. fr-CA) doesn't get picked ahead of the English original.
+        // With no resolvable region we keep the legacy lenient fallback.
+        val allowCrossRegionLanguageFallback = regionCode == null
         return images
             .sortedWith(
                 compareByDescending<TmdbImage> { it.iso6391 == languageCode && it.iso31661 == regionCode }
                     .thenByDescending { it.iso6391 == languageCode && it.iso31661 == null }
-                    .thenByDescending { it.iso6391 == languageCode }
+                    .thenByDescending { allowCrossRegionLanguageFallback && it.iso6391 == languageCode }
                     .thenByDescending { it.iso6391 == "en" }
                     .thenByDescending { it.iso6391 == null }
             )
