@@ -1042,7 +1042,13 @@ internal fun PlayerRuntimeController.findBestInternalSubtitleTrackIndex(
         }
         val preferredCandidateIndexes = candidateIndexes.filter { index -> !subtitleTracks[index].isForced }
             .takeIf { it.isNotEmpty() }
-            ?: candidateIndexes
+            ?: if (normalOnly) {
+                // Forced tracks are the only candidates but we explicitly want non-forced.
+                // Continue to the next target or let addon fallback handle it.
+                continue
+            } else {
+                candidateIndexes
+            }
         if (preferredCandidateIndexes.size == 1) {
             // For regional targets, verify the single candidate is actually the right variant.
             // A track with language="por" matches both "pt" and "pt-br" by language code,
@@ -1090,12 +1096,31 @@ private fun findBestForcedSubtitleTrackIndex(
     selectedAudioTrack: TrackInfo?
 ): Int {
     // isForced is set from both the ExoPlayer SELECTION_FLAG_FORCED and name/label/id containing "forced"
-    return subtitleTracks.indexOfFirst { track ->
+    val directMatch = subtitleTracks.indexOfFirst { track ->
         track.isForced &&
             subtitleTrackMatchesLanguage(track, target) &&
             selectedAudioTrack != null &&
             subtitleTrackMatchesSelectedAudioLanguage(track, selectedAudioTrack)
     }
+    if (directMatch >= 0) return directMatch
+
+    // For regional variants (pt-br, es-419) the track may have a generic language code
+    // (e.g. "pt") but carry regional tags in its name/trackId. Use detectTrackLanguageVariant
+    // to resolve the actual variant and match against the target.
+    val normalizedTarget = PlayerSubtitleUtils.normalizeLanguageCode(target)
+    if (normalizedTarget == "pt-br" || normalizedTarget == "es-419") {
+        return subtitleTracks.indexOfFirst { track ->
+            track.isForced &&
+                selectedAudioTrack != null &&
+                subtitleTrackMatchesSelectedAudioLanguage(track, selectedAudioTrack) &&
+                PlayerSubtitleUtils.detectTrackLanguageVariant(
+                    language = track.language,
+                    name = track.name,
+                    trackId = track.trackId
+                ) == normalizedTarget
+        }
+    }
+    return -1
 }
 
 private fun subtitleTrackMatchesLanguage(track: TrackInfo, target: String): Boolean {
@@ -1338,6 +1363,31 @@ internal fun PlayerRuntimeController.subtitleHasAnyTag(track: TrackInfo, tags: L
     return tags.any { tag -> haystack.contains(tag) }
 }
 
+/**
+ * Checks whether the selected audio track matches the subtitle target language for the purpose
+ * of activating forced-only subtitle mode. This is more lenient than [audioTrackMatchesLanguage]
+ * for regional variants: if the target is "pt-br" and the audio language is generic "pt",
+ * we consider it a match because the audio is likely Brazilian Portuguese even without explicit
+ * regional tags. Same logic applies to "es-419" matching generic "es" audio.
+ */
+private fun audioMatchesSubtitleTargetForForced(audioTrack: TrackInfo, target: String): Boolean {
+    if (audioTrackMatchesLanguage(audioTrack, target)) return true
+
+    val normalizedTarget = PlayerSubtitleUtils.normalizeLanguageCode(target)
+    val baseTarget = normalizedTarget.substringBefore('-')
+    if (baseTarget == normalizedTarget) return false // not a regional variant
+
+    // Check if the audio track's base language matches the target's base language.
+    // e.g. audio="pt" matches target="pt-br", audio="es" matches target="es-419"
+    val audioVariant = PlayerSubtitleUtils.detectTrackLanguageVariant(
+        language = audioTrack.language,
+        name = audioTrack.name,
+        trackId = audioTrack.trackId
+    )
+    // If audio is generic base (e.g. "pt") or the same regional variant (e.g. "pt-br"), match.
+    return audioVariant == baseTarget || audioVariant == normalizedTarget
+}
+
 internal fun PlayerRuntimeController.tryAutoSelectPreferredSubtitleFromAvailableTracks() {
     if (autoSubtitleSelected) return
 
@@ -1348,7 +1398,7 @@ internal fun PlayerRuntimeController.tryAutoSelectPreferredSubtitleFromAvailable
     val useForcedSubtitles = state.subtitleStyle.useForcedSubtitles
     val forcedTarget = when {
         !useForcedSubtitles -> null
-        primaryTarget != null && selectedAudioTrack != null && audioTrackMatchesLanguage(selectedAudioTrack, primaryTarget) ->
+        primaryTarget != null && selectedAudioTrack != null && audioMatchesSubtitleTargetForForced(selectedAudioTrack, primaryTarget) ->
             primaryTarget
         primaryTarget == null &&
             selectedAudioTrack != null &&
@@ -1382,7 +1432,7 @@ internal fun PlayerRuntimeController.tryAutoSelectPreferredSubtitleFromAvailable
         subtitleTracks = state.subtitleTracks,
         targets = targets,
         forcedOnly = forcedOnly,
-        normalOnly = useForcedSubtitles && !forcedOnly,
+        normalOnly = !forcedOnly,
         selectedAudioTrack = selectedAudioTrack
     )
     if (internalIndex >= 0 && hasScannedTextTracksOnce) {
