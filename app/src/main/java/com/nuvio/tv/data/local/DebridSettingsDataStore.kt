@@ -2,10 +2,12 @@ package com.nuvio.tv.data.local
 
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.nuvio.tv.core.debrid.DebridStreamFormatterDefaults
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.domain.model.DebridSettings
+import com.nuvio.tv.domain.model.normalizeDebridInstantPlaybackPreparationLimit
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -27,6 +29,7 @@ class DebridSettingsDataStore @Inject constructor(
     private val enabledKey = booleanPreferencesKey("debrid_enabled")
     private val torboxApiKeyKey = stringPreferencesKey("torbox_api_key")
     private val realDebridApiKeyKey = stringPreferencesKey("real_debrid_api_key")
+    private val instantPlaybackPreparationLimitKey = intPreferencesKey("instant_playback_preparation_limit")
     private val streamNameTemplateKey = stringPreferencesKey("debrid_stream_name_template")
     private val streamDescriptionTemplateKey = stringPreferencesKey("debrid_stream_description_template")
 
@@ -36,6 +39,9 @@ class DebridSettingsDataStore @Inject constructor(
                 enabled = prefs[enabledKey] ?: false,
                 torboxApiKey = prefs[torboxApiKeyKey] ?: "",
                 realDebridApiKey = prefs[realDebridApiKeyKey] ?: "",
+                instantPlaybackPreparationLimit = normalizeDebridInstantPlaybackPreparationLimit(
+                    prefs[instantPlaybackPreparationLimitKey] ?: 0
+                ),
                 streamNameTemplate = prefs[streamNameTemplateKey]
                     ?: DebridStreamFormatterDefaults.NAME_TEMPLATE,
                 streamDescriptionTemplate = prefs[streamDescriptionTemplateKey]
@@ -49,11 +55,23 @@ class DebridSettingsDataStore @Inject constructor(
     }
 
     suspend fun setTorboxApiKey(apiKey: String) {
-        store().edit { it[torboxApiKeyKey] = apiKey.trim() }
+        val normalized = apiKey.trim()
+        store().edit {
+            it[torboxApiKeyKey] = normalized
+            if (normalized.isBlank()) {
+                it[enabledKey] = false
+            }
+        }
     }
 
     suspend fun setRealDebridApiKey(apiKey: String) {
         store().edit { it[realDebridApiKeyKey] = apiKey.trim() }
+    }
+
+    suspend fun setInstantPlaybackPreparationLimit(limit: Int) {
+        store().edit {
+            it[instantPlaybackPreparationLimitKey] = normalizeDebridInstantPlaybackPreparationLimit(limit)
+        }
     }
 
     suspend fun setStreamTemplates(nameTemplate: String, descriptionTemplate: String) {

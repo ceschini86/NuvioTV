@@ -13,14 +13,18 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -47,6 +51,7 @@ import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
@@ -61,6 +66,7 @@ fun DebridSettingsContent(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var activeApiKeyDialog by remember { mutableStateOf<DebridApiKeyDialogProvider?>(null) }
+    var showPrepareCountDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     LaunchedEffect(uiState.serverError) {
@@ -89,11 +95,15 @@ fun DebridSettingsContent(
                     contentPadding = PaddingValues(bottom = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    item(key = "debrid_notice") {
+                        DebridInfoText(text = stringResource(R.string.debrid_experimental_notice))
+                    }
+
                     item(key = "debrid_enabled") {
                         SettingsToggleRow(
                             title = stringResource(R.string.debrid_enable_title),
                             subtitle = stringResource(R.string.debrid_enable_subtitle),
-                            checked = uiState.enabled,
+                            checked = uiState.enabled && uiState.hasAnyApiKey,
                             onToggle = { viewModel.onEvent(DebridSettingsEvent.ToggleEnabled(!uiState.enabled)) },
                             modifier = Modifier
                                 .padding(top = 2.dp)
@@ -103,18 +113,19 @@ fun DebridSettingsContent(
                                     } else {
                                         Modifier
                                     }
-                                )
+                                ),
+                            enabled = uiState.hasAnyApiKey
                         )
                     }
 
-                    item(key = "debrid_provider") {
-                        SettingsActionRow(
-                            title = stringResource(R.string.debrid_provider_title),
-                            subtitle = stringResource(R.string.debrid_provider_subtitle),
-                            value = stringResource(R.string.debrid_provider_available),
-                            onClick = {},
-                            enabled = false
-                        )
+                    if (!uiState.hasAnyApiKey) {
+                        item(key = "debrid_add_key_first") {
+                            DebridInfoText(text = stringResource(R.string.debrid_add_key_first))
+                        }
+                    }
+
+                    item(key = "debrid_account_section") {
+                        DebridSectionLabel(text = stringResource(R.string.debrid_section_account))
                     }
 
                     item(key = "debrid_torbox_api_key") {
@@ -123,18 +134,39 @@ fun DebridSettingsContent(
                             subtitle = stringResource(R.string.debrid_api_key_subtitle),
                             value = maskDebridApiKey(uiState.torboxApiKey, stringResource(R.string.debrid_not_set)),
                             onClick = { activeApiKeyDialog = DebridApiKeyDialogProvider.TORBOX },
-                            enabled = uiState.enabled
+                            enabled = true
                         )
                     }
 
-                    item(key = "debrid_real_debrid_api_key") {
-                        SettingsActionRow(
-                            title = stringResource(R.string.debrid_real_debrid_api_key_title),
-                            subtitle = stringResource(R.string.debrid_real_debrid_api_key_subtitle),
-                            value = maskDebridApiKey(uiState.realDebridApiKey, stringResource(R.string.debrid_not_set)),
-                            onClick = { activeApiKeyDialog = DebridApiKeyDialogProvider.REAL_DEBRID },
-                            enabled = uiState.enabled
+                    item(key = "debrid_instant_section") {
+                        DebridSectionLabel(text = stringResource(R.string.debrid_section_instant_playback))
+                    }
+
+                    item(key = "debrid_prepare_links") {
+                        val prepareEnabled = uiState.enabled && uiState.instantPlaybackPreparationLimit > 0
+                        SettingsToggleRow(
+                            title = stringResource(R.string.debrid_prepare_instant_playback),
+                            subtitle = stringResource(R.string.debrid_prepare_instant_playback_description),
+                            checked = prepareEnabled,
+                            onToggle = { viewModel.setInstantPlaybackPreparationEnabled(!prepareEnabled) },
+                            enabled = uiState.enabled && uiState.hasAnyApiKey
                         )
+                    }
+
+                    if (uiState.enabled && uiState.instantPlaybackPreparationLimit > 0) {
+                        item(key = "debrid_prepare_count") {
+                            SettingsActionRow(
+                                title = stringResource(R.string.debrid_prepare_stream_count),
+                                subtitle = null,
+                                value = prepareCountLabel(uiState.instantPlaybackPreparationLimit),
+                                onClick = { showPrepareCountDialog = true },
+                                enabled = true
+                            )
+                        }
+                    }
+
+                    item(key = "debrid_formatting_section") {
+                        DebridSectionLabel(text = stringResource(R.string.debrid_section_formatting))
                     }
 
                     item(key = "debrid_formatter") {
@@ -178,21 +210,18 @@ fun DebridSettingsContent(
                 },
                 onDismiss = { activeApiKeyDialog = null }
             )
-            DebridApiKeyDialogProvider.REAL_DEBRID -> DebridApiKeyDialog(
-                title = stringResource(R.string.debrid_real_debrid_dialog_title),
-                subtitle = stringResource(R.string.debrid_real_debrid_dialog_subtitle),
-                placeholder = stringResource(R.string.debrid_real_debrid_dialog_placeholder),
-                currentValue = uiState.realDebridApiKey,
-                viewModel = viewModel,
-                onSave = { value, onSaved -> viewModel.validateAndSaveRealDebridApiKey(value, onSaved) },
-                onSaved = { activeApiKeyDialog = null },
-                onClear = {
-                    viewModel.validateAndSaveRealDebridApiKey("") {}
-                    activeApiKeyDialog = null
-                },
-                onDismiss = { activeApiKeyDialog = null }
-            )
         }
+    }
+
+    if (showPrepareCountDialog) {
+        DebridPrepareCountDialog(
+            selectedLimit = uiState.instantPlaybackPreparationLimit,
+            onLimitSelected = { limit ->
+                viewModel.setInstantPlaybackPreparationLimit(limit)
+                showPrepareCountDialog = false
+            },
+            onDismiss = { showPrepareCountDialog = false }
+        )
     }
 
     if (uiState.isFormatterQrModeActive) {
@@ -202,6 +231,109 @@ fun DebridSettingsContent(
             instruction = stringResource(R.string.debrid_formatter_qr_instruction),
             onClose = { viewModel.stopFormatterQrMode() }
         )
+    }
+}
+
+@Composable
+private fun DebridInfoText(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = NuvioColors.TextSecondary,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 18.dp, vertical = 8.dp)
+    )
+}
+
+@Composable
+private fun DebridSectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        color = NuvioColors.TextPrimary,
+        modifier = Modifier.padding(start = 8.dp, top = 8.dp)
+    )
+}
+
+@Composable
+private fun prepareCountLabel(limit: Int): String {
+    return if (limit == 1) {
+        stringResource(R.string.debrid_prepare_count_one)
+    } else {
+        stringResource(R.string.debrid_prepare_count_many, limit)
+    }
+}
+
+@Composable
+private fun DebridPrepareCountDialog(
+    selectedLimit: Int,
+    onLimitSelected: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val focusRequester = remember { FocusRequester() }
+    val options = listOf(1, 2, 3, 5)
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
+    NuvioDialog(
+        onDismiss = onDismiss,
+        title = stringResource(R.string.debrid_prepare_stream_count),
+        width = 420.dp,
+        suppressFirstKeyUp = false
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 280.dp)
+        ) {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(vertical = 4.dp)
+            ) {
+                itemsIndexed(
+                    items = options,
+                    key = { _, limit -> limit }
+                ) { index, limit ->
+                    val isSelected = limit == selectedLimit
+                    Card(
+                        onClick = { onLimitSelected(limit) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (index == 0) Modifier.focusRequester(focusRequester) else Modifier),
+                        colors = CardDefaults.colors(
+                            containerColor = if (isSelected) NuvioColors.FocusBackground else NuvioColors.BackgroundCard,
+                            focusedContainerColor = NuvioColors.FocusBackground
+                        ),
+                        shape = CardDefaults.shape(RoundedCornerShape(10.dp)),
+                        scale = CardDefaults.scale(focusedScale = 1f)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = prepareCountLabel(limit),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (isSelected) NuvioColors.Primary else NuvioColors.TextPrimary,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = stringResource(R.string.cd_selected),
+                                    tint = NuvioColors.Primary
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -336,6 +468,5 @@ private fun maskDebridApiKey(key: String, notSetLabel: String): String {
 }
 
 private enum class DebridApiKeyDialogProvider {
-    TORBOX,
-    REAL_DEBRID
+    TORBOX
 }

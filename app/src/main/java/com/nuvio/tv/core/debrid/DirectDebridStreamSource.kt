@@ -72,6 +72,7 @@ class DirectDebridStreamSource @Inject constructor(
                 val streams = response.body()?.streams
                     ?.map { it.toDomain(DirectDebridStreamFilter.FALLBACK_SOURCE_NAME, null) }
                     ?.let(DirectDebridStreamFilter::filterInstant)
+                    ?.filter { stream -> stream.clientResolve?.service.equals(service.provider.id, ignoreCase = true) }
                     ?.map { formatter.format(it, settings) }
                     .orEmpty()
                 if (streams.isEmpty()) {

@@ -16,26 +16,15 @@ class RealDebridFileSelector @Inject constructor() {
         val playable = files.filter { it.isPlayableVideo() }
         if (playable.isEmpty()) return null
 
-        resolve.fileIdx?.let { fileIdx ->
-            playable.firstOrNull { it.id == fileIdx }?.let { return it }
-            files.getOrNull(fileIdx)?.takeIf { it.isPlayableVideo() }?.let { return it }
-        }
-
-        val names = listOfNotNull(resolve.filename, resolve.title, resolve.torrentName)
-            .map { it.normalizedName() }
-            .filter { it.isNotBlank() }
-
-        if (names.isNotEmpty()) {
-            playable.firstOrNull { file ->
-                val fileName = file.displayName().normalizedName()
-                names.any { name -> fileName.contains(name) || name.contains(fileName) }
-            }?.let { return it }
-        }
-
-        val episodePatterns = buildEpisodePatterns(
+        val episodePatterns = buildDebridEpisodePatterns(
             season = season ?: resolve.season,
             episode = episode ?: resolve.episode
         )
+        val names = resolve.specificDebridFileNames(episodePatterns)
+        if (names.isNotEmpty()) {
+            playable.firstDebridNameMatch(names) { it.displayName() }?.let { return it }
+        }
+
         if (episodePatterns.isNotEmpty()) {
             playable.firstOrNull { file ->
                 val fileName = file.displayName().lowercase()
@@ -43,45 +32,19 @@ class RealDebridFileSelector @Inject constructor() {
             }?.let { return it }
         }
 
+        resolve.fileIdx?.let { fileIdx ->
+            files.getOrNull(fileIdx)?.takeIf { it.isPlayableVideo() }?.let { return it }
+            if (fileIdx > 0) {
+                files.getOrNull(fileIdx - 1)?.takeIf { it.isPlayableVideo() }?.let { return it }
+            }
+            playable.firstOrNull { it.id == fileIdx }?.let { return it }
+        }
+
         return playable.maxByOrNull { it.bytes ?: 0L }
     }
 
     private fun RealDebridTorrentFileDto.isPlayableVideo(): Boolean {
         val name = displayName().lowercase()
-        return videoExtensions.any { name.endsWith(it) }
-    }
-
-    private fun String.normalizedName(): String {
-        return substringAfterLast('/')
-            .substringBeforeLast('.')
-            .lowercase()
-            .replace(Regex("[^a-z0-9]+"), " ")
-            .trim()
-    }
-
-    private fun buildEpisodePatterns(season: Int?, episode: Int?): List<String> {
-        if (season == null || episode == null) return emptyList()
-        val seasonTwo = season.toString().padStart(2, '0')
-        val episodeTwo = episode.toString().padStart(2, '0')
-        return listOf(
-            "s${seasonTwo}e$episodeTwo",
-            "${season}x$episodeTwo",
-            "${season}x$episode"
-        )
-    }
-
-    private companion object {
-        val videoExtensions = setOf(
-            ".mp4",
-            ".mkv",
-            ".webm",
-            ".avi",
-            ".mov",
-            ".m4v",
-            ".ts",
-            ".m2ts",
-            ".wmv",
-            ".flv"
-        )
+        return name.hasDebridVideoExtension()
     }
 }

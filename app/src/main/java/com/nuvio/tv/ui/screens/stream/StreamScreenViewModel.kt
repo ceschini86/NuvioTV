@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.R
 import com.nuvio.tv.core.debrid.DirectDebridResolveResult
 import com.nuvio.tv.core.debrid.DirectDebridResolver
+import com.nuvio.tv.core.debrid.DirectDebridStreamPreparer
 import com.nuvio.tv.core.debrid.DirectDebridStreamSource
 import com.nuvio.tv.core.plugin.PluginManager
 import com.nuvio.tv.core.network.NetworkResult
@@ -60,6 +61,7 @@ class StreamScreenViewModel @Inject constructor(
     private val torrentSettings: TorrentSettings,
     private val directDebridStreamSource: DirectDebridStreamSource,
     private val directDebridResolver: DirectDebridResolver,
+    private val directDebridStreamPreparer: DirectDebridStreamPreparer,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
     private var autoPlayHandledForSession = false
@@ -379,6 +381,49 @@ class StreamScreenViewModel @Inject constructor(
             var lastSuccessData: List<AddonStreams>? = null
             var autoSelectTriggered = false
             var timeoutElapsed = false
+            var debridPreparationLaunched = false
+
+            fun launchDirectDebridPreparationIfNeeded(streamGroups: List<AddonStreams>) {
+                if (debridPreparationLaunched || streamGroups.none { group -> group.streams.any { it.isDirectDebrid() && it.getStreamUrl() == null } }) {
+                    return
+                }
+                debridPreparationLaunched = true
+                viewModelScope.launch {
+                    directDebridStreamPreparer.prepare(
+                        streams = _uiState.value.allStreams,
+                        season = season,
+                        episode = episode,
+                        playerSettings = playerSettings,
+                        installedAddonNames = installedAddonOrder.toSet()
+                    ) { original, prepared ->
+                        updateUiStateIfChanged { state ->
+                            val updatedGroups = directDebridStreamPreparer.replacePreparedStream(
+                                groups = state.addonStreams,
+                                original = original,
+                                prepared = prepared
+                            )
+                            if (updatedGroups == state.addonStreams) {
+                                state
+                            } else {
+                                val updatedAllStreams = updatedGroups.flatMap { addonStreams ->
+                                    addonStreams.streams.sortedByDescending { it.qualityValue }
+                                }
+                                val currentFilter = state.selectedAddonFilter
+                                val filteredStreams = if (currentFilter == null) {
+                                    updatedAllStreams
+                                } else {
+                                    updatedAllStreams.filter { it.addonName == currentFilter }
+                                }
+                                state.copy(
+                                    addonStreams = updatedGroups,
+                                    allStreams = updatedAllStreams,
+                                    filteredStreams = filteredStreams
+                                )
+                            }
+                        }
+                    }
+                }
+            }
 
             val streamLoadInner = viewModelScope.launch {
                 streamRepository.getStreamsFromAllAddons(
@@ -391,6 +436,7 @@ class StreamScreenViewModel @Inject constructor(
                         is NetworkResult.Success -> {
                             lastSuccessData = result.data
                             applySuccess(result.data, isAllLoaded = false)
+                            launchDirectDebridPreparationIfNeeded(result.data)
                             if (timeoutElapsed && !autoSelectTriggered) {
                                 applySuccess(result.data, isAllLoaded = true)
                                 if (resolvedAutoPlayTarget) {

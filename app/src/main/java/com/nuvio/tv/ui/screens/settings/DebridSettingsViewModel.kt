@@ -10,8 +10,8 @@ import com.nuvio.tv.core.server.DebridFormatterConfigServer
 import com.nuvio.tv.core.server.DebridFormatterSettings
 import com.nuvio.tv.core.server.DeviceIpAddress
 import com.nuvio.tv.data.local.DebridSettingsDataStore
-import com.nuvio.tv.data.remote.api.RealDebridApi
 import com.nuvio.tv.data.remote.api.TorboxApi
+import com.nuvio.tv.domain.model.DEBRID_PREPARE_INSTANT_PLAYBACK_DEFAULT_LIMIT
 import com.nuvio.tv.domain.model.DebridSettings
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -30,8 +30,7 @@ import javax.inject.Inject
 class DebridSettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val dataStore: DebridSettingsDataStore,
-    private val torboxApi: TorboxApi,
-    private val realDebridApi: RealDebridApi
+    private val torboxApi: TorboxApi
 ) : ViewModel() {
     private var formatterServer: DebridFormatterConfigServer? = null
 
@@ -54,7 +53,10 @@ class DebridSettingsViewModel @Inject constructor(
 
     fun onEvent(event: DebridSettingsEvent) {
         when (event) {
-            is DebridSettingsEvent.ToggleEnabled -> update { dataStore.setEnabled(event.enabled) }
+            is DebridSettingsEvent.ToggleEnabled -> {
+                if (event.enabled && !_uiState.value.hasAnyApiKey) return
+                update { dataStore.setEnabled(event.enabled) }
+            }
         }
     }
 
@@ -113,6 +115,19 @@ class DebridSettingsViewModel @Inject constructor(
         update { dataStore.resetStreamTemplates() }
     }
 
+    fun setInstantPlaybackPreparationEnabled(enabled: Boolean) {
+        val nextLimit = if (enabled) {
+            DEBRID_PREPARE_INSTANT_PLAYBACK_DEFAULT_LIMIT
+        } else {
+            0
+        }
+        update { dataStore.setInstantPlaybackPreparationLimit(nextLimit) }
+    }
+
+    fun setInstantPlaybackPreparationLimit(limit: Int) {
+        update { dataStore.setInstantPlaybackPreparationLimit(limit) }
+    }
+
     fun validateAndSaveTorboxApiKey(value: String, onSuccess: () -> Unit) {
         val trimmed = value.trim()
         if (trimmed.isBlank()) {
@@ -140,33 +155,6 @@ class DebridSettingsViewModel @Inject constructor(
         }
     }
 
-    fun validateAndSaveRealDebridApiKey(value: String, onSuccess: () -> Unit) {
-        val trimmed = value.trim()
-        if (trimmed.isBlank()) {
-            viewModelScope.launch { dataStore.setRealDebridApiKey("") }
-            onSuccess()
-            return
-        }
-        viewModelScope.launch {
-            _validating.value = true
-            val valid = try {
-                val response = realDebridApi.getUser("Bearer $trimmed")
-                response.body()?.close()
-                response.errorBody()?.close()
-                response.isSuccessful
-            } catch (e: Exception) {
-                false
-            }
-            _validating.value = false
-            if (valid) {
-                dataStore.setRealDebridApiKey(trimmed)
-                onSuccess()
-            } else {
-                _validationError.tryEmit(context.getString(R.string.debrid_invalid_real_debrid_api_key))
-            }
-        }
-    }
-
     private fun update(action: suspend () -> Unit) {
         viewModelScope.launch { action() }
     }
@@ -186,6 +174,7 @@ data class DebridSettingsUiState(
     val enabled: Boolean = false,
     val torboxApiKey: String = "",
     val realDebridApiKey: String = "",
+    val instantPlaybackPreparationLimit: Int = 0,
     val streamNameTemplate: String = "",
     val streamDescriptionTemplate: String = "",
     val isFormatterQrModeActive: Boolean = false,
@@ -193,10 +182,14 @@ data class DebridSettingsUiState(
     val formatterServerUrl: String? = null,
     val serverError: String? = null
 ) {
+    val hasAnyApiKey: Boolean
+        get() = torboxApiKey.isNotBlank()
+
     fun fromSettings(settings: DebridSettings): DebridSettingsUiState = copy(
         enabled = settings.enabled,
         torboxApiKey = settings.torboxApiKey,
         realDebridApiKey = settings.realDebridApiKey,
+        instantPlaybackPreparationLimit = settings.instantPlaybackPreparationLimit,
         streamNameTemplate = settings.streamNameTemplate,
         streamDescriptionTemplate = settings.streamDescriptionTemplate
     )

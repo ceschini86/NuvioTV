@@ -5,7 +5,8 @@ import com.nuvio.tv.domain.model.DebridSettings
 data class DebridProvider(
     val id: String,
     val displayName: String,
-    val shortName: String
+    val shortName: String,
+    val visibleInUi: Boolean = true
 )
 
 data class DebridServiceCredential(
@@ -26,12 +27,15 @@ object DebridProviders {
     val RealDebrid = DebridProvider(
         id = REAL_DEBRID_ID,
         displayName = "Real-Debrid",
-        shortName = "RD"
+        shortName = "RD",
+        visibleInUi = false
     )
 
     private val registered = listOf(Torbox, RealDebrid)
 
     fun all(): List<DebridProvider> = registered
+
+    fun visible(): List<DebridProvider> = registered.filter { it.visibleInUi }
 
     fun byId(id: String?): DebridProvider? {
         val normalized = id?.trim()?.takeIf { it.isNotBlank() } ?: return null
@@ -39,6 +43,8 @@ object DebridProviders {
     }
 
     fun isSupported(id: String?): Boolean = byId(id) != null
+
+    fun isVisible(id: String?): Boolean = byId(id)?.visibleInUi == true
 
     fun instantName(id: String?): String = "${displayName(id)} Instant"
 
@@ -52,10 +58,10 @@ object DebridProviders {
 
     fun configuredServices(settings: DebridSettings): List<DebridServiceCredential> {
         return buildList {
-            settings.torboxApiKey.trim().takeIf { it.isNotBlank() }?.let { apiKey ->
+            settings.torboxApiKey.trim().takeIf { Torbox.visibleInUi && it.isNotBlank() }?.let { apiKey ->
                 add(DebridServiceCredential(Torbox, apiKey))
             }
-            settings.realDebridApiKey.trim().takeIf { it.isNotBlank() }?.let { apiKey ->
+            settings.realDebridApiKey.trim().takeIf { RealDebrid.visibleInUi && it.isNotBlank() }?.let { apiKey ->
                 add(DebridServiceCredential(RealDebrid, apiKey))
             }
         }
