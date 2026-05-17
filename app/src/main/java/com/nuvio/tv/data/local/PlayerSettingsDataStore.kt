@@ -212,6 +212,23 @@ data class PlayerSettings(
         const val DEFAULT_STILL_WATCHING_EPISODE_THRESHOLD = 3
         const val MIN_STILL_WATCHING_EPISODE_THRESHOLD = 2
         const val MAX_STILL_WATCHING_EPISODE_THRESHOLD = 6
+
+        const val STREAM_AUTOPLAY_TIMEOUT_UNLIMITED = Int.MAX_VALUE
+
+        val STREAM_AUTOPLAY_TIMEOUT_VALUES: List<Int> =
+            listOf(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, STREAM_AUTOPLAY_TIMEOUT_UNLIMITED)
+
+        fun applyLegacyTimeoutSentinelMigration(stored: Int?): Int {
+            val raw = stored ?: 3
+            if (raw == 11) return STREAM_AUTOPLAY_TIMEOUT_UNLIMITED
+            if (raw in STREAM_AUTOPLAY_TIMEOUT_VALUES) return raw
+            return STREAM_AUTOPLAY_TIMEOUT_VALUES
+                .filter { it != STREAM_AUTOPLAY_TIMEOUT_UNLIMITED }
+                .minBy { kotlin.math.abs(it.toLong() - raw.toLong()) }
+        }
+
+        fun isBoundedTimeout(timeoutSeconds: Int): Boolean =
+            timeoutSeconds > 0 && timeoutSeconds != STREAM_AUTOPLAY_TIMEOUT_UNLIMITED
     }
 }
 
@@ -545,7 +562,9 @@ class PlayerSettingsDataStore @Inject constructor(
                 streamAutoPlayNextEpisodeEnabled = prefs[streamAutoPlayNextEpisodeEnabledKey] ?: false,
                 streamAutoPlayPreferBingeGroupForNextEpisode =
                     prefs[streamAutoPlayPreferBingeGroupForNextEpisodeKey] ?: true,
-                streamAutoPlayTimeoutSeconds = (prefs[streamAutoPlayTimeoutSecondsKey] ?: 3).coerceIn(0, 11),
+                streamAutoPlayTimeoutSeconds = PlayerSettings.applyLegacyTimeoutSentinelMigration(
+                    prefs[streamAutoPlayTimeoutSecondsKey]
+                ),
                 stillWatchingEnabled = prefs[stillWatchingEnabledKey] ?: false,
                 stillWatchingEpisodeThreshold = prefs[stillWatchingEpisodeThresholdKey]
                     ?.coerceIn(
@@ -827,7 +846,7 @@ class PlayerSettingsDataStore @Inject constructor(
 
     suspend fun setStreamAutoPlayTimeoutSeconds(seconds: Int) {
         store().edit { prefs ->
-            prefs[streamAutoPlayTimeoutSecondsKey] = seconds.coerceIn(0, 11)
+            prefs[streamAutoPlayTimeoutSecondsKey] = PlayerSettings.applyLegacyTimeoutSentinelMigration(seconds)
         }
     }
 
