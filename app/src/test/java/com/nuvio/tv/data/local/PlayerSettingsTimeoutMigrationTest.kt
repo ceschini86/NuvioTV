@@ -29,6 +29,17 @@ class PlayerSettingsTimeoutMigrationTest {
     }
 
     @Test
+    fun `every entry in STREAM_AUTOPLAY_TIMEOUT_VALUES passes through unchanged`() {
+        PlayerSettings.STREAM_AUTOPLAY_TIMEOUT_VALUES.forEach { value ->
+            assertEquals(
+                "value $value should pass through migration unchanged",
+                value,
+                PlayerSettings.applyLegacyTimeoutSentinelMigration(value)
+            )
+        }
+    }
+
+    @Test
     fun `current sentinel passes through unchanged`() {
         assertEquals(
             PlayerSettings.STREAM_AUTOPLAY_TIMEOUT_UNLIMITED,
