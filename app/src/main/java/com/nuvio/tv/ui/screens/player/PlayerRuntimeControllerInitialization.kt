@@ -660,7 +660,6 @@ internal fun PlayerRuntimeController.resolveAutoInternalPlayerEngine(): Internal
                 currentVideoId?.startsWith("mal:") == true ||
                 currentVideoId?.startsWith("anilist:") == true
 
-        // AIOMetadata usually matches hasAnimeGenre or hasAnimeId, Cinemeta usually matches isAnimationFromJapan
         val isAnime = hasAnimeGenre || hasAnimeId || isAnimationFromJapan
 
         if (isAnime) InternalPlayerEngine.MVP_PLAYER else InternalPlayerEngine.EXOPLAYER
