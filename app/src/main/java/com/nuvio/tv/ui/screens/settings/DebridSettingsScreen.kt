@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -353,8 +354,16 @@ private fun DebridApiKeyDialog(
     var isInputFocused by remember { mutableStateOf(false) }
     val inputFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
     val validating by viewModel.validating.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val submit = {
+        if (!validating) {
+            focusManager.clearFocus()
+            keyboardController?.hide()
+            onSave(value, onSaved)
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.validationError.collect { message ->
@@ -366,7 +375,8 @@ private fun DebridApiKeyDialog(
         onDismiss = onDismiss,
         title = title,
         subtitle = subtitle,
-        width = 700.dp
+        width = 700.dp,
+        suppressFirstKeyUp = false
     ) {
         Card(
             onClick = { inputFocusRequester.requestFocus() },
@@ -398,13 +408,23 @@ private fun DebridApiKeyDialog(
                         .fillMaxWidth()
                         .focusRequester(inputFocusRequester)
                         .onKeyEvent { event ->
-                            event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_CENTER &&
-                                event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN
+                            val native = event.nativeKeyEvent
+                            when {
+                                native.keyCode == KeyEvent.KEYCODE_DPAD_CENTER &&
+                                    native.action == KeyEvent.ACTION_DOWN -> true
+                                (native.keyCode == KeyEvent.KEYCODE_ENTER ||
+                                    native.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER) &&
+                                    native.action == KeyEvent.ACTION_DOWN -> {
+                                    submit()
+                                    true
+                                }
+                                else -> false
+                            }
                         },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(
-                        onDone = { keyboardController?.hide() }
+                        onDone = { submit() }
                     ),
                     textStyle = MaterialTheme.typography.bodyMedium.copy(color = NuvioColors.TextPrimary),
                     cursorBrush = SolidColor(
@@ -449,7 +469,7 @@ private fun DebridApiKeyDialog(
             }
             Spacer(modifier = Modifier.width(8.dp))
             Button(
-                onClick = { if (!validating) onSave(value, onSaved) },
+                onClick = { submit() },
                 colors = ButtonDefaults.colors(
                     containerColor = NuvioColors.BackgroundCard,
                     contentColor = NuvioColors.TextPrimary
