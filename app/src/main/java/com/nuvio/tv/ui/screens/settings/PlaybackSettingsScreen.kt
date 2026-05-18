@@ -78,6 +78,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.tv.material3.Border
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
@@ -102,6 +103,7 @@ import com.nuvio.tv.data.local.StreamAutoPlaySource
 import com.nuvio.tv.data.local.TrailerSettings
 import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.components.P2pConsentDialog
+import com.nuvio.tv.ui.screens.detail.requestFocusAfterFrames
 import com.nuvio.tv.ui.theme.NuvioColors
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.PlayCircle
@@ -1107,6 +1109,9 @@ internal fun ColorSelectionDialog(
         ?: colors.find { it.copy(alpha = 1f).toArgb() == selectedColor.copy(alpha = 1f).toArgb() }
         ?: colors.firstOrNull()
         ?: selectedColor
+    val focusedColorIndex = colors.indexOfFirst { it.toArgb() == initialChip.toArgb() }
+        .let { if (it >= 0) it else 0 }
+    val colorListState = rememberLazyListState(initialFirstVisibleItemIndex = focusedColorIndex)
     var currentChipColor by remember { mutableStateOf(initialChip) }
     var alphaPercent by remember { mutableIntStateOf((selectedColor.alpha * 100f).roundToInt().coerceIn(0, 100)) }
 
@@ -1122,7 +1127,9 @@ internal fun ColorSelectionDialog(
         ) {
             // Color grid using LazyRow for proper TV focus
             LazyRow(
+                state = colorListState,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 items(
@@ -1140,7 +1147,7 @@ internal fun ColorSelectionDialog(
                                 alphaPercent = (color.alpha * 100f).roundToInt().coerceIn(0, 100)
                             }
                         },
-                        modifier = if (color.toArgb() == currentChipColor.toArgb()) {
+                        modifier = if (index == focusedColorIndex) {
                             Modifier.focusRequester(focusRequester)
                         } else {
                             Modifier
@@ -1289,8 +1296,8 @@ internal fun ColorSelectionDialog(
         }
     }
 
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
+    LaunchedEffect(focusedColorIndex) {
+        focusRequester.requestFocusAfterFrames()
     }
 }
 
