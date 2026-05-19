@@ -149,6 +149,13 @@
     <string name="cw_min_left">%1$dm restantes</string>
     <string name="cw_almost_done">Presque terminé</string>
     <string name="cw_airs_date">Diffusion le %1$s</string>
+    <string name="cw_airs_today">Diffusion aujourd\'hui</string>
+    <string name="cw_airs_tomorrow">Diffusion demain</string>
+    <plurals name="cw_airs_in_days">
+        <item quantity="one">Diffusion dans %d jour</item>
+        <item quantity="many">Diffusion dans %d jours</item>
+        <item quantity="other">Diffusion dans %d jours</item>
+    </plurals>
     <string name="cw_action_go_to_details">Voir les détails</string>
     <string name="cw_action_start_from_beginning">Revoir depuis le début</string>
     <string name="cw_action_remove">Supprimer</string>
