@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -37,6 +38,7 @@ fun NuvioDialog(
     title: String,
     subtitle: String? = null,
     width: Dp = 520.dp,
+    titleTextAlign: TextAlign = TextAlign.Start,
     suppressFirstKeyUp: Boolean = true,
     content: @Composable ColumnScope.() -> Unit
 ) {
@@ -71,6 +73,8 @@ fun NuvioDialog(
                     text = title,
                     style = MaterialTheme.typography.titleLarge,
                     color = NuvioColors.TextPrimary,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = titleTextAlign,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
