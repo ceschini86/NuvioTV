@@ -5,6 +5,7 @@ package com.nuvio.tv.ui.screens.settings
 import android.view.KeyEvent
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,16 +38,16 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -63,6 +64,7 @@ import com.nuvio.tv.core.debrid.DebridDeviceAuthorizationTokenResult
 import com.nuvio.tv.core.debrid.DebridProvider
 import com.nuvio.tv.core.debrid.DebridProviderAuthMethod
 import com.nuvio.tv.core.debrid.DebridProviders
+import com.nuvio.tv.core.qr.QrCodeGenerator
 import com.nuvio.tv.domain.model.DebridStreamAudioChannel
 import com.nuvio.tv.domain.model.DebridStreamAudioTag
 import com.nuvio.tv.domain.model.DebridStreamEncode
@@ -1057,8 +1059,6 @@ private fun DebridDeviceAuthDialog(
     onDisconnect: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    val uriHandler = LocalUriHandler.current
-    val clipboardManager = LocalClipboardManager.current
     val isConnected = currentValue.isNotBlank()
     var restartNonce by remember(provider.id) { mutableStateOf(0) }
     var session by remember(provider.id, restartNonce, isConnected) { mutableStateOf<DebridDeviceAuthorization?>(null) }
@@ -1071,7 +1071,6 @@ private fun DebridDeviceAuthDialog(
     val failedMessage = stringResource(R.string.debrid_device_auth_failed)
     val missingConfigurationMessage = stringResource(R.string.debrid_device_auth_missing_configuration)
     val expiredMessage = stringResource(R.string.debrid_device_auth_expired)
-    val codeCopiedMessage = stringResource(R.string.debrid_device_auth_code_copied)
 
     LaunchedEffect(provider.id, restartNonce, isConnected) {
         if (isConnected) {
@@ -1149,17 +1148,21 @@ private fun DebridDeviceAuthDialog(
             provider.displayName
         ),
         width = 620.dp,
+        titleTextAlign = TextAlign.Center,
         suppressFirstKeyUp = false
     ) {
         if (isConnected) {
             Text(
                 text = stringResource(R.string.debrid_device_auth_connected, provider.displayName),
                 style = MaterialTheme.typography.bodyMedium,
-                color = NuvioColors.TextSecondary
+                color = NuvioColors.TextSecondary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
             )
         } else if (isStarting) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
@@ -1171,51 +1174,36 @@ private fun DebridDeviceAuthDialog(
             }
         } else {
             session?.let { activeSession ->
+                val qrBitmap = remember(activeSession.friendlyVerificationUrl) {
+                    runCatching { QrCodeGenerator.generate(activeSession.friendlyVerificationUrl, 420, margin = 1) }.getOrNull()
+                }
                 Text(
                     text = stringResource(R.string.debrid_device_auth_instructions),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = NuvioColors.TextSecondary
+                    color = NuvioColors.TextSecondary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
                 )
-                Card(
-                    onClick = {
-                        clipboardManager.setText(AnnotatedString(activeSession.userCode))
-                        statusMessage = codeCopiedMessage
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.colors(
-                        containerColor = NuvioColors.Background,
-                        focusedContainerColor = NuvioColors.FocusBackground
-                    ),
-                    border = CardDefaults.border(
-                        focusedBorder = Border(
-                            border = BorderStroke(2.dp, NuvioColors.FocusRing),
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                    ),
-                    shape = CardDefaults.shape(RoundedCornerShape(10.dp)),
-                    scale = CardDefaults.scale(focusedScale = 1f)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = activeSession.userCode,
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = NuvioColors.TextPrimary,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = activeSession.friendlyVerificationUrl,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = NuvioColors.Primary
-                        )
-                    }
+                if (qrBitmap != null) {
+                    Image(
+                        bitmap = qrBitmap.asImageBitmap(),
+                        contentDescription = stringResource(R.string.cd_qr_code),
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .size(196.dp),
+                        contentScale = ContentScale.Fit
+                    )
                 }
+                DebridDeviceAuthCodes(
+                    userCode = activeSession.userCode,
+                    verificationUrl = activeSession.friendlyVerificationUrl,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
             statusMessage?.let { message ->
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (isPolling) {
@@ -1228,13 +1216,14 @@ private fun DebridDeviceAuthDialog(
                             NuvioColors.Error
                         } else {
                             NuvioColors.TextSecondary
-                        }
+                        },
+                        textAlign = TextAlign.Center
                     )
                 }
             }
         }
 
-        SettingsDialogActionRow {
+        SettingsDialogActionRow(horizontalAlignment = Alignment.CenterHorizontally) {
             SettingsDialogActionButton(
                 text = stringResource(R.string.action_cancel),
                 onClick = onDismiss
@@ -1255,20 +1244,34 @@ private fun DebridDeviceAuthDialog(
                     onClick = { restartNonce += 1 }
                 )
             }
-            if (!isConnected) {
-                session?.let { activeSession ->
-                    SettingsDialogActionButton(
-                        text = stringResource(R.string.debrid_device_auth_open),
-                        onClick = {
-                            runCatching { uriHandler.openUri(activeSession.verificationUrl) }
-                                .onFailure { statusMessage = failedMessage }
-                        },
-                        primary = true,
-                        enabled = !isStarting
-                    )
-                }
-            }
         }
+    }
+}
+
+@Composable
+private fun DebridDeviceAuthCodes(
+    userCode: String,
+    verificationUrl: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = userCode,
+            style = MaterialTheme.typography.headlineSmall,
+            color = NuvioColors.TextPrimary,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center
+        )
+        Text(
+            text = verificationUrl,
+            style = MaterialTheme.typography.bodySmall,
+            color = NuvioColors.TextTertiary,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
