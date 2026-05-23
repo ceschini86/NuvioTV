@@ -787,11 +787,12 @@ internal fun <T> SettingsMultiChoiceDialog(
 
 @Composable
 internal fun SettingsDialogActionRow(
+    horizontalAlignment: Alignment.Horizontal = Alignment.End,
     content: @Composable RowScope.() -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, horizontalAlignment),
         verticalAlignment = Alignment.CenterVertically,
         content = content
     )
