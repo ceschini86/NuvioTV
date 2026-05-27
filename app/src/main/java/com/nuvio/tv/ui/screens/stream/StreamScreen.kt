@@ -239,9 +239,12 @@ fun StreamScreen(
 
     DisposableEffect(lifecycleOwner, pendingRestoreOnResume) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME && pendingRestoreOnResume) {
-                restoreFocusedStream = true
-                pendingRestoreOnResume = false
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.onEvent(StreamScreenEvent.OnResume)
+                if (pendingRestoreOnResume) {
+                    restoreFocusedStream = true
+                    pendingRestoreOnResume = false
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
