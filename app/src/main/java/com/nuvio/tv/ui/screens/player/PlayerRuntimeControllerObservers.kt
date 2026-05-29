@@ -290,7 +290,9 @@ internal fun PlayerRuntimeController.observeSubtitleSettings() {
                 state.copy(
                     subtitleStyle = settings.subtitleStyle,
                     loadingOverlayEnabled = settings.loadingOverlayEnabled,
+                    showPlayerLoadingStatus = settings.showPlayerLoadingStatus,
                     showLoadingOverlay = shouldShowOverlay,
+                    loadingMessage = if (settings.showPlayerLoadingStatus || state.isTorrentStream) state.loadingMessage else null,
                     pauseOverlayEnabled = settings.pauseOverlayEnabled,
                     osdClockEnabled = settings.osdClockEnabled,
                     internalPlayerEngine = resolvedInternalPlayerEngine,

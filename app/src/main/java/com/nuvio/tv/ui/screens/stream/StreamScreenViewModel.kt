@@ -250,7 +250,11 @@ class StreamScreenViewModel @Inject constructor(
                     it.copy(
                         isDirectAutoPlayFlow = true,
                         showDirectAutoPlayOverlay = true,
-                        directAutoPlayMessage = context.getString(R.string.stream_finding_source)
+                        directAutoPlayMessage = if (playerSettings.showPlayerLoadingStatus) {
+                            context.getString(R.string.stream_finding_source)
+                        } else {
+                            null
+                        }
                     )
                 }
             }
@@ -905,10 +909,11 @@ class StreamScreenViewModel @Inject constructor(
             return getStreamForPlayback(stream)
         }
 
+        val showLoadingStatus = playerSettingsDataStore.playerSettings.first().showPlayerLoadingStatus
         updateUiStateIfChanged {
             it.copy(
                 showDirectAutoPlayOverlay = true,
-                directAutoPlayMessage = if (playerSettingsDataStore.playerSettings.first().showPlayerLoadingStatus) {
+                directAutoPlayMessage = if (showLoadingStatus) {
                     context.getString(R.string.debrid_resolving_stream)
                 } else {
                     null
@@ -1192,8 +1197,15 @@ class StreamScreenViewModel @Inject constructor(
 
         if (preferredLanguages.isEmpty()) return null
 
+        val showLoadingStatus = settings.showPlayerLoadingStatus
         updateUiStateIfChanged {
-            it.copy(directAutoPlayMessage = context.getString(R.string.subtitle_loading_addon))
+            it.copy(
+                directAutoPlayMessage = if (showLoadingStatus) {
+                    context.getString(R.string.subtitle_loading_addon)
+                } else {
+                    null
+                }
+            )
         }
 
         return try {
@@ -1212,7 +1224,9 @@ class StreamScreenViewModel @Inject constructor(
                     } else {
                         context.getString(R.string.player_loading_subtitles_progress, completed, total)
                     }
-                    updateUiStateIfChanged { it.copy(directAutoPlayMessage = msg) }
+                    if (showLoadingStatus) {
+                        updateUiStateIfChanged { it.copy(directAutoPlayMessage = msg) }
+                    }
                 }
             )
 

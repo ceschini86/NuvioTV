@@ -69,6 +69,7 @@ data class PlayerUiState(
     val pendingPreviewSeekPosition: Long? = null,
     val playbackSpeed: Float = 1f,
     val loadingOverlayEnabled: Boolean = true,
+    val showPlayerLoadingStatus: Boolean = true,
     val showLoadingOverlay: Boolean = true,
     val loadingMessage: String? = null,
     val loadingProgress: Float? = null,
