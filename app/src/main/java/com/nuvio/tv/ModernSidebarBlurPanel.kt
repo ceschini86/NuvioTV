@@ -109,12 +109,20 @@ internal fun ModernSidebarBlurPanel(
     val bgElevated = colors.BackgroundElevated
     val bgCard = colors.BackgroundCard
     val borderBase = colors.Border
-    val panelBackgroundBrush = remember(blurEnabled) {
-        val alpha = if (blurEnabled) 0.65f else 0.96f
-        Brush.verticalGradient(listOf(
-            Color(0xFF1C1C1E).copy(alpha = alpha),
-            Color(0xFF1C1C1E).copy(alpha = alpha)
-        ))
+    val panelBackgroundBrush = remember(blurEnabled, bgElevated, bgCard) {
+        val baseColor = if (bgElevated == Color.Black) Color.Black else Color(0xFF161618)
+        val alpha = if (blurEnabled) 0.65f else 0.97f
+        if (blurEnabled) {
+            Brush.verticalGradient(listOf(
+                baseColor.copy(alpha = alpha),
+                baseColor.copy(alpha = alpha)
+            ))
+        } else {
+            Brush.verticalGradient(listOf(
+                baseColor.copy(alpha = alpha),
+                baseColor.copy(alpha = alpha)
+            ))
+        }
     }
 
     Column(
