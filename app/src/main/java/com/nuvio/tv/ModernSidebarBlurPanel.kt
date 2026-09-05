@@ -109,20 +109,21 @@ internal fun ModernSidebarBlurPanel(
     val bgElevated = colors.BackgroundElevated
     val bgCard = colors.BackgroundCard
     val borderBase = colors.Border
-    val panelBackgroundBrush = remember(blurEnabled, bgElevated, bgCard) {
-        val baseColor = if (bgElevated == Color.Black) Color.Black else Color(0xFF161618)
-        val alpha = if (blurEnabled) 0.65f else 0.97f
-        if (blurEnabled) {
-            Brush.verticalGradient(listOf(
-                baseColor.copy(alpha = alpha),
-                baseColor.copy(alpha = alpha)
-            ))
-        } else {
-            Brush.verticalGradient(listOf(
-                baseColor.copy(alpha = alpha),
-                baseColor.copy(alpha = alpha)
-            ))
+    val isAmoledBlack = bgElevated == Color.Black
+    val panelBackgroundBrush = remember(blurEnabled, isAmoledBlack, bgElevated, bgCard) {
+        val baseColor = if (isAmoledBlack) Color.Black else Color(0xFF161618)
+        val alpha = when {
+            blurEnabled -> 0.65f
+            isAmoledBlack -> 1f
+            else -> 0.97f
         }
+        Brush.verticalGradient(listOf(
+            baseColor.copy(alpha = alpha),
+            baseColor.copy(alpha = alpha)
+        ))
+    }
+    val panelBorderColor = remember(isAmoledBlack, blurEnabled, borderBase) {
+        if (!blurEnabled && isAmoledBlack) borderBase.copy(alpha = 0.9f) else Color.Transparent
     }
 
     Column(
@@ -139,6 +140,13 @@ internal fun ModernSidebarBlurPanel(
             .clip(panelShape)
             .then(expandedPanelBlurModifier)
             .background(brush = panelBackgroundBrush, shape = panelShape)
+            .then(
+                if (panelBorderColor != Color.Transparent) {
+                    Modifier.border(width = NuvioStrokes.tokens.hairline, color = panelBorderColor, shape = panelShape)
+                } else {
+                    Modifier
+                }
+            )
             .padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.lg - NuvioTheme.spacing.xxs)
     ) {
         if (showProfileSelector && activeProfileName.isNotEmpty()) {
