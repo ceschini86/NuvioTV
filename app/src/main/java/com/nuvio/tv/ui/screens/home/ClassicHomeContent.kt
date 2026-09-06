@@ -723,6 +723,11 @@ fun ClassicHomeContent(
                         currentFocusSnapshot.rowKey = "upcoming_section"
                         activeRowKeyState.value = "upcoming_section"
                         cwFocusedIndex.intValue = itemIndex
+                        onFocusedRowKeyChanged(null)
+                        if (uiState.classicFocusGradientEnabled) {
+                            focusedArtwork = uiState.upcomingItems.getOrNull(itemIndex)
+                                ?.toClassicFocusArtwork(uiState.focusedPosterBackdropExpandEnabled)
+                        }
                     },
                     cardWidth = classicContinueWatchingCardWidth,
                     imageHeight = classicContinueWatchingImageHeight,
@@ -882,7 +887,7 @@ fun ClassicHomeContent(
     } // CompositionLocalProvider
 }
 
-private fun MetaPreview.toClassicFocusArtwork(useBackdrop: Boolean): ClassicFocusArtwork {
+internal fun MetaPreview.toClassicFocusArtwork(useBackdrop: Boolean): ClassicFocusArtwork {
     return ClassicFocusArtwork(
         imageUrl = if (useBackdrop) {
             background ?: landscapePoster ?: poster
