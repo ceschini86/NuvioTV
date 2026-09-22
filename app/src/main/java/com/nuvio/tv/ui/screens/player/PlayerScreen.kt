@@ -85,9 +85,12 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -2372,6 +2375,7 @@ private fun PlayerControlsProgressBarHost(
     onFocused: (() -> Unit)? = null
 ) {
     val playbackTimeline by viewModel.playbackTimeline.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
 
     ProgressBar(
         currentPosition = playbackTimeline.currentPosition,
@@ -2387,7 +2391,9 @@ private fun PlayerControlsProgressBarHost(
         downFocusRequester = downFocusRequester,
         onUpKey = onUpKey,
         onFocused = onFocused,
-        bufferedPosition = playbackTimeline.bufferedPosition
+        bufferedPosition = playbackTimeline.bufferedPosition,
+        previewPosition = uiState.pendingPreviewSeekPosition,
+        isScrubbing = uiState.pendingPreviewSeekPosition != null
     )
 }
 
@@ -2539,9 +2545,14 @@ private fun ProgressBar(
     onUpKey: (() -> Unit)? = null,
     onFocused: (() -> Unit)? = null,
     /** Position (ms) up to which content is buffered. Pass 0 to skip the overlay. */
-    bufferedPosition: Long = 0L
+    bufferedPosition: Long = 0L,
+    previewPosition: Long? = null,
+    isScrubbing: Boolean = false
 ) {
     val accentBrush = NuvioTheme.palette.accentBrush()
+    val accentColor = NuvioTheme.colors.Secondary
+    val density = LocalDensity.current
+
     val progress = if (duration > 0) {
         (currentPosition.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
     } else 0f
@@ -2560,12 +2571,67 @@ private fun ProgressBar(
         animationSpec = tween(200),
         label = "bufferedProgress"
     )
+
     var isFocused by remember { mutableStateOf(false) }
+    val scrubbingActive = isScrubbing || previewPosition != null
+
+    // Freeze the last idle playhead so we can mark the real position while scrubbing.
+    // playbackTimeline.currentPosition already jumps to the preview target on seek.
+    var hasSeenIdle by remember { mutableStateOf(previewPosition == null) }
+    var realPositionAnchor by remember { mutableStateOf(currentPosition) }
+    if (previewPosition == null) {
+        hasSeenIdle = true
+        realPositionAnchor = currentPosition
+    }
+    val realProgress = if (duration > 0) {
+        (realPositionAnchor.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+    } else 0f
+    val showRealMarker = previewPosition != null && hasSeenIdle
+
+    var showBubble by remember { mutableStateOf(false) }
+    var lastBubbleDeltaMs by remember { mutableStateOf(0L) }
+    if (previewPosition != null) {
+        lastBubbleDeltaMs = currentPosition - realPositionAnchor
+    }
+    LaunchedEffect(scrubbingActive) {
+        if (scrubbingActive) {
+            showBubble = true
+        } else {
+            delay(500)
+            showBubble = false
+        }
+    }
+
+    val trackHeight by animateDpAsState(
+        targetValue = when {
+            scrubbingActive -> 10.dp
+            isFocused -> 8.dp
+            else -> 6.dp
+        },
+        animationSpec = NuvioMotion.focusTween(),
+        label = "trackHeight"
+    )
+    val thumbSize by animateDpAsState(
+        targetValue = if (scrubbingActive) 20.dp else 14.dp,
+        animationSpec = NuvioMotion.focusTween(),
+        label = "thumbSize"
+    )
+    val thumbScale by animateFloatAsState(
+        targetValue = if (isFocused || scrubbingActive) 1f else 0f,
+        animationSpec = NuvioMotion.focusTween(),
+        label = "thumbScale"
+    )
+    val bubbleAlpha by animateFloatAsState(
+        targetValue = if (showBubble) 1f else 0f,
+        animationSpec = NuvioMotion.focusTween(),
+        label = "bubbleAlpha"
+    )
+    var bubbleWidthPx by remember { mutableStateOf(0) }
 
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .height(if (isFocused) NuvioTheme.spacing.md else NuvioTheme.spacing.sm)
+            .height(24.dp)
             .then(
                 if (focusRequester != null) Modifier.focusRequester(focusRequester)
                 else Modifier
@@ -2597,7 +2663,6 @@ private fun ProgressBar(
                     return@onPreviewKeyEvent false
                 }
 
-                // testing additional key handling for DPAD_LEFT and DPAD_RIGHT to allow seek in focus (check)
                 if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
                     when (keyEvent.nativeKeyEvent.keyCode) {
                         KeyEvent.KEYCODE_DPAD_DOWN -> {
@@ -2649,33 +2714,106 @@ private fun ProgressBar(
                     false
                 }
             }
-            .clip(RoundedCornerShape(3.dp))
-            .background(
-                if (isFocused) Color.White.copy(alpha = 0.45f)
-                else Color.White.copy(alpha = 0.3f)
-            )
     ) {
         val trackWidth = maxWidth
+        val playheadX = trackWidth * animatedProgress
 
-        // Buffered-ahead overlay: the theme accent, faded so it reads under the played
-        // fill and on light themes.
-        if (animatedBufferedProgress > 0f) {
+        // Track (centered vertically so focus/scrub height changes do not reflow neighbors).
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(trackHeight)
+                .align(Alignment.CenterStart)
+                .clip(CircleShape)
+                .background(
+                    if (isFocused || scrubbingActive) Color.White.copy(alpha = 0.30f)
+                    else Color.White.copy(alpha = 0.22f)
+                )
+        ) {
+            if (animatedBufferedProgress > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(trackWidth * animatedBufferedProgress)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.40f))
+                )
+            }
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(trackWidth * animatedBufferedProgress)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(NuvioTheme.colors.Secondary.copy(alpha = 0.35f))
+                    .width(trackWidth * animatedProgress)
+                    .clip(CircleShape)
+                    .background(accentBrush)
             )
         }
-        // Played fill.
+
+        if (showRealMarker) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .offset(x = (trackWidth * realProgress) - 1.dp)
+                    .width(2.dp)
+                    .height(trackHeight + 4.dp)
+                    .background(Color.White.copy(alpha = 0.70f), CircleShape)
+            )
+        }
+
+        // Thumb — hidden when idle, grows while scrubbing.
         Box(
             modifier = Modifier
-                .fillMaxHeight()
-                .width(trackWidth * animatedProgress)
-                .clip(RoundedCornerShape(3.dp))
-                .background(accentBrush)
+                .align(Alignment.CenterStart)
+                .offset(x = playheadX - (thumbSize / 2))
+                .size(thumbSize)
+                .graphicsLayer {
+                    scaleX = thumbScale
+                    scaleY = thumbScale
+                }
+                .clip(CircleShape)
+                .background(accentColor)
         )
+
+        // Time bubble that follows the thumb during scrub.
+        if (bubbleAlpha > 0.01f) {
+            val bubbleWidthDp = with(density) { bubbleWidthPx.toDp() }
+            val bubbleX = (playheadX - (bubbleWidthDp / 2))
+                .coerceIn(0.dp, (trackWidth - bubbleWidthDp).coerceAtLeast(0.dp))
+            val deltaText = formatSignedSeekDelta(lastBubbleDeltaMs)
+
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset(x = bubbleX, y = (-28).dp)
+                    .graphicsLayer { alpha = bubbleAlpha }
+                    .onSizeChanged { bubbleWidthPx = it.width }
+                    .background(
+                        color = Color.Black.copy(alpha = 0.82f),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = formatTime(currentPosition),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontFeatureSettings = "tnum",
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    color = Color.White,
+                    maxLines = 1
+                )
+                Text(
+                    text = deltaText,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 12.sp,
+                        fontFeatureSettings = "tnum"
+                    ),
+                    color = Color.White.copy(alpha = 0.72f),
+                    maxLines = 1
+                )
+            }
+        }
     }
 }
 
@@ -2683,7 +2821,9 @@ private fun ProgressBar(
 private fun SeekOverlay(
     currentPosition: Long,
     duration: Long,
-    bufferedPosition: Long = 0L
+    bufferedPosition: Long = 0L,
+    previewPosition: Long? = null,
+    isScrubbing: Boolean = true
 ) {
     Column(
         modifier = Modifier
@@ -2696,7 +2836,9 @@ private fun SeekOverlay(
                 duration = duration,
                 onSeekPreview = {},
                 onSeekCommit = {},
-                bufferedPosition = bufferedPosition
+                bufferedPosition = bufferedPosition,
+                previewPosition = previewPosition,
+                isScrubbing = isScrubbing
             )
 
             Spacer(modifier = Modifier.height(NuvioTheme.spacing.md))
@@ -2719,11 +2861,14 @@ private fun SeekOverlay(
 @Composable
 private fun SeekOverlayHost(viewModel: PlayerViewModel) {
     val playbackTimeline by viewModel.playbackTimeline.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
 
     SeekOverlay(
         currentPosition = playbackTimeline.currentPosition,
         duration = playbackTimeline.duration,
-        bufferedPosition = playbackTimeline.bufferedPosition
+        bufferedPosition = playbackTimeline.bufferedPosition,
+        previewPosition = uiState.pendingPreviewSeekPosition,
+        isScrubbing = uiState.pendingPreviewSeekPosition != null || uiState.showSeekOverlay
     )
 }
 
@@ -3485,6 +3630,11 @@ internal fun DialogButton(
             overflow = TextOverflow.Ellipsis
         )
     }
+}
+
+private fun formatSignedSeekDelta(deltaMs: Long): String {
+    val sign = if (deltaMs >= 0L) "+" else "-"
+    return sign + formatTime(kotlin.math.abs(deltaMs))
 }
 
 private fun formatTime(millis: Long): String {
