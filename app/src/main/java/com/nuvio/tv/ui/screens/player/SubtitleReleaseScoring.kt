@@ -63,6 +63,8 @@ internal object SubtitleReleaseScoring {
     private val SPLIT_SEASON_RE = Regex("(s\\d{1,2})\\s+(e\\d{1,2})", RegexOption.IGNORE_CASE)
     private val PURE_NUMBERS_RE = Regex("\\d+")
     private val SUBTITLE_BRACKET_RE = Regex("^\\[[^]]+]")
+    // AIOStreams / similar providers prefix release keys as v3+|id|Release.Name
+    private val AIOSTREAMS_PREFIX_RE = Regex("^v\\d+\\+?\\|\\d+\\|")
     private val SEPARATOR_RE = Regex("[.\\-_\\s]+")
 
     private fun tokenWeight(token: String): Int = when {
@@ -79,8 +81,14 @@ internal object SubtitleReleaseScoring {
     fun score(streamSourceRaw: String, subtitleId: String): Int {
         if (streamSourceRaw.isBlank() || subtitleId.isBlank()) return 0
 
-        val streamSource = streamSourceRaw.replace('+', ' ')
-        val cleanId = subtitleId.replace(SUBTITLE_BRACKET_RE, "").trim()
+        val streamSource = streamSourceRaw
+            .replace(SUBTITLE_BRACKET_RE, "")
+            .replace(AIOSTREAMS_PREFIX_RE, "")
+            .replace('+', ' ')
+        val cleanId = subtitleId
+            .replace(SUBTITLE_BRACKET_RE, "")
+            .replace(AIOSTREAMS_PREFIX_RE, "")
+            .trim()
 
         fun normalise(s: String) = SPLIT_SEASON_RE.replace(s) { it.groupValues[1] + it.groupValues[2] }
 
@@ -125,7 +133,11 @@ internal object SubtitleReleaseScoring {
     fun subtitleScoreKey(id: String, url: String = "", addonName: String = ""): String {
         val fromUrl = url.substringAfterLast('/').substringBefore('?').takeIf { it.length > 3 }.orEmpty()
         return listOf(id, fromUrl, addonName)
-            .map { it.replace(SUBTITLE_BRACKET_RE, "").trim() }
+            .map {
+                it.replace(SUBTITLE_BRACKET_RE, "")
+                    .replace(AIOSTREAMS_PREFIX_RE, "")
+                    .trim()
+            }
             .firstOrNull { it.isNotBlank() && it.length > 2 }
             .orEmpty()
     }

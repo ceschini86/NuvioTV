@@ -5,6 +5,7 @@ import com.nuvio.tv.data.local.AVAILABLE_SUBTITLE_LANGUAGES
 import com.nuvio.tv.data.local.SubtitleLanguageOption
 import com.nuvio.tv.data.local.displayName
 import com.nuvio.tv.domain.model.Subtitle
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiCredentials
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiModel
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleTranslationManager
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleTranslationService
@@ -29,10 +30,7 @@ import java.util.Locale
 internal fun PlayerRuntimeController.ensureSubtitleTranslationManager(): SubtitleTranslationManager {
     subtitleTranslationManager?.let { return it }
     val manager = SubtitleTranslationManager(
-        service = SubtitleTranslationService(
-            apiKeyProvider = { subtitleAiApiKey },
-            modelProvider = { subtitleAiModel }
-        ),
+        service = SubtitleTranslationService(),
         targetLanguage = resolveSubtitleAiTargetLanguageName(),
         scope = scope
     )
@@ -41,8 +39,11 @@ internal fun PlayerRuntimeController.ensureSubtitleTranslationManager(): Subtitl
         _uiState.update { it.copy(isAiSubtitleTranslating = translating) }
     }
     manager.onBatchResult = { success, error ->
-        if (!success && error != null && error != TRANSLATION_ERROR_CONTENT_BLOCKED && error != "RATE_LIMITED") {
+        if (success) {
+            _uiState.update { it.copy(aiSubtitleLastError = null) }
+        } else if (error != null && error != TRANSLATION_ERROR_CONTENT_BLOCKED) {
             Log.w(PlayerRuntimeController.TAG, "AI subtitle batch failed: $error")
+            _uiState.update { it.copy(aiSubtitleLastError = error) }
         }
     }
     manager.onUntranslatableSource = {
@@ -66,25 +67,39 @@ internal fun PlayerRuntimeController.observeSubtitleAiSettings() {
     scope.launch {
         combine(
             playerSettingsDataStore.playerSettings,
+            deviceLocalPlayerPreferences.subtitleAiCredentials,
             deviceLocalPlayerPreferences.subtitleAiApiKey
-        ) { settings, apiKey ->
-            Triple(settings.subtitleStyle, apiKey, settings.internalPlayerEngine)
-        }.distinctUntilChanged().collect { (style, apiKey, _) ->
-            subtitleAiApiKey = apiKey
+        ) { settings, credentials, legacyKey ->
+            Triple(settings.subtitleStyle, credentials, legacyKey)
+        }.distinctUntilChanged().collect { (style, credentials, legacyKey) ->
+            subtitleAiCredentials = credentials
+            subtitleAiApiKey = credentials.enabledProviders().firstOrNull()?.usableKeys?.firstOrNull()
+                ?: legacyKey
             subtitleAiModel = runCatching {
                 SubtitleAiModel.valueOf(style.aiModel)
-            }.getOrDefault(SubtitleAiModel.GROQ_LLAMA_70B)
+            }.getOrDefault(
+                credentials.enabledProviders().firstOrNull()?.model
+                    ?: SubtitleAiModel.GROQ_LLAMA_70B
+            )
             subtitleAiFeatureEnabled = style.aiEnabled
             subtitleAiAutoSelect = style.aiAutoSelect
 
             val manager = ensureSubtitleTranslationManager()
-            manager.updateService(apiKey, subtitleAiModel)
+            manager.updateCredentials(credentials)
+            manager.updatePreferredModel(subtitleAiModel)
+            // Legacy single-key path still seeds router if credentials empty but legacy key set.
+            if (!credentials.anyUsable() && legacyKey.isNotBlank()) {
+                manager.updateCredentials(
+                    SubtitleAiCredentials.migrateFromLegacy(legacyKey, subtitleAiModel)
+                )
+            }
+            manager.updateService(subtitleAiApiKey, subtitleAiModel)
             manager.targetLanguage = resolveSubtitleAiTargetLanguageName()
             manager.removeHearingImpaired = style.stripSdh
 
             val canUseAi = !isUsingMpvEngine() &&
                 style.aiEnabled &&
-                apiKey.isNotBlank()
+                (credentials.anyUsable() || legacyKey.isNotBlank())
 
             if (!canUseAi && manager.isEnabled) {
                 setAiSubtitleTranslationEnabled(false)
@@ -130,7 +145,7 @@ internal fun PlayerRuntimeController.applySubtitleAutoSelectPolicy() {
 internal fun PlayerRuntimeController.canRunAiAutoSelectLadder(): Boolean {
     return subtitleAiAutoSelect &&
         subtitleAiFeatureEnabled &&
-        subtitleAiApiKey.isNotBlank() &&
+        (subtitleAiCredentials.anyUsable() || subtitleAiApiKey.isNotBlank()) &&
         !isUsingMpvEngine()
 }
 
@@ -329,7 +344,7 @@ internal fun PlayerRuntimeController.setAiSubtitleTranslationEnabled(
         return
     }
     val manager = ensureSubtitleTranslationManager()
-    val apiKeyOk = subtitleAiApiKey.isNotBlank()
+    val apiKeyOk = subtitleAiCredentials.anyUsable() || subtitleAiApiKey.isNotBlank()
     val featureOk = subtitleAiFeatureEnabled
     val effective = enabled && apiKeyOk && featureOk && !isUsingMpvEngine()
     if (!effective) {
@@ -380,7 +395,7 @@ internal fun PlayerRuntimeController.translateSubtitleWithAi(
     addonSubtitle: Subtitle?
 ) {
     if (isUsingMpvEngine()) return
-    if (!subtitleAiFeatureEnabled || subtitleAiApiKey.isBlank()) {
+    if (!subtitleAiFeatureEnabled || !(subtitleAiCredentials.anyUsable() || subtitleAiApiKey.isNotBlank())) {
         Log.w(PlayerRuntimeController.TAG, "Translate with AI ignored: feature/key unavailable")
         return
     }
@@ -534,9 +549,10 @@ internal fun PlayerRuntimeController.selectAiTranslationSourceIfAvailable(
 }
 
 internal fun PlayerRuntimeController.resolveStreamReleaseNameForSubtitleScore(): String {
-    return listOfNotNull(streamName, contentName)
+    return listOfNotNull(streamName, contentName, title)
         .map { it.trim() }
-        .firstOrNull { it.isNotBlank() }
+        .filter { it.isNotBlank() }
+        .maxByOrNull { it.length }
         .orEmpty()
 }
 

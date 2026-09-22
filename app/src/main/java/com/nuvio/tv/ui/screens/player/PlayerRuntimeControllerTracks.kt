@@ -1123,7 +1123,7 @@ internal fun PlayerRuntimeController.applyPersistedTrackPreference(
                     )
                 }
             } else {
-                val addonSubtitlesStillLoading = state.isLoadingAddonSubtitles || state.addonSubtitles.isEmpty()
+                val addonSubtitlesStillLoading = state.isLoadingAddonSubtitles
                 if (addonSubtitlesStillLoading) {
                     // Addon subtitles haven't loaded yet — keep the preference
                     // so it can be restored once they arrive. Block auto-selection

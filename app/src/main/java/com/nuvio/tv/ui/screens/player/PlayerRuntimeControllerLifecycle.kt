@@ -24,6 +24,7 @@ internal fun PlayerRuntimeController.releasePlayer(flushPlaybackState: Boolean) 
             it.copy(
                 aiSubtitleTranslationActive = false,
                 isAiSubtitleTranslating = false,
+                aiSubtitleLastError = null,
                 aiSubtitleDiagnostics = null,
                 showAiSubtitleDiagnosticsOverlay = false,
                 showSubtitleTranslateMenuOverlay = false,

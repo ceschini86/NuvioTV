@@ -1323,6 +1323,9 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             pendingAddonSubtitleTrackId = null
             pendingAudioSelectionAfterSubtitleRefresh = null
             resetSubtitleAutoSyncState()
+            // Manual track picks must leave AI translation mode, otherwise the overlay keeps
+            // highlighting "Translate with AI" and translation may keep running on the new source.
+            setAiSubtitleTranslationEnabled(false)
             rememberInternalSubtitleSelection(event.index)
             selectSubtitleTrack(event.index)
             _uiState.update {
@@ -1416,6 +1419,8 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
                 message = "addonId=${event.subtitle.id} addonLang=${event.subtitle.lang} addonName=${event.subtitle.addonName}"
             )
             autoSubtitleSelected = true
+            // Same as internal: choosing a concrete addon is an explicit non-AI selection.
+            setAiSubtitleTranslationEnabled(false)
             rememberAddonSubtitleSelection(event.subtitle)
             selectAddonSubtitle(event.subtitle)
             _uiState.update {

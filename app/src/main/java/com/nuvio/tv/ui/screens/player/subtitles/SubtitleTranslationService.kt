@@ -3,7 +3,10 @@ package com.nuvio.tv.ui.screens.player.subtitles
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicLong
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -48,6 +51,11 @@ private const val GROQ_REASONING_FORMAT = "hidden"
 // positioned by Google for high-volume translation. Same v1beta API + thinkingLevel field.
 private const val GEMINI_MODEL_ID = "gemini-3.5-flash-lite"
 private const val GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/$GEMINI_MODEL_ID:generateContent"
+// Haiku is the right latency/cost tradeoff for subtitle windows; Sonnet/Opus are overkill.
+private const val CLAUDE_MODEL_ID = "claude-haiku-4-5"
+private const val CLAUDE_URL = "https://api.anthropic.com/v1/messages"
+private const val CLAUDE_API_VERSION = "2023-06-01"
+private const val CLAUDE_MAX_TOKENS = 4096
 
 // Transient-failure retry (server overload / flaky network). 503/500/502 and IOExceptions are
 // Google-side capacity blips that usually clear within ~1s; retry the same batch a couple times
@@ -56,10 +64,13 @@ private const val GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v
 // the manager's 5s cooldown handles it) or 4xx/content blocks (retrying won't change the outcome).
 private const val GEMINI_MAX_TRANSIENT_RETRIES = 2        // 3 attempts total
 private const val GEMINI_RETRY_BASE_DELAY_MS = 400L       // 400ms, then 800ms (×2 each retry)
+// Free tier for flash-lite is ~15 RPM. Pace requests so preTranslate + live batches do not
+// instantly exhaust the minute budget and leave translation stuck on RATE_LIMITED.
+private const val GEMINI_MIN_INTERVAL_MS = 4_200L
 private val GEMINI_RETRYABLE_HTTP = setOf(500, 502, 503)
 
 class SubtitleTranslationService(
-    private val apiKeyProvider: () -> String,
+    private val apiKeyProvider: () -> String = { "" },
     private val modelProvider: () -> SubtitleAiModel = { SubtitleAiModel.GROQ_LLAMA_70B }
 ) {
 
@@ -67,6 +78,18 @@ class SubtitleTranslationService(
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
+
+    private val geminiRequestLock = Mutex()
+    private val lastGeminiRequestAtMs = AtomicLong(0L)
+
+    private suspend fun throttleGeminiRequests() {
+        geminiRequestLock.withLock {
+            val now = System.currentTimeMillis()
+            val waitMs = GEMINI_MIN_INTERVAL_MS - (now - lastGeminiRequestAtMs.get())
+            if (waitMs > 0L) delay(waitMs)
+            lastGeminiRequestAtMs.set(System.currentTimeMillis())
+        }
+    }
 
     private fun extractJsonArray(text: String): JSONArray? {
         val codeBlocks = Regex("```(?:json)?\\s*([\\s\\S]*?)```").findAll(text)
@@ -173,6 +196,7 @@ class SubtitleTranslationService(
         val raw = when (modelProvider()) {
             SubtitleAiModel.GROQ_LLAMA_70B -> matchGroq(prompt, payload, apiKey)
             SubtitleAiModel.GEMINI_FLASH_25 -> matchGemini(prompt, payload, apiKey)
+            SubtitleAiModel.CLAUDE_HAIKU -> matchClaude(prompt, payload, apiKey)
         } ?: return null
         val array = extractJsonArray(raw) ?: return null
         val matches = ArrayList<LineMatch>(array.length())
@@ -280,6 +304,70 @@ class SubtitleTranslationService(
     suspend fun translateBatch(lines: List<String>, targetLanguage: String): TranslationResult =
         translateBatchInternal(lines, targetLanguage, depth = 0)
 
+    /** Explicit provider+key call used by [SubtitleAiRouter] (multi-key / multi-provider). */
+    suspend fun translateWith(
+        model: SubtitleAiModel,
+        apiKey: String,
+        lines: List<String>,
+        targetLanguage: String
+    ): ProviderAttemptResult {
+        if (lines.isEmpty()) {
+            return ProviderAttemptResult(TranslationResult(lines, true))
+        }
+        if (apiKey.isBlank()) {
+            return ProviderAttemptResult(TranslationResult(lines, false, "API key missing"), httpCode = 401)
+        }
+        return translateWithInternal(model, apiKey, lines, targetLanguage, depth = 0)
+    }
+
+    private suspend fun translateWithInternal(
+        model: SubtitleAiModel,
+        apiKey: String,
+        lines: List<String>,
+        targetLanguage: String,
+        depth: Int
+    ): ProviderAttemptResult {
+        val translation = when (model) {
+            SubtitleAiModel.GROQ_LLAMA_70B -> translateGroq(lines, targetLanguage, apiKey)
+            SubtitleAiModel.GEMINI_FLASH_25 -> translateGemini(lines, targetLanguage, apiKey)
+            SubtitleAiModel.CLAUDE_HAIKU -> translateClaude(lines, targetLanguage, apiKey)
+        }
+        val attempt = ProviderAttemptResult(
+            translation = translation,
+            httpCode = when (translation.errorMessage) {
+                "RATE_LIMITED" -> 429
+                "API key missing" -> 401
+                else -> null
+            }
+        )
+        if (!attempt.translation.success &&
+            attempt.translation.errorMessage == TRANSLATION_ERROR_CONTENT_BLOCKED &&
+            lines.size >= 2 && depth < 2
+        ) {
+            val mid = lines.size / 2
+            val left = translateWithInternal(model, apiKey, lines.subList(0, mid), targetLanguage, depth + 1)
+            val right = translateWithInternal(model, apiKey, lines.subList(mid, lines.size), targetLanguage, depth + 1)
+            return ProviderAttemptResult(
+                translation = TranslationResult(left.translation.lines + right.translation.lines, true),
+                httpCode = attempt.httpCode,
+                quota = attempt.quota ?: left.quota ?: right.quota
+            )
+        }
+        return attempt
+    }
+
+    /** Lightweight auth/model reachability check for settings UI. */
+    suspend fun ping(model: SubtitleAiModel, apiKey: String): ProviderPingHttpResult {
+        if (apiKey.isBlank()) {
+            return ProviderPingHttpResult(false, "Empty key", httpCode = 401)
+        }
+        return when (model) {
+            SubtitleAiModel.GROQ_LLAMA_70B -> pingGroq(apiKey)
+            SubtitleAiModel.GEMINI_FLASH_25 -> pingGemini(apiKey)
+            SubtitleAiModel.CLAUDE_HAIKU -> pingClaude(apiKey)
+        }
+    }
+
     private suspend fun translateBatchInternal(
         lines: List<String>,
         targetLanguage: String,
@@ -295,6 +383,7 @@ class SubtitleTranslationService(
         val result = when (modelProvider()) {
             SubtitleAiModel.GROQ_LLAMA_70B -> translateGroq(lines, targetLanguage, apiKey)
             SubtitleAiModel.GEMINI_FLASH_25 -> translateGemini(lines, targetLanguage, apiKey)
+            SubtitleAiModel.CLAUDE_HAIKU -> translateClaude(lines, targetLanguage, apiKey)
         }
 
         // A content-policy block poisons the whole window because of (usually) one line.
@@ -388,6 +477,7 @@ class SubtitleTranslationService(
         attempt: Int = 0,
         transientAttempt: Int = 0
     ): TranslationResult {
+        throttleGeminiRequests()
         val NL = "⏎"
         val inputArray = encodeIndexed(lines, NL)
         val systemPrompt = buildSystemPrompt(targetLanguage, NL)
@@ -522,6 +612,235 @@ class SubtitleTranslationService(
                 Log.e(TAG, "translateGemini exception: ${e.message}", e)
                 TranslationResult(lines, false, e.message)
             }
+        }
+    }
+
+
+    private fun extractClaudeText(responseBody: String): String {
+        val json = JSONObject(responseBody)
+        val content = json.optJSONArray("content") ?: return ""
+        return buildString {
+            for (i in 0 until content.length()) {
+                val part = content.optJSONObject(i) ?: continue
+                if (part.optString("type") == "text") {
+                    append(part.optString("text"))
+                }
+            }
+        }.trim()
+    }
+
+    private suspend fun matchClaude(prompt: String, payload: String, apiKey: String): String? {
+        val body = JSONObject().apply {
+            put("model", CLAUDE_MODEL_ID)
+            put("max_tokens", 2048)
+            put("temperature", 0)
+            put("system", prompt)
+            put("messages", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("role", "user")
+                    put("content", payload)
+                })
+            })
+        }
+        val request = Request.Builder()
+            .url(CLAUDE_URL)
+            .header("x-api-key", apiKey)
+            .header("anthropic-version", CLAUDE_API_VERSION)
+            .header("Content-Type", "application/json")
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                client.newCall(request).execute().use { response ->
+                    val responseBody = response.body?.string()
+                    if (!response.isSuccessful || responseBody == null) {
+                        Log.w(TAG, "matchSubtitleLines claude HTTP ${response.code}")
+                        return@use null
+                    }
+                    extractClaudeText(responseBody).ifBlank { null }
+                }
+            }.onFailure {
+                if (it is kotlinx.coroutines.CancellationException) throw it
+                Log.w(TAG, "matchSubtitleLines claude failed: ${it.message}")
+            }.getOrNull()
+        }
+    }
+
+    private suspend fun translateClaude(
+        lines: List<String>,
+        targetLanguage: String,
+        apiKey: String,
+        attempt: Int = 0
+    ): TranslationResult {
+        val NL = "⏎"
+        val inputArray = encodeIndexed(lines, NL)
+        val systemPrompt = buildSystemPrompt(targetLanguage, NL)
+
+        val body = JSONObject().apply {
+            put("model", CLAUDE_MODEL_ID)
+            put("max_tokens", CLAUDE_MAX_TOKENS)
+            put("temperature", 0.1)
+            put("system", systemPrompt)
+            put("messages", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("role", "user")
+                    put("content", "Translate to $targetLanguage:\n$inputArray")
+                })
+            })
+        }
+
+        val request = Request.Builder()
+            .url(CLAUDE_URL)
+            .header("x-api-key", apiKey)
+            .header("anthropic-version", CLAUDE_API_VERSION)
+            .header("Content-Type", "application/json")
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = client.newCall(request).execute()
+                val responseBody = response.body?.string() ?: run {
+                    Log.e(TAG, "Empty Claude response body (HTTP ${response.code})")
+                    return@withContext TranslationResult(lines, false, "Empty response (${response.code})")
+                }
+                if (!response.isSuccessful) {
+                    val errorMsg = if (response.code == 429) "RATE_LIMITED" else "HTTP ${response.code}: $responseBody"
+                    return@withContext TranslationResult(lines, false, errorMsg)
+                }
+
+                val rawText = extractClaudeText(responseBody)
+                if (rawText.isBlank()) {
+                    Log.e(TAG, "Claude response has no text: ${responseBody.take(400)}")
+                    return@withContext TranslationResult(lines, false, "Empty Claude content")
+                }
+
+                val parsed = parseTranslationResult(lines, targetLanguage, rawText, NL)
+                if (!parsed.success && attempt == 0) {
+                    Log.w(TAG, "Claude parse failed (${parsed.errorMessage}) — retrying batch once")
+                    return@withContext translateClaude(lines, targetLanguage, apiKey, attempt = 1)
+                }
+                parsed
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e(TAG, "translateClaude exception: ${e.message}", e)
+                TranslationResult(lines, false, e.message)
+            }
+        }
+    }
+
+
+    private suspend fun pingGroq(apiKey: String): ProviderPingHttpResult = withContext(Dispatchers.IO) {
+        val body = JSONObject().apply {
+            put("model", GROQ_MODEL_ID)
+            put("temperature", 0)
+            put("max_tokens", 8)
+            put("messages", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("role", "user")
+                    put("content", "Reply with OK")
+                })
+            })
+        }
+        val request = Request.Builder()
+            .url(GROQ_URL)
+            .header("Authorization", "Bearer $apiKey")
+            .header("Content-Type", "application/json")
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        runCatching {
+            client.newCall(request).execute().use { response ->
+                val quota = parseProviderQuota(
+                    SubtitleAiModel.GROQ_LLAMA_70B, apiKey, response.headers, response.code
+                )
+                if (response.isSuccessful) {
+                    ProviderPingHttpResult(true, "Groq key OK", response.code, quota)
+                } else {
+                    val bodyText = response.body?.string().orEmpty()
+                    val msg = if (response.code == 429) "RATE_LIMITED" else "HTTP ${response.code}"
+                    ProviderPingHttpResult(false, msg, response.code, quota)
+                }
+            }
+        }.getOrElse {
+            if (it is kotlinx.coroutines.CancellationException) throw it
+            ProviderPingHttpResult(false, it.message ?: "Ping failed")
+        }
+    }
+
+    private suspend fun pingGemini(apiKey: String): ProviderPingHttpResult = withContext(Dispatchers.IO) {
+        val body = JSONObject().apply {
+            put("contents", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("parts", JSONArray().apply {
+                        put(JSONObject().apply { put("text", "Reply with OK") })
+                    })
+                })
+            })
+            put("generationConfig", JSONObject().apply {
+                put("temperature", 0)
+                put("maxOutputTokens", 8)
+                put("thinkingConfig", JSONObject().apply { put("thinkingLevel", "minimal") })
+            })
+        }
+        val request = Request.Builder()
+            .url(GEMINI_BASE_URL)
+            .header("x-goog-api-key", apiKey)
+            .header("Content-Type", "application/json")
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        runCatching {
+            client.newCall(request).execute().use { response ->
+                val quota = parseProviderQuota(
+                    SubtitleAiModel.GEMINI_FLASH_25, apiKey, response.headers, response.code
+                )
+                val bodyText = response.body?.string().orEmpty()
+                if (response.isSuccessful) {
+                    ProviderPingHttpResult(true, "Gemini key OK", response.code, quota)
+                } else {
+                    val msg = if (response.code == 429) "RATE_LIMITED" else "HTTP ${response.code}"
+                    ProviderPingHttpResult(false, msg, response.code, quota)
+                }
+            }
+        }.getOrElse {
+            if (it is kotlinx.coroutines.CancellationException) throw it
+            ProviderPingHttpResult(false, it.message ?: "Ping failed")
+        }
+    }
+
+    private suspend fun pingClaude(apiKey: String): ProviderPingHttpResult = withContext(Dispatchers.IO) {
+        val body = JSONObject().apply {
+            put("model", CLAUDE_MODEL_ID)
+            put("max_tokens", 8)
+            put("temperature", 0)
+            put("messages", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("role", "user")
+                    put("content", "Reply with OK")
+                })
+            })
+        }
+        val request = Request.Builder()
+            .url(CLAUDE_URL)
+            .header("x-api-key", apiKey)
+            .header("anthropic-version", CLAUDE_API_VERSION)
+            .header("Content-Type", "application/json")
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        runCatching {
+            client.newCall(request).execute().use { response ->
+                val quota = parseProviderQuota(
+                    SubtitleAiModel.CLAUDE_HAIKU, apiKey, response.headers, response.code
+                )
+                if (response.isSuccessful) {
+                    ProviderPingHttpResult(true, "Claude key OK", response.code, quota)
+                } else {
+                    val msg = if (response.code == 429) "RATE_LIMITED" else "HTTP ${response.code}"
+                    ProviderPingHttpResult(false, msg, response.code, quota)
+                }
+            }
+        }.getOrElse {
+            if (it is kotlinx.coroutines.CancellationException) throw it
+            ProviderPingHttpResult(false, it.message ?: "Ping failed")
         }
     }
 

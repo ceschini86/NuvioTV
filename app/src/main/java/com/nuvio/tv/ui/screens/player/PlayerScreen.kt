@@ -1640,7 +1640,12 @@ fun PlayerScreen(
             aiSubtitleAvailable = uiState.aiSubtitleAvailable,
             aiSubtitleTranslationActive = uiState.aiSubtitleTranslationActive,
             isAiSubtitleTranslating = uiState.isAiSubtitleTranslating,
-            streamReleaseName = uiState.currentStreamName ?: uiState.contentName,
+            aiSubtitleDiagnostics = uiState.aiSubtitleDiagnostics,
+            aiSubtitleLastError = uiState.aiSubtitleLastError,
+            streamReleaseName = listOfNotNull(uiState.currentStreamName, uiState.contentName, uiState.title)
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .maxByOrNull { it.length },
             onInternalTrackSelected = { viewModel.onEvent(PlayerEvent.OnSelectSubtitleTrack(it)) },
             onAddonSubtitleSelected = { viewModel.onEvent(PlayerEvent.OnSelectAddonSubtitle(it)) },
             onDisableSubtitles = { viewModel.onEvent(PlayerEvent.OnDisableSubtitles) },
