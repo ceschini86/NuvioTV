@@ -14,7 +14,8 @@ import kotlinx.coroutines.CancellationException
 class SubtitleTranslationManager(
     private var service: SubtitleTranslationService,
     internal var targetLanguage: String,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val router: SubtitleAiRouter = SubtitleAiRouter(service)
 ) {
     companion object {
         const val MOCK_MODE = false
@@ -64,7 +65,24 @@ class SubtitleTranslationManager(
             apiKeyProvider = { apiKey },
             modelProvider = { model }
         )
+        // Keep router.service in sync via new router instance credentials only —
+        // translate path prefers [updateCredentials].
     }
+
+    fun updateCredentials(credentials: SubtitleAiCredentials) {
+        router.credentials = credentials
+    }
+
+    fun updatePreferredModel(model: SubtitleAiModel) {
+        router.preferredModel = model
+    }
+
+    fun quotaSnapshots(): List<SubtitleAiQuotaSnapshot> = router.quotaSnapshots()
+
+    suspend fun pingKey(model: SubtitleAiModel, apiKey: String): SubtitleAiPingResult =
+        router.ping(model, apiKey)
+
+    fun hasUsableCredentials(): Boolean = router.hasUsableCredentials()
 
     private suspend fun processBatches() {
         val batch = mutableListOf<PendingItem>()
@@ -85,7 +103,7 @@ class SubtitleTranslationManager(
 
             val texts = batch.map { it.text }
             val result = try {
-                service.translateBatch(texts, targetLanguage)
+                router.translateBatch(texts, targetLanguage)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -168,7 +186,7 @@ class SubtitleTranslationManager(
         val uncached = texts.filter { !cache.containsKey(it) && !inFlight.containsKey(it) }
         if (uncached.isEmpty()) return
         uncached.chunked(40).forEach { chunk ->
-            val result = service.translateBatch(chunk, targetLanguage)
+            val result = router.translateBatch(chunk, targetLanguage)
             if (result.success) {
                 onBatchResult?.invoke(true, null)
                 chunk.forEachIndexed { i, text ->

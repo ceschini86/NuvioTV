@@ -1474,6 +1474,7 @@
     <string name="subtitle_tab_addons">Addons</string>
     <string name="subtitle_tab_languages">Idiomas</string>
     <string name="subtitle_tab_style">Estilo</string>
+    <string name="subtitle_tab_info">Info</string>
     <string name="subtitle_tab_delay">Atraso</string>
     <string name="subtitle_none">Nenhuma</string>
     <string name="subtitle_built_in">Integrada</string>

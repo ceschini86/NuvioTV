@@ -126,6 +126,7 @@ data class PlayerUiState(
     val showSubtitleTranslateMenuOverlay: Boolean = false,
     val subtitleTranslateMenuOptionId: String? = null,
     val isAiSubtitleTranslating: Boolean = false,
+    val aiSubtitleLastError: String? = null,
     // Addon subtitles
     val addonSubtitles: List<Subtitle> = emptyList(),
     val isLoadingAddonSubtitles: Boolean = false,

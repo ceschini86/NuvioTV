@@ -665,6 +665,7 @@
     <string name="subtitle_tab_addons">Complementos</string>
     <string name="subtitle_tab_languages">Idiomas</string>
     <string name="subtitle_tab_style">Estilo</string>
+    <string name="subtitle_tab_info">Info</string>
     <string name="subtitle_tab_delay">Retraso</string>
     <string name="subtitle_none">Ninguno</string>
     <string name="subtitle_all">Todos</string>

@@ -83,6 +83,10 @@ import com.nuvio.tv.data.local.Dv7HandlingMode
 import com.nuvio.tv.data.local.PlayerSettings
 import com.nuvio.tv.data.local.displayName
 import com.nuvio.tv.ui.components.NuvioDialog
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiCredentials
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiModel
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiPingResult
+import com.nuvio.tv.ui.screens.player.subtitles.maskApiKey
 import com.nuvio.tv.ui.components.P2pConsentDialog
 import com.nuvio.tv.ui.screens.detail.requestFocusAfterFrames
 import kotlinx.coroutines.launch
@@ -115,7 +119,10 @@ fun PlaybackSettingsContent(
     initialFocusRequester: FocusRequester? = null
 ) {
     val playerSettings by viewModel.playerSettings.collectAsStateWithLifecycle(initialValue = PlayerSettings())
-    val subtitleAiApiKey by viewModel.subtitleAiApiKey.collectAsStateWithLifecycle(initialValue = "")
+    val subtitleAiCredentials by viewModel.subtitleAiCredentials.collectAsStateWithLifecycle(
+        initialValue = SubtitleAiCredentials()
+    )
+    val subtitleAiPingResults by viewModel.subtitleAiPingResults.collectAsStateWithLifecycle()
     val torrentSettings by viewModel.torrentSettingsFlow.collectAsStateWithLifecycle(
         initialValue = com.nuvio.tv.core.torrent.TorrentSettingsData()
     )
@@ -147,7 +154,7 @@ fun PlaybackSettingsContent(
     var showPlayerPreferenceDialog by remember { mutableStateOf(false) }
     var showInternalPlayerEngineDialog by remember { mutableStateOf(false) }
     var showP2pConsentDialog by remember { mutableStateOf(false) }
-    var showAiApiKeyDialog by remember { mutableStateOf(false) }
+    var aiProviderKeysDialogModel by remember { mutableStateOf<SubtitleAiModel?>(null) }
 
     fun dismissAllDialogs() {
         showLanguageDialog = false
@@ -171,7 +178,7 @@ fun PlaybackSettingsContent(
         showPlayerPreferenceDialog = false
         showInternalPlayerEngineDialog = false
         showP2pConsentDialog = false
-        showAiApiKeyDialog = false
+        aiProviderKeysDialogModel = null
     }
 
     fun openDialog(setter: () -> Unit) {
@@ -215,8 +222,13 @@ fun PlaybackSettingsContent(
                 onShowTextColorDialog = { openDialog { showTextColorDialog = true } },
                 onShowBackgroundColorDialog = { openDialog { showBackgroundColorDialog = true } },
                 onShowOutlineColorDialog = { openDialog { showOutlineColorDialog = true } },
-                onShowAiApiKeyDialog = { openDialog { showAiApiKeyDialog = true } },
-                subtitleAiApiKey = subtitleAiApiKey,
+                onShowAiProviderKeysDialog = { model ->
+                    openDialog { aiProviderKeysDialogModel = model }
+                },
+                onSetSubtitleAiProviderEnabled = { model, enabled ->
+                    coroutineScope.launch { viewModel.setSubtitleAiProviderEnabled(model, enabled) }
+                },
+                subtitleAiCredentials = subtitleAiCredentials,
                 onShowStreamAutoPlayModeDialog = { openDialog { showStreamAutoPlayModeDialog = true } },
                 onShowStreamAutoPlaySourceDialog = { openDialog { showStreamAutoPlaySourceDialog = true } },
                 onShowStreamAutoPlayAddonSelectionDialog = { openDialog { showStreamAutoPlayAddonSelectionDialog = true } },
@@ -633,39 +645,139 @@ fun PlaybackSettingsContent(
         )
     }
 
-    if (showAiApiKeyDialog) {
-        SubtitleAiApiKeyDialog(
-            currentValue = subtitleAiApiKey,
-            onSave = { key ->
-                coroutineScope.launch { viewModel.setSubtitleAiApiKey(key) }
-                showAiApiKeyDialog = false
+    aiProviderKeysDialogModel?.let { model ->
+        SubtitleAiProviderKeysDialog(
+            model = model,
+            provider = subtitleAiCredentials.provider(model),
+            pingResults = subtitleAiPingResults,
+            onToggleEnabled = { enabled ->
+                coroutineScope.launch { viewModel.setSubtitleAiProviderEnabled(model, enabled) }
             },
-            onClear = {
-                coroutineScope.launch { viewModel.setSubtitleAiApiKey("") }
-                showAiApiKeyDialog = false
+            onAddKey = { key ->
+                coroutineScope.launch { viewModel.addSubtitleAiKey(model, key) }
             },
-            onDismiss = { showAiApiKeyDialog = false }
+            onRemoveKey = { key ->
+                coroutineScope.launch { viewModel.removeSubtitleAiKey(model, key) }
+            },
+            onPingKey = { key -> viewModel.pingSubtitleAiKey(model, key) },
+            onDismiss = { aiProviderKeysDialogModel = null }
         )
     }
 }
 
 @Composable
-private fun SubtitleAiApiKeyDialog(
-    currentValue: String,
-    onSave: (String) -> Unit,
-    onClear: () -> Unit,
+private fun SubtitleAiProviderKeysDialog(
+    model: SubtitleAiModel,
+    provider: com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiProviderCredentials,
+    pingResults: Map<String, SubtitleAiPingResult>,
+    onToggleEnabled: (Boolean) -> Unit,
+    onAddKey: (String) -> Unit,
+    onRemoveKey: (String) -> Unit,
+    onPingKey: suspend (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var value by remember(currentValue) { mutableStateOf(currentValue) }
+    var newKey by remember { mutableStateOf("") }
+    var pingingKey by remember { mutableStateOf<String?>(null) }
+    val coroutineScope = rememberCoroutineScope()
+    val modelLabel = when (model) {
+        SubtitleAiModel.GEMINI_FLASH_25 -> stringResource(R.string.sub_ai_model_gemini)
+        SubtitleAiModel.CLAUDE_HAIKU -> stringResource(R.string.sub_ai_model_claude)
+        SubtitleAiModel.GROQ_LLAMA_70B -> stringResource(R.string.sub_ai_model_groq)
+    }
     NuvioDialog(
         onDismiss = onDismiss,
-        title = stringResource(R.string.sub_ai_api_key),
+        title = stringResource(R.string.sub_ai_provider_keys) + " — " + modelLabel,
         subtitle = stringResource(R.string.sub_ai_api_key_desc),
-        width = 700.dp
+        width = 760.dp
     ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.sub_ai_provider_enabled),
+                color = NuvioTheme.colors.TextPrimary,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            androidx.tv.material3.Switch(
+                checked = provider.enabled && provider.usableKeys.isNotEmpty(),
+                onCheckedChange = onToggleEnabled,
+                enabled = provider.usableKeys.isNotEmpty()
+            )
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        provider.usableKeys.forEach { key ->
+            val slot = model.name + ":" + key.trim().takeLast(4)
+            val ping = pingResults[slot]
+            val status = when {
+                pingingKey == key -> stringResource(R.string.sub_ai_ping_testing)
+                ping == null -> ""
+                ping.success -> stringResource(R.string.sub_ai_ping_ok)
+                ping.message == "RATE_LIMITED" -> stringResource(R.string.sub_ai_ping_rate_limited)
+                else -> stringResource(R.string.sub_ai_ping_fail) + " · " + ping.message
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = maskApiKey(key),
+                        color = NuvioTheme.colors.TextPrimary,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    if (status.isNotBlank()) {
+                        Text(
+                            text = status,
+                            color = if (ping?.success == true) {
+                                Color(0xFF7CFFB2)
+                            } else {
+                                NuvioTheme.colors.TextSecondary
+                            },
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+                androidx.tv.material3.Button(
+                    onClick = {
+                        pingingKey = key
+                        coroutineScope.launch {
+                            onPingKey(key)
+                            pingingKey = null
+                        }
+                    },
+                    enabled = pingingKey == null,
+                    colors = androidx.tv.material3.ButtonDefaults.colors(
+                        containerColor = NuvioTheme.colors.BackgroundElevated,
+                        contentColor = NuvioTheme.colors.TextPrimary
+                    )
+                ) {
+                    Text(text = stringResource(R.string.sub_ai_ping))
+                }
+                androidx.tv.material3.Button(
+                    onClick = { onRemoveKey(key) },
+                    colors = androidx.tv.material3.ButtonDefaults.colors(
+                        containerColor = NuvioTheme.colors.BackgroundElevated,
+                        contentColor = NuvioTheme.colors.TextPrimary
+                    )
+                ) {
+                    Text(text = stringResource(R.string.sub_ai_remove_key))
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = stringResource(R.string.sub_ai_add_key),
+            color = NuvioTheme.colors.TextSecondary,
+            style = MaterialTheme.typography.bodySmall
+        )
         androidx.compose.foundation.text.BasicTextField(
-            value = value,
-            onValueChange = { value = it },
+            value = newKey,
+            onValueChange = { newKey = it },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 8.dp),
@@ -678,7 +790,7 @@ private fun SubtitleAiApiKeyDialog(
                         .background(NuvioTheme.colors.BackgroundElevated, RoundedCornerShape(10.dp))
                         .padding(14.dp)
                 ) {
-                    if (value.isBlank()) {
+                    if (newKey.isBlank()) {
                         Text(
                             text = stringResource(R.string.sub_ai_api_key_hint),
                             color = NuvioTheme.colors.TextSecondary
@@ -704,23 +816,24 @@ private fun SubtitleAiApiKeyDialog(
             }
             Spacer(modifier = Modifier.width(NuvioTheme.spacing.sm))
             androidx.tv.material3.Button(
-                onClick = onClear,
-                colors = androidx.tv.material3.ButtonDefaults.colors(
-                    containerColor = NuvioTheme.colors.BackgroundElevated,
-                    contentColor = NuvioTheme.colors.TextPrimary
-                )
-            ) {
-                Text(text = stringResource(R.string.action_clear))
-            }
-            Spacer(modifier = Modifier.width(NuvioTheme.spacing.sm))
-            androidx.tv.material3.Button(
-                onClick = { onSave(value) },
+                onClick = {
+                    val key = newKey.trim()
+                    if (key.isBlank()) return@Button
+                    onAddKey(key)
+                    pingingKey = key
+                    coroutineScope.launch {
+                        onPingKey(key)
+                        pingingKey = null
+                        newKey = ""
+                    }
+                },
+                enabled = newKey.isNotBlank(),
                 colors = androidx.tv.material3.ButtonDefaults.colors(
                     containerColor = NuvioTheme.colors.BackgroundCard,
                     contentColor = NuvioTheme.colors.TextPrimary
                 )
             ) {
-                Text(text = stringResource(R.string.action_save))
+                Text(text = stringResource(R.string.sub_ai_add_key))
             }
         }
     }

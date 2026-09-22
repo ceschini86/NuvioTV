@@ -74,6 +74,8 @@ import com.nuvio.tv.data.local.InternalPlayerEngine
 import com.nuvio.tv.data.local.LibassRenderType
 import com.nuvio.tv.data.local.PlayerPreference
 import com.nuvio.tv.data.local.PlayerSettings
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiCredentials
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiModel
 import com.nuvio.tv.data.local.VodCacheSizeMode
 import com.nuvio.tv.ui.components.NuvioDialog
 
@@ -175,8 +177,9 @@ internal fun PlaybackSettingsSections(
     onSetSubtitleAiEnabled: (Boolean) -> Unit,
     onSetSubtitleAiAutoSelect: (Boolean) -> Unit,
     onSetSubtitleAiModel: (String) -> Unit,
-    onShowAiApiKeyDialog: () -> Unit,
-    subtitleAiApiKey: String,
+    onShowAiProviderKeysDialog: (SubtitleAiModel) -> Unit,
+    onSetSubtitleAiProviderEnabled: (SubtitleAiModel, Boolean) -> Unit,
+    subtitleAiCredentials: SubtitleAiCredentials,
     onSetSubtitleOutlineEnabled: (Boolean) -> Unit,
     onSetUseLibass: (Boolean) -> Unit,
     onSetLibassRenderType: (LibassRenderType) -> Unit,
@@ -669,7 +672,7 @@ internal fun PlaybackSettingsSections(
         ) {
             subtitleSettingsItems(
                 playerSettings = playerSettings,
-                subtitleAiApiKey = subtitleAiApiKey,
+                subtitleAiCredentials = subtitleAiCredentials,
                 aiSubtitlesExpanded = aiSubtitlesExpanded,
                 onToggleAiSubtitlesExpanded = { aiSubtitlesExpanded = !aiSubtitlesExpanded },
                 aiSubtitlesHeaderFocus = aiSubtitlesHeaderFocus,
@@ -678,7 +681,8 @@ internal fun PlaybackSettingsSections(
                 onShowTextColorDialog = onShowTextColorDialog,
                 onShowBackgroundColorDialog = onShowBackgroundColorDialog,
                 onShowOutlineColorDialog = onShowOutlineColorDialog,
-                onShowAiApiKeyDialog = onShowAiApiKeyDialog,
+                onShowAiProviderKeysDialog = onShowAiProviderKeysDialog,
+                onSetSubtitleAiProviderEnabled = onSetSubtitleAiProviderEnabled,
                 onSetSubtitleSize = onSetSubtitleSize,
                 onSetSubtitleVerticalOffset = onSetSubtitleVerticalOffset,
                 onSetSubtitleBold = onSetSubtitleBold,

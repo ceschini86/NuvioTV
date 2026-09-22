@@ -585,6 +585,8 @@ class PlayerRuntimeController(
     internal val subtitleDelayUs = AtomicLong(0L)
     internal var subtitleTranslationManager: com.nuvio.tv.ui.screens.player.subtitles.SubtitleTranslationManager? = null
     @Volatile internal var subtitleAiApiKey: String = ""
+    @Volatile internal var subtitleAiCredentials: com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiCredentials =
+        com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiCredentials()
     @Volatile internal var subtitleAiModel: com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiModel =
         com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiModel.GROQ_LLAMA_70B
     @Volatile internal var subtitleAiFeatureEnabled: Boolean = false
