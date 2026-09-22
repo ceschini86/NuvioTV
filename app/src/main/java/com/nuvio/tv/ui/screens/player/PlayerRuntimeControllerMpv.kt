@@ -288,7 +288,7 @@ internal fun PlayerRuntimeController.updateMpvAvailableTracks() {
             val snapshot = view.readTrackSnapshot()
             if (!isUsingMpvEngine() || mpvView !== view || currentStreamUrl != streamUrlAtRefresh) return@launch
             applyMpvTrackSnapshot(snapshot)
-            tryAutoSelectPreferredSubtitleFromAvailableTracks()
+            applySubtitleAutoSelectPolicy()
         } catch (error: CancellationException) {
             throw error
         } catch (error: Throwable) {

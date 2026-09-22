@@ -526,6 +526,8 @@ class PlayerRuntimeController(
     @Volatile internal var subtitleAiFeatureEnabled: Boolean = false
     @Volatile internal var subtitleAiAutoSelect: Boolean = false
     @Volatile internal var aiSubtitleAutoSelectAttempted: Boolean = false
+    /** User picked AI from the subtitle menu — do not auto-upgrade away from AI. */
+    @Volatile internal var aiSubtitleUserLocked: Boolean = false
     internal var pendingPreviewSeekPosition: Long?
         get() = _uiState.value.pendingPreviewSeekPosition
         set(value) {

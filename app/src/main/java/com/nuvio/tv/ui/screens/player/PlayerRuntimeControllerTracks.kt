@@ -319,7 +319,7 @@ internal fun PlayerRuntimeController.updateAvailableTracks(tracks: Tracks) {
     } else {
         cancelFirstFrameWatchdog()
     }
-    tryAutoSelectPreferredSubtitleFromAvailableTracks()
+    applySubtitleAutoSelectPolicy()
     maybeAdjustLibassPipelineForTracks(tracks)
 }
 
@@ -1595,6 +1595,15 @@ private fun audioMatchesSubtitleTargetForForced(audioTrack: TrackInfo, target: S
 internal fun PlayerRuntimeController.tryAutoSelectPreferredSubtitleFromAvailableTracks() {
     if (isUserExplicitSubtitleSelection) {
         Log.d(PlayerRuntimeController.TAG, "AUTO_SUB stop: user explicitly selected current subtitle")
+        return
+    }
+    if (aiSubtitleUserLocked && subtitleTranslationManager?.isEnabled == true) {
+        Log.d(PlayerRuntimeController.TAG, "AUTO_SUB stop: user locked AI translation")
+        return
+    }
+    // When AI auto-select is active and currently translating, do not steal with addons.
+    if (canRunAiAutoSelectLadder() && subtitleTranslationManager?.isEnabled == true) {
+        Log.d(PlayerRuntimeController.TAG, "AUTO_SUB stop: AI auto ladder is holding translation")
         return
     }
     val state = _uiState.value

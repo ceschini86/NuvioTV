@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sub_ai_enabled">Tradução de legendas por IA</string>
+    <string name="sub_ai_enabled_desc">Traduz legendas com sua própria chave de API Groq ou Gemini (somente ExoPlayer)</string>
+    <string name="sub_ai_auto_select">Selecionar tradução por IA automaticamente</string>
+    <string name="sub_ai_auto_select_desc">Na reprodução: legenda embutida no idioma preferido, depois tradução por IA, depois addons</string>
+    <string name="sub_ai_model">Modelo de tradução por IA</string>
+    <string name="sub_ai_model_groq">Groq (gpt-oss-120b)</string>
+    <string name="sub_ai_model_gemini">Gemini (3.5 Flash Lite)</string>
+    <string name="sub_ai_api_key">Chave de API da IA</string>
+    <string name="sub_ai_api_key_desc">Armazenada só neste dispositivo. Necessária para traduzir legendas com IA</string>
+    <string name="sub_ai_api_key_hint">Colar chave de API</string>
+    <string name="sub_ai_translating">Traduzindo…</string>
+    <string name="sub_ai_translate_action">Traduzir com IA</string>
+    <string name="sub_ai_option_badge">IA</string>
+    <string name="sub_ai_option_meta">Tradução por IA a partir da legenda embutida</string>
+    <string name="sub_ai_unavailable_mpv">A tradução por IA exige o ExoPlayer</string>
+</resources>

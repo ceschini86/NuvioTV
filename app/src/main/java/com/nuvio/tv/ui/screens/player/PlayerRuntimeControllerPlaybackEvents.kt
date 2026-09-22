@@ -1323,6 +1323,7 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             pendingAddonSubtitleTrackId = null
             pendingAudioSelectionAfterSubtitleRefresh = null
             resetSubtitleAutoSyncState()
+            setAiSubtitleTranslationEnabled(false)
             rememberInternalSubtitleSelection(event.index)
             selectSubtitleTrack(event.index)
             _uiState.update {
@@ -1363,7 +1364,14 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
         }
         PlayerEvent.OnToggleAiSubtitleTranslation -> {
             val currentlyActive = _uiState.value.aiSubtitleTranslationActive
-            setAiSubtitleTranslationEnabled(!currentlyActive)
+            if (currentlyActive) {
+                aiSubtitleUserLocked = false
+                setAiSubtitleTranslationEnabled(false)
+            } else {
+                // Manual menu pick: keep AI on the embedded source; do not bounce to OpenSubtitles.
+                aiSubtitleUserLocked = true
+                setAiSubtitleTranslationEnabled(true, allowPreferredUpgrade = false)
+            }
         }
         is PlayerEvent.OnSelectAddonSubtitle -> {
             logSwitchTrace(
@@ -1371,6 +1379,7 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
                 message = "addonId=${event.subtitle.id} addonLang=${event.subtitle.lang} addonName=${event.subtitle.addonName}"
             )
             autoSubtitleSelected = true
+            setAiSubtitleTranslationEnabled(false)
             rememberAddonSubtitleSelection(event.subtitle)
             selectAddonSubtitle(event.subtitle)
             _uiState.update {

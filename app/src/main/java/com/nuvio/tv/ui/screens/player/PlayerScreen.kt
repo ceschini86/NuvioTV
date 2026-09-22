@@ -1626,6 +1626,7 @@ fun PlayerScreen(
             aiSubtitleAvailable = uiState.aiSubtitleAvailable,
             aiSubtitleTranslationActive = uiState.aiSubtitleTranslationActive,
             isAiSubtitleTranslating = uiState.isAiSubtitleTranslating,
+            streamReleaseName = uiState.currentStreamName ?: uiState.contentName,
             onInternalTrackSelected = { viewModel.onEvent(PlayerEvent.OnSelectSubtitleTrack(it)) },
             onAddonSubtitleSelected = { viewModel.onEvent(PlayerEvent.OnSelectAddonSubtitle(it)) },
             onDisableSubtitles = { viewModel.onEvent(PlayerEvent.OnDisableSubtitles) },

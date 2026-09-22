@@ -17,6 +17,7 @@ internal fun PlayerRuntimeController.releasePlayer(flushPlaybackState: Boolean) 
         flushPlaybackSnapshotForSwitchOrExit()
         subtitleTranslationManager?.reset()
         aiSubtitleAutoSelectAttempted = false
+        aiSubtitleUserLocked = false
         _uiState.update {
             it.copy(
                 aiSubtitleTranslationActive = false,
