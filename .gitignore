@@ -68,4 +68,7 @@ docs/*
 !docs/prd-ai-subtitles.md
 !docs/prd-ai-subtitles-ui-menu.md
 !docs/architecture-ai-subtitles.md
+!docs/smoke-ai-subtitles.md
+!docs/handoff/
+!docs/handoff/**
 status-page/

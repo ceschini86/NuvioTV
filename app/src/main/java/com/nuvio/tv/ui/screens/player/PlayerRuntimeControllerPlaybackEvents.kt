@@ -20,6 +20,7 @@ import com.nuvio.tv.data.repository.PlaybackIssuePlaybackSettingsInput
 import com.nuvio.tv.data.repository.PlaybackIssueReportInput
 import com.nuvio.tv.data.repository.SkipInterval
 import com.nuvio.tv.domain.model.WatchProgress
+import com.nuvio.tv.ui.screens.player.subtitles.TRANSLATION_ERROR_RATE_LIMITED
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
@@ -1367,9 +1368,19 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
         PlayerEvent.OnToggleAiSubtitleTranslation -> {
             val currentlyActive = _uiState.value.aiSubtitleTranslationActive
             if (!currentlyActive) {
-                aiSubtitleUserLocked = true
+                refreshAiSubtitleQuotaExhaustedState()
+                if (_uiState.value.aiSubtitleQuotaExhausted) {
+                    Log.w(PlayerRuntimeController.TAG, "Toggle AI on ignored: all keys rate-limited")
+                    _uiState.update {
+                        it.copy(aiSubtitleLastError = TRANSLATION_ERROR_RATE_LIMITED)
+                    }
+                } else {
+                    aiSubtitleUserLocked = true
+                    setAiSubtitleTranslationEnabled(true, allowPreferredUpgrade = false)
+                }
+            } else {
+                setAiSubtitleTranslationEnabled(false, allowPreferredUpgrade = false)
             }
-            setAiSubtitleTranslationEnabled(!currentlyActive, allowPreferredUpgrade = false)
         }
         is PlayerEvent.OnTranslateSubtitleWithAi -> {
             translateSubtitleWithAi(

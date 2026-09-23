@@ -119,6 +119,8 @@ data class PlayerUiState(
     // Subtitle style settings
     val subtitleStyle: SubtitleStyleSettings = SubtitleStyleSettings(),
     val aiSubtitleAvailable: Boolean = false,
+    /** True when every usable AI key is in 429 cooldown — hide/disable Translate CTAs. */
+    val aiSubtitleQuotaExhausted: Boolean = false,
     val aiSubtitleTranslationActive: Boolean = false,
     val subtitleAiFeatureEnabled: Boolean = false,
     val aiSubtitleDiagnostics: AiSubtitleDiagnostics? = null,

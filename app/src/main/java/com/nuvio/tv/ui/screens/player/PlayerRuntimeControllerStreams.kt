@@ -857,6 +857,7 @@ internal fun PlayerRuntimeController.switchToSourceStream(
     subtitleDisabledByPersistedPreference = false
     subtitleAddonRestoredByPersistedPreference = false
     pendingRestoredAddonSubtitle = null
+    resetSubtitleAiPolicyForNewMedia()
     lastSavedPosition = 0L
     _exoPlayer?.stop()
     resetLoadingOverlayForNewStream()
@@ -972,6 +973,7 @@ private fun PlayerRuntimeController.switchToTorrentSourceStream(
     subtitleDisabledByPersistedPreference = false
     subtitleAddonRestoredByPersistedPreference = false
     pendingRestoredAddonSubtitle = null
+    resetSubtitleAiPolicyForNewMedia()
     lastSavedPosition = 0L
     _uiState.update {
         it.copy(
@@ -1527,6 +1529,7 @@ private fun PlayerRuntimeController.switchToEpisodeStreamCommon(
     hasRetriedCurrentStreamAfter416 = false
     hasRetriedCurrentStreamAfterUnexpectedNpe = false
     hasRetriedCurrentStreamAfterMediaPeriodHolderCrash = false
+    resetSubtitleAiPolicyForNewMedia()
 
     currentVideoId = targetVideo?.id ?: _uiState.value.episodeStreamsForVideoId ?: currentVideoId
     currentSeason = targetVideo?.season ?: _uiState.value.episodeStreamsSeason ?: currentSeason

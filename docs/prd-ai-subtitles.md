@@ -11,7 +11,7 @@
 | Fonte canônica | **Este arquivo** = requisitos de produto |
 | UX do menu (overlay) | [`prd-ai-subtitles-ui-menu.md`](./prd-ai-subtitles-ui-menu.md) |
 | Fonte técnica | [`architecture-ai-subtitles.md`](./architecture-ai-subtitles.md) (ladder **real** do código = §3) |
-| Última revisão | 2026-09-23 |
+| Última revisão | 2026-09-23 (Smart AI = **só embutidas**) |
 
 ---
 
@@ -21,7 +21,7 @@ Legendas no idioma do usuário costumam faltar, vir com release errado, ou exist
 
 ## 2. Solução
 
-**Traduzir legendas já existentes** (embedded ou addon) para o idioma preferido do usuário, via LLM com **chave própria (BYOK)**, e **escolher a melhor fonte** automaticamente quando o modo smart estiver ligado.
+**Traduzir legendas já existentes** (embedded ou addon) para o idioma preferido do usuário, via LLM com **chave própria (BYOK)**. Com **Smart AI** ligado, o player escolhe automaticamente a melhor fonte **embutida**; addons só entram na tradução via **Translate with AI** (manual).
 
 > Fora de escopo: gerar legendas a partir do áudio (Whisper/ASR), tradução offline on-device, ou sync de API keys na nuvem.
 
@@ -44,11 +44,11 @@ Legendas no idioma do usuário costumam faltar, vir com release errado, ou exist
 | M6 | Ping / “Test key” | Settings mostra Valid / Invalid / Rate limited |
 | M7 | Idioma alvo = preferência de legenda do app | Mudança de idioma preferido altera traduções novas |
 | M8 | Respeitar strip SDH | Com strip SDH, tags/HI removidos no pipeline de tradução |
-| M9 | Smart ladder (auto-select) | Ordem de produto abaixo; implementação canônica em architecture §3 |
-| M10 | Score de release-name 0–100 | Addon como fonte AI só se score ≥ 50; badge % no overlay |
-| M11 | “Translate with AI” manual | Lock: auto-select não sobrescreve até o usuário mudar |
+| M9 | Smart ladder (auto-select) | Só embutidas: preferred → AI embedded → classic; implementação canônica em architecture §3 |
+| M10 | Score de release-name 0–100 | Badge `%` no overlay (info humana); **não** gate da ladder automática |
+| M11 | “Translate with AI” manual | Lock: auto-select não sobrescreve; único path auto-livre para traduzir **addon** |
 | M12 | Diagnósticos | Long-press / Details: rung, reason, source, score, target, model, locked |
-| M13 | Fonte sem texto extraível (ex.: PGS) | Não ficar no original “silencioso”; tenta próxima fonte ou desliga AI |
+| M13 | Fonte sem texto extraível (ex.: PGS) | Não ficar no original “silencioso”; tenta outra **embedded** ou desliga AI (+ classic se smart) |
 | M14 | Settings Playback → AI subtitles | Enable, smart auto-select, provider preferido, enable por provider, keys |
 
 ### Should (parcial / próximo)
@@ -60,6 +60,7 @@ Legendas no idioma do usuário costumam faltar, vir com release errado, ou exist
 | S3 | Pré-tradução / cache suficiente pós-seek | Implementado na manager; validar UX em seeks longos |
 | S4 | Mensagens de erro amigáveis (rate limit, key inválida) | Em melhoria neste branch; revisar locales |
 | S5 | Quota / cooldown visível nas settings (além do ping) | Router guarda snapshots; UI limitada |
+| S6 | Rate-limit total → avisar sem mudar seleção | **Implementado:** AI off + **preserve** track/addon (nunca promover French); `aiSubtitleQuotaExhausted` oculta Translate; cooldown refresh reabilita. Manual e Smart iguais nesta regra. |
 
 ### Won’t (neste fork, por enquanto)
 
@@ -70,6 +71,7 @@ Legendas no idioma do usuário costumam faltar, vir com release errado, ou exist
 | W3 | Servidor Nuvio intermediando keys ou prompts |
 | W4 | ML Kit / modelo on-device para tradução |
 | W5 | Sync de API keys entre dispositivos / perfis |
+| W6 | Smart AI auto-selecionar ou traduzir **addons** (só via Translate with AI) |
 
 ## 5. Smart ladder (comportamento de produto)
 
@@ -80,12 +82,20 @@ Smart AI ON + ExoPlayer + credenciais usáveis
  │
  ├─ 1. Embedded no idioma preferido     → seleciona, AI off
  ├─ 2. Embedded / original traduzível   → AI on dessa fonte
- ├─ 3. Melhor addon (idioma pivot) com score ≥ 50 → AI on
- ├─ 4. Addon no idioma preferido (melhor score)   → sem AI
- └─ else classic auto-select / none
+ └─ else classic auto-select / none     → AI off (addons só no classic, sem tradução)
 ```
 
-Pick manual “Translate with AI” → rung **Manual** + lock até override do usuário.
+Pick manual “Translate with AI” → rung **Manual** + lock até override do usuário (funciona em embedded **ou** addon).
+
+### 5.1 Rate-limit esgotado vs score (esclarecimento)
+
+| Conceito | O que é | Usa LLM? | Relação com fallback clássico |
+|----------|---------|----------|-------------------------------|
+| **Score de release** (M10) | 0–100, nome do stream × id/filename do addon | **Não** — só ranking local / badge | **Não** governa a ladder Smart; útil no menu e em diagnostics MANUAL |
+| **Tradução AI** (M1/M5) | HTTP Groq/Gemini/Claude das cues | **Sim** | Se 429 em todas as keys → **S6**: AI off + **mesma** fonte; Translate oculto |
+| **Seleção legada** | Auto-select clássico (preferred → secondary), sem tradução | Não | Degrau final quando Smart não acha embedded traduzível — **não** é o destino do S6 por 429 |
+
+**Resumo:** “alternar para legado quando não houver keys válidas por rate limit” = só enquanto o usuário está (ou ficaria) **vendo legendas via tradução AI** (Smart embedded ou MANUAL). Se a ladder já escolheu preferred embedded **sem** AI, ou classic sem tradução, não há o que “desligar” por 429.
 
 ## 6. Settings & privacidade
 
@@ -99,11 +109,12 @@ Pick manual “Translate with AI” → rung **Manual** + lock até override do 
 1. Sem key / AI off → comportamento idêntico ao upstream (seleção clássica).
 2. AI on + key + ExoPlayer + smart on + só original embedded → traduz para idioma preferido.
 3. Embedded preferido presente → usa embedded **sem** chamar API.
-4. Addon com score baixo (< 50) **não** vira fonte AI; score alto (≥ 50) pode.
+4. Sem embutida traduzível + addons presentes → **classic** (AI off); smart **não** traduz addon. Translate with AI no addon → AI on + lock.
 5. Translate with AI no menu → traduz e permanece após nova lista de tracks (enquanto lock).
 6. Trocar para MPV → AI some / mensagem ExoPlayer-only.
 7. Key inválida no ping → Invalid; 429 → Rate limited (ainda “válida”).
 8. Desinstalar / limpar dados do app → keys somem (device-local).
+9. (**S6**) Todas as keys em cooldown 429 → AI off, **mesma** fonte no menu, aviso, Translate oculto até haver quota. **Não** saltar para French/outra língua.
 
 ## 8. Gaps vs estado do repo
 
@@ -112,6 +123,7 @@ Pick manual “Translate with AI” → rung **Manual** + lock até override do 
 | Merge para `dev` | Integrar `fix/ai-ladder-and-rate-limit` (ou release) quando for a linha ativa |
 | README sem Claude / multi-key / ping | Atualizar seção “AI subtitles” |
 | PRD vs arquitetura | Este arquivo = produto; `architecture-ai-subtitles.md` = implementação |
+| **S6** rate-limit | AI off + seleção preservada + CTA Translate oculto (`aiSubtitleQuotaExhausted`). Ver UI menu §3.5 |
 
 ## 9. Fora deste PRD
 

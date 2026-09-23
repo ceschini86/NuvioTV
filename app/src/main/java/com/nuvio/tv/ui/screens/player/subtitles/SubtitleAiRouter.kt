@@ -9,7 +9,13 @@ import java.util.concurrent.ConcurrentHashMap
  * Cooldowns from 429 / rate-limit headers skip exhausted keys temporarily.
  */
 class SubtitleAiRouter(
-    private val service: SubtitleTranslationService = SubtitleTranslationService()
+    private val service: SubtitleTranslationService = SubtitleTranslationService(),
+    private val translateAttempt: (suspend (
+        model: SubtitleAiModel,
+        apiKey: String,
+        lines: List<String>,
+        targetLanguage: String
+    ) -> ProviderAttemptResult)? = null
 ) {
     companion object {
         private const val TAG = "SubtitleAiRouter"
@@ -39,29 +45,42 @@ class SubtitleAiRouter(
         }
 
         var lastError: String? = "No provider available"
+        var sawRateLimit = false
+        var triedSlots = 0
         val now = System.currentTimeMillis()
         for (provider in providers) {
             for (key in provider.usableKeys) {
                 val slot = slotId(provider.model, key)
                 val coolUntil = cooldownUntilMs[slot] ?: 0L
                 if (coolUntil > now) {
+                    sawRateLimit = true
                     Log.d(TAG, "skip ${provider.model} …${key.takeLast(4)} cooldown ${coolUntil - now}ms")
                     continue
                 }
-                val result = service.translateWith(
-                    model = provider.model,
-                    apiKey = key,
-                    lines = lines,
-                    targetLanguage = targetLanguage
-                )
+                triedSlots++
+                val result = translateAttempt?.invoke(provider.model, key, lines, targetLanguage)
+                    ?: service.translateWith(
+                        model = provider.model,
+                        apiKey = key,
+                        lines = lines,
+                        targetLanguage = targetLanguage
+                    )
                 result.quota?.let { lastQuota[slot] = it }
                 if (result.translation.success) {
                     cooldownUntilMs.remove(slot)
+                    if (sawRateLimit || triedSlots > 1) {
+                        Log.i(
+                            TAG,
+                            "fallback ok via ${provider.model} …${key.takeLast(4)} " +
+                                "(after rate-limit/skip on earlier key)"
+                        )
+                    }
                     return result.translation
                 }
-                val err = result.translation.errorMessage
+                val err = normalizeProviderError(result.translation.errorMessage, result.httpCode)
                 lastError = err
-                if (err == "RATE_LIMITED" || result.httpCode == 429) {
+                if (err == TRANSLATION_ERROR_RATE_LIMITED || result.httpCode == 429) {
+                    sawRateLimit = true
                     val until = result.quota?.cooldownUntilMs
                         ?: (now + DEFAULT_COOLDOWN_MS)
                     cooldownUntilMs[slot] = until
@@ -74,11 +93,41 @@ class SubtitleAiRouter(
                 }
                 // Other failures: still try next key/provider (content blocks handled upstream).
                 if (err == TRANSLATION_ERROR_CONTENT_BLOCKED) {
-                    return result.translation
+                    return result.translation.copy(errorMessage = err)
                 }
             }
         }
-        return TranslationResult(lines, false, lastError)
+        val exhausted = when {
+            sawRateLimit && triedSlots == 0 -> TRANSLATION_ERROR_RATE_LIMITED
+            sawRateLimit -> TRANSLATION_ERROR_RATE_LIMITED
+            else -> lastError
+        }
+        return TranslationResult(lines, false, exhausted)
+    }
+
+    /** True when every usable key/provider is currently in cooldown. */
+    fun allUsableKeysInCooldown(nowMs: Long = System.currentTimeMillis()): Boolean {
+        val providers = credentials.enabledProviders()
+        if (providers.isEmpty()) return false
+        return providers.all { provider ->
+            provider.usableKeys.all { key ->
+                (cooldownUntilMs[slotId(provider.model, key)] ?: 0L) > nowMs
+            }
+        }
+    }
+
+    fun nextCooldownRemainingMs(nowMs: Long = System.currentTimeMillis()): Long {
+        val providers = credentials.enabledProviders()
+        if (providers.isEmpty()) return 0L
+        return providers.asSequence()
+            .flatMap { provider ->
+                provider.usableKeys.asSequence().map { key ->
+                    ((cooldownUntilMs[slotId(provider.model, key)] ?: 0L) - nowMs).coerceAtLeast(0L)
+                }
+            }
+            .filter { it > 0L }
+            .minOrNull()
+            ?: 0L
     }
 
     suspend fun ping(model: SubtitleAiModel, apiKey: String): SubtitleAiPingResult {
@@ -91,7 +140,9 @@ class SubtitleAiRouter(
         result.quota?.let { lastQuota[slotId(model, trimmed)] = it }
         if (result.success) {
             cooldownUntilMs.remove(slotId(model, trimmed))
-        } else if (result.httpCode == 429) {
+        } else if (result.httpCode == 429 ||
+            normalizeProviderError(result.message, result.httpCode) == TRANSLATION_ERROR_RATE_LIMITED
+        ) {
             cooldownUntilMs[slotId(model, trimmed)] =
                 result.quota?.cooldownUntilMs ?: (System.currentTimeMillis() + DEFAULT_COOLDOWN_MS)
         }
@@ -99,7 +150,7 @@ class SubtitleAiRouter(
             model = model,
             keySuffix = suffix,
             success = result.success,
-            message = result.message,
+            message = normalizeProviderError(result.message, result.httpCode) ?: result.message,
             quota = result.quota
         )
     }
@@ -114,6 +165,23 @@ class SubtitleAiRouter(
     private fun slotId(model: SubtitleAiModel, key: String): String =
         "${model.name}:${key.trim().hashCode()}"
 }
+
+/** Normalize provider error strings so UI can map rate limits reliably. */
+internal fun normalizeProviderError(message: String?, httpCode: Int?): String? {
+    if (httpCode == 429) return TRANSLATION_ERROR_RATE_LIMITED
+    val raw = message?.trim().orEmpty()
+    if (raw.isEmpty()) return message
+    if (raw.equals("RATE_LIMITED", ignoreCase = true)) return TRANSLATION_ERROR_RATE_LIMITED
+    if (raw.contains("429") || raw.contains("rate limit", ignoreCase = true) ||
+        raw.contains("resource_exhausted", ignoreCase = true) ||
+        raw.contains("too many requests", ignoreCase = true)
+    ) {
+        return TRANSLATION_ERROR_RATE_LIMITED
+    }
+    return raw
+}
+
+const val TRANSLATION_ERROR_RATE_LIMITED = "RATE_LIMITED"
 
 data class ProviderAttemptResult(
     val translation: TranslationResult,

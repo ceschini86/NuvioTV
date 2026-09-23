@@ -10,6 +10,7 @@ import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiModel
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleTranslationManager
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleTranslationService
 import com.nuvio.tv.ui.screens.player.subtitles.TRANSLATION_ERROR_CONTENT_BLOCKED
+import com.nuvio.tv.ui.screens.player.subtitles.TRANSLATION_ERROR_RATE_LIMITED
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
@@ -22,10 +23,13 @@ import java.util.Locale
  * Smart-subtitles ladder (when "smart AI subtitles" is on):
  * 1. Preferred-language embedded track (no AI)
  * 2. AI translation of embedded track (prefer original-language)
- * 3. AI translation of best-scoring pivot-language addon (score ≥ 50)
- * 4. Preferred-language addon with best release-name score
+ * 3. Classic preferred-language auto-select (no AI; may pick an addon without translating)
  *
- * Manual AI picks from the menu are user-locked and skip automatic overrides.
+ * Addons are never auto-translated. Manual "Translate with AI" is user-locked and skips
+ * automatic overrides.
+ *
+ * Product S6: when every usable key is in 429 cooldown and playback is on an AI-on rung
+ * (not manual lock), disable translation and preserve the current selection.
  */
 internal fun PlayerRuntimeController.ensureSubtitleTranslationManager(): SubtitleTranslationManager {
     subtitleTranslationManager?.let { return it }
@@ -40,10 +44,14 @@ internal fun PlayerRuntimeController.ensureSubtitleTranslationManager(): Subtitl
     }
     manager.onBatchResult = { success, error ->
         if (success) {
+            refreshAiSubtitleQuotaExhaustedState()
             _uiState.update { it.copy(aiSubtitleLastError = null) }
         } else if (error != null && error != TRANSLATION_ERROR_CONTENT_BLOCKED) {
             Log.w(PlayerRuntimeController.TAG, "AI subtitle batch failed: $error")
             _uiState.update { it.copy(aiSubtitleLastError = error) }
+            if (error == TRANSLATION_ERROR_RATE_LIMITED) {
+                maybeHandleAiRateLimitExhaustion()
+            }
         }
     }
     manager.onUntranslatableSource = {
@@ -61,6 +69,105 @@ internal fun PlayerRuntimeController.ensureSubtitleTranslationManager(): Subtitl
     }
     subtitleTranslationManager = manager
     return manager
+}
+
+/**
+ * Rate-limit UX: when every usable key is cooling, stop translating, **keep** the current
+ * track/addon selection (never promote French/another language), surface the error, and
+ * mark quota exhausted so Translate CTAs hide/disable until cooldown ends.
+ */
+internal fun PlayerRuntimeController.maybeHandleAiRateLimitExhaustion() {
+    val manager = subtitleTranslationManager ?: return
+    refreshAiSubtitleQuotaExhaustedState()
+    if (!manager.allUsableKeysInCooldown()) return
+    if (!shouldDisableAiPreservingSelectionOnRateLimit(
+            translationEnabled = manager.isEnabled,
+            allKeysInCooldown = true
+        )
+    ) {
+        return
+    }
+    val prev = _uiState.value.aiSubtitleDiagnostics
+    Log.i(
+        PlayerRuntimeController.TAG,
+        "AI rate-limit: all keys cooling — AI off, preserve selection (rung=${prev?.rung})"
+    )
+    // Turns translation off without re-running classic/ladder (that used to select embedded FR).
+    setAiSubtitleTranslationEnabled(false)
+    val preserved = prev?.copy(
+        reason = "all keys rate-limited; selection preserved",
+        userLocked = false
+    ) ?: AiSubtitleDiagnostics(
+        rung = AiSubtitleLadderRung.CLASSIC_FALLBACK,
+        reason = "all keys rate-limited; selection preserved",
+        targetLanguage = resolveSubtitleAiTargetLanguageName(),
+        model = subtitleAiModel.name,
+        userLocked = false
+    )
+    publishAiSubtitleDiagnostics(preserved)
+    _uiState.update {
+        it.copy(
+            aiSubtitleQuotaExhausted = true,
+            aiSubtitleLastError = TRANSLATION_ERROR_RATE_LIMITED
+        )
+    }
+    scheduleAiSubtitleQuotaExhaustionRefresh()
+}
+
+/** @deprecated name kept for call-site clarity in older notes; use [maybeHandleAiRateLimitExhaustion]. */
+internal fun PlayerRuntimeController.maybeFallbackAiToClassicAfterRateLimitExhaustion() =
+    maybeHandleAiRateLimitExhaustion()
+
+internal fun PlayerRuntimeController.refreshAiSubtitleQuotaExhaustedState() {
+    val exhausted = subtitleTranslationManager?.allUsableKeysInCooldown() == true
+    val current = _uiState.value.aiSubtitleQuotaExhausted
+    if (current == exhausted) {
+        if (exhausted) scheduleAiSubtitleQuotaExhaustionRefresh()
+        return
+    }
+    _uiState.update { it.copy(aiSubtitleQuotaExhausted = exhausted) }
+    if (exhausted) {
+        scheduleAiSubtitleQuotaExhaustionRefresh()
+    } else {
+        aiSubtitleQuotaRefreshJob?.cancel()
+        aiSubtitleQuotaRefreshJob = null
+    }
+}
+
+internal fun PlayerRuntimeController.scheduleAiSubtitleQuotaExhaustionRefresh() {
+    val manager = subtitleTranslationManager ?: return
+    val waitMs = manager.nextCooldownRemainingMs().coerceAtLeast(500L)
+    aiSubtitleQuotaRefreshJob?.cancel()
+    aiSubtitleQuotaRefreshJob = scope.launch {
+        kotlinx.coroutines.delay(waitMs)
+        refreshAiSubtitleQuotaExhaustedState()
+        if (subtitleTranslationManager?.allUsableKeysInCooldown() == true) {
+            scheduleAiSubtitleQuotaExhaustionRefresh()
+        } else if (subtitleAiAutoSelect && !isUserExplicitSubtitleSelection && !aiSubtitleUserLocked) {
+            // Quota recovered — smart may resume AI rungs without stealing an explicit pick.
+            applySubtitleAutoSelectPolicy()
+        }
+    }
+}
+
+/** Pure decision: stop AI translation when all keys are cooling (unit-tested). */
+internal fun shouldDisableAiPreservingSelectionOnRateLimit(
+    translationEnabled: Boolean,
+    allKeysInCooldown: Boolean
+): Boolean = translationEnabled && allKeysInCooldown
+
+/**
+ * Legacy name from S6-classic era; now equivalent to [shouldDisableAiPreservingSelectionOnRateLimit]
+ * for AI-on paths (userLocked no longer blocks disable — we still preserve the track).
+ */
+internal fun shouldFallbackAiToClassicOnRateLimit(
+    translationEnabled: Boolean,
+    userLocked: Boolean,
+    allKeysInCooldown: Boolean,
+    rung: AiSubtitleLadderRung?
+): Boolean {
+    // userLocked / rung ignored for the disable decision; selection is always preserved.
+    return shouldDisableAiPreservingSelectionOnRateLimit(translationEnabled, allKeysInCooldown)
 }
 
 internal fun PlayerRuntimeController.observeSubtitleAiSettings() {
@@ -114,6 +221,7 @@ internal fun PlayerRuntimeController.observeSubtitleAiSettings() {
                     subtitleAiFeatureEnabled = style.aiEnabled
                 )
             }
+            refreshAiSubtitleQuotaExhaustedState()
         }
     }
 }
@@ -129,13 +237,27 @@ internal fun PlayerRuntimeController.applySubtitleAutoSelectPolicy() {
         return
     }
     if (aiSubtitleUserLocked && subtitleTranslationManager?.isEnabled == true) {
-        selectAiTranslationSourceIfAvailable()
+        // Lock means keep the user's source. Only re-pick if the selection was cleared
+        // (e.g. tracks rebuilt). Calling selectAiTranslationSourceIfAvailable() here used to
+        // prefer embedded and steal a manual Translate-with-AI addon mid-playback.
+        val lockedState = _uiState.value
+        if (lockedState.selectedAddonSubtitle == null &&
+            lockedState.selectedSubtitleTrackIndex < 0
+        ) {
+            selectAiTranslationSourceIfAvailable()
+        }
         return
     }
     if (canRunAiAutoSelectLadder()) {
         applyAiAutoSelectLadder()
         return
     }
+    Log.d(
+        PlayerRuntimeController.TAG,
+        "SUB_POLICY classic: smart=$subtitleAiAutoSelect feature=$subtitleAiFeatureEnabled " +
+            "keys=${subtitleAiCredentials.anyUsable() || subtitleAiApiKey.isNotBlank()} " +
+            "mpv=${isUsingMpvEngine()}"
+    )
     tryAutoSelectPreferredSubtitleFromAvailableTracks()
     if (subtitleTranslationManager?.isEnabled == true) {
         refreshAiSubtitleSourceAndMaybeUpgrade()
@@ -150,15 +272,20 @@ internal fun PlayerRuntimeController.canRunAiAutoSelectLadder(): Boolean {
 }
 
 /**
- * Priority: preferred embedded → AI on original/embedded → scored pivot addon → preferred scored addon.
+ * Priority: preferred embedded → AI on original/embedded → classic auto-select.
+ * Smart never evaluates or translates addons (Translate with AI only).
  */
 internal fun PlayerRuntimeController.applyAiAutoSelectLadder() {
     if (isUserExplicitSubtitleSelection || aiSubtitleUserLocked) return
     if (!canRunAiAutoSelectLadder()) return
 
     val state = _uiState.value
-    if (state.subtitleStyle.useForcedSubtitles) {
-        tryAutoSelectPreferredSubtitleFromAvailableTracks()
+    // Keep-disabled must not confuse "selection cleared for a new media file" (in-player stream
+    // switch) with the user choosing Off. Only the persisted/disabled preference means Off.
+    if (subtitleDisabledByPersistedPreference ||
+        rememberedTrackPreference?.subtitle == PlayerRuntimeController.RememberedSubtitleSelection.Disabled
+    ) {
+        Log.d(PlayerRuntimeController.TAG, "AI ladder stop: subtitles kept disabled")
         return
     }
 
@@ -178,6 +305,28 @@ internal fun PlayerRuntimeController.applyAiAutoSelectLadder() {
         )
         Log.d(PlayerRuntimeController.TAG, "AI ladder stop: preferred=none")
         return
+    }
+
+    // Forced preference only diverts to classic when forced can actually bind (audio language
+    // matches preferred). Otherwise Forced+Smart used to skip the ladder entirely and classic
+    // picked the secondary-language firstOrNull addon (EN) — with zero "AI ladder" logs.
+    if (state.subtitleStyle.useForcedSubtitles) {
+        val audioForForced = selectedAudioTrackForSubtitleMatching(state)
+        if (audioForForced == null) {
+            Log.d(PlayerRuntimeController.TAG, "AI ladder defer: forced preference waiting for audio")
+            return
+        }
+        val forcedApplies = audioMatchesSubtitleTargetForForced(audioForForced, primaryTarget)
+        if (forcedApplies) {
+            Log.d(PlayerRuntimeController.TAG, "AI ladder: forced applies — classic forced path")
+            tryAutoSelectPreferredSubtitleFromAvailableTracks()
+            return
+        }
+        Log.d(
+            PlayerRuntimeController.TAG,
+            "AI ladder: forced on but audio≠preferred — continuing smart " +
+                "(audio=${audioForForced.language}, preferred=$primaryTarget)"
+        )
     }
 
     if (!hasScannedTextTracksOnce) {
@@ -225,109 +374,79 @@ internal fun PlayerRuntimeController.applyAiAutoSelectLadder() {
         }
     }
 
-    val originalContentLanguage = contentLanguage
-    val aiSourceIndex = findAiSourceSubtitleTrackIndex(
-        subtitleTracks = state.subtitleTracks,
-        originalLanguage = originalContentLanguage
-    )
-    if (aiSourceIndex >= 0) {
-        val track = state.subtitleTracks[aiSourceIndex]
-        Log.i(
+    val translationCapacityExhausted =
+        subtitleTranslationManager?.allUsableKeysInCooldown() == true
+    if (translationCapacityExhausted) {
+        Log.d(
             PlayerRuntimeController.TAG,
-            "AI ladder: AI translation source index=$aiSourceIndex lang=${track.language}"
+            "AI ladder: all keys in cooldown — skipping AI-on rungs (preferred/classic only)"
         )
-        setAiSubtitleTranslationEnabled(true, allowPreferredUpgrade = false)
-        autoSubtitleSelected = true
-        publishAiSubtitleDiagnostics(
-            AiSubtitleDiagnostics(
-                rung = AiSubtitleLadderRung.AI_EMBEDDED,
-                reason = if (originalContentLanguage != null &&
-                    PlayerSubtitleUtils.matchesLanguageCode(track.language, originalContentLanguage)
-                ) {
-                    "embedded original-language source"
-                } else {
-                    "embedded text source"
-                },
-                sourceKind = AiSubtitleSourceKind.EMBEDDED,
-                sourceLabel = track.name,
-                sourceLanguage = track.language,
-                targetLanguage = resolveSubtitleAiTargetLanguageName(),
-                model = subtitleAiModel.name,
-                userLocked = false
+    }
+
+    if (!translationCapacityExhausted) {
+        val originalContentLanguage = contentLanguage
+        val aiSourceIndex = findAiSourceSubtitleTrackIndex(
+            subtitleTracks = state.subtitleTracks,
+            originalLanguage = originalContentLanguage
+        )
+        if (aiSourceIndex >= 0) {
+            val track = state.subtitleTracks[aiSourceIndex]
+            Log.i(
+                PlayerRuntimeController.TAG,
+                "AI ladder: AI translation source index=$aiSourceIndex lang=${track.language}"
             )
-        )
-        return
-    }
-
-    if (state.isLoadingAddonSubtitles) {
-        Log.d(PlayerRuntimeController.TAG, "AI ladder defer: waiting for addon subtitles")
-        return
-    }
-
-    val scoredAddon = findBestScoredAddonAiSource(state.addonSubtitles)
-    if (scoredAddon != null) {
-        val (subtitle, score) = scoredAddon
-        Log.i(
-            PlayerRuntimeController.TAG,
-            "AI ladder: scored addon AI source score=$score lang=${subtitle.lang} " +
-                "addon=${subtitle.addonName} id=${subtitle.id.take(80)}"
-        )
-        selectAddonSubtitle(subtitle)
-        _uiState.update { it.copy(selectedAddonSubtitle = subtitle, selectedSubtitleTrackIndex = -1) }
-        setAiSubtitleTranslationEnabled(true, allowPreferredUpgrade = false)
-        autoSubtitleSelected = true
-        publishAiSubtitleDiagnostics(
-            AiSubtitleDiagnostics(
-                rung = AiSubtitleLadderRung.AI_SCORED_ADDON,
-                reason = "pivot addon score ≥ ${SubtitleReleaseScoring.AI_ADDON_SOURCE_MIN_SCORE}",
-                sourceKind = AiSubtitleSourceKind.ADDON,
-                sourceLabel = subtitle.addonName,
-                sourceLanguage = subtitle.lang,
-                matchScore = score,
-                targetLanguage = resolveSubtitleAiTargetLanguageName(),
-                model = subtitleAiModel.name,
-                userLocked = false
+            // Source already chosen — enable AI without re-running source selection (that path
+            // prefers embedded and can replace an explicit pick).
+            selectSubtitleTrack(aiSourceIndex)
+            _uiState.update {
+                it.copy(selectedSubtitleTrackIndex = aiSourceIndex, selectedAddonSubtitle = null)
+            }
+            setAiSubtitleTranslationEnabled(
+                true,
+                allowPreferredUpgrade = false,
+                refreshSource = false
             )
-        )
-        return
-    }
-
-    val preferredScored = findBestScoredPreferredLanguageAddon(state.addonSubtitles, primaryTarget)
-    if (preferredScored != null) {
-        val (subtitle, score) = preferredScored
-        Log.i(
-            PlayerRuntimeController.TAG,
-            "AI ladder: preferred-language addon score=$score lang=${subtitle.lang} " +
-                "addon=${subtitle.addonName}"
-        )
-        setAiSubtitleTranslationEnabled(false)
-        selectAddonSubtitle(subtitle)
-        _uiState.update { it.copy(selectedAddonSubtitle = subtitle, selectedSubtitleTrackIndex = -1) }
-        autoSubtitleSelected = true
-        publishAiSubtitleDiagnostics(
-            AiSubtitleDiagnostics(
-                rung = AiSubtitleLadderRung.PREFERRED_SCORED_ADDON,
-                reason = "best preferred-language addon by release score",
-                sourceKind = AiSubtitleSourceKind.ADDON,
-                sourceLabel = subtitle.addonName,
-                sourceLanguage = subtitle.lang,
-                matchScore = score,
-                targetLanguage = resolveSubtitleAiTargetLanguageName(),
-                model = subtitleAiModel.name,
-                userLocked = false
+            autoSubtitleSelected = true
+            publishAiSubtitleDiagnostics(
+                AiSubtitleDiagnostics(
+                    rung = AiSubtitleLadderRung.AI_EMBEDDED,
+                    reason = if (originalContentLanguage != null &&
+                        PlayerSubtitleUtils.matchesLanguageCode(track.language, originalContentLanguage)
+                    ) {
+                        "embedded original-language source"
+                    } else {
+                        "embedded text source"
+                    },
+                    sourceKind = AiSubtitleSourceKind.EMBEDDED,
+                    sourceLabel = track.name,
+                    sourceLanguage = track.language,
+                    targetLanguage = resolveSubtitleAiTargetLanguageName(),
+                    model = subtitleAiModel.name,
+                    userLocked = false
+                )
             )
-        )
-        return
+            return
+        }
+        if (state.subtitleTracks.isEmpty()) {
+            Log.d(
+                PlayerRuntimeController.TAG,
+                "AI ladder: no embedded text tracks after scan — classic fallback"
+            )
+        }
     }
 
-    Log.i(PlayerRuntimeController.TAG, "AI ladder: no scored preferred addon — classic fallback")
+    Log.i(PlayerRuntimeController.TAG, "AI ladder: no smart embedded source — classic fallback")
     setAiSubtitleTranslationEnabled(false)
     autoSubtitleSelected = false
-    tryAutoSelectPreferredSubtitleFromAvailableTracks()
+    tryAutoSelectPreferredSubtitleFromAvailableTracks(primaryLanguageOnly = true)
     publishAiSubtitleDiagnostics(
         AiSubtitleDiagnostics(
             rung = AiSubtitleLadderRung.CLASSIC_FALLBACK,
-            reason = "classic preferred-language auto-select",
+            reason = if (translationCapacityExhausted) {
+                "all keys rate-limited; classic preferred-language auto-select (primary only)"
+            } else {
+                "classic preferred-language auto-select (primary only)"
+            },
             targetLanguage = resolveSubtitleAiTargetLanguageName(),
             model = subtitleAiModel.name,
             userLocked = false
@@ -335,9 +454,54 @@ internal fun PlayerRuntimeController.applyAiAutoSelectLadder() {
     )
 }
 
+/**
+ * In-player stream switches use [releasePlayer] with `flushPlaybackState=false`, so AI lock,
+ * diagnostics, and [autoSubtitleSelected] would otherwise survive into the next file. That left
+ * stale source labels (e.g. French from stream A) and made the ladder treat "nothing selected yet"
+ * as keep-disabled. Call this whenever the media file changes without a full flush.
+ */
+internal fun PlayerRuntimeController.resetSubtitleAiPolicyForNewMedia() {
+    val keepDisabled = subtitleDisabledByPersistedPreference ||
+        rememberedTrackPreference?.subtitle == PlayerRuntimeController.RememberedSubtitleSelection.Disabled
+    subtitleTranslationManager?.reset()
+    aiSubtitleAutoSelectAttempted = false
+    aiSubtitleUserLocked = false
+    isUserExplicitSubtitleSelection = keepDisabled
+    autoSubtitleSelected = keepDisabled
+    subtitleScoreCache.clear()
+    subtitleScoreCacheStreamName = null
+    if (!keepDisabled) {
+        rememberedTrackPreference = rememberedTrackPreference?.copy(subtitle = null)
+    }
+    _uiState.update {
+        it.copy(
+            aiSubtitleTranslationActive = false,
+            isAiSubtitleTranslating = false,
+            aiSubtitleLastError = null,
+            aiSubtitleDiagnostics = null,
+            showAiSubtitleDiagnosticsOverlay = false,
+            showSubtitleTranslateMenuOverlay = false,
+            subtitleTranslateMenuOptionId = null,
+            selectedAddonSubtitle = null,
+            selectedSubtitleTrackIndex = -1
+        )
+    }
+    Log.d(
+        PlayerRuntimeController.TAG,
+        "AI policy reset for new media keepDisabled=$keepDisabled"
+    )
+}
+
+/**
+ * @param refreshSource when true (default), pick/refresh an AI pivot via
+ * [selectAiTranslationSourceIfAvailable]. Callers that already selected the source
+ * (Translate with AI, ladder AI rungs) must pass false — otherwise embedded always wins
+ * over a just-selected addon.
+ */
 internal fun PlayerRuntimeController.setAiSubtitleTranslationEnabled(
     enabled: Boolean,
-    allowPreferredUpgrade: Boolean = !aiSubtitleUserLocked
+    allowPreferredUpgrade: Boolean = !aiSubtitleUserLocked,
+    refreshSource: Boolean = true
 ) {
     if (enabled && isUsingMpvEngine()) {
         Log.i(PlayerRuntimeController.TAG, "AI subtitle translation ignored on MPV")
@@ -353,7 +517,7 @@ internal fun PlayerRuntimeController.setAiSubtitleTranslationEnabled(
         aiSubtitleUserLocked = false
     }
     if (manager.isEnabled == effective) {
-        if (effective) {
+        if (effective && refreshSource) {
             refreshAiSubtitleSourceAndMaybeUpgrade(allowPreferredUpgrade = allowPreferredUpgrade)
         }
         _uiState.update {
@@ -364,7 +528,7 @@ internal fun PlayerRuntimeController.setAiSubtitleTranslationEnabled(
         }
         return
     }
-    if (effective) {
+    if (effective && refreshSource) {
         selectAiTranslationSourceIfAvailable()
     }
     manager.isEnabled = effective
@@ -380,7 +544,8 @@ internal fun PlayerRuntimeController.setAiSubtitleTranslationEnabled(
     }
     Log.i(
         PlayerRuntimeController.TAG,
-        "AI subtitle translation enabled=$effective locked=$aiSubtitleUserLocked upgrade=$allowPreferredUpgrade"
+        "AI subtitle translation enabled=$effective locked=$aiSubtitleUserLocked " +
+            "upgrade=$allowPreferredUpgrade refreshSource=$refreshSource"
     )
     if (effective && allowPreferredUpgrade && !aiSubtitleUserLocked) {
         tryUpgradeAiToPreferredEmbeddedSubtitle()
@@ -399,6 +564,12 @@ internal fun PlayerRuntimeController.translateSubtitleWithAi(
         Log.w(PlayerRuntimeController.TAG, "Translate with AI ignored: feature/key unavailable")
         return
     }
+    refreshAiSubtitleQuotaExhaustedState()
+    if (_uiState.value.aiSubtitleQuotaExhausted) {
+        Log.w(PlayerRuntimeController.TAG, "Translate with AI ignored: all keys rate-limited")
+        _uiState.update { it.copy(aiSubtitleLastError = TRANSLATION_ERROR_RATE_LIMITED) }
+        return
+    }
     when {
         internalTrackIndex != null && internalTrackIndex >= 0 -> {
             val track = _uiState.value.subtitleTracks.getOrNull(internalTrackIndex) ?: return
@@ -407,7 +578,13 @@ internal fun PlayerRuntimeController.translateSubtitleWithAi(
                 it.copy(selectedSubtitleTrackIndex = internalTrackIndex, selectedAddonSubtitle = null)
             }
             aiSubtitleUserLocked = true
-            setAiSubtitleTranslationEnabled(true, allowPreferredUpgrade = false)
+            // Do not refreshSource: selectAiTranslationSourceIfAvailable prefers embedded and
+            // would replace this explicit track (same for addon path below).
+            setAiSubtitleTranslationEnabled(
+                true,
+                allowPreferredUpgrade = false,
+                refreshSource = false
+            )
             publishAiSubtitleDiagnostics(
                 AiSubtitleDiagnostics(
                     rung = AiSubtitleLadderRung.MANUAL,
@@ -427,7 +604,11 @@ internal fun PlayerRuntimeController.translateSubtitleWithAi(
                 it.copy(selectedAddonSubtitle = addonSubtitle, selectedSubtitleTrackIndex = -1)
             }
             aiSubtitleUserLocked = true
-            setAiSubtitleTranslationEnabled(true, allowPreferredUpgrade = false)
+            setAiSubtitleTranslationEnabled(
+                true,
+                allowPreferredUpgrade = false,
+                refreshSource = false
+            )
             val score = scoreAddonSubtitleCached(addonSubtitle)
             publishAiSubtitleDiagnostics(
                 AiSubtitleDiagnostics(
@@ -504,48 +685,29 @@ internal fun PlayerRuntimeController.tryUpgradeAiToPreferredEmbeddedSubtitle(): 
 internal fun PlayerRuntimeController.selectAiTranslationSourceIfAvailable(
     excludeCurrent: Boolean = false
 ): Boolean {
-    if (selectEmbeddedAiSourceIfAvailable(excludeCurrent = excludeCurrent)) return true
     if (isUsingMpvEngine()) return false
 
     val state = _uiState.value
     val excludeId = if (excludeCurrent) state.selectedAddonSubtitle?.id else null
-    val streamSrc = resolveStreamReleaseNameForSubtitleScore()
 
+    // Keep current addon only when user-locked (Translate with AI). Smart never hunts addons.
     val current = state.selectedAddonSubtitle
     if (current != null &&
         current.id != excludeId &&
         !current.isStreamProvided &&
-        streamSrc.isNotBlank()
+        aiSubtitleUserLocked
     ) {
-        val score = scoreAddonSubtitleCached(current)
-        if (score >= SubtitleReleaseScoring.AI_ADDON_SOURCE_MIN_SCORE &&
-            isUsableAddonAiSourceLanguage(current)
-        ) {
-            Log.i(
-                PlayerRuntimeController.TAG,
-                "AI source: keeping addon score=$score lang=${current.lang} id=${current.id.take(80)}"
-            )
-            return true
-        }
+        Log.i(
+            PlayerRuntimeController.TAG,
+            "AI source: keeping user-locked addon lang=${current.lang} id=${current.id.take(80)}"
+        )
+        return true
     }
 
-    val best = findBestScoredAddonAiSource(
-        addonSubtitles = state.addonSubtitles,
-        excludeId = excludeId
-    )
-    if (best == null) {
-        Log.i(PlayerRuntimeController.TAG, "AI source: no usable embedded or scored addon")
-        return false
-    }
-    val (subtitle, score) = best
-    Log.i(
-        PlayerRuntimeController.TAG,
-        "AI source: selecting addon score=$score lang=${subtitle.lang} " +
-            "addon=${subtitle.addonName} id=${subtitle.id.take(80)}"
-    )
-    selectAddonSubtitle(subtitle)
-    _uiState.update { it.copy(selectedAddonSubtitle = subtitle, selectedSubtitleTrackIndex = -1) }
-    return true
+    if (selectEmbeddedAiSourceIfAvailable(excludeCurrent = excludeCurrent)) return true
+
+    Log.i(PlayerRuntimeController.TAG, "AI source: no usable embedded (addons only via Translate with AI)")
+    return false
 }
 
 internal fun PlayerRuntimeController.resolveStreamReleaseNameForSubtitleScore(): String {
@@ -562,7 +724,10 @@ internal fun scoreAddonSubtitle(streamSource: String, subtitle: Subtitle): Int {
     return SubtitleReleaseScoring.score(streamSource, key)
 }
 
-/** Cached score lookup; invalidates when the stream release name changes. */
+/**
+ * Cached score lookup; invalidates when the stream release name changes.
+ * Used for overlay badges / diagnostics — not by the Smart ladder.
+ */
 internal fun PlayerRuntimeController.scoreAddonSubtitleCached(subtitle: Subtitle): Int {
     val streamSrc = resolveStreamReleaseNameForSubtitleScore()
     if (streamSrc.isBlank() || subtitle.isStreamProvided) return 0
@@ -573,62 +738,6 @@ internal fun PlayerRuntimeController.scoreAddonSubtitleCached(subtitle: Subtitle
     return subtitleScoreCache.getOrPut(subtitle.id) {
         scoreAddonSubtitle(streamSrc, subtitle)
     }
-}
-
-/**
- * Best non-preferred-language addon whose release-name score meets the AI source threshold.
- * Prefer original-language, then English, when scores tie.
- */
-internal fun PlayerRuntimeController.findBestScoredAddonAiSource(
-    addonSubtitles: List<Subtitle>,
-    excludeId: String? = null
-): Pair<Subtitle, Int>? {
-    val streamSrc = resolveStreamReleaseNameForSubtitleScore()
-    if (streamSrc.isBlank()) return null
-    val original = contentLanguage
-
-    return addonSubtitles
-        .asSequence()
-        .filter { !it.isStreamProvided }
-        .filter { excludeId == null || it.id != excludeId }
-        .filter { isUsableAddonAiSourceLanguage(it) }
-        .map { subtitle -> subtitle to scoreAddonSubtitleCached(subtitle) }
-        .filter { (_, score) -> score >= SubtitleReleaseScoring.AI_ADDON_SOURCE_MIN_SCORE }
-        .maxWithOrNull(
-            compareByDescending<Pair<Subtitle, Int>> { it.second }
-                .thenByDescending {
-                    original != null &&
-                        PlayerSubtitleUtils.matchesLanguageCode(it.first.lang, original)
-                }
-                .thenByDescending { PlayerSubtitleUtils.matchesLanguageCode(it.first.lang, "en") }
-        )
-}
-
-/** Best addon in the preferred language by release-name score (no threshold). */
-internal fun PlayerRuntimeController.findBestScoredPreferredLanguageAddon(
-    addonSubtitles: List<Subtitle>,
-    preferredLanguage: String
-): Pair<Subtitle, Int>? {
-    val streamSrc = resolveStreamReleaseNameForSubtitleScore()
-    val candidates = addonSubtitles
-        .asSequence()
-        .filter { !it.isStreamProvided }
-        .filter { PlayerSubtitleUtils.matchesLanguageCode(it.lang, preferredLanguage) }
-        .map { subtitle ->
-            val score = if (streamSrc.isBlank()) 0 else scoreAddonSubtitleCached(subtitle)
-            subtitle to score
-        }
-        .toList()
-    if (candidates.isEmpty()) return null
-    return candidates.maxWithOrNull(
-        compareByDescending<Pair<Subtitle, Int>> { it.second }
-            .thenBy { it.first.addonName }
-    )
-}
-
-internal fun PlayerRuntimeController.isUsableAddonAiSourceLanguage(subtitle: Subtitle): Boolean {
-    val preferred = subtitleLanguageTargets().firstOrNull() ?: return true
-    return !PlayerSubtitleUtils.matchesLanguageCode(subtitle.lang, preferred)
 }
 
 internal fun PlayerRuntimeController.selectEmbeddedAiSourceIfAvailable(

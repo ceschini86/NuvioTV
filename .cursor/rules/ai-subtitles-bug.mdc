@@ -1,0 +1,27 @@
+---
+description: AI subtitles bug report — read docs hub + canonical architecture when @mentioned
+alwaysApply: false
+---
+
+# AI subtitles — bug / regressão UX
+
+Usar só quando esta rule for `@`-mencionada (ex.: `@ai-subtitles-bug`).
+
+## Contexto obrigatório
+
+1. Ler `docs/README.md` (índice e fonte canônica por tema).
+2. Ler `docs/architecture-ai-subtitles.md` (ladder real, locks, pipeline, mapa de arquivos).
+3. Se o bug for do **overlay/menu** (rails, Translate, diagnostics, highlight), ler também `docs/prd-ai-subtitles-ui-menu.md` — senão pular.
+4. Não carregar `docs/architecture.md` inteiro para bugs AI.
+
+## Como investigar
+
+- Tratar diagnostics do player como verdade de runtime: `rung`, `reason`, `source`, `score`, `target`, `model`, `locked`.
+- Se o usuário não mandou diagnostics / steps, pedir em 1 mensagem curta antes de chutar.
+- Comparar **esperado (PRD/ladder §3)** vs **observado**; corrigir a policy/código mínimo, sem reescrever a feature.
+- Preferir âncoras: `PlayerRuntimeControllerAiSubtitles.kt`, `SubtitleAiRouter.kt`, `SubtitleTranslationManager.kt`, `SubtitleSelectionOverlay.kt`.
+
+## Resposta
+
+- Dizer qual degrau/lock deveria ter ganhado e por quê (citando § do doc canônico).
+- Patch focado + como validar (smoke do PRD/UI menu se aplicável).
