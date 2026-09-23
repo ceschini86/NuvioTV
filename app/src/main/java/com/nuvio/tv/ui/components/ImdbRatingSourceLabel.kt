@@ -1,7 +1,7 @@
 package com.nuvio.tv.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
@@ -62,8 +62,8 @@ fun ImdbRatingSourceLabel(
 /**
  * Series Graph source mark.
  *
- * - [compact]=true: logo only (episode cards), with attribution as contentDescription
- * - [compact]=false: logo + localized "Ratings from Series Graph" attribution
+ * - [compact]=true: logo only (episode cards / overlays), attribution as contentDescription
+ * - [compact]=false: wordmark with attribution underneath (Ratings tab header)
  */
 @Composable
 fun SeriesGraphRatingSourceLabel(
@@ -71,7 +71,7 @@ fun SeriesGraphRatingSourceLabel(
     textColor: Color,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
-    logoHeightDp: Int = if (compact) 12 else 16
+    logoHeightDp: Int = if (compact) 14 else 18
 ) {
     val attribution = stringResource(R.string.episode_rating_attribution_series_graph)
     val shortFallback = stringResource(R.string.episode_rating_source_series_graph_short)
@@ -82,10 +82,11 @@ fun SeriesGraphRatingSourceLabel(
             .build()
     }
     var logoFailed by remember { mutableStateOf(false) }
+    // Wordmark aspect ≈ 10:1 — keep max width proportional so Fit does not squash height.
+    val logoMaxWidthDp = (logoHeightDp * 10).coerceAtMost(if (compact) 100 else 180)
     val logoModifier = Modifier
         .height(logoHeightDp.dp)
-        .widthIn(max = if (compact) 72.dp else 120.dp)
-        .semantics { contentDescription = attribution }
+        .widthIn(max = logoMaxWidthDp.dp)
 
     if (compact) {
         if (logoFailed) {
@@ -103,16 +104,17 @@ fun SeriesGraphRatingSourceLabel(
                 contentDescription = attribution,
                 modifier = modifier.then(logoModifier),
                 contentScale = ContentScale.Fit,
+                alignment = Alignment.CenterStart,
                 onError = { logoFailed = true }
             )
         }
         return
     }
 
-    Row(
+    Column(
         modifier = modifier.semantics { contentDescription = attribution },
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalAlignment = Alignment.Start
     ) {
         if (!logoFailed) {
             AsyncImage(
@@ -120,7 +122,16 @@ fun SeriesGraphRatingSourceLabel(
                 contentDescription = null,
                 modifier = logoModifier,
                 contentScale = ContentScale.Fit,
+                alignment = Alignment.CenterStart,
                 onError = { logoFailed = true }
+            )
+        } else {
+            Text(
+                text = stringResource(R.string.episode_rating_source_series_graph),
+                style = textStyle,
+                color = textColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
         Text(

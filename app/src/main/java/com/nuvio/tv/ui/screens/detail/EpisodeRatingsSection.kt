@@ -130,12 +130,12 @@ fun EpisodeRatingsSection(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = if (hasTitle) 14.dp else 6.dp, bottom = NuvioTheme.spacing.sm)
+            .padding(top = if (hasTitle) 14.dp else 10.dp, bottom = NuvioTheme.spacing.sm)
     ) {
         if (hasTitle) {
             Column(
                 modifier = Modifier.padding(horizontal = NuvioTheme.spacing.xxxl),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
                     text = title,
@@ -145,15 +145,19 @@ fun EpisodeRatingsSection(
                 SeriesGraphRatingSourceLabel(
                     textStyle = MaterialTheme.typography.labelSmall,
                     textColor = NuvioTheme.colors.TextSecondary,
-                    logoHeightDp = 14
+                    logoHeightDp = 18
                 )
             }
         } else {
             SeriesGraphRatingSourceLabel(
                 textStyle = MaterialTheme.typography.labelSmall,
                 textColor = NuvioTheme.colors.TextSecondary,
-                modifier = Modifier.padding(horizontal = NuvioTheme.spacing.xxxl),
-                logoHeightDp = 14
+                modifier = Modifier.padding(
+                    start = NuvioTheme.spacing.xxxl,
+                    end = NuvioTheme.spacing.xxxl,
+                    bottom = 4.dp
+                ),
+                logoHeightDp = 18
             )
         }
 
