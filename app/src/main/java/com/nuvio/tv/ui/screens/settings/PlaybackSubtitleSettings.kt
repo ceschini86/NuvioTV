@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.VerticalAlignBottom
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -38,6 +39,9 @@ import com.nuvio.tv.data.local.LibassRenderType
 import com.nuvio.tv.data.local.PlayerSettings
 import com.nuvio.tv.data.local.SubtitleLanguageOption
 import com.nuvio.tv.ui.components.NuvioDialog
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiCredentials
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiModel
+import com.nuvio.tv.ui.screens.player.subtitles.maskApiKey
 
 private val subtitleColors = listOf(
     Color.White,
@@ -68,17 +72,26 @@ private val subtitleOutlineColors = listOf(
 
 internal fun LazyListScope.subtitleSettingsItems(
     playerSettings: PlayerSettings,
+    subtitleAiCredentials: SubtitleAiCredentials,
+    aiSubtitlesExpanded: Boolean = false,
+    onToggleAiSubtitlesExpanded: () -> Unit = {},
+    aiSubtitlesHeaderFocus: FocusRequester? = null,
     onShowLanguageDialog: () -> Unit,
     onShowSecondaryLanguageDialog: () -> Unit,
     onShowTextColorDialog: () -> Unit,
     onShowBackgroundColorDialog: () -> Unit,
     onShowOutlineColorDialog: () -> Unit,
+    onShowAiProviderKeysDialog: (SubtitleAiModel) -> Unit,
+    onSetSubtitleAiProviderEnabled: (SubtitleAiModel, Boolean) -> Unit,
     onSetSubtitleSize: (Int) -> Unit,
     onSetSubtitleVerticalOffset: (Int) -> Unit,
     onSetSubtitleBold: (Boolean) -> Unit,
     onSetUseForcedSubtitles: (Boolean) -> Unit,
     onSetSubtitleShowOnlyPreferredLanguages: (Boolean) -> Unit,
     onSetSubtitleStripSdh: (Boolean) -> Unit,
+    onSetSubtitleAiEnabled: (Boolean) -> Unit,
+    onSetSubtitleAiAutoSelect: (Boolean) -> Unit,
+    onSetSubtitleAiModel: (String) -> Unit,
     onSetSubtitleOutlineEnabled: (Boolean) -> Unit,
     onSetUseLibass: (Boolean) -> Unit,
     onSetLibassRenderType: (LibassRenderType) -> Unit,
@@ -156,6 +169,116 @@ internal fun LazyListScope.subtitleSettingsItems(
             onFocused = onItemFocused,
             enabled = enabled
         )
+    }
+
+    item(key = "subtitle_ai_section_header") {
+        PlaybackSectionHeader(
+            title = stringResource(R.string.sub_ai_section),
+            description = stringResource(R.string.sub_ai_section_desc),
+            expanded = aiSubtitlesExpanded,
+            onToggle = onToggleAiSubtitlesExpanded,
+            focusRequester = aiSubtitlesHeaderFocus ?: androidx.compose.ui.focus.FocusRequester(),
+            onFocused = onItemFocused,
+            enabled = enabled
+        )
+    }
+
+    if (aiSubtitlesExpanded) {
+        item(key = "subtitle_ai_enabled") {
+            ToggleSettingsItem(
+                icon = Icons.Default.Subtitles,
+                title = stringResource(R.string.sub_ai_enabled),
+                subtitle = stringResource(R.string.sub_ai_enabled_desc),
+                isChecked = playerSettings.subtitleStyle.aiEnabled,
+                onCheckedChange = onSetSubtitleAiEnabled,
+                onFocused = onItemFocused,
+                enabled = enabled
+            )
+        }
+
+        item(key = "subtitle_ai_auto_select") {
+            ToggleSettingsItem(
+                icon = Icons.Default.Subtitles,
+                title = stringResource(R.string.sub_ai_auto_select),
+                subtitle = stringResource(R.string.sub_ai_auto_select_desc),
+                isChecked = playerSettings.subtitleStyle.aiAutoSelect,
+                onCheckedChange = onSetSubtitleAiAutoSelect,
+                onFocused = onItemFocused,
+                enabled = enabled && playerSettings.subtitleStyle.aiEnabled
+            )
+        }
+
+        item(key = "subtitle_ai_model") {
+            val modelLabel = when (playerSettings.subtitleStyle.aiModel) {
+                "GEMINI_FLASH_25" -> stringResource(R.string.sub_ai_model_gemini)
+                "CLAUDE_HAIKU" -> stringResource(R.string.sub_ai_model_claude)
+                else -> stringResource(R.string.sub_ai_model_groq)
+            }
+            NavigationSettingsItem(
+                icon = Icons.Default.Language,
+                title = stringResource(R.string.sub_ai_model),
+                subtitle = modelLabel + " · " + stringResource(R.string.sub_ai_model_preferred_desc),
+                onClick = {
+                    val next = when (playerSettings.subtitleStyle.aiModel) {
+                        "GROQ_LLAMA_70B" -> "GEMINI_FLASH_25"
+                        "GEMINI_FLASH_25" -> "CLAUDE_HAIKU"
+                        else -> "GROQ_LLAMA_70B"
+                    }
+                    onSetSubtitleAiModel(next)
+                },
+                onFocused = onItemFocused,
+                enabled = enabled && playerSettings.subtitleStyle.aiEnabled
+            )
+        }
+
+        SubtitleAiModel.entries.forEach { model ->
+            item(key = "subtitle_ai_provider_enabled_" + model.name) {
+                val provider = subtitleAiCredentials.provider(model)
+                val modelLabel = when (model) {
+                    SubtitleAiModel.GEMINI_FLASH_25 -> stringResource(R.string.sub_ai_model_gemini)
+                    SubtitleAiModel.CLAUDE_HAIKU -> stringResource(R.string.sub_ai_model_claude)
+                    SubtitleAiModel.GROQ_LLAMA_70B -> stringResource(R.string.sub_ai_model_groq)
+                }
+                ToggleSettingsItem(
+                    icon = Icons.Default.Subtitles,
+                    title = modelLabel,
+                    subtitle = stringResource(R.string.sub_ai_provider_enabled_desc),
+                    isChecked = provider.enabled && provider.usableKeys.isNotEmpty(),
+                    onCheckedChange = { onSetSubtitleAiProviderEnabled(model, it) },
+                    onFocused = onItemFocused,
+                    enabled = enabled &&
+                        playerSettings.subtitleStyle.aiEnabled &&
+                        provider.usableKeys.isNotEmpty()
+                )
+            }
+            item(key = "subtitle_ai_provider_keys_" + model.name) {
+                val provider = subtitleAiCredentials.provider(model)
+                val modelLabel = when (model) {
+                    SubtitleAiModel.GEMINI_FLASH_25 -> stringResource(R.string.sub_ai_model_gemini)
+                    SubtitleAiModel.CLAUDE_HAIKU -> stringResource(R.string.sub_ai_model_claude)
+                    SubtitleAiModel.GROQ_LLAMA_70B -> stringResource(R.string.sub_ai_model_groq)
+                }
+                val keysSub = when {
+                    provider.usableKeys.isEmpty() ->
+                        stringResource(R.string.sub_ai_provider_keys_none)
+                    else -> {
+                        val count = stringResource(
+                            R.string.sub_ai_provider_keys_count,
+                            provider.usableKeys.size
+                        )
+                        count + " · " + maskApiKey(provider.usableKeys.first())
+                    }
+                }
+                NavigationSettingsItem(
+                    icon = Icons.Default.Language,
+                    title = stringResource(R.string.sub_ai_provider_keys) + " — " + modelLabel,
+                    subtitle = keysSub,
+                    onClick = { onShowAiProviderKeysDialog(model) },
+                    onFocused = onItemFocused,
+                    enabled = enabled
+                )
+            }
+        }
     }
 
     item(key = "subtitle_size") {

@@ -66,9 +66,11 @@ import coil3.request.transformations
 import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.EpisodeOptionsOverlayStyle
 import com.nuvio.tv.domain.model.Video
-import com.nuvio.tv.ui.components.ImdbRatingSourceLabel
+import com.nuvio.tv.ui.components.SeriesGraphRatingColors
+import com.nuvio.tv.ui.components.SeriesGraphRatingSourceLabel
 import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.BlurTransformation
+import com.nuvio.tv.ui.util.contentTextDirection
 import com.nuvio.tv.ui.util.localizeEpisodeTitle
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -93,6 +95,7 @@ internal fun EpisodeOptionsOverlay(
     hasProgress: Boolean = false,
     onDismiss: () -> Unit,
     onPlay: () -> Unit,
+    isPlayEnabled: Boolean = true,
     onStartFromBeginning: () -> Unit = {},
     onOpenEpisodeComments: () -> Unit = {},
     showOpenEpisodeComments: Boolean = false,
@@ -169,6 +172,10 @@ internal fun EpisodeOptionsOverlay(
     val ratingLabel = remember(imdbRating) {
         imdbRating?.takeIf { it > 0.0 }?.let { String.format(Locale.US, "%.1f", it) }
     }
+    val ratingColor = remember(imdbRating) {
+        imdbRating?.takeIf { it > 0.0 }?.let(SeriesGraphRatingColors::cellColor)
+            ?: Color.White.copy(alpha = 0.72f)
+    }
     val episodeLabel = when {
         episode.season != null && episode.episode != null -> {
             stringResource(R.string.season_episode_format, episode.season, episode.episode)
@@ -210,7 +217,8 @@ internal fun EpisodeOptionsOverlay(
         }
         add(
             EpisodeOverlayAction(
-                label = stringResource(R.string.episodes_play),
+                label = stringResource(if (isPlayEnabled) R.string.episodes_play else R.string.playback_unavailable),
+                enabled = isPlayEnabled,
                 onClick = onPlay
             )
         )
@@ -222,7 +230,7 @@ internal fun EpisodeOptionsOverlay(
                 )
             )
         }
-        if (showPlayManually) {
+        if (showPlayManually && isPlayEnabled) {
             add(
                 EpisodeOverlayAction(
                     label = stringResource(R.string.play_manually),
@@ -230,7 +238,7 @@ internal fun EpisodeOptionsOverlay(
                 )
             )
         }
-        if (hasProgress) {
+        if (hasProgress && isPlayEnabled) {
             add(
                 EpisodeOverlayAction(
                     label = stringResource(R.string.cw_action_start_from_beginning),
@@ -389,15 +397,16 @@ internal fun EpisodeOptionsOverlay(
                                 horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                ImdbRatingSourceLabel(
-                                    logoModifier = Modifier.size(30.dp),
+                                SeriesGraphRatingSourceLabel(
                                     textStyle = MaterialTheme.typography.titleMedium,
-                                    textColor = Color.White.copy(alpha = 0.72f)
+                                    textColor = Color.White.copy(alpha = 0.72f),
+                                    compact = true,
+                                    logoHeightDp = 18
                                 )
                                 Text(
                                     text = rating,
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = Color.White.copy(alpha = 0.72f)
+                                    color = ratingColor
                                 )
                             }
                         }
@@ -414,11 +423,11 @@ internal fun EpisodeOptionsOverlay(
                     if (description.isNotBlank()) {
                         Text(
                             text = description,
-                            style = if (isNoneStyle) {
+                            style = (if (isNoneStyle) {
                                 MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Normal)
                             } else {
                                 descriptionStyle
-                            },
+                            }).copy(textDirection = description.contentTextDirection()),
                             color = Color.White.copy(alpha = 0.72f),
                             maxLines = if (isNoneStyle) 8 else Int.MAX_VALUE,
                             overflow = TextOverflow.Ellipsis

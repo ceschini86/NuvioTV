@@ -3,6 +3,16 @@ package com.nuvio.tv.ui.screens.settings
 import androidx.lifecycle.ViewModel
 import androidx.media3.common.util.UnstableApi
 import com.nuvio.tv.core.plugin.PluginManager
+import com.nuvio.tv.data.local.DeviceLocalPlayerPreferences
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiCredentials
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiModel
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiPingResult
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiRouter
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleTranslationService
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import com.nuvio.tv.data.local.LibassRenderType
 import com.nuvio.tv.data.local.InternalPlayerEngine
 import com.nuvio.tv.data.local.Dv7HandlingMode
@@ -35,6 +45,7 @@ import javax.inject.Inject
 @HiltViewModel
 class PlaybackSettingsViewModel @Inject constructor(
     private val playerSettingsDataStore: PlayerSettingsDataStore,
+    private val deviceLocalPlayerPreferences: DeviceLocalPlayerPreferences,
     private val trailerSettingsDataStore: TrailerSettingsDataStore,
     private val addonRepository: AddonRepository,
     private val pluginManager: PluginManager,
@@ -42,6 +53,14 @@ class PlaybackSettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     val playerSettings: Flow<PlayerSettings> = playerSettingsDataStore.playerSettings
+    val subtitleAiApiKey: Flow<String> = deviceLocalPlayerPreferences.subtitleAiApiKey
+    val subtitleAiCredentials: Flow<SubtitleAiCredentials> =
+        deviceLocalPlayerPreferences.subtitleAiCredentials
+    private val _subtitleAiPingResults =
+        MutableStateFlow<Map<String, SubtitleAiPingResult>>(emptyMap())
+    val subtitleAiPingResults: StateFlow<Map<String, SubtitleAiPingResult>> =
+        _subtitleAiPingResults.asStateFlow()
+    private val subtitleAiRouter = SubtitleAiRouter(SubtitleTranslationService())
     val trailerSettings: Flow<TrailerSettings> = trailerSettingsDataStore.settings
     val torrentSettingsFlow: Flow<TorrentSettingsData> = torrentSettings.settings
 
@@ -244,6 +263,55 @@ class PlaybackSettingsViewModel @Inject constructor(
 
     suspend fun setSubtitleStripSdh(enabled: Boolean) {
         playerSettingsDataStore.setSubtitleStripSdh(enabled)
+    }
+
+    suspend fun setSubtitleAiEnabled(enabled: Boolean) {
+        playerSettingsDataStore.setSubtitleAiEnabled(enabled)
+    }
+
+    suspend fun setSubtitleAiAutoSelect(enabled: Boolean) {
+        playerSettingsDataStore.setSubtitleAiAutoSelect(enabled)
+    }
+
+    suspend fun setSubtitleAiModel(model: String) {
+        playerSettingsDataStore.setSubtitleAiModel(model)
+    }
+
+    suspend fun setSubtitleAiApiKey(apiKey: String) {
+        deviceLocalPlayerPreferences.setSubtitleAiApiKey(apiKey)
+    }
+
+    suspend fun setSubtitleAiProviderEnabled(model: SubtitleAiModel, enabled: Boolean) {
+        val current = deviceLocalPlayerPreferences.subtitleAiCredentials.first()
+        val provider = current.provider(model)
+        deviceLocalPlayerPreferences.updateSubtitleAiProvider(provider.copy(enabled = enabled))
+    }
+
+    suspend fun addSubtitleAiKey(model: SubtitleAiModel, apiKey: String) {
+        val key = apiKey.trim()
+        if (key.isBlank()) return
+        val current = deviceLocalPlayerPreferences.subtitleAiCredentials.first()
+        val provider = current.provider(model)
+        val keys = (provider.keys + key).map { it.trim() }.filter { it.isNotBlank() }.distinct()
+        deviceLocalPlayerPreferences.updateSubtitleAiProvider(
+            provider.copy(enabled = true, keys = keys)
+        )
+    }
+
+    suspend fun removeSubtitleAiKey(model: SubtitleAiModel, apiKey: String) {
+        val current = deviceLocalPlayerPreferences.subtitleAiCredentials.first()
+        val provider = current.provider(model)
+        val keys = provider.keys.filterNot { it == apiKey }
+        deviceLocalPlayerPreferences.updateSubtitleAiProvider(
+            provider.copy(enabled = provider.enabled && keys.isNotEmpty(), keys = keys)
+        )
+    }
+
+    suspend fun pingSubtitleAiKey(model: SubtitleAiModel, apiKey: String): SubtitleAiPingResult {
+        val result = subtitleAiRouter.ping(model, apiKey)
+        val slot = model.name + ":" + apiKey.trim().takeLast(4)
+        _subtitleAiPingResults.value = _subtitleAiPingResults.value + (slot to result)
+        return result
     }
 
     suspend fun setSubtitleSize(size: Int) {

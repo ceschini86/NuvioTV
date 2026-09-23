@@ -22,6 +22,7 @@ local.properties
 libass-android
 Stremio addons refer
 nuviotv.jks
+nuviotv-sideload.jks
 CLAUDE.md
 build_and_install.sh
 android-tv-samples
@@ -61,5 +62,13 @@ local-assets/supporter-profile-backgrounds/
 logs
 AGENTS.md
 /PR.md
-docs/
+# Docs: ignore by default; allow curated AI package (Agent context in git)
+docs/*
+!docs/README.md
+!docs/prd-ai-subtitles.md
+!docs/prd-ai-subtitles-ui-menu.md
+!docs/architecture-ai-subtitles.md
+!docs/smoke-ai-subtitles.md
+!docs/handoff/
+!docs/handoff/**
 status-page/

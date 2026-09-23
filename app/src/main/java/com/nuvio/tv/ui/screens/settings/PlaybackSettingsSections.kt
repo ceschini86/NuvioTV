@@ -74,6 +74,8 @@ import com.nuvio.tv.data.local.InternalPlayerEngine
 import com.nuvio.tv.data.local.LibassRenderType
 import com.nuvio.tv.data.local.PlayerPreference
 import com.nuvio.tv.data.local.PlayerSettings
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiCredentials
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiModel
 import com.nuvio.tv.data.local.VodCacheSizeMode
 import com.nuvio.tv.ui.components.NuvioDialog
 
@@ -172,6 +174,12 @@ internal fun PlaybackSettingsSections(
     onSetUseForcedSubtitles: (Boolean) -> Unit,
     onSetSubtitleShowOnlyPreferredLanguages: (Boolean) -> Unit,
     onSetSubtitleStripSdh: (Boolean) -> Unit,
+    onSetSubtitleAiEnabled: (Boolean) -> Unit,
+    onSetSubtitleAiAutoSelect: (Boolean) -> Unit,
+    onSetSubtitleAiModel: (String) -> Unit,
+    onShowAiProviderKeysDialog: (SubtitleAiModel) -> Unit,
+    onSetSubtitleAiProviderEnabled: (SubtitleAiModel, Boolean) -> Unit,
+    subtitleAiCredentials: SubtitleAiCredentials,
     onSetSubtitleOutlineEnabled: (Boolean) -> Unit,
     onSetUseLibass: (Boolean) -> Unit,
     onSetLibassRenderType: (LibassRenderType) -> Unit,
@@ -206,6 +214,7 @@ internal fun PlaybackSettingsSections(
     var streamExpanded by rememberSaveable { mutableStateOf(false) }
     var audioTrailerExpanded by rememberSaveable { mutableStateOf(false) }
     var subtitlesExpanded by rememberSaveable { mutableStateOf(false) }
+    var aiSubtitlesExpanded by rememberSaveable { mutableStateOf(false) }
     var p2pExpanded by rememberSaveable { mutableStateOf(false) }
     var bufferAndNetworkExpanded by rememberSaveable { mutableStateOf(false) }
 
@@ -215,6 +224,7 @@ internal fun PlaybackSettingsSections(
     val streamHeaderFocus = remember { FocusRequester() }
     val audioTrailerHeaderFocus = remember { FocusRequester() }
     val subtitlesHeaderFocus = remember { FocusRequester() }
+    val aiSubtitlesHeaderFocus = remember { FocusRequester() }
     val p2pHeaderFocus = remember { FocusRequester() }
     val bufferAndNetworkHeaderFocus = remember { FocusRequester() }
     val generalHeaderFocus = initialFocusRequester ?: defaultGeneralHeaderFocus
@@ -455,6 +465,21 @@ internal fun PlaybackSettingsSections(
                         enabled = !generalUi.isExternalPlayer && playerSettings.skipIntroEnabled
                     )
                 }
+
+                item(key = "general_auto_skip_movie_credits") {
+                    ToggleSettingsItem(
+                        icon = Icons.Default.SkipNext,
+                        title = stringResource(R.string.auto_skip_movie_credits),
+                        subtitle = stringResource(R.string.auto_skip_movie_credits_sub),
+                        isChecked = AutoSkipSegmentType.MOVIE_CREDITS in playerSettings.autoSkipSegmentTypes,
+                        onCheckedChange = {
+                            onSetAutoSkipSegmentTypeEnabled(AutoSkipSegmentType.MOVIE_CREDITS, it)
+                        },
+                        onFocused = { focusedSection = PlaybackSection.GENERAL },
+                        enabled = !generalUi.isExternalPlayer && playerSettings.skipIntroEnabled
+                    )
+                }
+
             }
 
         }
@@ -647,17 +672,26 @@ internal fun PlaybackSettingsSections(
         ) {
             subtitleSettingsItems(
                 playerSettings = playerSettings,
+                subtitleAiCredentials = subtitleAiCredentials,
+                aiSubtitlesExpanded = aiSubtitlesExpanded,
+                onToggleAiSubtitlesExpanded = { aiSubtitlesExpanded = !aiSubtitlesExpanded },
+                aiSubtitlesHeaderFocus = aiSubtitlesHeaderFocus,
                 onShowLanguageDialog = onShowLanguageDialog,
                 onShowSecondaryLanguageDialog = onShowSecondaryLanguageDialog,
                 onShowTextColorDialog = onShowTextColorDialog,
                 onShowBackgroundColorDialog = onShowBackgroundColorDialog,
                 onShowOutlineColorDialog = onShowOutlineColorDialog,
+                onShowAiProviderKeysDialog = onShowAiProviderKeysDialog,
+                onSetSubtitleAiProviderEnabled = onSetSubtitleAiProviderEnabled,
                 onSetSubtitleSize = onSetSubtitleSize,
                 onSetSubtitleVerticalOffset = onSetSubtitleVerticalOffset,
                 onSetSubtitleBold = onSetSubtitleBold,
                 onSetUseForcedSubtitles = onSetUseForcedSubtitles,
                 onSetSubtitleShowOnlyPreferredLanguages = onSetSubtitleShowOnlyPreferredLanguages,
                 onSetSubtitleStripSdh = onSetSubtitleStripSdh,
+                onSetSubtitleAiEnabled = onSetSubtitleAiEnabled,
+                onSetSubtitleAiAutoSelect = onSetSubtitleAiAutoSelect,
+                onSetSubtitleAiModel = onSetSubtitleAiModel,
                 onSetSubtitleOutlineEnabled = onSetSubtitleOutlineEnabled,
                 onSetUseLibass = onSetUseLibass,
                 onSetLibassRenderType = onSetLibassRenderType,
@@ -776,7 +810,7 @@ private fun LazyListScope.playbackCollapsibleSection(
 }
 
 @Composable
-private fun PlaybackSectionHeader(
+internal fun PlaybackSectionHeader(
     title: String,
     description: String,
     expanded: Boolean,

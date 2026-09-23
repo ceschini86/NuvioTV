@@ -83,6 +83,10 @@ import com.nuvio.tv.data.local.Dv7HandlingMode
 import com.nuvio.tv.data.local.PlayerSettings
 import com.nuvio.tv.data.local.displayName
 import com.nuvio.tv.ui.components.NuvioDialog
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiCredentials
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiModel
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiPingResult
+import com.nuvio.tv.ui.screens.player.subtitles.maskApiKey
 import com.nuvio.tv.ui.components.P2pConsentDialog
 import com.nuvio.tv.ui.screens.detail.requestFocusAfterFrames
 import kotlinx.coroutines.launch
@@ -115,6 +119,10 @@ fun PlaybackSettingsContent(
     initialFocusRequester: FocusRequester? = null
 ) {
     val playerSettings by viewModel.playerSettings.collectAsStateWithLifecycle(initialValue = PlayerSettings())
+    val subtitleAiCredentials by viewModel.subtitleAiCredentials.collectAsStateWithLifecycle(
+        initialValue = SubtitleAiCredentials()
+    )
+    val subtitleAiPingResults by viewModel.subtitleAiPingResults.collectAsStateWithLifecycle()
     val torrentSettings by viewModel.torrentSettingsFlow.collectAsStateWithLifecycle(
         initialValue = com.nuvio.tv.core.torrent.TorrentSettingsData()
     )
@@ -146,6 +154,7 @@ fun PlaybackSettingsContent(
     var showPlayerPreferenceDialog by remember { mutableStateOf(false) }
     var showInternalPlayerEngineDialog by remember { mutableStateOf(false) }
     var showP2pConsentDialog by remember { mutableStateOf(false) }
+    var aiProviderKeysDialogModel by remember { mutableStateOf<SubtitleAiModel?>(null) }
 
     fun dismissAllDialogs() {
         showLanguageDialog = false
@@ -169,6 +178,7 @@ fun PlaybackSettingsContent(
         showPlayerPreferenceDialog = false
         showInternalPlayerEngineDialog = false
         showP2pConsentDialog = false
+        aiProviderKeysDialogModel = null
     }
 
     fun openDialog(setter: () -> Unit) {
@@ -212,6 +222,13 @@ fun PlaybackSettingsContent(
                 onShowTextColorDialog = { openDialog { showTextColorDialog = true } },
                 onShowBackgroundColorDialog = { openDialog { showBackgroundColorDialog = true } },
                 onShowOutlineColorDialog = { openDialog { showOutlineColorDialog = true } },
+                onShowAiProviderKeysDialog = { model ->
+                    openDialog { aiProviderKeysDialogModel = model }
+                },
+                onSetSubtitleAiProviderEnabled = { model, enabled ->
+                    coroutineScope.launch { viewModel.setSubtitleAiProviderEnabled(model, enabled) }
+                },
+                subtitleAiCredentials = subtitleAiCredentials,
                 onShowStreamAutoPlayModeDialog = { openDialog { showStreamAutoPlayModeDialog = true } },
                 onShowStreamAutoPlaySourceDialog = { openDialog { showStreamAutoPlaySourceDialog = true } },
                 onShowStreamAutoPlayAddonSelectionDialog = { openDialog { showStreamAutoPlayAddonSelectionDialog = true } },
@@ -338,6 +355,15 @@ fun PlaybackSettingsContent(
                 onSetSubtitleStripSdh = { enabled ->
                     coroutineScope.launch { viewModel.setSubtitleStripSdh(enabled) }
                 },
+                onSetSubtitleAiEnabled = { enabled ->
+                    coroutineScope.launch { viewModel.setSubtitleAiEnabled(enabled) }
+                },
+                onSetSubtitleAiAutoSelect = { enabled ->
+                    coroutineScope.launch { viewModel.setSubtitleAiAutoSelect(enabled) }
+                },
+                onSetSubtitleAiModel = { model ->
+                    coroutineScope.launch { viewModel.setSubtitleAiModel(model) }
+                },
                 onSetSubtitleOutlineEnabled = { enabled -> coroutineScope.launch { viewModel.setSubtitleOutlineEnabled(enabled) } },
                 onSetUseLibass = { enabled -> coroutineScope.launch { viewModel.setUseLibass(enabled) } },
                 onSetLibassRenderType = { renderType -> coroutineScope.launch { viewModel.setLibassRenderType(renderType) } },
@@ -439,12 +465,23 @@ fun PlaybackSettingsContent(
                 }
                 else -> MemoryBudget.defaultBufferSizeMb
             }
-            val totalUsageMb = MemoryBudget.totalUsageMb(
-                effectiveBufferMb,
-                playerSettings.parallelConnectionCount,
-                Math.ceil(playerSettings.parallelChunkSizeKb / 1024.0).toInt(),
-                playerSettings.useParallelConnections && playerSettings.parallelNetworkEnabled
-            )
+            val parallelActive = playerSettings.parallelNetworkEnabled && playerSettings.useParallelConnections
+            val chunkMb = Math.ceil(playerSettings.parallelChunkSizeKb / 1024.0).toInt().coerceAtMost(MemoryBudget.tierMaxChunkMb)
+            val parallelOverheadMb = if (parallelActive) {
+                MemoryBudget.parallelOverheadMb(playerSettings.parallelConnectionCount, chunkMb)
+            } else {
+                0
+            }
+            val totalUsageMb = if (playerSettings.nuvioPerformanceModeEnabled) {
+                effectiveBufferMb
+            } else {
+                MemoryBudget.totalUsageMb(
+                    effectiveBufferMb,
+                    playerSettings.parallelConnectionCount,
+                    chunkMb,
+                    parallelActive
+                )
+            }
 
             val safeLimitMb = if (playerSettings.nuvioPerformanceModeEnabled) {
                 NuvioExoPlayerPerformanceHelper.getSafeNativeMemoryLimitMb(context)
@@ -474,8 +511,17 @@ fun PlaybackSettingsContent(
                     .border(NuvioTheme.spacing.hairline, usageColor.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
                     .padding(horizontal = 14.dp, vertical = 10.dp)
             ) {
+                val effectiveExoMb = (effectiveBufferMb - parallelOverheadMb).coerceAtLeast(MemoryBudget.MIN_BUFFER_MB)
+                val baseText = stringResource(R.string.playback_estimated_memory_usage, totalUsageMb, warningLimitMb)
+                val usageText = if (playerSettings.nuvioPerformanceModeEnabled && parallelActive && parallelOverheadMb > 0) {
+                    baseText
+                        .replace("$totalUsageMb / $warningLimitMb", "$totalUsageMb($effectiveExoMb+$parallelOverheadMb)/$warningLimitMb")
+                        .replace("$totalUsageMb /", "$totalUsageMb($effectiveExoMb+$parallelOverheadMb)/")
+                } else {
+                    baseText
+                }
                 Text(
-                    text = stringResource(R.string.playback_estimated_memory_usage, totalUsageMb, warningLimitMb),
+                    text = usageText,
                     style = MaterialTheme.typography.bodySmall,
                     color = usageColor
                 )
@@ -598,7 +644,205 @@ fun PlaybackSettingsContent(
             onDismiss = { showP2pConsentDialog = false }
         )
     }
+
+    aiProviderKeysDialogModel?.let { model ->
+        SubtitleAiProviderKeysDialog(
+            model = model,
+            provider = subtitleAiCredentials.provider(model),
+            pingResults = subtitleAiPingResults,
+            onToggleEnabled = { enabled ->
+                coroutineScope.launch { viewModel.setSubtitleAiProviderEnabled(model, enabled) }
+            },
+            onAddKey = { key ->
+                coroutineScope.launch { viewModel.addSubtitleAiKey(model, key) }
+            },
+            onRemoveKey = { key ->
+                coroutineScope.launch { viewModel.removeSubtitleAiKey(model, key) }
+            },
+            onPingKey = { key -> viewModel.pingSubtitleAiKey(model, key) },
+            onDismiss = { aiProviderKeysDialogModel = null }
+        )
+    }
 }
+
+@Composable
+private fun SubtitleAiProviderKeysDialog(
+    model: SubtitleAiModel,
+    provider: com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiProviderCredentials,
+    pingResults: Map<String, SubtitleAiPingResult>,
+    onToggleEnabled: (Boolean) -> Unit,
+    onAddKey: (String) -> Unit,
+    onRemoveKey: (String) -> Unit,
+    onPingKey: suspend (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var newKey by remember { mutableStateOf("") }
+    var pingingKey by remember { mutableStateOf<String?>(null) }
+    val coroutineScope = rememberCoroutineScope()
+    val modelLabel = when (model) {
+        SubtitleAiModel.GEMINI_FLASH_25 -> stringResource(R.string.sub_ai_model_gemini)
+        SubtitleAiModel.CLAUDE_HAIKU -> stringResource(R.string.sub_ai_model_claude)
+        SubtitleAiModel.GROQ_LLAMA_70B -> stringResource(R.string.sub_ai_model_groq)
+    }
+    NuvioDialog(
+        onDismiss = onDismiss,
+        title = stringResource(R.string.sub_ai_provider_keys) + " — " + modelLabel,
+        subtitle = stringResource(R.string.sub_ai_api_key_desc),
+        width = 760.dp
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.sub_ai_provider_enabled),
+                color = NuvioTheme.colors.TextPrimary,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            androidx.tv.material3.Switch(
+                checked = provider.enabled && provider.usableKeys.isNotEmpty(),
+                onCheckedChange = onToggleEnabled,
+                enabled = provider.usableKeys.isNotEmpty()
+            )
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        provider.usableKeys.forEach { key ->
+            val slot = model.name + ":" + key.trim().takeLast(4)
+            val ping = pingResults[slot]
+            val status = when {
+                pingingKey == key -> stringResource(R.string.sub_ai_ping_testing)
+                ping == null -> ""
+                ping.success -> stringResource(R.string.sub_ai_ping_ok)
+                ping.message == "RATE_LIMITED" ||
+                    ping.message.contains("429") ||
+                    ping.message.contains("rate limit", ignoreCase = true) ->
+                    stringResource(R.string.sub_ai_ping_rate_limited)
+                else -> stringResource(R.string.sub_ai_ping_fail) + " · " + ping.message
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = maskApiKey(key),
+                        color = NuvioTheme.colors.TextPrimary,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    if (status.isNotBlank()) {
+                        Text(
+                            text = status,
+                            color = if (ping?.success == true) {
+                                Color(0xFF7CFFB2)
+                            } else {
+                                NuvioTheme.colors.TextSecondary
+                            },
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+                androidx.tv.material3.Button(
+                    onClick = {
+                        pingingKey = key
+                        coroutineScope.launch {
+                            onPingKey(key)
+                            pingingKey = null
+                        }
+                    },
+                    enabled = pingingKey == null,
+                    colors = androidx.tv.material3.ButtonDefaults.colors(
+                        containerColor = NuvioTheme.colors.BackgroundElevated,
+                        contentColor = NuvioTheme.colors.TextPrimary
+                    )
+                ) {
+                    Text(text = stringResource(R.string.sub_ai_ping))
+                }
+                androidx.tv.material3.Button(
+                    onClick = { onRemoveKey(key) },
+                    colors = androidx.tv.material3.ButtonDefaults.colors(
+                        containerColor = NuvioTheme.colors.BackgroundElevated,
+                        contentColor = NuvioTheme.colors.TextPrimary
+                    )
+                ) {
+                    Text(text = stringResource(R.string.sub_ai_remove_key))
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = stringResource(R.string.sub_ai_add_key),
+            color = NuvioTheme.colors.TextSecondary,
+            style = MaterialTheme.typography.bodySmall
+        )
+        androidx.compose.foundation.text.BasicTextField(
+            value = newKey,
+            onValueChange = { newKey = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(color = NuvioTheme.colors.TextPrimary),
+            decorationBox = { inner ->
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(NuvioTheme.colors.BackgroundElevated, RoundedCornerShape(10.dp))
+                        .padding(14.dp)
+                ) {
+                    if (newKey.isBlank()) {
+                        Text(
+                            text = stringResource(R.string.sub_ai_api_key_hint),
+                            color = NuvioTheme.colors.TextSecondary
+                        )
+                    }
+                    inner()
+                }
+            }
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            androidx.tv.material3.Button(
+                onClick = onDismiss,
+                colors = androidx.tv.material3.ButtonDefaults.colors(
+                    containerColor = NuvioTheme.colors.BackgroundElevated,
+                    contentColor = NuvioTheme.colors.TextPrimary
+                )
+            ) {
+                Text(text = stringResource(R.string.action_cancel))
+            }
+            Spacer(modifier = Modifier.width(NuvioTheme.spacing.sm))
+            androidx.tv.material3.Button(
+                onClick = {
+                    val key = newKey.trim()
+                    if (key.isBlank()) return@Button
+                    onAddKey(key)
+                    pingingKey = key
+                    coroutineScope.launch {
+                        onPingKey(key)
+                        pingingKey = null
+                        newKey = ""
+                    }
+                },
+                enabled = newKey.isNotBlank(),
+                colors = androidx.tv.material3.ButtonDefaults.colors(
+                    containerColor = NuvioTheme.colors.BackgroundCard,
+                    contentColor = NuvioTheme.colors.TextPrimary
+                )
+            ) {
+                Text(text = stringResource(R.string.sub_ai_add_key))
+            }
+        }
+    }
+}
+
+private const val SettingsSubtitleFocusedMaxLines = 8
 
 @Composable
 internal fun ToggleSettingsItem(
@@ -610,7 +854,8 @@ internal fun ToggleSettingsItem(
     onFocused: () -> Unit = {},
     enabled: Boolean = true,
     titleTrailingIcon: ImageVector? = null,
-    titleTrailingIconTint: Color = NuvioTheme.colors.TextPrimary
+    titleTrailingIconTint: Color = NuvioTheme.colors.TextPrimary,
+    expandSubtitleOnFocus: Boolean = false
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val contentAlpha = if (enabled) 1f else 0.4f
@@ -679,7 +924,7 @@ internal fun ToggleSettingsItem(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = NuvioTheme.colors.TextSecondary.copy(alpha = contentAlpha),
-                    maxLines = 3,
+                    maxLines = if (expandSubtitleOnFocus && isFocused) SettingsSubtitleFocusedMaxLines else 3,
                     overflow = TextOverflow.Ellipsis
                 )
             }

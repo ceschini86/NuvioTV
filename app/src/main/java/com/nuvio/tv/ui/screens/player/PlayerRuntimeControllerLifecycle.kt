@@ -15,6 +15,25 @@ internal fun PlayerRuntimeController.releasePlayer(flushPlaybackState: Boolean) 
     if (flushPlaybackState) {
         stopTorrentStream()
         flushPlaybackSnapshotForSwitchOrExit()
+        subtitleTranslationManager?.reset()
+        aiSubtitleAutoSelectAttempted = false
+        aiSubtitleUserLocked = false
+        aiSubtitleQuotaRefreshJob?.cancel()
+        aiSubtitleQuotaRefreshJob = null
+        subtitleScoreCache.clear()
+        subtitleScoreCacheStreamName = null
+        _uiState.update {
+            it.copy(
+                aiSubtitleTranslationActive = false,
+                aiSubtitleQuotaExhausted = false,
+                isAiSubtitleTranslating = false,
+                aiSubtitleLastError = null,
+                aiSubtitleDiagnostics = null,
+                showAiSubtitleDiagnosticsOverlay = false,
+                showSubtitleTranslateMenuOverlay = false,
+                subtitleTranslateMenuOptionId = null
+            )
+        }
     }
 
     notifyAudioSessionUpdate(false)
@@ -35,6 +54,8 @@ internal fun PlayerRuntimeController.releasePlayer(flushPlaybackState: Boolean) 
     hideControlsJob?.cancel()
     watchProgressSaveJob?.cancel()
     seekProgressSyncJob?.cancel()
+    seekSourceLogJob?.cancel()
+    seekSourceLogJob = null
     frameRateProbeJob?.cancel()
     hideStreamSourceIndicatorJob?.cancel()
     hideStreamSourceIndicatorJob = null
@@ -71,6 +92,9 @@ internal fun PlayerRuntimeController.releasePlayer(flushPlaybackState: Boolean) 
         runCatching { player.release() }
     }
     _exoPlayer = null
+    _loadControl = null
+    currentBitrateAwareLoadControl = null
+    currentParallelChunkOverheadMb = 0
     ffmpegAudioRenderer = null
     updateAudioControlAvailability()
     playbackSpeedAwareAudioSink = null

@@ -41,6 +41,8 @@ import androidx.tv.material3.Text
 import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.Video
+import com.nuvio.tv.ui.components.SeriesGraphRatingColors
+import com.nuvio.tv.ui.components.SeriesGraphRatingSourceLabel
 
 @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
@@ -97,8 +99,8 @@ fun EpisodeRatingsSection(
             val episodeNumber = episode.episode ?: return@mapNotNull null
             val rating = ratings[season to episodeNumber]
             val ratingText = rating?.let { String.format("%.1f", it) } ?: "—"
-            val chipColor = rating?.let(::ratingColor) ?: defaultChipColor
-            val chipTextColor = rating?.let(::ratingTextColor) ?: defaultChipTextColor
+            val chipColor = rating?.let(SeriesGraphRatingColors::cellColor) ?: defaultChipColor
+            val chipTextColor = rating?.let(SeriesGraphRatingColors::labelColor) ?: defaultChipTextColor
             EpisodeRatingChipUi(
                 id = episode.id,
                 seasonNumber = season,
@@ -128,14 +130,34 @@ fun EpisodeRatingsSection(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = if (hasTitle) 14.dp else 6.dp, bottom = NuvioTheme.spacing.sm)
+            .padding(top = if (hasTitle) 14.dp else 10.dp, bottom = NuvioTheme.spacing.sm)
     ) {
         if (hasTitle) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = NuvioTheme.colors.TextPrimary,
-                modifier = Modifier.padding(horizontal = NuvioTheme.spacing.xxxl)
+            Column(
+                modifier = Modifier.padding(horizontal = NuvioTheme.spacing.xxxl),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = NuvioTheme.colors.TextPrimary
+                )
+                SeriesGraphRatingSourceLabel(
+                    textStyle = MaterialTheme.typography.labelSmall,
+                    textColor = NuvioTheme.colors.TextSecondary,
+                    logoHeightDp = 18
+                )
+            }
+        } else {
+            SeriesGraphRatingSourceLabel(
+                textStyle = MaterialTheme.typography.labelSmall,
+                textColor = NuvioTheme.colors.TextSecondary,
+                modifier = Modifier.padding(
+                    start = NuvioTheme.spacing.xxxl,
+                    end = NuvioTheme.spacing.xxxl,
+                    bottom = 4.dp
+                ),
+                logoHeightDp = 18
             )
         }
 
@@ -287,24 +309,6 @@ fun EpisodeRatingsSection(
                 }
             }
         }
-    }
-}
-
-private fun ratingColor(value: Double): androidx.compose.ui.graphics.Color {
-    return when {
-        value >= 9.0 -> androidx.compose.ui.graphics.Color(0xFF186A3B)
-        value >= 8.0 -> androidx.compose.ui.graphics.Color(0xFF28B463)
-        value >= 7.5 -> androidx.compose.ui.graphics.Color(0xFFF4D03F)
-        value >= 7.0 -> androidx.compose.ui.graphics.Color(0xFFF39C12)
-        value >= 6.0 -> androidx.compose.ui.graphics.Color(0xFFE74C3C)
-        else -> androidx.compose.ui.graphics.Color(0xFF633974)
-    }
-}
-
-private fun ratingTextColor(value: Double): Color {
-    return when {
-        value >= 7.0 && value < 8.0 -> Color(0xFF1D1D1F)
-        else -> Color.White
     }
 }
 

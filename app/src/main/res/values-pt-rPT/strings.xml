@@ -354,6 +354,11 @@
     <string name="licenses_attributions_introdb_body">O Nuvio utiliza a API do IntroDB para marcas de tempo de introduções, resumos, créditos e pré-visualizações fornecidas pela comunidade, utilizadas pelos controlos de salto. O Nuvio não é afiliado nem endossado pelo IntroDB.</string>
     <string name="licenses_attributions_imdb_title">Conjuntos de dados não comerciais do IMDb</string>
     <string name="licenses_attributions_imdb_body">O Nuvio utiliza os conjuntos de dados não comerciais do IMDb, incluindo title.ratings.tsv.gz, para classificações e contagens de votos do IMDb. Informação cedida pelo IMDb (https://www.imdb.com). Utilizado com permissão. Os dados do IMDb destinam-se a uso pessoal e não comercial nos termos do IMDb.</string>
+    <string name="licenses_attributions_series_graph_title">Series Graph</string>
+    <string name="licenses_attributions_series_graph_body">O Nuvio utiliza o Series Graph para médias comunitárias de classificação de episódios nas páginas de detalhes de séries. O Nuvio não é afiliado nem endossado pelo Series Graph.</string>
+    <string name="episode_rating_source_series_graph">Series Graph</string>
+    <string name="episode_rating_source_series_graph_short">SG</string>
+    <string name="episode_rating_attribution_series_graph">Classificações do Series Graph</string>
     <string name="licenses_attributions_exoplayer_title">AndroidX Media3 ExoPlayer 1.8.0</string>
     <string name="licenses_attributions_exoplayer_body">Utilizado como motor de reprodução Android. Licenciado sob a Apache License, Versão 2.0.</string>
     <string name="licenses_attributions_libmpv_title">libmpv / libmpv-android</string>
@@ -843,7 +848,7 @@
     <string name="layout_trailer_muted">Reproduzir trailer sem som</string>
     <string name="layout_trailer_muted_sub_preview">Retirar o som do áudio do trailer durante a pré-visualização automática.</string>
     <string name="layout_trailer_muted_sub_expanded">Retirar o som do áudio do trailer nos cartões expandidos.</string>
-    <string name="layout_section_card_style">Estilo dos cartões com cartaz</string>
+    <string name="layout_section_card_style">Cartões com cartaz</string>
     <string name="layout_section_card_style_desc">Ajustar a largura do cartão e o raio dos cantos.</string>
     <string name="layout_open">Aberto</string>
     <string name="layout_closed">Fechado</string>
@@ -1474,6 +1479,7 @@
     <string name="subtitle_tab_addons">Addons</string>
     <string name="subtitle_tab_languages">Idiomas</string>
     <string name="subtitle_tab_style">Estilo</string>
+    <string name="subtitle_tab_info">Info</string>
     <string name="subtitle_tab_delay">Atraso</string>
     <string name="subtitle_none">Nenhuma</string>
     <string name="subtitle_built_in">Integrada</string>
@@ -2593,4 +2599,28 @@
     <string name="profile_default_name">Perfil %1$d</string>
     <string name="detail_tmdb_fallback_title">TMDB %1$d</string>
     <string name="collections_editor_tmdb_collection_fallback">Coleção TMDB %1$d</string>
+    <string name="sub_ai_section">Legendas com IA</string>
+    <string name="sub_ai_section_desc">Modelo de tradução, chave de API e seleção inteligente de legendas embutidas</string>
+    <string name="sub_ai_diagnostics_title">Fonte da legenda IA</string>
+    <string name="sub_ai_diagnostics_rung">Degrau da escada</string>
+    <string name="sub_ai_diagnostics_reason">Motivo</string>
+    <string name="sub_ai_diagnostics_source">Fonte</string>
+    <string name="sub_ai_diagnostics_score">Score de correspondência</string>
+    <string name="sub_ai_diagnostics_target">Idioma alvo</string>
+    <string name="sub_ai_diagnostics_model">Modelo</string>
+    <string name="sub_ai_diagnostics_locked">Escolha manual</string>
+    <string name="sub_ai_translate_this">Traduzir com IA</string>
+    <string name="sub_ai_menu_disable">Desativar legendas</string>
+    <string name="sub_ai_menu_details">Detalhes</string>
+    <string name="sub_ai_rung_preferred_embedded">Embutida preferida</string>
+    <string name="sub_ai_rung_ai_embedded">IA a partir de embutida</string>
+    <string name="sub_ai_rung_ai_scored_addon">IA a partir de addon com score</string>
+    <string name="sub_ai_rung_preferred_scored_addon">Addon preferido com score</string>
+    <string name="sub_ai_rung_classic_fallback">Fallback clássico</string>
+    <string name="sub_ai_rung_manual">Manual</string>
+    <string name="sub_ai_rung_none">Nenhuma</string>
+    <string name="sub_ai_option_meta">Tradução com IA para o idioma preferido</string>
+    <string name="sub_ai_option_badge">IA</string>
+    <string name="sub_ai_auto_select">Legendas inteligentes com IA</string>
+    <string name="sub_ai_auto_select_desc">Embutida no idioma preferido, depois IA a partir da embutida; senão seleção clássica. Addons só com Traduzir com IA</string>
 </resources>

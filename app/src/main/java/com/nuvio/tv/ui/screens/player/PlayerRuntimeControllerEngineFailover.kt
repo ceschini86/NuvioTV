@@ -45,6 +45,9 @@ internal fun PlayerRuntimeController.maybeAutoSwitchInternalPlayerOnStartupError
     }
 
     val switchingToMpv = targetEngine == InternalPlayerEngine.MVP_PLAYER
+    if (switchingToMpv) {
+        setAiSubtitleTranslationEnabled(false)
+    }
     pendingMpvHardRestartOnNextAttach = switchingToMpv
     delayMpvResumeSeekUntilVideoTrack = switchingToMpv
     releasePlayer(flushPlaybackState = false)
@@ -62,15 +65,13 @@ internal fun PlayerRuntimeController.maybeAutoSwitchInternalPlayerOnStartupError
     return true
 }
 
-internal fun PlayerRuntimeController.switchInternalPlayerEngineManually() {
+internal fun PlayerRuntimeController.switchToInternalPlayerEngine(
+    targetEngine: InternalPlayerEngine,
+    reason: String = "manual-switch"
+) {
     if (currentStreamUrl.isBlank()) return
 
-    val targetEngine = when (currentInternalPlayerEngine) {
-        InternalPlayerEngine.EXOPLAYER -> InternalPlayerEngine.MVP_PLAYER
-        InternalPlayerEngine.MVP_PLAYER -> InternalPlayerEngine.EXOPLAYER
-        InternalPlayerEngine.AUTO -> if (mpvView != null) InternalPlayerEngine.EXOPLAYER else InternalPlayerEngine.MVP_PLAYER
-    }
-    beginSwitchTraceSession(reason = "manual-osd", targetEngine = targetEngine)
+    beginSwitchTraceSession(reason = reason, targetEngine = targetEngine)
     val targetEngineLabel = targetEngineLabel(targetEngine)
     val switchMessage = context.getString(R.string.player_engine_switching_manual_message, targetEngineLabel)
     val currentPosition = currentPlaybackPositionMs()?.coerceAtLeast(0L) ?: 0L
@@ -94,6 +95,7 @@ internal fun PlayerRuntimeController.switchInternalPlayerEngineManually() {
     _uiState.update {
         it.copy(
             error = null,
+            showSwitchToMpvErrorAction = false,
             showPauseOverlay = false,
             showLoadingOverlay = it.loadingOverlayEnabled,
             showControls = false,
@@ -110,6 +112,9 @@ internal fun PlayerRuntimeController.switchInternalPlayerEngineManually() {
     }
 
     val switchingToMpv = targetEngine == InternalPlayerEngine.MVP_PLAYER
+    if (switchingToMpv) {
+        setAiSubtitleTranslationEnabled(false)
+    }
     pendingMpvHardRestartOnNextAttach = switchingToMpv
     delayMpvResumeSeekUntilVideoTrack = switchingToMpv
 
@@ -125,6 +130,17 @@ internal fun PlayerRuntimeController.switchInternalPlayerEngineManually() {
         delay(2200)
         _uiState.update { state -> state.copy(showPlayerEngineSwitchInfo = false) }
     }
+}
+
+internal fun PlayerRuntimeController.switchInternalPlayerEngineManually() {
+    if (currentStreamUrl.isBlank()) return
+
+    val targetEngine = when (currentInternalPlayerEngine) {
+        InternalPlayerEngine.EXOPLAYER -> InternalPlayerEngine.MVP_PLAYER
+        InternalPlayerEngine.MVP_PLAYER -> InternalPlayerEngine.EXOPLAYER
+        InternalPlayerEngine.AUTO -> if (mpvView != null) InternalPlayerEngine.EXOPLAYER else InternalPlayerEngine.MVP_PLAYER
+    }
+    switchToInternalPlayerEngine(targetEngine, reason = "manual-osd")
 }
 
 private fun PlayerRuntimeController.isStartupPhaseForEngineFailover(): Boolean {

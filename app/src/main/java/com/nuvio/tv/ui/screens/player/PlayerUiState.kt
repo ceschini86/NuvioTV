@@ -118,6 +118,17 @@ data class PlayerUiState(
     val showMoreDialog: Boolean = false,
     // Subtitle style settings
     val subtitleStyle: SubtitleStyleSettings = SubtitleStyleSettings(),
+    val aiSubtitleAvailable: Boolean = false,
+    /** True when every usable AI key is in 429 cooldown — hide/disable Translate CTAs. */
+    val aiSubtitleQuotaExhausted: Boolean = false,
+    val aiSubtitleTranslationActive: Boolean = false,
+    val subtitleAiFeatureEnabled: Boolean = false,
+    val aiSubtitleDiagnostics: AiSubtitleDiagnostics? = null,
+    val showAiSubtitleDiagnosticsOverlay: Boolean = false,
+    val showSubtitleTranslateMenuOverlay: Boolean = false,
+    val subtitleTranslateMenuOptionId: String? = null,
+    val isAiSubtitleTranslating: Boolean = false,
+    val aiSubtitleLastError: String? = null,
     // Addon subtitles
     val addonSubtitles: List<Subtitle> = emptyList(),
     val isLoadingAddonSubtitles: Boolean = false,
@@ -164,6 +175,7 @@ data class PlayerUiState(
     val showAddonLogo: Boolean = true,
     val streamBadgePlacement: StreamBadgePlacement = StreamBadgePlacement.BOTTOM,
     val error: String? = null,
+    val showSwitchToMpvErrorAction: Boolean = false,
     val playbackIssueReportStatus: PlaybackIssueReportStatus = PlaybackIssueReportStatus.Idle,
     val playbackIssueReportId: String? = null,
     val playbackIssueReportError: String? = null,
@@ -174,6 +186,7 @@ data class PlayerUiState(
     val parentalGuideHasShown: Boolean = false,
     // Skip intro
     val activeSkipInterval: SkipInterval? = null,
+    val activeSkipTargetsPostCredits: Boolean = false,
     val skipIntervalDismissed: Boolean = false,
     // Next episode card
     val nextEpisode: NextEpisodeInfo? = null,
@@ -282,6 +295,15 @@ sealed class PlayerEvent {
     data class OnSetCenterMixLevelDb(val db: Int) : PlayerEvent()
     data class OnSelectSubtitleTrack(val index: Int) : PlayerEvent()
     data object OnDisableSubtitles : PlayerEvent()
+    data object OnToggleAiSubtitleTranslation : PlayerEvent()
+    data class OnTranslateSubtitleWithAi(
+        val internalTrackIndex: Int? = null,
+        val addonSubtitle: Subtitle? = null
+    ) : PlayerEvent()
+    data object OnShowAiSubtitleDiagnostics : PlayerEvent()
+    data object OnDismissAiSubtitleDiagnostics : PlayerEvent()
+    data class OnShowSubtitleTranslateMenu(val optionId: String) : PlayerEvent()
+    data object OnDismissSubtitleTranslateMenu : PlayerEvent()
     data class OnSelectAddonSubtitle(val subtitle: Subtitle) : PlayerEvent()
     data class OnSetPlaybackSpeed(val speed: Float) : PlayerEvent()
     data object OnToggleControls : PlayerEvent()
@@ -338,6 +360,7 @@ sealed class PlayerEvent {
     data object OnResetSubtitleDefaults : PlayerEvent()
     data object OnToggleAspectRatio : PlayerEvent()
     data object OnSwitchInternalPlayerEngine : PlayerEvent()
+    data object OnSwitchToMpvPlayer : PlayerEvent()
     data object OnShowStreamInfo : PlayerEvent()
     data object OnDismissStreamInfo : PlayerEvent()
     data object OnTogglePlayerStatsHud : PlayerEvent()
@@ -390,4 +413,31 @@ data class StreamInfoData(
     val subtitleLanguage: String? = null,
     val subtitleSource: String? = null,
     val playerEngine: String? = null
+)
+
+enum class AiSubtitleLadderRung {
+    PREFERRED_EMBEDDED,
+    AI_EMBEDDED,
+    AI_SCORED_ADDON,
+    PREFERRED_SCORED_ADDON,
+    CLASSIC_FALLBACK,
+    MANUAL,
+    NONE
+}
+
+enum class AiSubtitleSourceKind {
+    EMBEDDED,
+    ADDON
+}
+
+data class AiSubtitleDiagnostics(
+    val rung: AiSubtitleLadderRung,
+    val reason: String,
+    val sourceKind: AiSubtitleSourceKind? = null,
+    val sourceLabel: String? = null,
+    val sourceLanguage: String? = null,
+    val matchScore: Int? = null,
+    val targetLanguage: String? = null,
+    val model: String? = null,
+    val userLocked: Boolean = false
 )

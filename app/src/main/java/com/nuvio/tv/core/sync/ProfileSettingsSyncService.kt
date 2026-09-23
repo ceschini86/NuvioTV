@@ -122,6 +122,10 @@ private val localOnlyPlayerProfileSettingsKeys = setOf(
     "resize_mode",
     "min_buffer_ms",
     "max_buffer_ms",
+    "subtitle_ai_api_key",
+    "subtitle_ai_enabled",
+    "subtitle_ai_auto_select",
+    "subtitle_ai_model",
     "buffer_for_playback_ms",
     "buffer_for_playback_after_rebuffer_ms",
     "target_buffer_size_mb",
@@ -137,6 +141,9 @@ private val localOnlyPlayerProfileSettingsKeys = setOf(
     "migration_after_rebuffer_lowered_done",
     "migration_back_buffer_duration_reduced_done",
     "migration_target_buffer_size_reduced_done",
+    "migration_allow_large_target_buffer_off_done",
+    "migration_buffer_budget_managed_exo_done",
+    "migration_vod_cache_back_buffer_zeroed_done",
     "nuvio_performance_mode_enabled"
 )
 
