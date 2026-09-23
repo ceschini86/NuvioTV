@@ -62,5 +62,10 @@ local-assets/supporter-profile-backgrounds/
 logs
 AGENTS.md
 /PR.md
-docs/
+# Docs: ignore by default; allow curated AI package (Agent context in git)
+docs/*
+!docs/README.md
+!docs/prd-ai-subtitles.md
+!docs/prd-ai-subtitles-ui-menu.md
+!docs/architecture-ai-subtitles.md
 status-page/
