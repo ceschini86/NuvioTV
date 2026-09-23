@@ -1,7 +1,6 @@
 package com.nuvio.tv.data.repository
 
 import android.util.Log
-import com.nuvio.tv.data.remote.api.ImdbTapframeApi
 import com.nuvio.tv.data.remote.api.SeriesGraphApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -15,7 +14,6 @@ import javax.inject.Singleton
 
 @Singleton
 class ImdbEpisodeRatingsRepository @Inject constructor(
-    private val imdbTapframeApi: ImdbTapframeApi,
     private val seriesGraphApi: SeriesGraphApi
 ) {
     private data class CacheEntry(
@@ -31,20 +29,10 @@ class ImdbEpisodeRatingsRepository @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     suspend fun getEpisodeRatings(
-        imdbId: String?,
         tmdbId: Int?
     ): Map<Pair<Int, Int>, Double> {
-        val normalizedImdbId = imdbId
-            ?.trim()
-            ?.takeIf { it.startsWith("tt", ignoreCase = true) }
-            ?.substringBefore(':')
-        val normalizedTmdbId = tmdbId?.takeIf { it > 0 }
-        if (normalizedImdbId == null && normalizedTmdbId == null) return emptyMap()
-
-        val cacheKey = when {
-            !normalizedImdbId.isNullOrBlank() -> "imdb:$normalizedImdbId"
-            else -> "tmdb:$normalizedTmdbId"
-        }
+        val normalizedTmdbId = tmdbId?.takeIf { it > 0 } ?: return emptyMap()
+        val cacheKey = "tmdb:$normalizedTmdbId"
 
         val now = System.currentTimeMillis()
         cache[cacheKey]?.let { cached ->
@@ -55,10 +43,7 @@ class ImdbEpisodeRatingsRepository @Inject constructor(
         val deferred = inFlightMutex.withLock {
             inFlight[cacheKey] ?: scope.async {
                 try {
-                    fetchEpisodeRatings(
-                        imdbId = normalizedImdbId,
-                        tmdbId = normalizedTmdbId
-                    ).also { result ->
+                    fetchFromSeriesGraph(normalizedTmdbId).also { result ->
                         cache[cacheKey] = CacheEntry(
                             ratings = result,
                             expiresAtMs = System.currentTimeMillis() + cacheTtlMs
@@ -77,47 +62,16 @@ class ImdbEpisodeRatingsRepository @Inject constructor(
         return deferred.await()
     }
 
-    private suspend fun fetchEpisodeRatings(
-        imdbId: String?,
-        tmdbId: Int?
-    ): Map<Pair<Int, Int>, Double> {
-        if (!imdbId.isNullOrBlank()) {
-            val primary = fetchFromImdbTapframe(imdbId)
-            if (primary.isNotEmpty()) return primary
-            Log.w(tag, "Primary episode ratings empty for imdbId=$imdbId, trying fallback.")
-        }
-
-        if (tmdbId != null && tmdbId > 0) {
-            return fetchFromSeriesGraph(tmdbId)
-        }
-
-        return emptyMap()
-    }
-
-    private suspend fun fetchFromImdbTapframe(imdbId: String): Map<Pair<Int, Int>, Double> {
-        return try {
-            val response = imdbTapframeApi.getSeasonRatings(imdbId)
-            if (!response.isSuccessful) {
-                Log.w(tag, "Failed primary season ratings for imdbId=$imdbId (${response.code()})")
-                return emptyMap()
-            }
-            toRatingsMap(response.body().orEmpty())
-        } catch (e: Exception) {
-            Log.w(tag, "Error fetching primary season ratings for imdbId=$imdbId", e)
-            emptyMap()
-        }
-    }
-
     private suspend fun fetchFromSeriesGraph(tmdbId: Int): Map<Pair<Int, Int>, Double> {
         return try {
             val response = seriesGraphApi.getSeasonRatings(tmdbId)
             if (!response.isSuccessful) {
-                Log.w(tag, "Failed fallback season ratings for tmdbId=$tmdbId (${response.code()})")
+                Log.w(tag, "Failed Series Graph season ratings for tmdbId=$tmdbId (${response.code()})")
                 return emptyMap()
             }
             toRatingsMap(response.body().orEmpty())
         } catch (e: Exception) {
-            Log.w(tag, "Error fetching fallback season ratings for tmdbId=$tmdbId", e)
+            Log.w(tag, "Error fetching Series Graph season ratings for tmdbId=$tmdbId", e)
             emptyMap()
         }
     }
@@ -128,8 +82,8 @@ class ImdbEpisodeRatingsRepository @Inject constructor(
                 season.episodes.orEmpty().forEach { episode ->
                     val seasonNumber = episode.seasonNumber ?: return@forEach
                     val episodeNumber = episode.episodeNumber ?: return@forEach
-                    val voteAverage = episode.voteAverage ?: return@forEach
-                    put(seasonNumber to episodeNumber, voteAverage)
+                    val communityAverage = episode.communityAverage ?: return@forEach
+                    put(seasonNumber to episodeNumber, communityAverage)
                 }
             }
         }

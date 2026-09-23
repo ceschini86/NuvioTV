@@ -1395,9 +1395,8 @@ class MetaDetailsViewModel @Inject constructor(
                 val tmdbIdString = tmdbService.ensureTmdbId(meta.id, tmdbLookupType, fallbackImdbId = meta.imdbId)
                     ?: tmdbService.ensureTmdbId(itemId, itemType, fallbackImdbId = meta.imdbId)
                 val tmdbId = tmdbIdString?.toIntOrNull()
-                val imdbId = extractImdbId(meta.id) ?: extractImdbId(itemId) ?: meta.imdbId
 
-                if (tmdbId == null && imdbId == null) {
+                if (tmdbId == null) {
                     _uiState.update { state ->
                         if (state.meta == null || state.meta.id != meta.id) {
                             state
@@ -1416,10 +1415,7 @@ class MetaDetailsViewModel @Inject constructor(
                     return@launch
                 }
 
-                val ratings = imdbEpisodeRatingsRepository.getEpisodeRatings(
-                    imdbId = imdbId,
-                    tmdbId = tmdbId
-                )
+                val ratings = imdbEpisodeRatingsRepository.getEpisodeRatings(tmdbId = tmdbId)
 
                 _uiState.update { state ->
                     if (state.meta == null || state.meta.id != meta.id) {

@@ -440,6 +440,8 @@
     <string name="licenses_attributions_introdb_body">Nuvio uses the IntroDB API for community-provided intro, recap, credits, and preview timestamps used by skip controls. Nuvio is not affiliated with or endorsed by IntroDB.</string>
     <string name="licenses_attributions_imdb_title">IMDb Non-Commercial Datasets</string>
     <string name="licenses_attributions_imdb_body">Nuvio uses IMDb Non-Commercial Datasets, including title.ratings.tsv.gz, for IMDb ratings and vote counts. Information courtesy of IMDb (https://www.imdb.com). Used with permission. IMDb data is for personal and non-commercial use under IMDb terms.</string>
+    <string name="licenses_attributions_series_graph_title">Series Graph</string>
+    <string name="licenses_attributions_series_graph_body">Nuvio uses Series Graph for community episode rating averages shown on TV series detail pages. Nuvio is not affiliated with or endorsed by Series Graph.</string>
     <string name="licenses_attributions_exoplayer_title">AndroidX Media3 ExoPlayer 1.8.0</string>
     <string name="licenses_attributions_exoplayer_body">Used as an Android playback engine. Licensed under the Apache License, Version 2.0.</string>
     <string name="licenses_attributions_libmpv_title">libmpv / libmpv-android</string>
@@ -2492,6 +2494,9 @@
     <string name="cd_trakt_logo">Trakt Logo</string>
     <string name="cd_trakt_qr">Trakt activation QR</string>
     <string name="cd_imdb">IMDb</string>
+    <string name="episode_rating_source_series_graph">Series Graph</string>
+    <string name="episode_rating_source_series_graph_short">SG</string>
+    <string name="episode_rating_attribution_series_graph">Ratings from Series Graph</string>
     <string name="cd_open_discover">Open discover</string>
     <string name="cd_clear_search">Clear search</string>
     <string name="cd_voice_search">Voice search</string>
