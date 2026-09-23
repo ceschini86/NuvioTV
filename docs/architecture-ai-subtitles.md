@@ -262,7 +262,7 @@ Cache: `scoreAddonSubtitleCached` no controller (invalida se o nome de release d
 | `SubtitleAiCredentials` | `…/subtitles/SubtitleAiCredentials.kt` | Multi-provider JSON |
 | `SubtitleAiModel` | `…/subtitles/SubtitleAiModel.kt` | Enum persistido |
 
-**Batching:** channel ilimitado; junta até 40 linhas ou 150 ms; erro → completa com texto original **sem cache** + delay 5 s (retry na próxima renderização).
+**Batching:** channel ilimitado; junta até 40 linhas ou 150 ms; erro → completa com texto original **sem cache** + delay 5 s (retry na próxima renderização). Sucesso parcial / linha ainda no idioma fonte → **não** entra no `cache[]` (próxima cue tenta de novo; lote com cobertura &lt; 50% → `LOW_QUALITY` e o router cai para a próxima key/provider).
 
 **Providers / modelos reais (IDs no Service; enum estável no DataStore):**
 
@@ -468,6 +468,12 @@ Não há unit test dedicado só da ladder no tree analisado; a lógica está con
 - **Contexto:** Metadata de codec mente; PGS selecionado como “AI source”.  
 - **Decisão:** `onUntranslatableSource` quando `extractRawText` blank; próxima fonte = outra **embedded** (ou mantém addon se MANUAL locked); sem hunt scored addon.  
 - **Consequência:** Se nenhuma embedded, desliga AI (+ classic se smart).
+
+### ADR-AI-9 — Quality gate pós-parse (sem Find Best Match)
+
+- **Contexto:** Resposta HTTP 200 às vezes devolve o lote ainda no idioma fonte, ou alinha só parte dos índices — e o cache “grudava” inglês como tradução.  
+- **Decisão:** `TranslationQualityGate` rejeita linhas vazias / idênticas (com limiar para nomes curtos) / sem script esperado; cobertura &lt; 50% → `TRANSLATION_ERROR_LOW_QUALITY` (router tenta próxima key/provider). Manager só faz `cache[src]=dst` quando a linha passa no gate. Prompt reforça “nunca deixar no idioma fonte”.  
+- **Consequência:** Mais retries / fallbacks sob modelo preguiçoso; **não** copia o scan de sync do ARVIO — só endurece a tradução de cues já escolhidas.
 
 ---
 

@@ -61,6 +61,7 @@ Legendas no idioma do usuário costumam faltar, vir com release errado, ou exist
 | S4 | Mensagens de erro amigáveis (rate limit, key inválida) | Em melhoria neste branch; revisar locales |
 | S5 | Quota / cooldown visível nas settings (além do ping) | Router guarda snapshots; UI limitada |
 | S6 | Rate-limit total → avisar sem mudar seleção | **Implementado:** AI off + **preserve** track/addon (nunca promover French); `aiSubtitleQuotaExhausted` oculta Translate; cooldown refresh reabilita. Manual e Smart iguais nesta regra. |
+| S7 | Quality gate: não cachear / falhar lote ainda no idioma fonte | **Implementado:** `TranslationQualityGate` + `LOW_QUALITY` → fallback de provider; ver architecture ADR-AI-9 |
 
 ### Won’t (neste fork, por enquanto)
 

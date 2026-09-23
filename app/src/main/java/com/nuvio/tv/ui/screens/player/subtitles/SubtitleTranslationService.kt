@@ -31,6 +31,9 @@ data class TranslationResult(
 // it's not actionable and translation keeps working for everything else.
 const val TRANSLATION_ERROR_CONTENT_BLOCKED = "CONTENT_BLOCKED"
 
+/** Model returned mostly source-language / empty lines — treat as failure so the router can fall back. */
+const val TRANSLATION_ERROR_LOW_QUALITY = "LOW_QUALITY"
+
 private val BLOCKED_FINISH_REASONS = setOf(
     "PROHIBITED_CONTENT", "SAFETY", "RECITATION", "BLOCKLIST", "SPII"
 )
@@ -147,7 +150,10 @@ class SubtitleTranslationService(
         "2. Every input element starts with a numeric prefix like '7: ' — keep the EXACT same numeric prefix on the corresponding translated element. Never merge or split elements.\n" +
         "3. Keep the exact same order and element count.\n" +
         "4. Preserve the '$NL' symbol exactly where it appears as a line break.\n" +
-        "5. Use informal, spoken $targetLanguage suitable for cinema."
+        "5. Use informal, spoken $targetLanguage suitable for cinema.\n" +
+        "6. Every dialogue line MUST be in $targetLanguage — never leave a line in the source language. " +
+        "Keep well-known proper names as-is; translate the rest.\n" +
+        "7. Do not invent speaker labels, timestamps, or commentary."
 
     // The numeric prefix each translated element must carry back ("7: text" / tolerant of
     // "7. text", "7 - text"). Alignment by index instead of array position: the model merging or
@@ -889,11 +895,30 @@ class SubtitleTranslationService(
         }
 
         val isRtl = RTL_LANGUAGES.contains(targetLanguage.lowercase())
-        val translated = lines.indices.map { i ->
-            val line = byIndex[i]?.replace(NL, "\n") ?: return@map lines[i]
-            if (isRtl) "‏$line‏" else line
+        val accepted = Array<String?>(lines.size) { null }
+        for (i in lines.indices) {
+            val raw = byIndex[i]?.replace(NL, "\n") ?: continue
+            if (!TranslationQualityGate.isAcceptableTranslation(lines[i], raw, targetLanguage)) {
+                continue
+            }
+            accepted[i] = if (isRtl) "‏$raw‏" else raw
         }
 
+        val okCount = accepted.count { it != null }
+        if (!TranslationQualityGate.meetsCoverage(okCount, lines.size)) {
+            Log.w(
+                TAG,
+                "Low-quality translation: $okCount/${lines.size} acceptable for $targetLanguage"
+            )
+            return TranslationResult(lines, false, TRANSLATION_ERROR_LOW_QUALITY)
+        }
+
+        // Gaps stay in the source language for this frame, but the manager must NOT cache them
+        // (see SubtitleTranslationManager) so the next render can retry those lines.
+        val translated = lines.indices.map { i -> accepted[i] ?: lines[i] }
+        if (okCount < lines.size) {
+            Log.w(TAG, "Partial quality pass: $okCount/${lines.size} lines accepted")
+        }
         return TranslationResult(translated, true)
     }
 }

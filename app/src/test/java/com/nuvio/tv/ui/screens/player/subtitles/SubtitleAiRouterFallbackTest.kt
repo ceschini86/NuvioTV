@@ -54,6 +54,47 @@ class SubtitleAiRouterFallbackTest {
     }
 
     @Test
+    fun translateBatch_fallsBackAfterLowQualityTranslation() = runBlocking {
+        val attempted = mutableListOf<String>()
+        val router = SubtitleAiRouter(
+            translateAttempt = { _, apiKey, lines, _ ->
+                attempted += apiKey
+                if (apiKey == "key-a") {
+                    ProviderAttemptResult(
+                        translation = TranslationResult(
+                            lines,
+                            false,
+                            TRANSLATION_ERROR_LOW_QUALITY
+                        )
+                    )
+                } else {
+                    ProviderAttemptResult(
+                        translation = TranslationResult(lines.map { "PT:$it" }, true)
+                    )
+                }
+            }
+        )
+        router.credentials = SubtitleAiCredentials(
+            providers = listOf(
+                SubtitleAiProviderCredentials(
+                    model = SubtitleAiModel.GROQ_LLAMA_70B,
+                    enabled = true,
+                    keys = listOf("key-a", "key-b")
+                )
+            )
+        )
+        router.preferredModel = SubtitleAiModel.GROQ_LLAMA_70B
+
+        val result = router.translateBatch(
+            listOf("I never wanted any of this to happen."),
+            "Portuguese"
+        )
+        assertTrue(result.success)
+        assertEquals(listOf("PT:I never wanted any of this to happen."), result.lines)
+        assertEquals(listOf("key-a", "key-b"), attempted)
+    }
+
+    @Test
     fun translateBatch_fallsBackToNextProviderAfterRateLimit() = runBlocking {
         val attemptedModels = mutableListOf<SubtitleAiModel>()
         val router = SubtitleAiRouter(

@@ -144,9 +144,21 @@ class SubtitleTranslationManager(
             onBatchResult?.invoke(true, null)
             batch.forEachIndexed { i, item ->
                 val translated = result.lines.getOrElse(i) { item.text }
-                cache[item.text] = translated
-                inFlight.remove(item.text)
-                item.deferred.complete(translated)
+                // Never cache source-language leftovers from a partial/low-quality window —
+                // leaving them uncached lets the next cue render retry (and the router fall back).
+                if (TranslationQualityGate.isAcceptableTranslation(
+                        item.text,
+                        translated,
+                        targetLanguage
+                    )
+                ) {
+                    cache[item.text] = translated
+                    inFlight.remove(item.text)
+                    item.deferred.complete(translated)
+                } else {
+                    inFlight.remove(item.text)
+                    item.deferred.complete(item.text)
+                }
             }
             batch.clear()
         }
@@ -206,7 +218,15 @@ class SubtitleTranslationManager(
             if (result.success) {
                 onBatchResult?.invoke(true, null)
                 chunk.forEachIndexed { i, text ->
-                    cache[text] = result.lines.getOrElse(i) { text }
+                    val translated = result.lines.getOrElse(i) { text }
+                    if (TranslationQualityGate.isAcceptableTranslation(
+                            text,
+                            translated,
+                            targetLanguage
+                        )
+                    ) {
+                        cache[text] = translated
+                    }
                 }
             } else {
                 onBatchResult?.invoke(
