@@ -435,6 +435,11 @@
     <string name="licenses_attributions_introdb_body">O Nuvio utiliza a API do IntroDB para introduções, recaps, créditos e marcações de prévias fornecidas pela comunidade, usadas nos controles de pular. O Nuvio não é afiliado nem endossado pelo IntroDB.</string>
     <string name="licenses_attributions_imdb_title">IMDb Conjuntos de Dados Não-Comerciais</string>
     <string name="licenses_attributions_imdb_body">O Nuvio utiliza conjuntos de dados não-comerciais do IMDb, incluindo title.ratings.tsv.gz, para avaliações e contagem de votos do IMDb. Informações cortesia do IMDb (https://www.imdb.com). Usado com permissão. Os dados do IMDb são para uso pessoal e não-comercial sob os termos do IMDb.</string>
+    <string name="licenses_attributions_series_graph_title">Series Graph</string>
+    <string name="licenses_attributions_series_graph_body">O Nuvio utiliza o Series Graph para médias comunitárias de avaliação de episódios nas páginas de detalhes de séries. O Nuvio não é afiliado nem endossado pelo Series Graph.</string>
+    <string name="episode_rating_source_series_graph">Series Graph</string>
+    <string name="episode_rating_source_series_graph_short">SG</string>
+    <string name="episode_rating_attribution_series_graph">Avaliações do Series Graph</string>
     <string name="licenses_attributions_exoplayer_title">AndroidX Media3 ExoPlayer 1.8.0</string>
     <string name="licenses_attributions_exoplayer_body">Usado como motor de reprodução Android. Licenciado sob a Apache License, Versão 2.0.</string>
     <string name="licenses_attributions_libmpv_title">libmpv / libmpv-android</string>

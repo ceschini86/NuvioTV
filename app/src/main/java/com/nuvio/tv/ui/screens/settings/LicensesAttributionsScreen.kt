@@ -74,6 +74,7 @@ private const val TorboxUrl = "https://torbox.app"
 private const val MdbListUrl = "https://mdblist.com"
 private const val IntroDbUrl = "https://introdb.app/"
 private const val ImdbDatasetsUrl = "https://developer.imdb.com/non-commercial-datasets/"
+private const val SeriesGraphUrl = "https://seriesgraph.com"
 private const val ApacheLicenseUrl = "https://www.apache.org/licenses/LICENSE-2.0"
 private const val HazeLicenseUrl = "https://github.com/chrisbanes/haze/blob/1.7.2/LICENSE"
 private const val LibMpvAndroidUrl = "https://github.com/jarnedemeulemeester/libmpv-android"
@@ -418,6 +419,12 @@ private fun dataAttributionItems() = listOf(
         title = stringResource(R.string.licenses_attributions_imdb_title),
         body = stringResource(R.string.licenses_attributions_imdb_body),
         url = ImdbDatasetsUrl
+    ),
+    LicenseAttributionItem(
+        title = stringResource(R.string.licenses_attributions_series_graph_title),
+        body = stringResource(R.string.licenses_attributions_series_graph_body),
+        url = SeriesGraphUrl,
+        logo = LicenseLogo.Raw(R.raw.series_graph_logo_dark)
     )
 )
 

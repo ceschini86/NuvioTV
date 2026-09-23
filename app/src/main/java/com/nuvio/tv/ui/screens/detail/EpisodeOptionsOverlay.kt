@@ -66,7 +66,8 @@ import coil3.request.transformations
 import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.EpisodeOptionsOverlayStyle
 import com.nuvio.tv.domain.model.Video
-import com.nuvio.tv.ui.components.ImdbRatingSourceLabel
+import com.nuvio.tv.ui.components.SeriesGraphRatingColors
+import com.nuvio.tv.ui.components.SeriesGraphRatingSourceLabel
 import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.BlurTransformation
 import com.nuvio.tv.ui.util.contentTextDirection
@@ -170,6 +171,10 @@ internal fun EpisodeOptionsOverlay(
     }
     val ratingLabel = remember(imdbRating) {
         imdbRating?.takeIf { it > 0.0 }?.let { String.format(Locale.US, "%.1f", it) }
+    }
+    val ratingColor = remember(imdbRating) {
+        imdbRating?.takeIf { it > 0.0 }?.let(SeriesGraphRatingColors::cellColor)
+            ?: Color.White.copy(alpha = 0.72f)
     }
     val episodeLabel = when {
         episode.season != null && episode.episode != null -> {
@@ -392,15 +397,16 @@ internal fun EpisodeOptionsOverlay(
                                 horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                ImdbRatingSourceLabel(
-                                    logoModifier = Modifier.size(30.dp),
+                                SeriesGraphRatingSourceLabel(
                                     textStyle = MaterialTheme.typography.titleMedium,
-                                    textColor = Color.White.copy(alpha = 0.72f)
+                                    textColor = Color.White.copy(alpha = 0.72f),
+                                    compact = true,
+                                    logoHeightDp = 18
                                 )
                                 Text(
                                     text = rating,
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = Color.White.copy(alpha = 0.72f)
+                                    color = ratingColor
                                 )
                             }
                         }
