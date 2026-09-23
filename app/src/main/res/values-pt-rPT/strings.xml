@@ -2595,7 +2595,7 @@
     <string name="detail_tmdb_fallback_title">TMDB %1$d</string>
     <string name="collections_editor_tmdb_collection_fallback">Coleção TMDB %1$d</string>
     <string name="sub_ai_section">Legendas com IA</string>
-    <string name="sub_ai_section_desc">Modelo de tradução, chave de API e seleção inteligente</string>
+    <string name="sub_ai_section_desc">Modelo de tradução, chave de API e seleção inteligente de legendas embutidas</string>
     <string name="sub_ai_diagnostics_title">Fonte da legenda IA</string>
     <string name="sub_ai_diagnostics_rung">Degrau da escada</string>
     <string name="sub_ai_diagnostics_reason">Motivo</string>
@@ -2617,5 +2617,5 @@
     <string name="sub_ai_option_meta">Tradução com IA para o idioma preferido</string>
     <string name="sub_ai_option_badge">IA</string>
     <string name="sub_ai_auto_select">Legendas inteligentes com IA</string>
-    <string name="sub_ai_auto_select_desc">Embutida no idioma preferido, depois IA a partir do original/embutida, depois addon com melhor score, depois addon preferido</string>
+    <string name="sub_ai_auto_select_desc">Embutida no idioma preferido, depois IA a partir da embutida; senão seleção clássica. Addons só com Traduzir com IA</string>
 </resources>

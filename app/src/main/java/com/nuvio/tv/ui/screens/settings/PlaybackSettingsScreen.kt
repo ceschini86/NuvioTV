@@ -714,7 +714,10 @@ private fun SubtitleAiProviderKeysDialog(
                 pingingKey == key -> stringResource(R.string.sub_ai_ping_testing)
                 ping == null -> ""
                 ping.success -> stringResource(R.string.sub_ai_ping_ok)
-                ping.message == "RATE_LIMITED" -> stringResource(R.string.sub_ai_ping_rate_limited)
+                ping.message == "RATE_LIMITED" ||
+                    ping.message.contains("429") ||
+                    ping.message.contains("rate limit", ignoreCase = true) ->
+                    stringResource(R.string.sub_ai_ping_rate_limited)
                 else -> stringResource(R.string.sub_ai_ping_fail) + " · " + ping.message
             }
             Row(

@@ -1638,6 +1638,7 @@ fun PlayerScreen(
             useLibass = uiState.useLibass,
             isUsingMpv = uiState.internalPlayerEngine == InternalPlayerEngine.MVP_PLAYER,
             aiSubtitleAvailable = uiState.aiSubtitleAvailable,
+            aiSubtitleQuotaExhausted = uiState.aiSubtitleQuotaExhausted,
             aiSubtitleTranslationActive = uiState.aiSubtitleTranslationActive,
             isAiSubtitleTranslating = uiState.isAiSubtitleTranslating,
             aiSubtitleDiagnostics = uiState.aiSubtitleDiagnostics,
@@ -1720,7 +1721,7 @@ fun PlayerScreen(
             contentPadding = PaddingValues(start = 52.dp, end = 52.dp, top = 36.dp, bottom = 76.dp)
         ) {
             SubtitleTranslateMenuOverlayContent(
-                aiTranslateAvailable = uiState.aiSubtitleAvailable,
+                aiTranslateAvailable = uiState.aiSubtitleAvailable && !uiState.aiSubtitleQuotaExhausted,
                 onTranslateWithAi = { dispatchTranslateSubtitleWithAi(viewModel, uiState) },
                 onDisableSubtitles = {
                     viewModel.onEvent(PlayerEvent.OnDisableSubtitles)

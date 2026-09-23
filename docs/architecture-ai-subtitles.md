@@ -29,8 +29,8 @@
 ### O que o usuário ganha
 
 - Traduzir cues de legenda (ExoPlayer) para o idioma preferido de legenda, com **API key própria** (BYOK).
-- **Smart AI subtitles**: o player escolhe automaticamente a melhor fonte (embedded preferido sem AI → AI de embedded → AI de addon com score ≥ 50 → addon preferido / fallback clássico).
-- No overlay: badges de **match score** (%), opção **AI**, long-press → menu **Translate with AI** ou painel de **diagnóstico** da fonte.
+- **Smart AI subtitles**: o player escolhe automaticamente a melhor fonte **embutida** (preferred sem AI → AI de embedded → fallback clássico). Addons **não** entram na ladder; só via **Translate with AI** (manual).
+- No overlay: badges de **match score** (%) (info humana), opção **AI**, long-press → menu **Translate with AI** ou painel de **diagnóstico** da fonte.
 - Settings em **Playback → AI subtitles**: enable, smart auto-select, provider preferido, enable por provider, várias keys + **Test key** (ping).
 
 ### Fork vs upstream
@@ -42,7 +42,7 @@
 | Tradução LLM / ladder / badges / diagnostics | Não | Sim |
 | Restrict engine | — | **ExoPlayer only** |
 
-Contexto mínimo de integração (não é o foco deste doc): tracks embutidas + addons (`SubtitleRepository*`) alimentam a ladder; SRT/VTT addon costuma ir por **sidecar**; ASS+libass permanece no media-source path; MPV não entra no pipeline AI.
+Contexto mínimo de integração (não é o foco deste doc): tracks embutidas alimentam a ladder Smart; addons (`SubtitleRepository*`) alimentam classic + Translate with AI; SRT/VTT addon costuma ir por **sidecar**; ASS+libass permanece no media-source path; MPV não entra no pipeline AI.
 
 ---
 
@@ -59,14 +59,14 @@ Contexto mínimo de integração (não é o foco deste doc): tracks embutidas + 
 │ ensureSubtitleTranslation   │  SubtitleTranslationManager
 │ Manager + SubtitleAiRouter  │
 └──────────────┬──────────────┘
-               │ playback start / tracks / addons ready
+               │ playback start / text tracks scanned
                ▼
 ┌─────────────────────────────┐
 │ applySubtitleAutoSelectPolicy│
 │  → applyAiAutoSelectLadder  │  (se smart AI)
 │  → classic auto-select      │  (senão / fallback)
 └──────────────┬──────────────┘
-               │ escolhe fonte (embedded | addon)
+               │ Smart: só embedded; classic: embedded|addon
                ▼
 ┌─────────────────────────────┐     Exo text renderer
 │ Cues (embedded / sidecar)   │──────────────────────┐
@@ -75,7 +75,7 @@ Contexto mínimo de integração (não é o foco deste doc): tracks embutidas + 
                                          (ou sidecar AI hook)
                                                       │
                          blank text (PGS etc.) ───────┼──► onUntranslatableSource
-                                                      │      → next source / disable
+                                                      │      → next embedded / disable
                          text + cache miss ───────────┼──► Manager.translate()
                                                       │         │
                                                       │         ▼
@@ -102,8 +102,10 @@ flowchart TB
   Observe --> Ladder{Smart AI?}
   Ladder -->|sim| L[applyAiAutoSelectLadder]
   Ladder -->|não| Classic[tryAutoSelectPreferred…]
-  L --> Src[Fonte: embedded ou addon]
+  L --> Src[Fonte: embedded only]
+  Classic --> SrcClassic[Fonte: embedded ou addon]
   Src --> Cues[Cues Exo / sidecar]
+  SrcClassic --> Cues
   Cues --> TTO[TranslatingTextOutput / sidecar AI]
   TTO --> Mgr[SubtitleTranslationManager]
   Mgr --> Router[SubtitleAiRouter]
@@ -136,11 +138,13 @@ Todas verdadeiras:
 | Condição | Efeito |
 |----------|--------|
 | `isUserExplicitSubtitleSelection` | Policy inteira para; ladder não roda |
-| `aiSubtitleUserLocked && translation enabled` | Não sobe a ladder; só `selectAiTranslationSourceIfAvailable()` |
-| `useForcedSubtitles` | Ladder desvia para auto-select clássico (forced) |
+| `aiSubtitleUserLocked && translation enabled` | Não sobe a ladder; **mantém** a fonte locked (só re-escolhe se seleção zerou). Evita `selectAiTranslationSourceIfAvailable` preferir embedded e roubar addon do Translate with AI. |
+| Keep-disabled (`subtitleDisabledByPersistedPreference` / remembered Disabled) | Ladder para; **não** confundir com seleção zerada no switch de stream in-player |
+| Troca de stream in-player (`releasePlayer(flush=false)`) | Chama `resetSubtitleAiPolicyForNewMedia()` — zera lock AI, diagnostics, explicit/auto (salvo keep-disabled) e limpa remembered subtitle, para a ladder reavaliar o arquivo novo |
+| `useForcedSubtitles` | Só desvia para classic se forced **aplica** (áudio casa com preferido). Senão continua a ladder (evita classic no secundário EN). |
 | `preferredLanguage` = none / vazio | Diagnostics `NONE`, AI off |
 | Text tracks ainda não escaneadas | Defer (`hasScannedTextTracksOnce == false`) |
-| Addons ainda loading (após falha de embedded AI) | Defer até `!isLoadingAddonSubtitles` |
+| Sem embutida traduzível após scan | `CLASSIC_FALLBACK` imediatamente — **não** espera addons nem pivota por score |
 
 ### Ordem dos degraus (`applyAiAutoSelectLadder`)
 
@@ -148,11 +152,9 @@ Todas verdadeiras:
 |---|-------------------------------|------|--------|
 | 1 | `PREFERRED_EMBEDDED` | Track **embutida** no idioma preferido (normal, não forced), match via `trackMatchesPreferredLanguage` | **Não** |
 | 2 | `AI_EMBEDDED` | `findAiSourceSubtitleTrackIndex` (prefere idioma **original** do conteúdo; senão qualquer texto usável) + `setAiSubtitleTranslationEnabled(true)` | **Sim** |
-| 3 | `AI_SCORED_ADDON` | Melhor addon com score ≥ **`SubtitleReleaseScoring.AI_ADDON_SOURCE_MIN_SCORE` (50)**, idioma **≠** preferido (`isUsableAddonAiSourceLanguage`); tie-break: original → en | **Sim** |
-| 4 | `PREFERRED_SCORED_ADDON` | Melhor addon no idioma preferido por score (sem limiar mínimo) | **Não** |
-| 5 | `CLASSIC_FALLBACK` | `tryAutoSelectPreferredSubtitleFromAvailableTracks()` | **Não** |
+| 3 | `CLASSIC_FALLBACK` | `tryAutoSelectPreferredSubtitleFromAvailableTracks()` (pode escolher addon **sem** AI) | **Não** |
 
-Alinhamento com README: a ordem 1–4 do README corresponde aos rungs 1–4; o “classic fallback” é o degrau 5 explícito no código.
+Enums `AI_SCORED_ADDON` / `PREFERRED_SCORED_ADDON` permanecem no código para labels legadas; a ladder **nunca** os publica.
 
 ### Fonte AI embutida (`findAiSourceSubtitleTrackIndex`)
 
@@ -160,10 +162,18 @@ Alinhamento com README: a ordem 1–4 do README corresponde aos rungs 1–4; o �
 - Pula codecs bitmap: **PGS / DVB / VOBSUB** (`isBitmapCodec`)
 - Prefere idioma original do conteúdo; depois tracks com language label; evita SDH/CC no nome quando há alternativa “plain”
 
+### `selectAiTranslationSourceIfAvailable`
+
+| Caso | Comportamento |
+|------|----------------|
+| `aiSubtitleUserLocked` + addon atual | Mantém o addon (Translate with AI) |
+| Auto / toggle / backstop | Só embedded (`selectEmbeddedAiSourceIfAvailable`); **nunca** hunt scored addon |
+| Sem fonte | `false` → caller desliga AI / classic |
+
 ### Interação com seleção manual
 
 - Escolher track interna ou addon no overlay → `setAiSubtitleTranslationEnabled(false)` + `isUserExplicitSubtitleSelection = true` (`PlayerRuntimeControllerPlaybackEvents` / `TrackSelection`).
-- **Translate with AI** (`translateSubtitleWithAi`) → seleciona fonte, `aiSubtitleUserLocked = true`, AI on, diagnostics `MANUAL`.
+- **Translate with AI** (`translateSubtitleWithAi`) → seleciona fonte (embedded **ou** addon), `aiSubtitleUserLocked = true`, AI on, diagnostics `MANUAL`.
 - Toggle AI no UI (`OnToggleAiSubtitleTranslation`) → ao **ligar**, também seta `aiSubtitleUserLocked = true`.
 - Lock impede: ladder automática e `tryUpgradeAiToPreferredEmbeddedSubtitle` (upgrade de AI → embedded preferido sem tradução).
 
@@ -173,7 +183,7 @@ Se AI está ativa e **não** locked, `refreshAiSubtitleSourceAndMaybeUpgrade` / 
 
 ### Fonte intranscritível em runtime
 
-`TranslatingTextOutput` / sidecar: se cues sem texto extraível → `onUntranslatableSource` → tenta outra fonte AI (`selectAiTranslationSourceIfAvailable(excludeCurrent=true)`); se falhar, desliga AI e, se possível, re-roda a ladder.
+`TranslatingTextOutput` / sidecar: se cues sem texto extraível → `onUntranslatableSource` → `selectAiTranslationSourceIfAvailable(excludeCurrent=true)` (só outra embedded, ou mantém addon se locked); se falhar, desliga AI e, se possível, re-roda a ladder.
 
 ---
 
@@ -186,7 +196,7 @@ Arquivo: `ui/screens/player/SubtitleReleaseScoring.kt`.
 - **Stream side:** `resolveStreamReleaseNameForSubtitleScore()` = string mais longa entre `streamName`, `contentName`, `title`.
 - **Subtitle side:** `subtitleScoreKey(id, url, addonName)` — primeiro de id / filename da URL / addonName (após strip de prefixos `[…]` e AIOStreams `vN+|id|`).
 
-Stream-provided addons (`isStreamProvided`) → score **0** (não usáveis como pivot AI).
+Stream-provided addons (`isStreamProvided`) → score **0**.
 
 ### Cálculo
 
@@ -205,7 +215,7 @@ Tokeniza release (separadores `. _ - espaço`), pesos:
 
 `score = matchedWeight * 100 / totalWeight` ∈ \[0, 100\].
 
-Limiar AI addon: **`AI_ADDON_SOURCE_MIN_SCORE = 50`**.
+`AI_ADDON_SOURCE_MIN_SCORE = 50` permanece no código mas **não** governa a ladder Smart (legado / unused pela policy). Score é **só display** (badge + diagnostics MANUAL).
 
 Cache: `scoreAddonSubtitleCached` no controller (invalida se o nome de release do stream muda).
 
@@ -213,7 +223,7 @@ Cache: `scoreAddonSubtitleCached` no controller (invalida se o nome de release d
 
 - `SubtitleSelectionOverlay`: `sessionScoreByOptionId` memoizado; `MatchScoreBadge` mostra `"$scorePercent%"` quando `matchScore > 0`.
 - Opção AI: badge textual `sub_ai_option_badge` (“AI”).
-- Painel de diagnóstico: linha `sub_ai_diagnostics_score` com o score da fonte escolhida.
+- Painel de diagnóstico: linha `sub_ai_diagnostics_score` com o score da fonte escolhida (útil em Translate MANUAL de addon).
 
 ---
 
@@ -360,14 +370,14 @@ Enums: `AiSubtitleLadderRung`, `AiSubtitleSourceKind`, data class `AiSubtitleDia
 |-------|----------------|
 | Sem key / feature off | `aiSubtitleAvailable=false`; ladder clássica |
 | MPV | AI ignorada |
-| 429 / rate limit | Cooldown por key; tenta outra key/provider; Gemini throttle ~4.2 s |
+| 429 / rate limit | Cooldown por key; fallback multi-key. **Esgotadas:** AI off + **preserve selection** (sem classic/FR); `aiSubtitleQuotaExhausted` oculta Translate até cooldown; ver PRD UI §3.5. |
 | 401/403 | Próxima key |
 | Transient 5xx Gemini | Retry curto (até 2) |
 | `CONTENT_BLOCKED` | Sem toast de erro genérico; bisect no service |
 | Batch fail genérico | Mostra original sem cache; retry depois; `aiSubtitleLastError` |
 | PGS / sem texto | `onUntranslatableSource` → outra fonte ou desliga AI + ladder |
-| Score &lt; 50 | Addon não entra como pivot AI (rung 3) |
-| Forced subs mode | Ladder AI não se aplica; clássico forced |
+| Score &lt; 50 | Addon não entra como pivot AI (rung 3); score = matching local de release-name |
+| Forced subs mode | Só desvia para classic se forced **aplica** (áudio ≈ preferido); senão continua ladder |
 
 ### Testes
 
@@ -425,9 +435,9 @@ Não há unit test dedicado só da ladder no tree analisado; a lógica está con
 
 ### ADR-AI-3 — Ladder antes de traduzir qualquer coisa
 
-- **Contexto:** Traduzir addon aleatório desperdiça quota e piora sync.  
-- **Decisão:** Preferir embedded no idioma alvo **sem** AI; só então AI de original/embedded; addon só com score ≥ 50.  
-- **Consequência:** Mais lógica de seleção; defer enquanto tracks/addons carregam.
+- **Contexto:** Traduzir addon automático desperdiça quota, acopla a timing de addons e piora sync.  
+- **Decisão:** Smart AI = só embutidas (preferred sem AI → AI embedded → classic). Addon só via **Translate with AI** (lock MANUAL).  
+- **Consequência:** Ladder mais curta; sem defer por loading de addons; score deixa de ser gate da policy.
 
 ### ADR-AI-4 — Lock manual supera auto
 
@@ -435,11 +445,11 @@ Não há unit test dedicado só da ladder no tree analisado; a lógica está con
 - **Decisão:** `aiSubtitleUserLocked` + `isUserExplicitSubtitleSelection`; pick normal desliga AI.  
 - **Consequência:** Dois locks relacionados (explícito vs AI); translate menu e toggle AI setam lock AI.
 
-### ADR-AI-5 — Limiar de score 50
+### ADR-AI-5 — Limiar de score 50 (**superseded**)
 
-- **Contexto:** Addon “errado” como pivot de tradução gera lixo.  
-- **Decisão:** `AI_ADDON_SOURCE_MIN_SCORE = 50` só para rung AI addon; addon no idioma preferido não exige limiar.  
-- **Consequência:** Sem bom match de release, cai para preferred addon / clássico.
+- **Contexto (histórico):** Addon “errado” como pivot de tradução gerava lixo.  
+- **Decisão antiga:** `AI_ADDON_SOURCE_MIN_SCORE = 50` para rung AI addon.  
+- **Superseded:** Smart não pivota em addon; constante pode permanecer no código sem uso na ladder. Score = badge / diagnostics only.
 
 ### ADR-AI-6 — Multi-provider + multi-key
 
@@ -456,14 +466,14 @@ Não há unit test dedicado só da ladder no tree analisado; a lógica está con
 ### ADR-AI-8 — Runtime backstop para bitmap
 
 - **Contexto:** Metadata de codec mente; PGS selecionado como “AI source”.  
-- **Decisão:** `onUntranslatableSource` quando `extractRawText` blank.  
-- **Consequência:** Troca de fonte mid-play; se nenhuma, desliga AI.
+- **Decisão:** `onUntranslatableSource` quando `extractRawText` blank; próxima fonte = outra **embedded** (ou mantém addon se MANUAL locked); sem hunt scored addon.  
+- **Consequência:** Se nenhuma embedded, desliga AI (+ classic se smart).
 
 ---
 
 ## Cheat sheet — respostas do critério de pronto
 
-1. **Ordem real da ladder?** §3 — `applyAiAutoSelectLadder` em `PlayerRuntimeControllerAiSubtitles.kt`: preferred embedded → AI embedded → AI addon score≥50 → preferred scored addon → classic.  
+1. **Ordem real da ladder?** §3 — `applyAiAutoSelectLadder`: preferred embedded → AI embedded → classic.  
 2. **API key / roteamento?** §5.2–5.3 — `DeviceLocalPlayerPreferences` JSON; `SubtitleAiRouter` preferred + fallback Groq/Gemini/Claude (`SubtitleTranslationService` IDs reais).  
 3. **Cue embutido → tela?** §5.1 — Exo `TextOutput` → `TranslatingTextOutput` → manager/router/service → cues com texto traduzido no `SubtitleView`.  
 4. **Lock manual impede?** §3 / §6 — ladder automática e upgrade para embedded preferido; diagnostics marca `userLocked`.  

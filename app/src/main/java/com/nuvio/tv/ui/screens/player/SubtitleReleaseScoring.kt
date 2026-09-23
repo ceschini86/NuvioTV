@@ -15,7 +15,10 @@ package com.nuvio.tv.ui.screens.player
  *   Pure numbers    → 0  (skipped)
  */
 internal object SubtitleReleaseScoring {
-    /** Minimum release-name score to use an addon as AI translation source. */
+    /**
+     * Legacy threshold from when Smart AI pivoted on scored addons.
+     * Unused by the ladder (embedded-only); score is display-only (badges / diagnostics).
+     */
     const val AI_ADDON_SOURCE_MIN_SCORE: Int = 50
 
     private val EPISODE_RE = Regex("s\\d{1,2}e\\d{1,2}|\\d{1,2}x\\d{1,2}", RegexOption.IGNORE_CASE)

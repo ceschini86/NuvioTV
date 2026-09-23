@@ -18,11 +18,14 @@ internal fun PlayerRuntimeController.releasePlayer(flushPlaybackState: Boolean) 
         subtitleTranslationManager?.reset()
         aiSubtitleAutoSelectAttempted = false
         aiSubtitleUserLocked = false
+        aiSubtitleQuotaRefreshJob?.cancel()
+        aiSubtitleQuotaRefreshJob = null
         subtitleScoreCache.clear()
         subtitleScoreCacheStreamName = null
         _uiState.update {
             it.copy(
                 aiSubtitleTranslationActive = false,
+                aiSubtitleQuotaExhausted = false,
                 isAiSubtitleTranslating = false,
                 aiSubtitleLastError = null,
                 aiSubtitleDiagnostics = null,

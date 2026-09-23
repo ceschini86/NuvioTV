@@ -3196,7 +3196,7 @@
     <string name="stream_test_video_bitrate">Taxa média de bits do vídeo: %1$s</string>
     <string name="stream_test_error_connection">Falha na conexão. O link do último stream reproduzido pode ter expirado ou estar inacessível. Por favor, reproduza o vídeo novamente e tente de novo.</string>
     <string name="sub_ai_section">Legendas com IA</string>
-    <string name="sub_ai_section_desc">Provedores, chaves de API, fallback e seleção inteligente</string>
+    <string name="sub_ai_section_desc">Provedores, chaves de API e seleção inteligente de legendas embutidas</string>
     <string name="sub_ai_provider_keys">Chaves de API</string>
     <string name="sub_ai_provider_keys_none">Nenhuma chave — adicione para usar este provedor</string>
     <string name="sub_ai_provider_keys_count">%1$d chaves</string>
@@ -3236,5 +3236,5 @@
     <string name="sub_ai_option_meta">Tradução com IA para o idioma preferido</string>
     <string name="sub_ai_option_badge">IA</string>
     <string name="sub_ai_auto_select">Legendas inteligentes com IA</string>
-    <string name="sub_ai_auto_select_desc">Embutida no idioma preferido, depois IA a partir do original/embutida, depois addon com melhor score, depois addon preferido</string>
+    <string name="sub_ai_auto_select_desc">Embutida no idioma preferido, depois IA a partir da embutida; senão seleção clássica. Addons só com Traduzir com IA</string>
 </resources>

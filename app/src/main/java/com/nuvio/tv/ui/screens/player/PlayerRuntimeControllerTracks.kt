@@ -1574,7 +1574,7 @@ internal fun PlayerRuntimeController.subtitleHasAnyTag(track: TrackInfo, tags: L
  * we consider it a match because the audio is likely Brazilian Portuguese even without explicit
  * regional tags. Same logic applies to "es-419" matching generic "es" audio.
  */
-private fun audioMatchesSubtitleTargetForForced(audioTrack: TrackInfo, target: String): Boolean {
+internal fun audioMatchesSubtitleTargetForForced(audioTrack: TrackInfo, target: String): Boolean {
     if (audioTrackMatchesLanguage(audioTrack, target)) return true
 
     val normalizedTarget = PlayerSubtitleUtils.normalizeLanguageCode(target)
@@ -1592,7 +1592,9 @@ private fun audioMatchesSubtitleTargetForForced(audioTrack: TrackInfo, target: S
     return audioVariant == baseTarget || audioVariant == normalizedTarget
 }
 
-internal fun PlayerRuntimeController.tryAutoSelectPreferredSubtitleFromAvailableTracks() {
+internal fun PlayerRuntimeController.tryAutoSelectPreferredSubtitleFromAvailableTracks(
+    primaryLanguageOnly: Boolean = false
+) {
     if (isUserExplicitSubtitleSelection) {
         Log.d(PlayerRuntimeController.TAG, "AUTO_SUB stop: user explicitly selected current subtitle")
         return
@@ -1629,6 +1631,7 @@ internal fun PlayerRuntimeController.tryAutoSelectPreferredSubtitleFromAvailable
     val forcedOnly = forcedTarget != null
     val targets = when {
         forcedTarget != null -> listOf(forcedTarget)
+        primaryLanguageOnly && primaryTarget != null -> listOf(primaryTarget)
         primaryTarget != null -> preferredTargets
         else -> emptyList()
     }

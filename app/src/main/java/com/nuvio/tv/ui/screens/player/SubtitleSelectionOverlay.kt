@@ -112,6 +112,7 @@ internal fun SubtitleSelectionOverlay(
     useLibass: Boolean = false,
     isUsingMpv: Boolean = false,
     aiSubtitleAvailable: Boolean = false,
+    aiSubtitleQuotaExhausted: Boolean = false,
     aiSubtitleTranslationActive: Boolean = false,
     isAiSubtitleTranslating: Boolean = false,
     aiSubtitleDiagnostics: AiSubtitleDiagnostics? = null,
@@ -129,7 +130,7 @@ internal fun SubtitleSelectionOverlay(
     val builtInLabel = stringResource(R.string.subtitle_built_in)
     val forcedLabel = stringResource(R.string.sub_forced_lang)
     var persistedStyleFocusKey by rememberSaveable { mutableStateOf<String?>(null) }
-    var styleRailPane by remember(visible) { mutableStateOf(StyleRailPane.STYLE) }
+    var styleRailPane by remember(visible) { mutableStateOf(StyleRailPane.INFO) }
     val sessionPreferredLanguage = remember(visible) { subtitleStyle.preferredLanguage }
     val sessionSecondaryPreferredLanguage = remember(visible) { subtitleStyle.secondaryPreferredLanguage }
     val sessionShowOnlyPreferredLanguages = remember(visible) { subtitleStyle.showOnlyPreferredLanguages }
@@ -164,7 +165,8 @@ internal fun SubtitleSelectionOverlay(
             selectedAddonSubtitle = sessionSelectedAddonSubtitle
         )
     }
-    val languageItems = remember(visible, sessionAddonSubtitles) {
+    val canOfferAiTranslation = aiSubtitleAvailable && !aiSubtitleQuotaExhausted
+    val languageItems = remember(visible, sessionAddonSubtitles, canOfferAiTranslation, aiSubtitleTranslationActive) {
         buildSubtitleLanguageRailItems(
             internalTracks = sessionInternalTracks,
             addonSubtitles = sessionAddonSubtitles,
@@ -173,7 +175,8 @@ internal fun SubtitleSelectionOverlay(
             showOnlyPreferredLanguages = sessionShowOnlyPreferredLanguages,
             currentLanguageKey = sessionSelectedSubtitleLanguageKey,
             noneLabel = noneLabel,
-            unknownLabel = unknownLabel
+            unknownLabel = unknownLabel,
+            ensurePreferredForAi = canOfferAiTranslation || aiSubtitleTranslationActive
         )
     }
     val preferredLanguageKey = remember(visible) {
@@ -224,7 +227,7 @@ internal fun SubtitleSelectionOverlay(
             builtInLabel = builtInLabel,
             forcedLabel = forcedLabel,
             unknownLabel = unknownLabel,
-            aiSubtitleAvailable = aiSubtitleAvailable,
+            aiSubtitleAvailable = canOfferAiTranslation,
             aiSubtitleTranslationActive = aiSubtitleTranslationActive,
             isAiSubtitleTranslating = isAiSubtitleTranslating,
             aiOptionBadge = aiOptionBadge,
@@ -259,7 +262,7 @@ internal fun SubtitleSelectionOverlay(
         sessionAddonSubtitles,
         sessionInstalledSubtitleAddonOrder,
         sessionScoreByOptionId,
-        aiSubtitleAvailable,
+        canOfferAiTranslation,
         aiSubtitleTranslationActive,
         isAiSubtitleTranslating,
         preferredLanguageKey,
@@ -429,13 +432,13 @@ internal fun SubtitleSelectionOverlay(
 
     fun requestStyleFocus(targetKey: String?, reason: String) {
         if (isStyleDisabledByLibass) return
-        val requestedKey = targetKey ?: StyleFocusKey.DelaySet
+        val requestedKey = targetKey ?: StyleFocusKey.InfoTranslate
         val resolvedKey = when {
             requestedKey.startsWith("${StyleFocusKey.OutlineColorPrefix}:") && !subtitleStyle.outlineEnabled -> {
                 StyleFocusKey.OutlineToggle
             }
             else -> requestedKey
-        }.takeIf { key -> styleRequesters.containsKey(key) } ?: StyleFocusKey.DelaySet
+        }.takeIf { key -> styleRequesters.containsKey(key) } ?: StyleFocusKey.InfoTranslate
         if (
             pendingStyleFocusKey == resolvedKey &&
             activeRail == OverlayFocusRail.STYLE &&
@@ -544,7 +547,11 @@ internal fun SubtitleSelectionOverlay(
             }
             val targetIndex = styleListIndexForFocusKey(targetKey)
             repeat(8) { attempt ->
-                styleListState.scrollItemIntoView(targetIndex)
+                // Info pane (and pane tabs) are not in the Style LazyColumn. scrollToItem on an
+                // unattached LazyListState suspends forever, so focus never reaches Translate.
+                if (StyleFocusKey.isStyleContentKey(targetKey)) {
+                    styleListState.scrollItemIntoView(targetIndex)
+                }
                 Log.d(
                     SubtitleFocusTag,
                     "style_focus_request attempt=$attempt key=$targetKey activeRail=$activeRail activeStyleKey=$activeStyleFocusKey"
@@ -716,6 +723,7 @@ internal fun SubtitleSelectionOverlay(
                         },
                         selectedOption = effectiveSelectedOption,
                         aiSubtitleAvailable = aiSubtitleAvailable,
+                        aiSubtitleQuotaExhausted = aiSubtitleQuotaExhausted,
                         aiSubtitleTranslationActive = aiSubtitleTranslationActive,
                         isAiSubtitleTranslating = isAiSubtitleTranslating,
                         aiSubtitleDiagnostics = aiSubtitleDiagnostics,
@@ -979,6 +987,7 @@ private fun SubtitleStyleRail(
     onPaneChange: (StyleRailPane) -> Unit,
     selectedOption: SubtitleOptionRailItem?,
     aiSubtitleAvailable: Boolean,
+    aiSubtitleQuotaExhausted: Boolean = false,
     aiSubtitleTranslationActive: Boolean,
     isAiSubtitleTranslating: Boolean,
     aiSubtitleDiagnostics: AiSubtitleDiagnostics?,
@@ -1025,6 +1034,7 @@ private fun SubtitleStyleRail(
                 SubtitleInfoPane(
                     selectedOption = selectedOption,
                     aiSubtitleAvailable = aiSubtitleAvailable,
+                    aiSubtitleQuotaExhausted = aiSubtitleQuotaExhausted,
                     aiSubtitleTranslationActive = aiSubtitleTranslationActive,
                     isAiSubtitleTranslating = isAiSubtitleTranslating,
                     diagnostics = aiSubtitleDiagnostics,
@@ -1283,26 +1293,26 @@ private fun SubtitleStylePaneTabs(
         horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)
     ) {
         SubtitleStylePaneTab(
-            label = stringResource(R.string.subtitle_tab_style),
-            selected = pane == StyleRailPane.STYLE,
-            focusKey = StyleFocusKey.PaneStyleTab,
-            focusRequester = focusRequesters[StyleFocusKey.PaneStyleTab],
-            onClick = { onPaneChange(StyleRailPane.STYLE) },
-            onFocused = onStyleFocused,
-            onMoveLeft = onMoveLeft,
-            onMoveRight = { onPaneChange(StyleRailPane.INFO) },
-            moveLeftKey = moveLeftKey,
-            moveRightKey = moveRightKey,
-            modifier = Modifier.weight(1f)
-        )
-        SubtitleStylePaneTab(
             label = stringResource(R.string.subtitle_tab_info),
             selected = pane == StyleRailPane.INFO,
             focusKey = StyleFocusKey.PaneInfoTab,
             focusRequester = focusRequesters[StyleFocusKey.PaneInfoTab],
             onClick = { onPaneChange(StyleRailPane.INFO) },
             onFocused = onStyleFocused,
-            onMoveLeft = { onPaneChange(StyleRailPane.STYLE) },
+            onMoveLeft = onMoveLeft,
+            onMoveRight = { onPaneChange(StyleRailPane.STYLE) },
+            moveLeftKey = moveLeftKey,
+            moveRightKey = moveRightKey,
+            modifier = Modifier.weight(1f)
+        )
+        SubtitleStylePaneTab(
+            label = stringResource(R.string.subtitle_tab_style),
+            selected = pane == StyleRailPane.STYLE,
+            focusKey = StyleFocusKey.PaneStyleTab,
+            focusRequester = focusRequesters[StyleFocusKey.PaneStyleTab],
+            onClick = { onPaneChange(StyleRailPane.STYLE) },
+            onFocused = onStyleFocused,
+            onMoveLeft = { onPaneChange(StyleRailPane.INFO) },
             onMoveRight = null,
             moveLeftKey = moveLeftKey,
             moveRightKey = moveRightKey,
@@ -1384,6 +1394,7 @@ private fun SubtitleStylePaneTab(
 private fun SubtitleInfoPane(
     selectedOption: SubtitleOptionRailItem?,
     aiSubtitleAvailable: Boolean,
+    aiSubtitleQuotaExhausted: Boolean,
     aiSubtitleTranslationActive: Boolean,
     isAiSubtitleTranslating: Boolean,
     diagnostics: AiSubtitleDiagnostics?,
@@ -1398,10 +1409,19 @@ private fun SubtitleInfoPane(
     val moveLeftKey = if (isRtl) android.view.KeyEvent.KEYCODE_DPAD_RIGHT else android.view.KeyEvent.KEYCODE_DPAD_LEFT
     val isAiOption = selectedOption?.kind == SubtitleOptionKind.AI ||
         (selectedOption == null && aiSubtitleTranslationActive)
+    val canOfferAiTranslation = aiSubtitleAvailable && !aiSubtitleQuotaExhausted
     val canTranslate = when {
-        !aiSubtitleAvailable -> false
-        isAiOption -> true // allow toggling / retrying AI from Info
+        isAiOption && aiSubtitleTranslationActive -> true // Stop always available
+        !canOfferAiTranslation -> false
+        isAiOption -> true
         selectedOption != null && selectedOption.kind != SubtitleOptionKind.AI && !aiSubtitleTranslationActive -> true
+        else -> false
+    }
+    // Hide Translate entirely when quota is exhausted (Stop still shows if AI active).
+    val showTranslateAction = when {
+        isAiOption && aiSubtitleTranslationActive -> true
+        aiSubtitleQuotaExhausted -> false
+        aiSubtitleAvailable -> true
         else -> false
     }
     val translateLabel = when {
@@ -1415,11 +1435,20 @@ private fun SubtitleInfoPane(
     val displayScore = selectedOption?.matchScore?.takeIf { it > 0 }
         ?: diagnostics?.matchScore?.takeIf { it > 0 }
     val statusLine = when {
-        !lastError.isNullOrBlank() -> when (lastError) {
-            "RATE_LIMITED" -> stringResource(R.string.sub_ai_error_rate_limited)
-            "API key missing" -> stringResource(R.string.sub_ai_api_key)
+        !lastError.isNullOrBlank() -> when {
+            lastError.equals("RATE_LIMITED", ignoreCase = true) ||
+                lastError.contains("429") ||
+                lastError.contains("rate limit", ignoreCase = true) ->
+                if (aiSubtitleQuotaExhausted) {
+                    stringResource(R.string.sub_ai_error_rate_limited_all)
+                } else {
+                    stringResource(R.string.sub_ai_error_rate_limited)
+                }
+            lastError.equals("API key missing", ignoreCase = true) ->
+                stringResource(R.string.sub_ai_error_api_key_missing)
             else -> lastError
         }
+        aiSubtitleQuotaExhausted -> stringResource(R.string.sub_ai_error_rate_limited_all)
         isAiSubtitleTranslating -> stringResource(R.string.sub_ai_translating)
         aiSubtitleTranslationActive -> stringResource(R.string.sub_ai_option_meta)
         else -> selectedOption?.meta
@@ -1519,17 +1548,19 @@ private fun SubtitleInfoPane(
             OverlayEmptyCard(text = stringResource(R.string.subtitle_none))
         }
 
-        SubtitleInfoActionCard(
-            label = translateLabel,
-            focusKey = StyleFocusKey.InfoTranslate,
-            focusRequester = focusRequesters[StyleFocusKey.InfoTranslate],
-            primary = true,
-            enabled = canTranslate,
-            onClick = { if (canTranslate) onTranslateWithAi() },
-            onMoveLeft = onMoveLeft,
-            onFocused = onStyleFocused,
-            moveLeftKey = moveLeftKey
-        )
+        if (showTranslateAction) {
+            SubtitleInfoActionCard(
+                label = translateLabel,
+                focusKey = StyleFocusKey.InfoTranslate,
+                focusRequester = focusRequesters[StyleFocusKey.InfoTranslate],
+                primary = true,
+                enabled = canTranslate,
+                onClick = { if (canTranslate) onTranslateWithAi() },
+                onMoveLeft = onMoveLeft,
+                onFocused = onStyleFocused,
+                moveLeftKey = moveLeftKey
+            )
+        }
 
         SubtitleInfoActionCard(
             label = stringResource(R.string.sub_ai_menu_disable),
@@ -2371,7 +2402,8 @@ private fun buildSubtitleLanguageRailItems(
     showOnlyPreferredLanguages: Boolean,
     currentLanguageKey: String,
     noneLabel: String,
-    unknownLabel: String
+    unknownLabel: String,
+    ensurePreferredForAi: Boolean = false
 ): List<SubtitleLanguageRailItem> {
     val counts = linkedMapOf<String, Int>()
     internalTracks.forEach { track ->
@@ -2387,6 +2419,14 @@ private fun buildSubtitleLanguageRailItems(
         preferredLanguage = preferredLanguage,
         secondaryPreferredLanguage = secondaryPreferredLanguage
     )
+
+    // Synthetic AI option lives on the preferred-language rail. Without any ES tracks/addons
+    // that rail was missing entirely — no Spanish row and no way to open AI/diagnostics.
+    if (ensurePreferredForAi) {
+        preferredOrder.firstOrNull()?.let { preferredKey ->
+            counts[preferredKey] = maxOf(counts[preferredKey] ?: 0, 1)
+        }
+    }
 
     val languageEntries = if (showOnlyPreferredLanguages) {
         val preferredKeys = preferredOrder.toSet()
@@ -2525,7 +2565,7 @@ private fun buildSubtitleOptionRailItems(
         )
         .map { (_, subtitle) -> toAddonItem(subtitle) }
 
-    val aiOptionItem = if (aiSubtitleAvailable && isPreferredLanguage) {
+    val aiOptionItem = if ((aiSubtitleAvailable || aiSubtitleTranslationActive) && isPreferredLanguage) {
         listOf(
             SubtitleOptionRailItem(
                 id = SubtitleAiOptionId,

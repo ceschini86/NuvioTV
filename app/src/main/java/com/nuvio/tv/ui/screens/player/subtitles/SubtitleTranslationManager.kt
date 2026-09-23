@@ -84,6 +84,13 @@ class SubtitleTranslationManager(
 
     fun hasUsableCredentials(): Boolean = router.hasUsableCredentials()
 
+    /** True when every enabled key is in 429 cooldown (no translation capacity right now). */
+    fun allUsableKeysInCooldown(nowMs: Long = System.currentTimeMillis()): Boolean =
+        router.allUsableKeysInCooldown(nowMs)
+
+    fun nextCooldownRemainingMs(nowMs: Long = System.currentTimeMillis()): Long =
+        router.nextCooldownRemainingMs(nowMs)
+
     private suspend fun processBatches() {
         val batch = mutableListOf<PendingItem>()
         while (true) {
@@ -114,7 +121,9 @@ class SubtitleTranslationManager(
                 )
             }
             if (!result.success) {
-                onBatchResult?.invoke(false, result.errorMessage)
+                val error = normalizeProviderError(result.errorMessage, httpCode = null)
+                    ?: result.errorMessage
+                onBatchResult?.invoke(false, error)
                 // On error: complete deferreds with original text so the caller doesn't hang,
                 // but do NOT cache — the next render will retry rather than permanently show English.
                 batch.forEachIndexed { i, item ->
@@ -122,7 +131,14 @@ class SubtitleTranslationManager(
                     item.deferred.complete(item.text)
                 }
                 batch.clear()
-                delay(5_000L)
+                // Prefer waiting only until the soonest key cooldown ends so fallbacks resume quickly.
+                val waitMs = when {
+                    error == TRANSLATION_ERROR_RATE_LIMITED && router.allUsableKeysInCooldown() ->
+                        router.nextCooldownRemainingMs().coerceIn(1_000L, 15_000L)
+                    error == TRANSLATION_ERROR_RATE_LIMITED -> 1_500L
+                    else -> 5_000L
+                }
+                delay(waitMs)
                 continue
             }
             onBatchResult?.invoke(true, null)
@@ -193,8 +209,19 @@ class SubtitleTranslationManager(
                     cache[text] = result.lines.getOrElse(i) { text }
                 }
             } else {
-                onBatchResult?.invoke(false, result.errorMessage)
-                delay(5_000L)
+                onBatchResult?.invoke(
+                    false,
+                    normalizeProviderError(result.errorMessage, httpCode = null) ?: result.errorMessage
+                )
+                val waitMs = if (result.errorMessage == TRANSLATION_ERROR_RATE_LIMITED ||
+                    normalizeProviderError(result.errorMessage, null) == TRANSLATION_ERROR_RATE_LIMITED
+                ) {
+                    router.nextCooldownRemainingMs().coerceIn(1_000L, 8_000L).takeIf { it > 0 }
+                        ?: 1_500L
+                } else {
+                    5_000L
+                }
+                delay(waitMs)
                 return
             }
         }
