@@ -26,13 +26,13 @@ In-app update checks point at **this** repository’s GitHub Releases.
 
 ### AI subtitles
 
-- **AI translation** (ExoPlayer only) using your own API key — Groq (`gpt-oss-120b`) or Gemini (`3.5 Flash Lite`). The key stays on-device.
-- **Smart AI subtitles** auto-picks a source in this order:
+- **AI translation** (ExoPlayer only) using your own API key — Groq (`gpt-oss-120b`), Gemini (`3.5 Flash Lite`), or Claude (`Haiku 4.5`). Keys stay on-device; multi-key fallback with rate-limit cooldowns.
+- **Smart AI subtitles** auto-picks **embedded tracks only**, in this order:
   1. Preferred-language embedded track (no AI)
-  2. AI translation from embedded / original-language track
-  3. AI translation from a high-scoring addon subtitle (release-name match ≥ 50)
-  4. Preferred-language scored addon, then classic fallback
-- **Manual “Translate with AI”** from the subtitle menu locks that choice so auto-select won’t override it.
+  2. AI translation from an embedded / original-language track
+  3. Classic preferred-language auto-select (addon without AI)
+- **Addon AI** only via manual **Translate with AI** (locks MANUAL so auto-select won’t override it).
+- **Quality gate:** batches that stay in the source language (or fail coverage) are rejected so the next key/provider can retry — unfinished leftovers are not cached as translations.
 - **Match score badges** and an AI source diagnostics panel show why a track was chosen.
 
 Configure under Playback → AI subtitles.
