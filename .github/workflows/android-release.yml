@@ -16,6 +16,11 @@ on:
         description: Optional comma-separated commit hashes to omit from the notes
         required: false
         type: string
+  # One-shot publish path when workflow_dispatch is unavailable to the agent token.
+  # Remove after 1.0.5 is published.
+  push:
+    branches:
+      - release/1.0.5
 
 permissions:
   contents: write
@@ -26,7 +31,7 @@ concurrency:
 
 jobs:
   release:
-    name: ${{ inputs.mode }} Android TV release
+    name: ${{ github.event.inputs.mode || 'publish' }} Android TV release
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
@@ -36,6 +41,8 @@ jobs:
       RELEASE_KEY_ALIAS: ${{ secrets.NUVIO_RELEASE_KEY_ALIAS }}
       RELEASE_KEY_PASSWORD: ${{ secrets.NUVIO_RELEASE_KEY_PASSWORD }}
       RELEASE_STORE_PASSWORD: ${{ secrets.NUVIO_RELEASE_STORE_PASSWORD }}
+      RELEASE_MODE: ${{ github.event.inputs.mode || 'publish' }}
+      EXCLUDE_COMMITS_INPUT: ${{ github.event.inputs.exclude_commits || '' }}
 
     steps:
       - name: Check out full history
@@ -58,7 +65,6 @@ jobs:
           CURRENT_BUMP: ${{ steps.release.outputs.current_bump }}
           RELEASE_COMMIT: ${{ steps.release.outputs.release_commit }}
           RELEASE_REF_TYPE: ${{ github.ref_type }}
-          RELEASE_MODE: ${{ inputs.mode }}
         run: |
           if [[ "${RELEASE_REF_TYPE}" != "branch" ]]; then
             echo "Releases must be dispatched from a branch, not ${RELEASE_REF_TYPE}." >&2
@@ -107,8 +113,7 @@ jobs:
         env:
           PREVIOUS_BUMP: ${{ steps.release.outputs.previous_bump }}
           CURRENT_BUMP: ${{ steps.release.outputs.current_bump }}
-          EXCLUDE_COMMITS: ${{ inputs.exclude_commits }}
-          RELEASE_MODE: ${{ inputs.mode }}
+          EXCLUDE_COMMITS: ${{ env.EXCLUDE_COMMITS_INPUT }}
         run: |
           release_note_args=(
             --from "${PREVIOUS_BUMP}"
@@ -147,7 +152,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: nuviotv-${{ steps.release.outputs.version }}-${{ inputs.mode }}-release-notes
+          name: nuviotv-${{ steps.release.outputs.version }}-${{ env.RELEASE_MODE }}-release-notes
           path: |
             release-notes.md
             release-note-quality.md
@@ -155,18 +160,18 @@ jobs:
           retention-days: 14
 
       - name: Set up Java
-        if: inputs.mode != 'dry-run'
+        if: env.RELEASE_MODE != 'dry-run'
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
 
       - name: Set up Gradle
-        if: inputs.mode != 'dry-run'
+        if: env.RELEASE_MODE != 'dry-run'
         uses: gradle/actions/setup-gradle@v6
 
       - name: Configure release properties
-        if: inputs.mode != 'dry-run'
+        if: env.RELEASE_MODE != 'dry-run'
         run: |
           keystore_path="${RUNNER_TEMP}/nuviotv-release.jks"
           printf '%s' "${RELEASE_KEYSTORE_BASE64}" | base64 --decode > "${keystore_path}"
@@ -205,11 +210,11 @@ jobs:
           done
 
       - name: Test updater and build full release APKs
-        if: inputs.mode != 'dry-run'
+        if: env.RELEASE_MODE != 'dry-run'
         run: ./gradlew :app:testFullReleaseUnitTest --tests 'com.nuvio.tv.updater.*' :app:assembleFullRelease --stacktrace
 
       - name: Upload build artifacts
-        if: inputs.mode != 'dry-run'
+        if: env.RELEASE_MODE != 'dry-run'
         uses: actions/upload-artifact@v6
         with:
           name: nuviotv-${{ steps.release.outputs.version }}-full-release
@@ -217,9 +222,8 @@ jobs:
           if-no-files-found: error
 
       - name: Create GitHub release
-        if: inputs.mode != 'dry-run'
+        if: env.RELEASE_MODE != 'dry-run'
         env:
-          RELEASE_MODE: ${{ inputs.mode }}
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
           RELEASE_TITLE: ${{ steps.release.outputs.title }}
           RELEASE_TARGET: ${{ steps.release.outputs.current_bump }}
