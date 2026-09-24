@@ -17,10 +17,8 @@ import android.view.ViewGroup
 import androidx.annotation.RawRes
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -2642,6 +2640,8 @@ private fun ControlButton(
             contentColor = Color.White,
             focusedContentColor = Color.Black
         ),
+        // Solid focus disc only — no TV Material3 “bubble” scale on focus/press.
+        scale = IconButtonDefaults.scale(focusedScale = 1f, pressedScale = 1f),
         shape = IconButtonDefaults.shape(shape = CircleShape)
     ) {
         if (iconPainter != null) {
@@ -2723,69 +2723,33 @@ private fun ProgressBar(
     }
     val lightScrubbing = scrubLevel == 1
     val fullScrubbing = scrubLevel >= 2
+    // Stremio Android TV–like scrubber: thin flat track, accent fill, white-ring thumb.
     val thumbSize by animateDpAsState(
         targetValue = when {
-            fullScrubbing -> 18.dp
-            lightScrubbing -> 14.dp
-            isFocused -> 14.dp
-            else -> 12.dp
+            fullScrubbing -> 14.dp
+            lightScrubbing -> 12.dp
+            isFocused -> 12.dp
+            else -> 11.dp
         },
         animationSpec = NuvioMotion.focusTween(),
         label = "thumbSize"
     )
     val trackHeight by animateDpAsState(
         targetValue = when {
-            fullScrubbing -> 12.dp
-            lightScrubbing -> 6.dp
-            isFocused -> 6.dp
-            else -> 4.dp
+            fullScrubbing -> 4.dp
+            lightScrubbing -> 3.dp
+            isFocused -> 3.dp
+            else -> 2.dp
         },
         animationSpec = NuvioMotion.focusTween(),
         label = "trackHeight"
     )
-    val sliderHeight by animateDpAsState(
-        targetValue = when {
-            fullScrubbing -> 40.dp
-            lightScrubbing -> 34.dp
-            else -> 32.dp
-        },
-        animationSpec = NuvioMotion.focusTween(),
-        label = "sliderHeight"
-    )
-    val thumbScale by animateFloatAsState(
-        targetValue = when {
-            fullScrubbing -> 1.18f
-            lightScrubbing -> 1.06f
-            else -> 1f
-        },
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "thumbZoom"
-    )
-    val haloSize by animateDpAsState(
-        targetValue = when {
-            fullScrubbing -> 40.dp
-            lightScrubbing -> 24.dp
-            else -> 0.dp
-        },
-        animationSpec = NuvioMotion.focusTween(),
-        label = "haloSize"
-    )
-    val haloAlpha by animateFloatAsState(
-        targetValue = when {
-            fullScrubbing -> 0.32f
-            lightScrubbing -> 0.18f
-            else -> 0f
-        },
-        animationSpec = NuvioMotion.focusTween(),
-        label = "haloAlpha"
-    )
+    val sliderHeight = 28.dp
     val trackShape = RoundedCornerShape(percent = 50)
     val themeAccent = NuvioTheme.colors.Secondary
-    val trackBackground = Color.White.copy(alpha = 0.38f)
-    val bufferedTrack = Color.White.copy(alpha = 0.22f)
+    val trackBackground = Color.White.copy(alpha = 0.26f)
+    val bufferedTrack = Color.White.copy(alpha = 0.16f)
+    val thumbBorder = BorderStroke(1.5.dp, Color.White)
 
     BoxWithConstraints(
         modifier = modifier
@@ -2907,8 +2871,6 @@ private fun ProgressBar(
         val playhead = trackWidth * animatedProgress
         val thumbStart = (playhead - thumbSize / 2)
             .coerceIn(0.dp, (trackWidth - thumbSize).coerceAtLeast(0.dp))
-        val haloStart = (playhead - haloSize / 2)
-            .coerceIn(0.dp, (trackWidth - haloSize).coerceAtLeast(0.dp))
 
         Box(
             modifier = Modifier
@@ -2939,26 +2901,13 @@ private fun ProgressBar(
                 .background(accentBrush)
         )
 
-        if (haloAlpha > 0.01f && haloSize > 0.dp) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(start = haloStart)
-                    .size(haloSize)
-                    .background(themeAccent.copy(alpha = haloAlpha), CircleShape)
-            )
-        }
-
         Box(
             modifier = Modifier
                 .align(Alignment.CenterStart)
                 .padding(start = thumbStart)
                 .size(thumbSize)
-                .graphicsLayer {
-                    scaleX = thumbScale
-                    scaleY = thumbScale
-                }
-                .background(accentBrush, CircleShape)
+                .background(themeAccent, CircleShape)
+                .border(thumbBorder, CircleShape)
         )
     }
 }
