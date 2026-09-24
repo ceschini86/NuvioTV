@@ -16,7 +16,7 @@
 | Ladder real, pipeline, keys, ADRs, mapa de arquivos | [`architecture-ai-subtitles.md`](./architecture-ai-subtitles.md) | Implementação / ordem da ladder |
 | Overlay, locks UX, matrizes de fluxo do menu | [`prd-ai-subtitles-ui-menu.md`](./prd-ai-subtitles-ui-menu.md) | Comportamento do menu (não settings) |
 
-**Estado (2026-09-23):** código presente neste working tree na branch `fix/ai-ladder-and-rate-limit` (base `release/1.0.2`). Ainda pode estar ausente em `dev` até merge. **Smart AI = só embutidas** (preferred → AI embedded → classic); **Translate with AI** = qualquer fonte (embedded ou addon).
+**Estado (2026-09-24):** merged em `dev` · shipped **[1.1.0](https://github.com/ceschini86/NuvioTV/releases/tag/1.1.0)** (`versionCode` 1077). **Smart AI = só embutidas** (preferred → AI embedded → classic); **Translate with AI** = qualquer fonte (embedded ou addon). README público com screenshots em `assets/screenshots/`.
 
 ### Âncoras de código (AI)
 
