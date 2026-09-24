@@ -7,8 +7,8 @@
 
 | Preciso de… | Abrir | Fonte canônica de |
 |-------------|--------|-------------------|
-| **Handoff para chat novo** | [`handoff/2026-09-23-ai-subtitles.md`](./handoff/2026-09-23-ai-subtitles.md) | Estado branch / emulador / pending |
-| **Spec overlay: Info rail dinâmico (em execução)** | [`handoff/2026-09-24-overlay-info-rail.md`](./handoff/2026-09-24-overlay-info-rail.md) | Base + fatias A/B/C + log do monitor (substitui o handoff de 2026-09-23 do menu) |
+| **Handoff overlay Info-rail (A–D close)** | [`handoff/2026-09-24-overlay-info-rail-close.md`](./handoff/2026-09-24-overlay-info-rail-close.md) | Branch, TV 1.0.7 uncommitted Fatia D, smoke → commit → release |
+| **Spec overlay: Info rail (matrizes A–D)** | [`handoff/2026-09-24-overlay-info-rail.md`](./handoff/2026-09-24-overlay-info-rail.md) | Base + fatias + log do monitor |
 | **Smoke no emulador (checklist + last results)** | [`smoke-ai-subtitles.md`](./smoke-ai-subtitles.md) | Casos PASS/FAIL no device · skill `.cursor/skills/ai-subtitles-smoke` |
 | Escopo, Must/Should/Won’t, smoke de produto | [`prd-ai-subtitles.md`](./prd-ai-subtitles.md) | Requisitos de produto |
 | Ladder real, pipeline, keys, ADRs, mapa de arquivos | [`architecture-ai-subtitles.md`](./architecture-ai-subtitles.md) | Implementação / ordem da ladder |

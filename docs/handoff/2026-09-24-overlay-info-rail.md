@@ -83,20 +83,23 @@ Col1 (Idiomas + None/Off) → Col2 (embedded | addon | AI sintética) → Col3 (
 | L1 | Quando a Col3 não é renderizada (N1), o **espaço dela fica reservado**: a Col2 não muda de largura nem de posição |
 | L2 | A Col3 **não tem cabeçalho** (sem título "Info") |
 
-## Requisitos: estados visuais (padrão do app)
-Hoje há vários elementos em roxo cheio ao mesmo tempo e não dá para saber onde está o foco. Regra única para as três colunas:
+## Requisitos: estados visuais (padrão do app) — Fatia D (substitui V1–V3)
 
-| Papel | Visual |
-|-------|--------|
-| Foco do DPAD | Roxo 100%. **Só um elemento por vez** na tela inteira |
-| Navegação / selecionado sem foco | Roxo ~50% (`Secondary.copy(alpha ≈ 0.5f)`, seguindo o padrão já usado no app) |
-| Demais | Neutro, sem fundo roxo |
+**Foco = `FocusBackground` (branco ~10%, como Settings).** Secondary/roxo só para seleção ou idioma browsed — nunca “roxo só porque está focado”. CTA enabled sem foco fica **neutro**.
 
-| ID | Coluna | Regra |
-|----|--------|-------|
-| V1 | Col1 | Linha focada → 100%. Idioma cuja lista está aberta na Col2, com o foco já na Col2/Col3 → ~50%. Outros → neutro. **Sem ✓** e sem marcar o idioma da legenda em playback (a única exceção é o ponto amarelo da fonte AI, Fatia C) |
-| V2 | Col2 | O ✓ existe **só aqui**, na opção ativa no playback. Focada → 100% (com ✓ se também estiver selecionada). Selecionada sem foco → ~50% + ✓. Demais → neutro |
-| V3 | Col3 | CTA focado → 100%. CTA visível sem foco → ~50%. Nunca roxo cheio sem foco |
+| ID | Onde | Focado | Selecionado / browsed | Visual |
+|----|------|--------|----------------------|--------|
+| S1 | Col1 | sim | — | FocusBackground |
+| S2 | Col1 | não | idioma com Col2 aberta | Secondary ~18% |
+| S3 | Col1 | não | outros | Neutro |
+| S4 | Col2 | sim | não | FocusBackground |
+| S5 | Col2 | sim | sim | Secondary 100% + focusRing + ✓ |
+| S6 | Col2 | não | sim | Secondary ~50% + ✓ |
+| S7 | Col2 | não | não | Neutro |
+| S8 | Col3 CTA | sim | enabled | FocusBackground |
+| S9 | Col3 CTA | não | enabled | Neutro (sem roxo) |
+
+Col1: sem ✓ (exceção: ponto amarelo F1 da fonte AI). Col2: ✓ só na opção de playback.
 
 ## Nesta fatia
 Os CTAs podem continuar com a lógica atual de quais aparecem. A matriz completa é da Fatia B. O objetivo aqui é a navegação, a estrutura e os estados visuais. O nome das tracks embutidas continua como está hoje (ex.: "en"); não alterar.
@@ -104,7 +107,7 @@ Os CTAs podem continuar com a lógica atual de quais aparecem. A matriz completa
 ## DoD
 - [ ] R1–R4 removidos, sem código morto sobrando (evidência: diff)
 - [ ] N1–N8, L1–L2 implementados; evidência = diff + nota de como o foco/layout foi garantido no código (**sem** screenshot nesta fatia)
-- [ ] V1–V3: cores 100% / ~50% / neutro no código; evidência = diff (**sem** screenshot nesta fatia)
+- [ ] V1–V3 **substituídos por S1–S9** (Fatia D): FocusBackground para foco; Secondary só seleção/browsed
 - [ ] Compile Kotlin + testes unitários existentes relevantes passando
 - [ ] **Sem** assemble/install/screencap nesta fatia
 
@@ -238,4 +241,5 @@ Valem **sempre que a tradução AI estiver ativa**, seja pela ladder (automátic
 |-------|--------|--------|-------------|
 | A | aprovada (código) | `f1385ce91` | R4 parcial: flags diagnostics sem UI. |
 | B | aprovada (código+testes) | `50dc371b8` | 14 testes ID-named. |
-| C | aprovada (código+testes+docs) | `c9611a57c` | Reset/F*/A*/T*/logs/docs/skill. Smoke device **pendente** (monitor). R4 residual TranslateMenu events. |
+| C | aprovada (código+testes+docs) | `c9611a57c` | Reset/F*/A*/T*/logs/docs/skill. R4 residual TranslateMenu events. |
+| D | smoke PASS (TV) | commit + bump 1.0.7 | F2 embedded; foco pós-CTA; S1–S9; R4 diagnostics. Smoke 2026-09-24 PASS (TWD S08E06). **Release 1.0.7 aguarda aprovação do user.** |

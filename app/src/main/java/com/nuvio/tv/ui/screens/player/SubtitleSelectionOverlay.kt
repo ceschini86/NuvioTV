@@ -73,6 +73,7 @@ internal const val SubtitleAiOptionId = "ai:translate"
 private const val RailFadeDurationMs = 120
 private val InfoRailWidth = 280.dp
 private val SelectedWithoutFocusAlpha = 0.5f
+private val LanguageBrowsedWithoutFocusAlpha = 0.18f
 /** F1/F2 yellow accent for the current AI translation source. */
 private val AiSourceIndicatorYellow = Color(0xFFFFD54F)
 
@@ -231,26 +232,32 @@ internal fun SubtitleSelectionOverlay(
         aiSubtitleDiagnostics,
         selectedInternalIndex,
         selectedAddonSubtitle,
-        internalTracks
+        internalTracks,
+        sessionInternalTracks
     ) {
         if (!aiSubtitleTranslationActive) {
             AiSourceIndicatorDecision.Hidden
         } else {
             val diag = aiSubtitleDiagnostics
+            val tracksForResolve = sessionInternalTracks.ifEmpty { internalTracks }
             val sourceLangKey = when {
                 !diag?.sourceLanguage.isNullOrBlank() ->
                     normalizeOverlayLanguageKey(diag!!.sourceLanguage)
                 selectedAddonSubtitle != null ->
                     normalizeOverlayLanguageKey(selectedAddonSubtitle.lang)
                 selectedInternalIndex >= 0 ->
-                    internalTracks.firstOrNull { it.index == selectedInternalIndex }
+                    tracksForResolve.firstOrNull { it.index == selectedInternalIndex }
                         ?.let { normalizeOverlayLanguageKeyForTrack(it) }
                 else -> null
             }
             val sourceOptionId = resolveAiSourceOptionId(
                 sourceKind = diag?.sourceKind,
                 selectedInternalIndex = selectedInternalIndex,
-                selectedAddonOptionId = selectedAddonSubtitle?.let { addonSubtitleOptionId(it) }
+                selectedAddonOptionId = selectedAddonSubtitle?.let { addonSubtitleOptionId(it) },
+                tracks = tracksForResolve,
+                diagnosticsInternalIndex = diag?.sourceInternalIndex,
+                sourceLanguage = diag?.sourceLanguage,
+                sourceLabel = diag?.sourceLabel
             )
             decideAiSourceIndicators(
                 translationActive = true,
@@ -808,8 +815,15 @@ internal fun SubtitleSelectionOverlay(
                                     pendingInfoFocusKey = null
                                 },
                                 onTranslateWithAi = {
+                                    // Capture source before jump (jump selects AI option).
                                     val option = playbackSelectedOption
                                         ?: subtitleOptions.firstOrNull { it.id == selectedOptionId }
+                                    // Focus Col2 AI first so CTA removal does not orphan DPAD focus.
+                                    jumpFocusToPreferredAi(reason = "translate_with_ai")
+                                    Log.d(
+                                        SubtitleFocusTag,
+                                        "post_cta_focus cta=translate target=$SubtitleAiOptionId lang=$preferredLanguageKey"
+                                    )
                                     when (option?.kind) {
                                         SubtitleOptionKind.INTERNAL -> {
                                             onEvent(
@@ -828,10 +842,27 @@ internal fun SubtitleSelectionOverlay(
                                         SubtitleOptionKind.AI -> onToggleAiTranslation()
                                         null -> onToggleAiTranslation()
                                     }
-                                    // T3: same-session jump to preferred + AI.
-                                    jumpFocusToPreferredAi(reason = "translate_with_ai")
                                 },
                                 onResetToSmartAuto = {
+                                    // Immediate Col2 landing before CTA disappears; LaunchedEffect realigns.
+                                    val landingId = selectedOptionId ?: SubtitleAiOptionId
+                                    val landingLang = when {
+                                        landingId == SubtitleAiOptionId -> preferredLanguageKey
+                                        else -> browsedLanguageKey
+                                    }
+                                    browsedLanguageKey = landingLang
+                                    activeOptionFocusId = landingId
+                                    infoEntryOptionId = landingId
+                                    activeRail = OverlayFocusRail.OPTION
+                                    requestOptionFocus(
+                                        targetId = landingId,
+                                        languageKey = landingLang,
+                                        reason = "reset_smart_preflight"
+                                    )
+                                    Log.d(
+                                        SubtitleFocusTag,
+                                        "post_cta_focus cta=reset target=$landingId lang=$landingLang"
+                                    )
                                     pendingPostActionFocus = "reset_smart"
                                     onEvent(PlayerEvent.OnResetToSmartAuto)
                                 }
@@ -1332,10 +1363,10 @@ private fun SubtitleInfoActionCard(
     onFocused: (String) -> Unit,
     moveLeftKey: Int
 ) {
-    // V3: unfocused visible CTA → ~50%; focused → 100% via focusedContainerColor.
+    // S8–S9: CTA focus = FocusBackground; never purple when unfocused.
     Card(
         onClick = { if (enabled) onClick() },
-        colors = overlayRailCardColors(emphasized = enabled),
+        colors = overlayRailCardColors(OverlayRailVisualRole.Cta),
         shape = CardDefaults.shape(RoundedCornerShape(NuvioTheme.radii.md)),
         border = overlayCardBorder(),
         modifier = Modifier
@@ -1374,7 +1405,7 @@ private fun SubtitleInfoActionCard(
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
-            color = if (enabled) NuvioTheme.colors.OnSecondary else Color.White,
+            color = if (enabled) Color.White else Color.White.copy(alpha = 0.55f),
             modifier = Modifier.padding(horizontal = NuvioTheme.spacing.md, vertical = 12.dp)
         )
     }
@@ -1415,8 +1446,10 @@ private fun SubtitleLanguageCard(
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val moveToOptionsKey = if (isRtl) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT
     var isFocused by remember { mutableStateOf(false) }
+    // S1–S3: focus uses FocusBackground (white text); browsed Secondary ~18% uses OnSecondary.
     val textColor = when {
-        isFocused || emphasized -> NuvioTheme.colors.OnSecondary
+        isFocused -> Color.White
+        emphasized -> NuvioTheme.colors.OnSecondary
         else -> Color.White
     }
 
@@ -1461,7 +1494,9 @@ private fun SubtitleLanguageCard(
                     onFocused()
                 }
             },
-        colors = overlayRailCardColors(emphasized = emphasized),
+        colors = overlayRailCardColors(
+            if (emphasized) OverlayRailVisualRole.LanguageBrowsed else OverlayRailVisualRole.Neutral
+        ),
         shape = CardDefaults.shape(RoundedCornerShape(NuvioTheme.radii.md)),
         border = overlayCardBorder(),
         scale = CardDefaults.scale(focusedScale = 1f, pressedScale = 1f)
@@ -1494,7 +1529,7 @@ private fun SubtitleLanguageCard(
                     )
                 }
                 if (item.count > 0) {
-                    CountBadge(count = item.count, selected = isFocused || emphasized)
+                    CountBadge(count = item.count, selected = emphasized && !isFocused)
                 }
             }
         }
@@ -1512,12 +1547,14 @@ private fun SubtitleOptionCard(
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
+    // S4–S7: Secondary fill only when selected; focus alone uses FocusBackground.
+    val onPurpleFill = item.isSelected
     val titleColor = when {
-        isFocused || item.isSelected -> NuvioTheme.colors.OnSecondary
+        onPurpleFill -> NuvioTheme.colors.OnSecondary
         else -> Color.White
     }
     val metaColor = when {
-        isFocused || item.isSelected -> NuvioTheme.colors.OnSecondary.copy(alpha = 0.72f)
+        onPurpleFill -> NuvioTheme.colors.OnSecondary.copy(alpha = 0.72f)
         else -> NuvioTheme.colors.TextTertiary
     }
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
@@ -1574,8 +1611,9 @@ private fun SubtitleOptionCard(
                     onFocused()
                 }
             },
-        // V2: selected without focus → ~50%; focused → 100%.
-        colors = overlayRailCardColors(emphasized = item.isSelected),
+        colors = overlayRailCardColors(
+            if (item.isSelected) OverlayRailVisualRole.OptionSelected else OverlayRailVisualRole.Neutral
+        ),
         shape = CardDefaults.shape(RoundedCornerShape(NuvioTheme.radii.md)),
         border = overlayCardBorder(),
         scale = CardDefaults.scale(focusedScale = 1f, pressedScale = 1f)
@@ -1595,7 +1633,7 @@ private fun SubtitleOptionCard(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    SourceChip(label = item.sourceLabel, selected = isFocused || item.isSelected)
+                    SourceChip(label = item.sourceLabel, selected = onPurpleFill)
                     // F2: yellow "Fonte IA" chip beside the origin chip.
                     if (item.isAiSource) {
                         SourceChip(
@@ -1625,7 +1663,7 @@ private fun SubtitleOptionCard(
                 if (item.matchScore > 0) {
                     MatchScoreBadge(
                         scorePercent = item.matchScore,
-                        selected = isFocused || item.isSelected
+                        selected = onPurpleFill
                     )
                 }
                 // V2: ✓ only on Col2 selected (playback) option.
@@ -1774,16 +1812,39 @@ private fun OverlayEmptyCard(text: String) {
     }
 }
 
+private enum class OverlayRailVisualRole {
+    /** Col1 language whose Col2 is open, without DPAD focus (S2). */
+    LanguageBrowsed,
+    /** Col2 option active in playback (S5/S6). */
+    OptionSelected,
+    /** Default list row / CTA idle (S3/S7/S9). */
+    Neutral,
+    /** Col3 action button (S8/S9). */
+    Cta
+}
+
 @Composable
-private fun overlayRailCardColors(emphasized: Boolean) = CardDefaults.colors(
-    // V1–V3: navigated/selected without focus → ~50%; focused → 100%.
-    containerColor = if (emphasized) {
-        NuvioTheme.colors.Secondary.copy(alpha = SelectedWithoutFocusAlpha)
-    } else {
-        Color.Transparent
+private fun overlayRailCardColors(role: OverlayRailVisualRole) = CardDefaults.colors(
+    // Unfocused fill: Secondary only for selection/browsed — never for bare focus.
+    containerColor = when (role) {
+        OverlayRailVisualRole.LanguageBrowsed ->
+            NuvioTheme.colors.Secondary.copy(alpha = LanguageBrowsedWithoutFocusAlpha)
+        OverlayRailVisualRole.OptionSelected ->
+            NuvioTheme.colors.Secondary.copy(alpha = SelectedWithoutFocusAlpha)
+        OverlayRailVisualRole.Neutral,
+        OverlayRailVisualRole.Cta -> Color.Transparent
     },
-    focusedContainerColor = NuvioTheme.colors.Secondary,
-    pressedContainerColor = NuvioTheme.colors.Secondary
+    // Focused fill: Secondary only when already selected (S5); else FocusBackground (S1/S4/S8).
+    focusedContainerColor = when (role) {
+        OverlayRailVisualRole.OptionSelected -> NuvioTheme.colors.Secondary
+        OverlayRailVisualRole.LanguageBrowsed,
+        OverlayRailVisualRole.Neutral,
+        OverlayRailVisualRole.Cta -> NuvioTheme.colors.FocusBackground
+    },
+    pressedContainerColor = when (role) {
+        OverlayRailVisualRole.OptionSelected -> NuvioTheme.colors.Secondary
+        else -> NuvioTheme.colors.FocusBackground
+    }
 )
 
 @Composable

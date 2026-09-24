@@ -153,6 +153,83 @@ class SubtitleAiSourceIndicatorsTest {
         )
     }
 
+    // --- F2 embedded / addon ---
+
+    @Test
+    fun f2_embedded_showsFonteIaChipWhenIndexMatches() {
+        val tracks = listOf(
+            TrackInfo(index = 0, name = "en", language = "en"),
+            TrackInfo(index = 1, name = "fr", language = "fr")
+        )
+        val optionId = resolveEmbeddedAiSourceOptionId(
+            diagnosticsIndex = 1,
+            selectedInternalIndex = 1,
+            tracks = tracks,
+            sourceLanguage = "fr",
+            sourceLabel = "fr"
+        )
+        assertEquals("internal:1", optionId)
+
+        val indicators = decideAiSourceIndicators(
+            translationActive = true,
+            sourceLanguageKey = "fr",
+            sourceOptionId = optionId
+        )
+        assertTrue(indicators.visible)
+        assertEquals("fr", indicators.languageKey)
+        assertEquals("internal:1", indicators.optionId)
+    }
+
+    @Test
+    fun f2_embedded_resolvesViaDiagnosticsIndexWhenSelectedIndexStale() {
+        val tracks = listOf(
+            TrackInfo(index = 0, name = "en", language = "en"),
+            TrackInfo(index = 2, name = "fr", language = "fra")
+        )
+        val optionId = resolveEmbeddedAiSourceOptionId(
+            diagnosticsIndex = 2,
+            selectedInternalIndex = 99, // stale / missing from list
+            tracks = tracks,
+            sourceLanguage = "fra",
+            sourceLabel = "fr"
+        )
+        assertEquals("internal:2", optionId)
+    }
+
+    @Test
+    fun f2_addon_unchanged() {
+        val addonId = "addon:AIOStreams:x:https://x/a.srt"
+        val optionId = resolveAiSourceOptionId(
+            sourceKind = AiSubtitleSourceKind.ADDON,
+            selectedInternalIndex = -1,
+            selectedAddonOptionId = addonId,
+            tracks = emptyList(),
+            diagnosticsInternalIndex = null
+        )
+        assertEquals(addonId, optionId)
+    }
+
+    @Test
+    fun f1_without_resolvable_option_hidesBoth() {
+        val hidden = decideAiSourceIndicators(
+            translationActive = true,
+            sourceLanguageKey = "fr",
+            sourceOptionId = null
+        )
+        assertFalse(hidden.visible)
+        assertNull(hidden.languageKey)
+        assertNull(hidden.optionId)
+
+        val unresolved = resolveEmbeddedAiSourceOptionId(
+            diagnosticsIndex = null,
+            selectedInternalIndex = -1,
+            tracks = listOf(TrackInfo(index = 0, name = "en", language = "en")),
+            sourceLanguage = "fr",
+            sourceLabel = null
+        )
+        assertNull(unresolved)
+    }
+
     // --- T4 helper: MANUAL diagnostics imply user-selected method (covered via decision) ---
 
     @Test

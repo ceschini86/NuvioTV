@@ -1422,23 +1422,11 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
                 )
             }
         }
-        PlayerEvent.OnShowAiSubtitleDiagnostics -> {
-            _uiState.update {
-                it.copy(
-                    showAiSubtitleDiagnosticsOverlay = true,
-                    showSubtitleTranslateMenuOverlay = false
-                )
-            }
-        }
-        PlayerEvent.OnDismissAiSubtitleDiagnostics -> {
-            _uiState.update { it.copy(showAiSubtitleDiagnosticsOverlay = false) }
-        }
         is PlayerEvent.OnShowSubtitleTranslateMenu -> {
             _uiState.update {
                 it.copy(
                     showSubtitleTranslateMenuOverlay = true,
-                    subtitleTranslateMenuOptionId = event.optionId,
-                    showAiSubtitleDiagnosticsOverlay = false
+                    subtitleTranslateMenuOptionId = event.optionId
                 )
             }
         }
@@ -1682,7 +1670,6 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
                     showSpeedDialog = false,
                     showSubtitleDelayOverlay = false,
                     showMoreDialog = false,
-                    showAiSubtitleDiagnosticsOverlay = false,
                     showSubtitleTranslateMenuOverlay = false,
                     subtitleTranslateMenuOptionId = null
                 )

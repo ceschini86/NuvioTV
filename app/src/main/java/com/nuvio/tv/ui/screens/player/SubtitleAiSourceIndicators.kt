@@ -2,7 +2,7 @@ package com.nuvio.tv.ui.screens.player
 
 /**
  * Pure decisions for AI source indicators (F1–F4) and Reset Smart focus/outcome (S2–S4).
- * Fatia C of overlay-info-rail — no Compose, no side effects.
+ * Fatia C/D of overlay-info-rail — no Compose, no side effects.
  */
 
 internal data class AiSourceIndicatorDecision(
@@ -19,6 +19,7 @@ internal data class AiSourceIndicatorDecision(
 
 /**
  * F1–F4: yellow indicators follow the active AI translation source, or hide when AI is off.
+ * F1 without a resolvable F2 optionId stays Hidden (never show the Col1 dot alone).
  */
 internal fun decideAiSourceIndicators(
     translationActive: Boolean,
@@ -41,14 +42,75 @@ internal fun decideAiSourceIndicators(
 internal fun resolveAiSourceOptionId(
     sourceKind: AiSubtitleSourceKind?,
     selectedInternalIndex: Int,
-    selectedAddonOptionId: String?
+    selectedAddonOptionId: String?,
+    tracks: List<TrackInfo> = emptyList(),
+    diagnosticsInternalIndex: Int? = null,
+    sourceLanguage: String? = null,
+    sourceLabel: String? = null
 ): String? = when (sourceKind) {
     AiSubtitleSourceKind.ADDON -> selectedAddonOptionId
-    AiSubtitleSourceKind.EMBEDDED ->
-        selectedInternalIndex.takeIf { it >= 0 }?.let { "internal:$it" }
+    AiSubtitleSourceKind.EMBEDDED -> resolveEmbeddedAiSourceOptionId(
+        diagnosticsIndex = diagnosticsInternalIndex,
+        selectedInternalIndex = selectedInternalIndex,
+        tracks = tracks,
+        sourceLanguage = sourceLanguage,
+        sourceLabel = sourceLabel
+    )
     null -> selectedAddonOptionId
-        ?: selectedInternalIndex.takeIf { it >= 0 }?.let { "internal:$it" }
+        ?: resolveEmbeddedAiSourceOptionId(
+            diagnosticsIndex = diagnosticsInternalIndex,
+            selectedInternalIndex = selectedInternalIndex,
+            tracks = tracks,
+            sourceLanguage = sourceLanguage,
+            sourceLabel = sourceLabel
+        )
 }
+
+/**
+ * F2 embedded: map diagnostics/selection to `internal:N` present in [tracks].
+ *
+ * Order: diagnostics index → selected index → unique language (+ label) match → null.
+ */
+internal fun resolveEmbeddedAiSourceOptionId(
+    diagnosticsIndex: Int?,
+    selectedInternalIndex: Int,
+    tracks: List<TrackInfo>,
+    sourceLanguage: String?,
+    sourceLabel: String?
+): String? {
+    fun idIfPresent(index: Int?): String? {
+        if (index == null || index < 0) return null
+        return tracks.firstOrNull { it.index == index }?.let { "internal:${it.index}" }
+    }
+
+    idIfPresent(diagnosticsIndex)?.let { return it }
+    idIfPresent(selectedInternalIndex.takeIf { it >= 0 })?.let { return it }
+
+    val langKey = normalizeIndicatorLanguageKey(sourceLanguage) ?: return null
+    val langMatches = tracks.filter { normalizeIndicatorLanguageKey(it.language) == langKey }
+    if (langMatches.isEmpty()) return null
+    if (langMatches.size == 1) return "internal:${langMatches.first().index}"
+
+    val label = sourceLabel?.trim()?.takeIf { it.isNotEmpty() }
+    if (label != null) {
+        val labeled = langMatches.filter { it.name.equals(label, ignoreCase = true) }
+        if (labeled.size == 1) return "internal:${labeled.first().index}"
+    }
+    return null
+}
+
+internal fun normalizeIndicatorLanguageKey(language: String?): String? {
+    if (language.isNullOrBlank()) return null
+    val normalized = language.trim().lowercase()
+        .replace('_', '-')
+    return when {
+        normalized.startsWith("pt-br") || normalized == "pt-br" -> "pt-br"
+        normalized.startsWith("es-419") || normalized == "es-419" -> "es-419"
+        else -> normalized.substringBefore('-').ifBlank { null }
+    }
+}
+
+internal fun internalSubtitleOptionId(index: Int): String = "internal:$index"
 
 internal enum class ResetSmartSelectionKind {
     AI,

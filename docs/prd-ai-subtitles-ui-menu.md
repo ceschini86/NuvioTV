@@ -57,13 +57,9 @@ Três rails (TV/DPAD):
 - Demais opções: embedded / stream-provided / addons daquele idioma, addons com **badge `%`** se score > 0. O **✓** existe só aqui (opção ativa no playback). Com AI ativa: chip amarelo **“Fonte IA”** / **“AI source”** ao lado do chip de origem na opção que é a fonte atual.
 - **Info (Col3):** painel único (sem aba Style; sem long-press Translate/Diagnostics). Card da opção focada/selecionada + diagnostics; CTAs conforme matriz B6 (Translate with AI / Voltar à seleção automática). Desligar legendas = só **None/Off** na Col1.
 
-### Estados visuais (foco)
+### Estados visuais (foco) — Fatia D
 
-| Papel | Visual |
-|-------|--------|
-| Foco do DPAD | Roxo 100% — **um** elemento por vez |
-| Selecionado / navegação sem foco | Roxo ~50% |
-| Demais | Neutro |
+Foco do DPAD = `FocusBackground` (como Settings), **não** Secondary. Secondary/roxo só para opção selecionada (Col2) ou idioma browsed na Col1 (~18%). CTA enabled sem foco = neutro (nunca roxo “falso selecionado”). ✓ só na Col2.
 
 ### Overlays empilhados
 

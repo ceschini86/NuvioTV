@@ -126,7 +126,6 @@ data class PlayerUiState(
     val aiSubtitleDiagnostics: AiSubtitleDiagnostics? = null,
     /** Mirrors runtime [isUserExplicitSubtitleSelection] for Info CTA C2 vs C5. */
     val userExplicitSubtitleSelection: Boolean = false,
-    val showAiSubtitleDiagnosticsOverlay: Boolean = false,
     val showSubtitleTranslateMenuOverlay: Boolean = false,
     val subtitleTranslateMenuOptionId: String? = null,
     val isAiSubtitleTranslating: Boolean = false,
@@ -304,8 +303,6 @@ sealed class PlayerEvent {
     ) : PlayerEvent()
     /** Clear userLocked + explicit and re-run Smart ladder (Info CTA "Voltar à seleção automática"). */
     data object OnResetToSmartAuto : PlayerEvent()
-    data object OnShowAiSubtitleDiagnostics : PlayerEvent()
-    data object OnDismissAiSubtitleDiagnostics : PlayerEvent()
     data class OnShowSubtitleTranslateMenu(val optionId: String) : PlayerEvent()
     data object OnDismissSubtitleTranslateMenu : PlayerEvent()
     data class OnSelectAddonSubtitle(val subtitle: Subtitle) : PlayerEvent()
@@ -440,6 +437,8 @@ data class AiSubtitleDiagnostics(
     val sourceKind: AiSubtitleSourceKind? = null,
     val sourceLabel: String? = null,
     val sourceLanguage: String? = null,
+    /** List index into `subtitleTracks` when [sourceKind] is EMBEDDED (F2 option id). */
+    val sourceInternalIndex: Int? = null,
     val matchScore: Int? = null,
     val targetLanguage: String? = null,
     val model: String? = null,
