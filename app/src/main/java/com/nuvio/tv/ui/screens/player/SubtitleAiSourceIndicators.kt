@@ -202,3 +202,101 @@ internal fun decideAiOptionClickAction(
     userLocked -> AiOptionClickAction.SELECT_ONLY
     else -> AiOptionClickAction.ENABLE_MANUAL
 }
+
+/**
+ * How to pick the AI pivot when enabling via Col2 AI option click (A3).
+ * Never treat an incidental classic Col2 pick as the new AI source — that is CTA Translate only.
+ */
+internal enum class AiOptionEnableSourceAction {
+    /** Current playback already is the remembered AI source. */
+    KEEP_CURRENT,
+    /** Reselect embedded track from prior diagnostics. */
+    RESTORE_EMBEDDED,
+    /** Reselect addon that matches prior diagnostics label/lang. */
+    RESTORE_ADDON,
+    /** No usable prior source — Smart embedded pick. */
+    PICK_EMBEDDED_SMART
+}
+
+internal data class AiOptionEnableSourceDecision(
+    val action: AiOptionEnableSourceAction,
+    val embeddedIndex: Int? = null
+)
+
+/**
+ * Decide restore vs Smart pick for AI-option enable.
+ *
+ * @param priorSourceKind diagnostics source when AI was last active (may linger after classic pick)
+ * @param priorEmbeddedIndex diagnostics.sourceInternalIndex
+ * @param priorSourceLabel diagnostics.sourceLabel (addon name or track name)
+ * @param priorSourceLanguage diagnostics.sourceLanguage
+ * @param currentEmbeddedIndex currently selected embedded track (-1 if none)
+ * @param currentAddonLabel currently selected addon name (null if none)
+ * @param currentAddonLanguage currently selected addon language
+ * @param tracks available embedded tracks (to validate restore index)
+ */
+internal fun decideAiOptionEnableSource(
+    priorSourceKind: AiSubtitleSourceKind?,
+    priorEmbeddedIndex: Int?,
+    priorSourceLabel: String?,
+    priorSourceLanguage: String?,
+    currentEmbeddedIndex: Int,
+    currentAddonLabel: String?,
+    currentAddonLanguage: String?,
+    tracks: List<TrackInfo>
+): AiOptionEnableSourceDecision {
+    fun trackPresent(index: Int?): Boolean =
+        index != null && index >= 0 && tracks.any { it.index == index }
+
+    val priorWasAiSource = priorSourceKind != null
+
+    when (priorSourceKind) {
+        AiSubtitleSourceKind.EMBEDDED -> {
+            if (trackPresent(priorEmbeddedIndex)) {
+                val sameAsCurrent =
+                    currentAddonLabel == null && currentEmbeddedIndex == priorEmbeddedIndex
+                return if (sameAsCurrent) {
+                    AiOptionEnableSourceDecision(AiOptionEnableSourceAction.KEEP_CURRENT)
+                } else {
+                    AiOptionEnableSourceDecision(
+                        action = AiOptionEnableSourceAction.RESTORE_EMBEDDED,
+                        embeddedIndex = priorEmbeddedIndex
+                    )
+                }
+            }
+        }
+        AiSubtitleSourceKind.ADDON -> {
+            val label = priorSourceLabel?.trim()?.takeIf { it.isNotEmpty() }
+            val lang = normalizeIndicatorLanguageKey(priorSourceLanguage)
+            val currentMatches =
+                currentAddonLabel != null &&
+                    (
+                        (label != null && currentAddonLabel.equals(label, ignoreCase = true)) ||
+                            (
+                                lang != null &&
+                                    normalizeIndicatorLanguageKey(currentAddonLanguage) == lang &&
+                                    label == null
+                                )
+                        )
+            if (currentMatches) {
+                return AiOptionEnableSourceDecision(AiOptionEnableSourceAction.KEEP_CURRENT)
+            }
+            if (label != null || lang != null) {
+                // Caller must resolve addon by label/lang; signal restore intent.
+                return AiOptionEnableSourceDecision(AiOptionEnableSourceAction.RESTORE_ADDON)
+            }
+        }
+        null -> Unit
+    }
+
+    // Incidental classic selection or missing prior → Smart embedded, never keep stray addon.
+    if (!priorWasAiSource &&
+        currentAddonLabel == null &&
+        currentEmbeddedIndex >= 0 &&
+        trackPresent(currentEmbeddedIndex)
+    ) {
+        // Cold A3 with only embedded selected: keep it as MANUAL pivot.
+        return AiOptionEnableSourceDecision(AiOptionEnableSourceAction.KEEP_CURRENT)
+    }
+    return AiOptionEnableSourceDecision(AiOptionEnableSourceAction.PICK_EMBEDDED_SMART)
+}

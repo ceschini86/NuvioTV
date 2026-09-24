@@ -1375,10 +1375,8 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
                         it.copy(aiSubtitleLastError = TRANSLATION_ERROR_RATE_LIMITED)
                     }
                 } else {
-                    // A3: enable MANUAL; runtime picks/keeps source.
-                    aiSubtitleUserLocked = true
-                    setAiSubtitleTranslationEnabled(true, allowPreferredUpgrade = false)
-                    publishManualAiDiagnosticsFromCurrentSource(reason = "user selected AI option")
+                    // A3: enable MANUAL; restore prior AI source or Smart embedded (not incidental Col2).
+                    enableAiFromOptionClick()
                     val diag = _uiState.value.aiSubtitleDiagnostics
                     logAiSubtitleAction(
                         action = "Select AI option",

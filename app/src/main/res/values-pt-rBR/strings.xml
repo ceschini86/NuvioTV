@@ -3241,6 +3241,10 @@
     <string name="sub_ai_menu_disable">Desativar legendas</string>
     <string name="sub_ai_menu_disable_ai">Parar tradução com IA</string>
     <string name="sub_ai_error_rate_limited">Limite da IA — aguarde e tente de novo</string>
+    <string name="sub_ai_error_rate_limited_all">Todas as keys da IA atingiram o limite. A aguardar antes de tentar de novo.</string>
+    <string name="sub_ai_error_api_key_missing">Adiciona uma API key de IA em Definições de reprodução para traduzir legendas.</string>
+    <string name="sub_ai_error_insufficient_credits">Créditos da API de tradução esgotados. Verifica o billing do fornecedor e tenta de novo.</string>
+    <string name="sub_ai_error_generic">Falha na tradução por IA. Tenta de novo ou verifica as keys em Definições.</string>
     <string name="sub_ai_menu_details">Detalhes</string>
     <string name="sub_ai_rung_preferred_embedded">Embutida preferida</string>
     <string name="sub_ai_rung_ai_embedded">IA a partir de embutida</string>

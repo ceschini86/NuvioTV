@@ -900,6 +900,8 @@
     <string name="sub_ai_error_rate_limited">AI is rate-limited right now. Trying your other keys automatically — subtitles may briefly show the original language.</string>
     <string name="sub_ai_error_rate_limited_all">All AI keys hit their rate limit. Waiting a moment before retrying.</string>
     <string name="sub_ai_error_api_key_missing">Add an AI API key in Playback settings to translate subtitles.</string>
+    <string name="sub_ai_error_insufficient_credits">AI translation credits are exhausted. Check your provider billing, then try again.</string>
+    <string name="sub_ai_error_generic">AI translation failed. Try again or check your API keys in Playback settings.</string>
     <string name="sub_ai_model_preferred_desc">Tried first among enabled providers</string>
     <string name="sub_ai_translating">Translating…</string>
     <string name="sub_ai_translate_action">AI translate</string>

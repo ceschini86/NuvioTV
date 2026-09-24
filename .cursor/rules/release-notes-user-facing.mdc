@@ -1,0 +1,33 @@
+---
+description: GitHub release notes must be user-facing; no internal slice/ID jargon
+alwaysApply: true
+---
+
+# Release notes — linguagem para o utilizador
+
+Quando criares ou editares notas de **GitHub Release** (`gh release create` / `edit`, ficheiros `release-notes*.md`, corpo do release):
+
+## Obrigatório
+
+- Escrever para quem **instala/atualiza o app** (TV), não para o agent/monitor.
+- Descrever **o que muda na experiência**: legendas, menu, foco, bugs corrigidos, settings.
+- Usar nomes que o utilizador vê na UI (ex.: «Traduzir com IA», «Fonte IA», «Voltar à seleção automática»).
+- Manter bullets curtos; secção opcional «Notas» só com package/versionCode/versionName se útil para sideload.
+
+## Proibido nas notas públicas
+
+- Jargão interno de execução: Fatia A/B/C/D, «handoff», «DoD», «monitor», «smoke PASS».
+- IDs de spec/matriz: F2-e, T-focus, S1–S9, C1–C6, R4, N1, etc.
+- Detalhe de implementação: nomes de ficheiros/funções (`SubtitleSelectionOverlay`, `sourceInternalIndex`, `FocusRequester`), tags de log, SHAs de branch (salvo se o utilizador pedir explicitamente).
+- Tom de changelog de engenharia («wire», «settle», «LaunchedEffect», «pure decision helpers»).
+
+## OK noutros sítios
+
+- Commits, handoffs em `docs/handoff/`, PRDs e comentários de código **podem** usar Fatia/IDs.
+- Esta regra aplica-se **só** ao texto público do release (e drafts destinadores a utilizadores).
+
+## Exemplo
+
+Ruim: `Fatia D — F2 embedded via sourceInternalIndex; S1–S9 FocusBackground`
+
+Bom: `O chip «Fonte IA» passa a aparecer também em legendas embutidas; o foco do comando volta à lista de legendas depois de Traduzir ou Voltar à seleção automática.`

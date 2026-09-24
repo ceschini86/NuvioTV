@@ -242,4 +242,4 @@ Valem **sempre que a tradução AI estiver ativa**, seja pela ladder (automátic
 | A | aprovada (código) | `f1385ce91` | R4 parcial: flags diagnostics sem UI. |
 | B | aprovada (código+testes) | `50dc371b8` | 14 testes ID-named. |
 | C | aprovada (código+testes+docs) | `c9611a57c` | Reset/F*/A*/T*/logs/docs/skill. R4 residual TranslateMenu events. |
-| D | smoke PASS (TV) | commit + bump 1.0.7 | F2 embedded; foco pós-CTA; S1–S9; R4 diagnostics. Smoke 2026-09-24 PASS (TWD S08E06). **Release 1.0.7 aguarda aprovação do user.** |
+| D | fechada | `2b0085ba8` + bump `3992cc496` + hotfix `ba8bcca70` | F2 embedded; S1–S9; R4; smoke TV PASS (F2*); T/S hotfix pós falso positivo. **Release [1.0.7](https://github.com/ceschini86/NuvioTV/releases/tag/1.0.7)** publicada. |
