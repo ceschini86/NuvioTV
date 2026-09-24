@@ -42,14 +42,16 @@ Col1 (Idiomas + None/Off) → Col2 (embedded | addon | AI sintética) → Col3 (
 4. Listar os gaps e decisões tomadas por conta própria. Se algo for ambíguo, parar e reportar em vez de assumir.
 5. Não commitar. O monitor revisa e commita.
 
-## Política de build (economia de tempo)
-**Não** rodar `assemble` + install a cada fatia.
+## Política de build e device (economia)
+**Não** rodar `assemble` + install + smoke de device a cada fatia. Device/TV fica para o **fim** (Fatia C ou gate do monitor), salvo o monitor pedir o contrário.
 
 | Fatia | Validação esperada |
 |-------|-------------------|
-| **A** | Já em andamento: compile Kotlin + unit tests; install/screenshots nesta fatia se forem necessários para N/V. Não repetir `assembleFullRelease` se já houver APK fresco. |
-| **B** | **Só** `:app:compile*Kotlin` (se precisar) + **unit tests** da função pura de Info/CTAs. **Sem** assemble/install/screenshots no dispositivo — evidência = testes. Screenshots de I*/C*/K1 ficam para a Fatia C. |
-| **C** | **Um** `assemble` + install + smoke/screenshots cobrindo regressão de A+B e os IDs de C (T/F/A/S/P). Estender a skill de smoke aqui. |
+| **A** | Compile Kotlin + unit tests relevantes. Evidência de N/V/R/L = **diff + inspeção de código** (e testes se houver). **Sem** install/screencap nesta fatia. |
+| **B** | Unit tests da função pura Info/CTAs. **Sem** assemble/install/screenshots. |
+| **C** | Implementação + unit tests de policy. **Um** assemble + install + smoke/screenshots só no fechamento (T/F/A/S/P + regressão A/B + I/C/K adiados). |
+
+**Gate entre fatias:** se o DoD de código/testes passar sem gaps graves, o monitor **segue para a próxima fatia** sem esperar TV/emulador. Device só bloqueia se o item for impossível de validar sem runtime e for crítico.
 
 ---
 
@@ -92,10 +94,11 @@ Hoje há vários elementos em roxo cheio ao mesmo tempo e não dá para saber on
 Os CTAs podem continuar com a lógica atual de quais aparecem. A matriz completa é da Fatia B. O objetivo aqui é a navegação, a estrutura e os estados visuais. O nome das tracks embutidas continua como está hoje (ex.: "en"); não alterar.
 
 ## DoD
-- [ ] R1–R4 removidos, sem código morto sobrando
-- [ ] N1–N8, L1–L2 validados no dispositivo, com screenshot por item
-- [ ] V1–V3: screenshots com o foco em cada coluna, mostrando só um elemento em roxo 100%
-- [ ] Build ok + testes existentes passando
+- [ ] R1–R4 removidos, sem código morto sobrando (evidência: diff)
+- [ ] N1–N8, L1–L2 implementados; evidência = diff + nota de como o foco/layout foi garantido no código (**sem** screenshot nesta fatia)
+- [ ] V1–V3: cores 100% / ~50% / neutro no código; evidência = diff (**sem** screenshot nesta fatia)
+- [ ] Compile Kotlin + testes unitários existentes relevantes passando
+- [ ] **Sem** assemble/install/screencap nesta fatia
 
 ---
 
