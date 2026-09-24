@@ -49,6 +49,16 @@ While AI is active you will see a yellow cue on the source language and an **AI 
 
 If every key hits rate limits or fails quality checks, translation turns off but the **current** subtitle selection is kept — the player does not jump to another language.
 
+<p align="center">
+  <img src="assets/screenshots/ai-fonte-ia.png" alt="Subtitle menu showing the AI source chip on an embedded English track and Info diagnostics for AI from embedded" width="900" />
+</p>
+<p align="center"><sub>Smart / active AI: yellow language cue, <strong>Fonte IA</strong> chip on the source track, Info shows ladder step and reason.</sub></p>
+
+<p align="center">
+  <img src="assets/screenshots/ai-info-reset.png" alt="Subtitle menu with AI option selected and Reset to smart auto CTA on Info" width="900" />
+</p>
+<p align="center"><sub>Manual Translate with AI: synthetic <strong>IA</strong> option on the preferred language, diagnostics, and <strong>Voltar à seleção automática</strong>.</sub></p>
+
 ### AI subtitles — architecture (short)
 
 ```text
@@ -76,6 +86,11 @@ Deeper design notes (ladder details, ADRs, file map): [`docs/architecture-ai-sub
 - Thin **Stremio-style** seek bar: accent played segment, discreet remaining track, solid thumb with a light ring.
 - Transport buttons stay solid on focus (no Material “bubble” scale).
 - VOD current / duration sits on the same row as the transport controls.
+
+<p align="center">
+  <img src="assets/screenshots/player-osd-seek.png" alt="Player OSD with thin accent seek bar, transport controls, and current/duration time" width="900" />
+</p>
+<p align="center"><sub>Player OSD: thin accent seek bar, solid focus on transport buttons, time on the controls row.</sub></p>
 
 ## Build from source
 
