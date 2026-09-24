@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -138,8 +139,15 @@ internal fun SubtitleSelectionOverlay(
             selectedAddonSubtitle = sessionSelectedAddonSubtitle
         )
     }
-    val canOfferAiTranslation = aiSubtitleAvailable && !aiSubtitleQuotaExhausted
-    val languageItems = remember(visible, sessionAddonSubtitles, canOfferAiTranslation, aiSubtitleTranslationActive) {
+    // K1: preferred Col1 count includes synthetic AI whenever that option is listed.
+    val aiOptionListedOnPreferred =
+        (aiSubtitleAvailable || aiSubtitleTranslationActive)
+    val languageItems = remember(
+        visible,
+        sessionAddonSubtitles,
+        aiSubtitleAvailable,
+        aiSubtitleTranslationActive
+    ) {
         buildSubtitleLanguageRailItems(
             internalTracks = sessionInternalTracks,
             addonSubtitles = sessionAddonSubtitles,
@@ -149,7 +157,7 @@ internal fun SubtitleSelectionOverlay(
             currentLanguageKey = sessionSelectedSubtitleLanguageKey,
             noneLabel = noneLabel,
             unknownLabel = unknownLabel,
-            ensurePreferredForAi = canOfferAiTranslation || aiSubtitleTranslationActive
+            includeSyntheticAiOnPreferred = aiOptionListedOnPreferred
         )
     }
     val preferredLanguageKey = remember(visible) {
@@ -200,7 +208,7 @@ internal fun SubtitleSelectionOverlay(
             builtInLabel = builtInLabel,
             forcedLabel = forcedLabel,
             unknownLabel = unknownLabel,
-            aiSubtitleAvailable = canOfferAiTranslation || aiSubtitleTranslationActive,
+            aiSubtitleAvailable = aiSubtitleAvailable || aiSubtitleTranslationActive,
             aiSubtitleTranslationActive = aiSubtitleTranslationActive,
             isAiSubtitleTranslating = isAiSubtitleTranslating,
             aiOptionBadge = aiOptionBadge,
@@ -233,7 +241,7 @@ internal fun SubtitleSelectionOverlay(
         sessionAddonSubtitles,
         sessionInstalledSubtitleAddonOrder,
         sessionScoreByOptionId,
-        canOfferAiTranslation,
+        aiSubtitleAvailable,
         aiSubtitleTranslationActive,
         isAiSubtitleTranslating,
         preferredLanguageKey,
@@ -305,23 +313,55 @@ internal fun SubtitleSelectionOverlay(
         OverlayFocusRail.INFO -> playbackSelectedOption ?: focusedOption
         else -> playbackSelectedOption
     }
-    val infoCtaState = remember(
+    val rateLimitedAll = stringResource(R.string.sub_ai_error_rate_limited_all)
+    val rateLimited = stringResource(R.string.sub_ai_error_rate_limited)
+    val apiKeyMissing = stringResource(R.string.sub_ai_error_api_key_missing)
+    val translatingLabel = stringResource(R.string.sub_ai_translating)
+    val aiOptionMetaLabel = stringResource(R.string.sub_ai_option_meta)
+    val infoStatusLine = when {
+        !aiSubtitleLastError.isNullOrBlank() -> when {
+            aiSubtitleLastError.equals("RATE_LIMITED", ignoreCase = true) ||
+                aiSubtitleLastError.contains("429") ||
+                aiSubtitleLastError.contains("rate limit", ignoreCase = true) ->
+                if (aiSubtitleQuotaExhausted) rateLimitedAll else rateLimited
+            aiSubtitleLastError.equals("API key missing", ignoreCase = true) -> apiKeyMissing
+            else -> aiSubtitleLastError
+        }
+        aiSubtitleQuotaExhausted -> rateLimitedAll
+        isAiSubtitleTranslating -> translatingLabel
+        aiSubtitleTranslationActive -> aiOptionMetaLabel
+        else -> infoDisplayOption?.meta
+    }
+    val infoRailDecision = remember(
         infoDisplayOption,
         playbackSelectedOption,
         activeRail,
         aiSubtitleAvailable,
         aiSubtitleQuotaExhausted,
-        aiSubtitleTranslationActive
+        aiSubtitleTranslationActive,
+        isUsingMpv,
+        aiSubtitleDiagnostics,
+        infoStatusLine
     ) {
-        computeInfoCtaState(
-            displayOption = infoDisplayOption,
-            playbackSelected = playbackSelectedOption,
-            focusOnInfo = activeRail == OverlayFocusRail.INFO,
-            aiSubtitleAvailable = aiSubtitleAvailable,
-            aiSubtitleQuotaExhausted = aiSubtitleQuotaExhausted,
-            aiSubtitleTranslationActive = aiSubtitleTranslationActive
+        val optionForDecision = when {
+            activeRail == OverlayFocusRail.INFO -> playbackSelectedOption ?: infoDisplayOption
+            else -> infoDisplayOption
+        }
+        val snapshot = optionForDecision?.toInfoSnapshot(unknownLabel = unknownLabel)
+        val selectedId = playbackSelectedOption?.id
+        decideSubtitleInfoRail(
+            displayOption = snapshot,
+            isPlaybackSelected = snapshot != null && snapshot.id == selectedId,
+            diagnostics = aiSubtitleDiagnostics?.toInfoSnapshot(),
+            statusLine = infoStatusLine,
+            aiAvailable = aiSubtitleAvailable,
+            aiQuotaExhausted = aiSubtitleQuotaExhausted,
+            isUsingMpv = isUsingMpv,
+            userExplicitSelection = false,
+            translationActive = aiSubtitleTranslationActive
         )
     }
+    val infoCtaState = infoRailDecision.cta
 
     fun requestLanguageFocus(targetKey: String?) {
         val resolvedKey = targetKey
@@ -367,9 +407,13 @@ internal fun SubtitleSelectionOverlay(
     }
 
     fun requestInfoFocus(reason: String) {
-        if (!infoCtaState.showEnabledTranslate) return
-        pendingInfoFocusKey = InfoFocusKey.Translate
-        Log.d(SubtitleFocusTag, "info_focus_schedule source=$reason key=${InfoFocusKey.Translate}")
+        if (!infoCtaState.canMoveFocusToCta) return
+        val focusKey = when (infoCtaState.action) {
+            SubtitleInfoCtaAction.RESET_TO_SMART_AUTO -> InfoFocusKey.ResetSmart
+            else -> InfoFocusKey.Translate
+        }
+        pendingInfoFocusKey = focusKey
+        Log.d(SubtitleFocusTag, "info_focus_schedule source=$reason key=$focusKey")
         infoFocusToken += 1
     }
 
@@ -401,7 +445,7 @@ internal fun SubtitleSelectionOverlay(
         val option = focusedOption ?: return
         // N4 / N6: only move Right when the focused option is selected and has an enabled CTA.
         if (!option.isSelected) return
-        if (!infoCtaState.showEnabledTranslate) return
+        if (!infoCtaState.canMoveFocusToCta) return
         infoEntryOptionId = option.id
         requestInfoFocus(reason = "option_to_info")
     }
@@ -475,8 +519,8 @@ internal fun SubtitleSelectionOverlay(
             }
         }
 
-        LaunchedEffect(visible, infoContentVisible, infoFocusToken, infoCtaState.showEnabledTranslate) {
-            if (!visible || !infoContentVisible || infoFocusToken <= 0 || !infoCtaState.showEnabledTranslate) {
+        LaunchedEffect(visible, infoContentVisible, infoFocusToken, infoCtaState.canMoveFocusToCta) {
+            if (!visible || !infoContentVisible || infoFocusToken <= 0 || !infoCtaState.canMoveFocusToCta) {
                 return@LaunchedEffect
             }
             val targetKey = pendingInfoFocusKey ?: return@LaunchedEffect
@@ -606,16 +650,13 @@ internal fun SubtitleSelectionOverlay(
                         if (infoContentVisible) {
                             SubtitleInfoRail(
                                 selectedOption = infoDisplayOption,
-                                aiSubtitleAvailable = aiSubtitleAvailable,
-                                aiSubtitleQuotaExhausted = aiSubtitleQuotaExhausted,
-                                aiSubtitleTranslationActive = aiSubtitleTranslationActive,
-                                isAiSubtitleTranslating = isAiSubtitleTranslating,
+                                decision = infoRailDecision,
                                 aiSubtitleDiagnostics = aiSubtitleDiagnostics,
                                 aiSubtitleLastError = aiSubtitleLastError,
-                                ctaState = infoCtaState,
+                                aiSubtitleTranslationActive = aiSubtitleTranslationActive,
                                 onMoveLeft = ::moveFocusBackToOptionRail,
                                 onBack = ::handleOverlayBack,
-                                translateFocusRequester = infoTranslateRequester,
+                                ctaFocusRequester = infoTranslateRequester,
                                 onInfoFocused = {
                                     activeRail = OverlayFocusRail.INFO
                                     activeInfoFocusKey = it
@@ -642,7 +683,9 @@ internal fun SubtitleSelectionOverlay(
                                         SubtitleOptionKind.AI -> onToggleAiTranslation()
                                         null -> onToggleAiTranslation()
                                     }
-                                }
+                                },
+                                // Fatia C wires reset Smart; show CTA only here (C4).
+                                onResetToSmartAuto = {}
                             )
                         }
                     }
@@ -652,44 +695,9 @@ internal fun SubtitleSelectionOverlay(
     }
 }
 
-private data class InfoCtaState(
-    val showTranslate: Boolean,
-    val translateEnabled: Boolean
-) {
-    val showEnabledTranslate: Boolean get() = showTranslate && translateEnabled
-}
-
-private fun computeInfoCtaState(
-    displayOption: SubtitleOptionRailItem?,
-    playbackSelected: SubtitleOptionRailItem?,
-    focusOnInfo: Boolean,
-    aiSubtitleAvailable: Boolean,
-    aiSubtitleQuotaExhausted: Boolean,
-    aiSubtitleTranslationActive: Boolean
-): InfoCtaState {
-    val option = if (focusOnInfo) playbackSelected else displayOption
-    val isSelected = option != null && (
-        option.isSelected ||
-            option.id == playbackSelected?.id
-        )
-    // N4: non-selected → no CTA.
-    if (!isSelected) {
-        return InfoCtaState(showTranslate = false, translateEnabled = false)
-    }
-    val isAiOption = option.kind == SubtitleOptionKind.AI
-    // R3: no Stop AI CTA when translation is already active.
-    if (isAiOption && aiSubtitleTranslationActive) {
-        return InfoCtaState(showTranslate = false, translateEnabled = false)
-    }
-    if (aiSubtitleQuotaExhausted || !aiSubtitleAvailable) {
-        return InfoCtaState(showTranslate = false, translateEnabled = false)
-    }
-    val canTranslate = when {
-        isAiOption -> true
-        option.kind != SubtitleOptionKind.AI && !aiSubtitleTranslationActive -> true
-        else -> false
-    }
-    return InfoCtaState(showTranslate = canTranslate, translateEnabled = canTranslate)
+private object InfoFocusKey {
+    const val Translate = "info_translate"
+    const val ResetSmart = "info_reset_smart"
 }
 
 @Composable
@@ -896,18 +904,16 @@ private fun SubtitleOptionsRail(
 @Composable
 private fun SubtitleInfoRail(
     selectedOption: SubtitleOptionRailItem?,
-    aiSubtitleAvailable: Boolean,
-    aiSubtitleQuotaExhausted: Boolean,
-    aiSubtitleTranslationActive: Boolean,
-    isAiSubtitleTranslating: Boolean,
+    decision: SubtitleInfoRailDecision,
     aiSubtitleDiagnostics: AiSubtitleDiagnostics?,
     aiSubtitleLastError: String?,
-    ctaState: InfoCtaState,
+    aiSubtitleTranslationActive: Boolean,
     onMoveLeft: () -> Unit,
     onBack: () -> Unit,
-    translateFocusRequester: FocusRequester,
+    ctaFocusRequester: FocusRequester,
     onInfoFocused: (String) -> Unit,
-    onTranslateWithAi: () -> Unit
+    onTranslateWithAi: () -> Unit,
+    onResetToSmartAuto: () -> Unit
 ) {
     // L2: no "Info" header — content only.
     Column(
@@ -918,18 +924,16 @@ private fun SubtitleInfoRail(
     ) {
         SubtitleInfoPane(
             selectedOption = selectedOption,
-            aiSubtitleAvailable = aiSubtitleAvailable,
-            aiSubtitleQuotaExhausted = aiSubtitleQuotaExhausted,
+            decision = decision,
+            aiSubtitleDiagnostics = aiSubtitleDiagnostics,
+            aiSubtitleLastError = aiSubtitleLastError,
             aiSubtitleTranslationActive = aiSubtitleTranslationActive,
-            isAiSubtitleTranslating = isAiSubtitleTranslating,
-            diagnostics = aiSubtitleDiagnostics,
-            lastError = aiSubtitleLastError,
-            ctaState = ctaState,
             onMoveLeft = onMoveLeft,
             onBack = onBack,
-            translateFocusRequester = translateFocusRequester,
+            ctaFocusRequester = ctaFocusRequester,
             onInfoFocused = onInfoFocused,
-            onTranslateWithAi = onTranslateWithAi
+            onTranslateWithAi = onTranslateWithAi,
+            onResetToSmartAuto = onResetToSmartAuto
         )
     }
 }
@@ -937,52 +941,36 @@ private fun SubtitleInfoRail(
 @Composable
 private fun SubtitleInfoPane(
     selectedOption: SubtitleOptionRailItem?,
-    aiSubtitleAvailable: Boolean,
-    aiSubtitleQuotaExhausted: Boolean,
+    decision: SubtitleInfoRailDecision,
+    aiSubtitleDiagnostics: AiSubtitleDiagnostics?,
+    aiSubtitleLastError: String?,
     aiSubtitleTranslationActive: Boolean,
-    isAiSubtitleTranslating: Boolean,
-    diagnostics: AiSubtitleDiagnostics?,
-    lastError: String?,
-    ctaState: InfoCtaState,
     onMoveLeft: () -> Unit,
     onBack: () -> Unit,
-    translateFocusRequester: FocusRequester,
+    ctaFocusRequester: FocusRequester,
     onInfoFocused: (String) -> Unit,
-    onTranslateWithAi: () -> Unit
+    onTranslateWithAi: () -> Unit,
+    onResetToSmartAuto: () -> Unit
 ) {
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val moveLeftKey = if (isRtl) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT
-    val sourceValue = listOfNotNull(
-        diagnostics?.sourceLabel,
-        diagnostics?.sourceLanguage?.let { Subtitle.languageCodeToName(it) }
-    ).joinToString(" · ").ifBlank { null }
-    val displayScore = selectedOption?.matchScore?.takeIf { it > 0 }
-        ?: diagnostics?.matchScore?.takeIf { it > 0 }
-    val statusLine = when {
-        !lastError.isNullOrBlank() -> when {
-            lastError.equals("RATE_LIMITED", ignoreCase = true) ||
-                lastError.contains("429") ||
-                lastError.contains("rate limit", ignoreCase = true) ->
-                if (aiSubtitleQuotaExhausted) {
-                    stringResource(R.string.sub_ai_error_rate_limited_all)
-                } else {
-                    stringResource(R.string.sub_ai_error_rate_limited)
-                }
-            lastError.equals("API key missing", ignoreCase = true) ->
-                stringResource(R.string.sub_ai_error_api_key_missing)
-            else -> lastError
-        }
-        aiSubtitleQuotaExhausted -> stringResource(R.string.sub_ai_error_rate_limited_all)
-        isAiSubtitleTranslating -> stringResource(R.string.sub_ai_translating)
-        aiSubtitleTranslationActive -> stringResource(R.string.sub_ai_option_meta)
-        else -> selectedOption?.meta
-    }
+    val content = decision.content
+    val cta = decision.cta
+    val statusLine = content.statusLine
+    val displayScore = content.matchScorePercent
+    val hasErrorTint = !aiSubtitleLastError.isNullOrBlank() ||
+        content.unavailableReason == SubtitleInfoUnavailableReason.RATE_LIMITED ||
+        content.unavailableReason == SubtitleInfoUnavailableReason.NO_API_KEY
+    val showCard = selectedOption != null ||
+        aiSubtitleTranslationActive ||
+        aiSubtitleDiagnostics != null ||
+        content.kind != SubtitleInfoContentKind.EMPTY
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
     ) {
-        if (selectedOption != null || aiSubtitleTranslationActive || diagnostics != null) {
+        if (showCard) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -991,13 +979,17 @@ private fun SubtitleInfoPane(
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     SourceChip(
-                        label = selectedOption?.sourceLabel
-                            ?: stringResource(R.string.sub_ai_option_badge),
+                        label = content.sourceChipLabel.ifBlank {
+                            selectedOption?.sourceLabel
+                                ?: stringResource(R.string.sub_ai_option_badge)
+                        },
                         selected = false
                     )
                     Text(
-                        text = selectedOption?.title
-                            ?: stringResource(R.string.sub_ai_diagnostics_title),
+                        text = content.title.ifBlank {
+                            selectedOption?.title
+                                ?: stringResource(R.string.sub_ai_diagnostics_title)
+                        },
                         style = MaterialTheme.typography.bodyLarge,
                         color = Color.White
                     )
@@ -1005,12 +997,29 @@ private fun SubtitleInfoPane(
                         Text(
                             text = statusLine,
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (!lastError.isNullOrBlank()) {
+                            color = if (hasErrorTint) {
                                 Color(0xFFFF8A80)
                             } else {
                                 Color.White.copy(alpha = 0.7f)
                             }
                         )
+                    }
+                    content.unavailableReason?.let { reason ->
+                        val reasonText = when (reason) {
+                            SubtitleInfoUnavailableReason.MPV ->
+                                stringResource(R.string.sub_ai_unavailable_mpv)
+                            SubtitleInfoUnavailableReason.RATE_LIMITED ->
+                                stringResource(R.string.sub_ai_error_rate_limited_all)
+                            SubtitleInfoUnavailableReason.NO_API_KEY ->
+                                stringResource(R.string.sub_ai_error_api_key_missing)
+                        }
+                        if (reasonText != statusLine) {
+                            Text(
+                                text = reasonText,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFFF8A80)
+                            )
+                        }
                     }
                     if (displayScore != null) {
                         Row(
@@ -1025,38 +1034,27 @@ private fun SubtitleInfoPane(
                             MatchScoreBadge(scorePercent = displayScore, selected = false)
                         }
                     }
-                    if (!sourceValue.isNullOrBlank()) {
-                        Text(
-                            text = "${stringResource(R.string.sub_ai_diagnostics_source)}: $sourceValue",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.7f)
-                        )
-                    }
-                    diagnostics?.reason?.takeIf { it.isNotBlank() }?.let { reason ->
-                        Text(
-                            text = "${stringResource(R.string.sub_ai_diagnostics_reason)}: $reason",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.7f)
-                        )
-                    }
-                    diagnostics?.targetLanguage?.takeIf { it.isNotBlank() }?.let { target ->
-                        Text(
-                            text = "${stringResource(R.string.sub_ai_diagnostics_target)}: " +
-                                Subtitle.languageCodeToName(target),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.7f)
-                        )
-                    }
-                    diagnostics?.model?.takeIf { it.isNotBlank() }?.let { model ->
-                        Text(
-                            text = "${stringResource(R.string.sub_ai_diagnostics_model)}: $model",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.7f)
-                        )
+                    content.fields.forEach { field ->
+                        if (field.key == SubtitleInfoFieldKey.STATUS ||
+                            field.key == SubtitleInfoFieldKey.SCORE ||
+                            field.key == SubtitleInfoFieldKey.TRACK_NAME
+                        ) {
+                            return@forEach
+                        }
+                        val label = infoFieldLabel(field.key) ?: return@forEach
+                        val value = infoFieldDisplayValue(field, aiSubtitleDiagnostics)
+                        if (value.isNotBlank()) {
+                            Text(
+                                text = "$label: $value",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.7f)
+                            )
+                        }
                     }
                     if (!selectedOption?.meta.isNullOrBlank() &&
                         selectedOption?.meta != statusLine &&
-                        selectedOption?.kind != SubtitleOptionKind.AI
+                        selectedOption?.kind != SubtitleOptionKind.AI &&
+                        content.kind != SubtitleInfoContentKind.AI
                     ) {
                         Text(
                             text = selectedOption!!.meta!!,
@@ -1070,21 +1068,104 @@ private fun SubtitleInfoPane(
             OverlayEmptyCard(text = stringResource(R.string.subtitle_none))
         }
 
-        // R3: Translate with AI only (no Disable / Stop). N4: hidden when not selected.
-        if (ctaState.showTranslate) {
-            SubtitleInfoActionCard(
-                label = stringResource(R.string.sub_ai_translate_this),
-                focusKey = InfoFocusKey.Translate,
-                focusRequester = translateFocusRequester,
-                enabled = ctaState.translateEnabled,
-                onClick = { if (ctaState.translateEnabled) onTranslateWithAi() },
-                onMoveLeft = onMoveLeft,
-                onBack = onBack,
-                onFocused = onInfoFocused,
-                moveLeftKey = moveLeftKey
-            )
+        when (cta.action) {
+            SubtitleInfoCtaAction.TRANSLATE_WITH_AI -> {
+                SubtitleInfoActionCard(
+                    label = stringResource(R.string.sub_ai_translate_this),
+                    focusKey = InfoFocusKey.Translate,
+                    focusRequester = if (cta.focusable) ctaFocusRequester else null,
+                    enabled = cta.enabled,
+                    focusable = cta.focusable,
+                    onClick = { if (cta.enabled) onTranslateWithAi() },
+                    onMoveLeft = onMoveLeft,
+                    onBack = onBack,
+                    onFocused = onInfoFocused,
+                    moveLeftKey = moveLeftKey
+                )
+            }
+            SubtitleInfoCtaAction.RESET_TO_SMART_AUTO -> {
+                SubtitleInfoActionCard(
+                    label = stringResource(R.string.sub_ai_reset_to_smart),
+                    focusKey = InfoFocusKey.ResetSmart,
+                    focusRequester = if (cta.focusable) ctaFocusRequester else null,
+                    enabled = cta.enabled,
+                    focusable = cta.focusable,
+                    onClick = { if (cta.enabled) onResetToSmartAuto() },
+                    onMoveLeft = onMoveLeft,
+                    onBack = onBack,
+                    onFocused = onInfoFocused,
+                    moveLeftKey = moveLeftKey
+                )
+            }
+            SubtitleInfoCtaAction.NONE -> Unit
         }
     }
+}
+
+@Composable
+private fun infoFieldLabel(key: SubtitleInfoFieldKey): String? = when (key) {
+    SubtitleInfoFieldKey.SOURCE -> stringResource(R.string.sub_ai_diagnostics_source)
+    SubtitleInfoFieldKey.METHOD -> stringResource(R.string.sub_ai_method_label)
+    SubtitleInfoFieldKey.RUNG -> stringResource(R.string.sub_ai_diagnostics_rung)
+    SubtitleInfoFieldKey.REASON -> stringResource(R.string.sub_ai_diagnostics_reason)
+    SubtitleInfoFieldKey.TARGET -> stringResource(R.string.sub_ai_diagnostics_target)
+    SubtitleInfoFieldKey.MODEL -> stringResource(R.string.sub_ai_diagnostics_model)
+    SubtitleInfoFieldKey.LOCKED -> stringResource(R.string.sub_ai_diagnostics_locked)
+    SubtitleInfoFieldKey.LANGUAGE -> stringResource(R.string.subtitle_tab_languages)
+    SubtitleInfoFieldKey.TRACK_NAME -> null
+    SubtitleInfoFieldKey.FORMAT -> stringResource(R.string.sub_ai_info_format)
+    SubtitleInfoFieldKey.FORCED -> stringResource(R.string.sub_forced_lang)
+    SubtitleInfoFieldKey.SDH -> stringResource(R.string.sub_ai_info_sdh)
+    SubtitleInfoFieldKey.ADDON_NAME -> stringResource(R.string.sub_ai_info_addon)
+    SubtitleInfoFieldKey.FILE_NAME -> stringResource(R.string.sub_ai_info_file)
+    SubtitleInfoFieldKey.STATUS, SubtitleInfoFieldKey.SCORE -> null
+}
+
+@Composable
+private fun infoFieldDisplayValue(
+    field: SubtitleInfoField,
+    diagnostics: AiSubtitleDiagnostics?
+): String = when (field.key) {
+    SubtitleInfoFieldKey.TARGET ->
+        field.value.takeIf { it.isNotBlank() }?.let(Subtitle::languageCodeToName) ?: field.value
+    SubtitleInfoFieldKey.SOURCE -> {
+        val fromDiag = listOfNotNull(
+            diagnostics?.sourceLabel,
+            diagnostics?.sourceLanguage?.let { Subtitle.languageCodeToName(it) }
+        ).joinToString(" · ").ifBlank { null }
+        fromDiag ?: field.value
+    }
+    SubtitleInfoFieldKey.METHOD -> when (field.value) {
+        "User selected" -> stringResource(R.string.sub_ai_method_user_selected)
+        "Automatic" -> stringResource(R.string.sub_ai_method_automatic)
+        else -> field.value
+    }
+    SubtitleInfoFieldKey.LOCKED -> when (field.value) {
+        "true" -> stringResource(R.string.sub_ai_locked_on)
+        "false" -> stringResource(R.string.sub_ai_locked_off)
+        else -> field.value
+    }
+    SubtitleInfoFieldKey.RUNG -> rungLabel(field.value)
+    else -> field.value
+}
+
+@Composable
+private fun rungLabel(rungName: String): String = when (rungName) {
+    AiSubtitleLadderRung.PREFERRED_EMBEDDED.name ->
+        stringResource(R.string.sub_ai_rung_preferred_embedded)
+    AiSubtitleLadderRung.AI_EMBEDDED.name ->
+        stringResource(R.string.sub_ai_rung_ai_embedded)
+    AiSubtitleLadderRung.AI_SCORED_ADDON.name ->
+        stringResource(R.string.sub_ai_rung_ai_scored_addon)
+    AiSubtitleLadderRung.PREFERRED_SCORED_ADDON.name ->
+        stringResource(R.string.sub_ai_rung_preferred_scored_addon)
+    AiSubtitleLadderRung.CLASSIC_FALLBACK.name ->
+        stringResource(R.string.sub_ai_rung_classic_fallback)
+    AiSubtitleLadderRung.MANUAL.name ->
+        stringResource(R.string.sub_ai_rung_manual)
+    AiSubtitleLadderRung.NONE.name ->
+        stringResource(R.string.sub_ai_rung_none)
+    else -> rungName
 }
 
 @Composable
@@ -1093,6 +1174,7 @@ private fun SubtitleInfoActionCard(
     focusKey: String,
     focusRequester: FocusRequester?,
     enabled: Boolean,
+    focusable: Boolean = true,
     onClick: () -> Unit,
     onMoveLeft: () -> Unit,
     onBack: () -> Unit,
@@ -1109,6 +1191,7 @@ private fun SubtitleInfoActionCard(
             .fillMaxWidth()
             .alpha(if (enabled) 1f else 0.45f)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .focusProperties { canFocus = focusable }
             .onPreviewKeyEvent { event ->
                 when (event.nativeKeyEvent.keyCode) {
                     moveLeftKey -> {
@@ -1145,6 +1228,7 @@ private fun SubtitleInfoActionCard(
         )
     }
 }
+
 
 @Composable
 private fun RailColumn(
@@ -1528,10 +1612,6 @@ private fun overlayCardBorder() = CardDefaults.border(
     )
 )
 
-private object InfoFocusKey {
-    const val Translate = "info_translate"
-}
-
 private enum class OverlayFocusRail {
     LANGUAGE,
     OPTION,
@@ -1556,7 +1636,7 @@ private fun preferredVisibleStartIndex(targetIndex: Int): Int {
     return (targetIndex - 1).coerceAtLeast(0)
 }
 
-private data class SubtitleLanguageRailItem(
+internal data class SubtitleLanguageRailItem(
     val key: String,
     val label: String,
     val count: Int
@@ -1577,10 +1657,43 @@ private data class SubtitleOptionRailItem(
     val isSelected: Boolean,
     val matchScore: Int = 0,
     val internalTrackIndex: Int? = null,
-    val addonSubtitle: Subtitle? = null
+    val addonSubtitle: Subtitle? = null,
+    val languageCode: String? = null,
+    val formatLabel: String? = null,
+    val isBitmap: Boolean = false,
+    val isForced: Boolean = false,
+    val isSdh: Boolean = false,
+    val fileName: String? = null
 )
 
-private fun buildSubtitleLanguageRailItems(
+private fun SubtitleOptionRailItem.toInfoSnapshot(unknownLabel: String): SubtitleInfoOptionSnapshot {
+    val languageLabel = languageCode
+        ?.takeIf { it.isNotBlank() }
+        ?.let { subtitleLanguageLabel(normalizeOverlayLanguageKey(it), unknownLabel) }
+    return SubtitleInfoOptionSnapshot(
+        kind = when (kind) {
+            SubtitleOptionKind.INTERNAL -> SubtitleInfoOptionKind.INTERNAL
+            SubtitleOptionKind.ADDON -> SubtitleInfoOptionKind.ADDON
+            SubtitleOptionKind.AI -> SubtitleInfoOptionKind.AI
+        },
+        id = id,
+        title = title,
+        sourceLabel = sourceLabel,
+        languageLabel = languageLabel,
+        languageCode = languageCode,
+        meta = meta,
+        matchScorePercent = matchScore,
+        formatLabel = formatLabel,
+        isBitmap = isBitmap,
+        isForced = isForced,
+        isSdh = isSdh,
+        addonName = addonSubtitle?.addonName ?: sourceLabel.takeIf { kind == SubtitleOptionKind.ADDON },
+        fileName = fileName ?: meta,
+        trackName = title.takeIf { kind == SubtitleOptionKind.INTERNAL }
+    )
+}
+
+internal fun buildSubtitleLanguageRailItems(
     internalTracks: List<TrackInfo>,
     addonSubtitles: List<Subtitle>,
     preferredLanguage: String,
@@ -1589,7 +1702,7 @@ private fun buildSubtitleLanguageRailItems(
     currentLanguageKey: String,
     noneLabel: String,
     unknownLabel: String,
-    ensurePreferredForAi: Boolean = false
+    includeSyntheticAiOnPreferred: Boolean = false
 ): List<SubtitleLanguageRailItem> {
     val counts = linkedMapOf<String, Int>()
     internalTracks.forEach { track ->
@@ -1606,11 +1719,14 @@ private fun buildSubtitleLanguageRailItems(
         secondaryPreferredLanguage = secondaryPreferredLanguage
     )
 
-    // Synthetic AI option lives on the preferred-language rail. Without any ES tracks/addons
-    // that rail was missing entirely — no Spanish row and no way to open AI/diagnostics.
-    if (ensurePreferredForAi) {
+    // K1: preferred Col1 count includes the synthetic AI option when listed.
+    // Also ensures the preferred row exists when there are zero tracks/addons.
+    if (includeSyntheticAiOnPreferred) {
         preferredOrder.firstOrNull()?.let { preferredKey ->
-            counts[preferredKey] = maxOf(counts[preferredKey] ?: 0, 1)
+            counts[preferredKey] = languageRailCountIncludingAi(
+                trackAndAddonCount = counts[preferredKey] ?: 0,
+                aiOptionListed = true
+            )
         }
     }
 
@@ -1698,6 +1814,7 @@ private fun buildSubtitleOptionRailItems(
     val addonOrderMap = installedAddonOrder.withIndex().associate { (index, name) -> name to index }
     fun toAddonItem(subtitle: Subtitle): SubtitleOptionRailItem {
         val optionId = addonSubtitleOptionId(subtitle)
+        val fileName = subtitle.id.takeIf { it.isNotBlank() && it != subtitle.lang && it != subtitle.url }
         return SubtitleOptionRailItem(
             id = optionId,
             kind = SubtitleOptionKind.ADDON,
@@ -1707,10 +1824,13 @@ private fun buildSubtitleOptionRailItems(
                 Subtitle.languageCodeToName(PlayerSubtitleUtils.normalizeLanguageCode(subtitle.lang))
             },
             sourceLabel = if (subtitle.isStreamProvided) builtInLabel else subtitle.addonName,
-            meta = subtitle.id.takeIf { it.isNotBlank() && it != subtitle.lang && it != subtitle.url },
+            meta = fileName,
             isSelected = optionId == selectedOptionId,
             matchScore = scoreByOptionId[optionId] ?: 0,
-            addonSubtitle = subtitle
+            addonSubtitle = subtitle,
+            languageCode = subtitle.lang,
+            formatLabel = subtitleFormatLabelFromUrl(subtitle.url),
+            fileName = fileName
         )
     }
 
@@ -1725,6 +1845,7 @@ private fun buildSubtitleOptionRailItems(
     val internalItems = internalTracks
         .filter { normalizeOverlayLanguageKeyForTrack(it) == selectedLanguageKey }
         .map { track ->
+            val (formatLabel, isBitmap) = subtitleFormatLabelFromCodec(track.codec)
             SubtitleOptionRailItem(
                 id = "internal:${track.index}",
                 kind = SubtitleOptionKind.INTERNAL,
@@ -1735,7 +1856,12 @@ private fun buildSubtitleOptionRailItems(
                     if (track.isForced) forcedLabel else null
                 ).joinToString(" • ").ifBlank { null },
                 isSelected = "internal:${track.index}" == selectedOptionId,
-                internalTrackIndex = track.index
+                internalTrackIndex = track.index,
+                languageCode = track.language,
+                formatLabel = formatLabel,
+                isBitmap = isBitmap,
+                isForced = track.isForced,
+                isSdh = trackNameLooksSdh(track.name)
             )
         }
 

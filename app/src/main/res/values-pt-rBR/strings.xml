@@ -3227,6 +3227,16 @@
     <string name="sub_ai_diagnostics_model">Modelo</string>
     <string name="sub_ai_diagnostics_locked">Escolha manual</string>
     <string name="sub_ai_translate_this">Traduzir com IA</string>
+    <string name="sub_ai_reset_to_smart">Voltar à seleção automática</string>
+    <string name="sub_ai_method_label">Método</string>
+    <string name="sub_ai_method_automatic">Automático</string>
+    <string name="sub_ai_method_user_selected">Selecionado pelo usuário</string>
+    <string name="sub_ai_locked_on">Ativado</string>
+    <string name="sub_ai_locked_off">Desativado</string>
+    <string name="sub_ai_info_format">Formato</string>
+    <string name="sub_ai_info_sdh">SDH</string>
+    <string name="sub_ai_info_addon">Addon</string>
+    <string name="sub_ai_info_file">Arquivo</string>
     <string name="sub_ai_menu_disable">Desativar legendas</string>
     <string name="sub_ai_menu_disable_ai">Parar tradução com IA</string>
     <string name="sub_ai_error_rate_limited">Limite da IA — aguarde e tente de novo</string>
