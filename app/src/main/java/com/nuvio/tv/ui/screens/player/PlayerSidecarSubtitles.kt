@@ -252,7 +252,8 @@ private fun PlayerRuntimeController.applySidecarAiTranslation(
             renderSidecarCuesAtCurrentPosition()
         }
     }
-    return emptyList()
+    // Keep source text on screen while the translation is in flight (same UX as embedded).
+    return cues
 }
 
 private fun PlayerRuntimeController.prefetchSidecarAiWindow(

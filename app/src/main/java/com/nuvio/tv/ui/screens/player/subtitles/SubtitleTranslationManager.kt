@@ -1,9 +1,13 @@
 package com.nuvio.tv.ui.screens.player.subtitles
 
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -19,10 +23,17 @@ class SubtitleTranslationManager(
 ) {
     companion object {
         const val MOCK_MODE = false
-        // Groq free tier: 30 RPM. Subtitles change every 2-4s naturally (~15-20 RPM).
-        // No artificial rate limit needed — just don't fire concurrent requests.
-        // If we get a 429, we back off 5s.
-        private const val BATCH_WINDOW_MS = 150L  // wait up to 150ms for more items to batch
+        private const val TAG = "SubtitleTranslation"
+        private const val MAX_BATCH_SIZE = 40
+        /** Groq/Claude: short window — their RPM budgets tolerate near-per-cue POSTs. */
+        private const val DEFAULT_BATCH_WINDOW_MS = 150L
+        /**
+         * Gemini free tier is ~15 RPM. A ~2s gather window packs more cues per POST so live +
+         * prefetch share the minute budget instead of firing ~1 request per cue.
+         */
+        private const val GEMINI_BATCH_WINDOW_MS = 2_000L
+        const val SOURCE_LIVE = "live"
+        const val SOURCE_PREFETCH = "prefetch"
     }
 
     var isEnabled: Boolean = false
@@ -38,6 +49,8 @@ class SubtitleTranslationManager(
      * silently rendering the untranslated source language.
      */
     var onUntranslatableSource: (() -> Unit)? = null
+    /** Fired from [reset] so display probes can emit a SUMMARY on player exit. */
+    var onReset: (() -> Unit)? = null
 
     val translatedCount: Int get() = cache.size
 
@@ -51,7 +64,11 @@ class SubtitleTranslationManager(
     private val pendingCount = AtomicInteger(0)
     private var hideTranslatingJob: Job? = null
 
-    private data class PendingItem(val text: String, val deferred: CompletableDeferred<String>)
+    private data class PendingItem(
+        val text: String,
+        val deferred: CompletableDeferred<String>,
+        val source: String
+    )
     private val queue = Channel<PendingItem>(Channel.UNLIMITED)
 
     init {
@@ -91,6 +108,20 @@ class SubtitleTranslationManager(
     fun nextCooldownRemainingMs(nowMs: Long = System.currentTimeMillis()): Long =
         router.nextCooldownRemainingMs(nowMs)
 
+    private fun batchWindowMs(): Long {
+        val active = router.preferredModel
+            ?: router.credentials.enabledProviders().firstOrNull()?.model
+        return when (active) {
+            SubtitleAiModel.GEMINI_FLASH_25 -> GEMINI_BATCH_WINDOW_MS
+            else -> DEFAULT_BATCH_WINDOW_MS
+        }
+    }
+
+    private fun activeModelLabel(): String =
+        (router.preferredModel
+            ?: router.credentials.enabledProviders().firstOrNull()?.model)?.name
+            ?: "none"
+
     private suspend fun processBatches() {
         val batch = mutableListOf<PendingItem>()
         while (true) {
@@ -98,17 +129,32 @@ class SubtitleTranslationManager(
             val first = queue.receive()
             batch.add(first)
 
-            // Collect any additional items that arrive within BATCH_WINDOW_MS.
+            val windowMs = batchWindowMs()
+            // Collect any additional items that arrive within the provider window.
             // This handles burst cache misses (e.g., right after a seek) efficiently.
-            val deadline = System.currentTimeMillis() + BATCH_WINDOW_MS
-            while (batch.size < 40) {
+            val deadline = System.currentTimeMillis() + windowMs
+            while (batch.size < MAX_BATCH_SIZE) {
                 val remaining = deadline - System.currentTimeMillis()
                 if (remaining <= 0L) break
                 val next = withTimeoutOrNull(remaining) { queue.receive() } ?: break
                 batch.add(next)
             }
 
+            val liveCount = batch.count { it.source == SOURCE_LIVE }
+            val prefetchCount = batch.count { it.source == SOURCE_PREFETCH }
+            val sourceLabel = when {
+                liveCount > 0 && prefetchCount > 0 -> "mixed"
+                prefetchCount > 0 -> SOURCE_PREFETCH
+                else -> SOURCE_LIVE
+            }
+            val modelLabel = activeModelLabel()
             val texts = batch.map { it.text }
+            val startedAt = System.currentTimeMillis()
+            Log.i(
+                TAG,
+                "batch start source=$sourceLabel batchSize=${batch.size} windowMs=$windowMs " +
+                    "live=$liveCount prefetch=$prefetchCount model=$modelLabel"
+            )
             val result = try {
                 router.translateBatch(texts, targetLanguage)
             } catch (e: CancellationException) {
@@ -120,9 +166,15 @@ class SubtitleTranslationManager(
                     errorMessage = e.message ?: "Translation error"
                 )
             }
+            val latencyMs = System.currentTimeMillis() - startedAt
             if (!result.success) {
                 val error = normalizeProviderError(result.errorMessage, httpCode = null)
                     ?: result.errorMessage
+                Log.w(
+                    TAG,
+                    "batch end source=$sourceLabel batchSize=${batch.size} windowMs=$windowMs " +
+                        "model=$modelLabel success=false latencyMs=$latencyMs error=$error"
+                )
                 onBatchResult?.invoke(false, error)
                 // On error: complete deferreds with original text so the caller doesn't hang,
                 // but do NOT cache — the next render will retry rather than permanently show English.
@@ -141,6 +193,11 @@ class SubtitleTranslationManager(
                 delay(waitMs)
                 continue
             }
+            Log.i(
+                TAG,
+                "batch end source=$sourceLabel batchSize=${batch.size} windowMs=$windowMs " +
+                    "model=$modelLabel success=true latencyMs=$latencyMs"
+            )
             onBatchResult?.invoke(true, null)
             batch.forEachIndexed { i, item ->
                 val translated = result.lines.getOrElse(i) { item.text }
@@ -156,23 +213,28 @@ class SubtitleTranslationManager(
 
     fun isInFlight(text: String): Boolean = inFlight.containsKey(text)
 
-    suspend fun translate(text: String): String {
+    suspend fun translate(text: String, source: String = SOURCE_LIVE): String {
         cache[text]?.let { return it }
         // If the same text is already queued (e.g. preTranslateWindow raced us), join it.
         inFlight[text]?.let { return it.await() }
 
         val deferred = CompletableDeferred<String>()
         inFlight[text] = deferred
-        val depth = pendingCount.getAndIncrement()
-        if (depth == 0) {
-            isTranslating = true
-            onTranslatingChanged?.invoke(true)
+        // Prefetch shares the live queue (anti-RPM) but must not drive the "Translating…"
+        // badge — otherwise lookahead keeps the chip on for the whole session.
+        val countsTowardUi = source == SOURCE_LIVE
+        if (countsTowardUi) {
+            val depth = pendingCount.getAndIncrement()
+            if (depth == 0) {
+                isTranslating = true
+                onTranslatingChanged?.invoke(true)
+            }
         }
-        queue.send(PendingItem(text, deferred))
+        queue.send(PendingItem(text, deferred, source))
         return try {
             deferred.await()
         } finally {
-            if (pendingCount.decrementAndGet() == 0) {
+            if (countsTowardUi && pendingCount.decrementAndGet() == 0) {
                 hideTranslatingJob?.cancel()
                 hideTranslatingJob = scope.launch {
                     delay(1500)
@@ -186,6 +248,7 @@ class SubtitleTranslationManager(
     }
 
     fun reset() {
+        onReset?.invoke()
         cache.clear()
         inFlight.clear()
         if (pendingCount.get() == 0) {
@@ -194,36 +257,22 @@ class SubtitleTranslationManager(
         }
     }
 
+    /**
+     * Prefetch upcoming cues through the **same** live queue (not a parallel [SubtitleAiRouter.translateBatch]).
+     * That way lookahead cannot race live POSTs against Gemini RPM.
+     */
     suspend fun preTranslateWindow(texts: List<String>) {
         // The lookahead triggers fire whenever a text track renders cues — including tracks
         // selected under the hood by "find best match" with AI translation off. Never spend
         // API requests unless translation is actually active.
-        if (!isEnabled) return
+        if (!isEnabled || MOCK_MODE) return
         val uncached = texts.filter { !cache.containsKey(it) && !inFlight.containsKey(it) }
         if (uncached.isEmpty()) return
-        uncached.chunked(40).forEach { chunk ->
-            val result = router.translateBatch(chunk, targetLanguage)
-            if (result.success) {
-                onBatchResult?.invoke(true, null)
-                chunk.forEachIndexed { i, text ->
-                    cache[text] = result.lines.getOrElse(i) { text }
-                }
-            } else {
-                onBatchResult?.invoke(
-                    false,
-                    normalizeProviderError(result.errorMessage, httpCode = null) ?: result.errorMessage
-                )
-                val waitMs = if (result.errorMessage == TRANSLATION_ERROR_RATE_LIMITED ||
-                    normalizeProviderError(result.errorMessage, null) == TRANSLATION_ERROR_RATE_LIMITED
-                ) {
-                    router.nextCooldownRemainingMs().coerceIn(1_000L, 8_000L).takeIf { it > 0 }
-                        ?: 1_500L
-                } else {
-                    5_000L
-                }
-                delay(waitMs)
-                return
-            }
+        Log.i(TAG, "prefetch enqueue count=${uncached.size} (via live queue)")
+        coroutineScope {
+            uncached.map { text ->
+                async { translate(text, source = SOURCE_PREFETCH) }
+            }.awaitAll()
         }
     }
 }

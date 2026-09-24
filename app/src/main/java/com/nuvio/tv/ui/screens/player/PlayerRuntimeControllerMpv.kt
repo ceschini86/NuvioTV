@@ -399,10 +399,16 @@ private fun PlayerRuntimeController.applyMpvTrackSnapshot(snapshot: MpvTrackSnap
             )
         }
     }
+    val hasUserAudioPreference = hasRememberedOrPersistedAudioPreference()
     applyPersistedTrackPreference(
         audioTracks = audioTracks,
         subtitleTracks = internalSubtitleTracks
     )
+    if (hasUserAudioPreference) {
+        originalAudioAutoSelectAttemptedForStreamUrl = currentStreamUrl.takeIf { it.isNotBlank() }
+    } else {
+        maybeAutoSelectOriginalAudioTrack(audioTracks)
+    }
     logSwitchTrace(
         stage = "mpv-snapshot-after-restore",
         message = "uiAudioIndex=${_uiState.value.selectedAudioTrackIndex} " +

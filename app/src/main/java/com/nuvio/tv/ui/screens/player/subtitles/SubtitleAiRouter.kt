@@ -7,6 +7,9 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Tries enabled providers (and each provider's keys) in order until a batch succeeds.
  * Cooldowns from 429 / rate-limit headers skip exhausted keys temporarily.
+ *
+ * Gemini multi-key note: Google AI Studio quotas (RPM/TPM/RPD) are **per project**, not per
+ * API key. Extra keys only help when each key belongs to a **distinct** AI Studio project.
  */
 class SubtitleAiRouter(
     private val service: SubtitleTranslationService = SubtitleTranslationService(),
@@ -20,6 +23,8 @@ class SubtitleAiRouter(
     companion object {
         private const val TAG = "SubtitleAiRouter"
         private const val DEFAULT_COOLDOWN_MS = 60_000L
+        private const val GEMINI_PROJECT_HINT =
+            "projectHint=gemini_quota_is_per_ai_studio_project_not_per_key"
     }
 
     @Volatile
@@ -31,6 +36,8 @@ class SubtitleAiRouter(
 
     private val cooldownUntilMs = ConcurrentHashMap<String, Long>()
     private val lastQuota = ConcurrentHashMap<String, SubtitleAiQuotaSnapshot>()
+    @Volatile
+    private var loggedGeminiMultiKeyNote = false
 
     fun quotaSnapshots(): List<SubtitleAiQuotaSnapshot> =
         lastQuota.values.sortedBy { it.model.ordinal }
@@ -43,6 +50,7 @@ class SubtitleAiRouter(
         if (providers.isEmpty()) {
             return TranslationResult(lines, false, "API key missing")
         }
+        maybeLogGeminiMultiKeyNote(providers)
 
         var lastError: String? = "No provider available"
         var sawRateLimit = false
@@ -54,10 +62,20 @@ class SubtitleAiRouter(
                 val coolUntil = cooldownUntilMs[slot] ?: 0L
                 if (coolUntil > now) {
                     sawRateLimit = true
-                    Log.d(TAG, "skip ${provider.model} …${key.takeLast(4)} cooldown ${coolUntil - now}ms")
+                    val cooldownMs = coolUntil - now
+                    Log.i(
+                        TAG,
+                        "skip ${provider.model} …${key.takeLast(4)} cooldownMs=$cooldownMs" +
+                            geminiHintSuffix(provider.model)
+                    )
                     continue
                 }
                 triedSlots++
+                Log.i(
+                    TAG,
+                    "attempt ${provider.model} …${key.takeLast(4)} lines=${lines.size}" +
+                        geminiHintSuffix(provider.model)
+                )
                 val result = translateAttempt?.invoke(provider.model, key, lines, targetLanguage)
                     ?: service.translateWith(
                         model = provider.model,
@@ -84,11 +102,20 @@ class SubtitleAiRouter(
                     val until = result.quota?.cooldownUntilMs
                         ?: (now + DEFAULT_COOLDOWN_MS)
                     cooldownUntilMs[slot] = until
-                    Log.w(TAG, "${provider.model} …${key.takeLast(4)} rate-limited until $until")
+                    val cooldownMs = (until - now).coerceAtLeast(0L)
+                    Log.w(
+                        TAG,
+                        "${provider.model} …${key.takeLast(4)} rate-limited " +
+                            "httpCode=${result.httpCode ?: 429} cooldownMs=$cooldownMs" +
+                            geminiHintSuffix(provider.model)
+                    )
                     continue
                 }
                 if (result.httpCode == 401 || result.httpCode == 403 || err == "API key missing") {
-                    Log.w(TAG, "${provider.model} …${key.takeLast(4)} auth failed — trying next key")
+                    Log.w(
+                        TAG,
+                        "${provider.model} …${key.takeLast(4)} auth failed httpCode=${result.httpCode} — trying next key"
+                    )
                     continue
                 }
                 // Other failures: still try next key/provider (content blocks handled upstream).
@@ -104,6 +131,25 @@ class SubtitleAiRouter(
         }
         return TranslationResult(lines, false, exhausted)
     }
+
+    private fun maybeLogGeminiMultiKeyNote(providers: List<SubtitleAiProviderCredentials>) {
+        if (loggedGeminiMultiKeyNote) return
+        val geminiKeys = providers
+            .firstOrNull { it.model == SubtitleAiModel.GEMINI_FLASH_25 }
+            ?.usableKeys
+            ?.size
+            ?: 0
+        if (geminiKeys < 2) return
+        loggedGeminiMultiKeyNote = true
+        Log.i(
+            TAG,
+            "Gemini multi-key ($geminiKeys keys): $GEMINI_PROJECT_HINT — " +
+                "extra keys only help across distinct AI Studio projects"
+        )
+    }
+
+    private fun geminiHintSuffix(model: SubtitleAiModel): String =
+        if (model == SubtitleAiModel.GEMINI_FLASH_25) " $GEMINI_PROJECT_HINT" else ""
 
     /** True when every usable key/provider is currently in cooldown. */
     fun allUsableKeysInCooldown(nowMs: Long = System.currentTimeMillis()): Boolean {

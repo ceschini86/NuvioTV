@@ -543,6 +543,8 @@ class PlayerRuntimeController(
     internal var mpvPreferredAudioLanguages: List<String> = emptyList()
     internal var currentStreamBingeGroup: String? = navigationArgs.bingeGroup
     internal var hasAppliedRememberedAudioSelection: Boolean = false
+    /** Stream URL for which we already attempted file-original audio auto-select (success or skip). */
+    internal var originalAudioAutoSelectAttemptedForStreamUrl: String? = null
     internal var hasInitializedAudioAmplificationForSession: Boolean = false
     internal var hasInitializedCenterMixForSession: Boolean = false
     internal var rememberAudioDelayPerDeviceEnabled: Boolean = false
