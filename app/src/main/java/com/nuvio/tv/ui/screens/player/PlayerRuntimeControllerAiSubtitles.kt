@@ -466,7 +466,7 @@ internal fun PlayerRuntimeController.resetSubtitleAiPolicyForNewMedia() {
     subtitleTranslationManager?.reset()
     aiSubtitleAutoSelectAttempted = false
     aiSubtitleUserLocked = false
-    isUserExplicitSubtitleSelection = keepDisabled
+    setUserExplicitSubtitleSelection(keepDisabled)
     autoSubtitleSelected = keepDisabled
     subtitleScoreCache.clear()
     subtitleScoreCacheStreamName = null
@@ -479,6 +479,7 @@ internal fun PlayerRuntimeController.resetSubtitleAiPolicyForNewMedia() {
             isAiSubtitleTranslating = false,
             aiSubtitleLastError = null,
             aiSubtitleDiagnostics = null,
+            userExplicitSubtitleSelection = keepDisabled,
             showAiSubtitleDiagnosticsOverlay = false,
             showSubtitleTranslateMenuOverlay = false,
             subtitleTranslateMenuOptionId = null,
@@ -597,6 +598,13 @@ internal fun PlayerRuntimeController.translateSubtitleWithAi(
                     userLocked = true
                 )
             )
+            logAiSubtitleAction(
+                action = "Translate with AI",
+                source = track.name ?: track.language,
+                reason = "user chose translate with AI",
+                locked = true,
+                rung = AiSubtitleLadderRung.MANUAL
+            )
         }
         addonSubtitle != null -> {
             selectAddonSubtitle(addonSubtitle)
@@ -622,6 +630,13 @@ internal fun PlayerRuntimeController.translateSubtitleWithAi(
                     model = subtitleAiModel.name,
                     userLocked = true
                 )
+            )
+            logAiSubtitleAction(
+                action = "Translate with AI",
+                source = addonSubtitle.addonName,
+                reason = "user chose translate with AI",
+                locked = true,
+                rung = AiSubtitleLadderRung.MANUAL
             )
         }
         else -> Log.w(PlayerRuntimeController.TAG, "Translate with AI: no source provided")
@@ -830,6 +845,102 @@ internal fun trackMatchesPreferredLanguage(track: TrackInfo, primaryTarget: Stri
 
 internal fun PlayerRuntimeController.publishAiSubtitleDiagnostics(diagnostics: AiSubtitleDiagnostics) {
     _uiState.update { it.copy(aiSubtitleDiagnostics = diagnostics) }
+}
+
+internal fun PlayerRuntimeController.setUserExplicitSubtitleSelection(explicit: Boolean) {
+    isUserExplicitSubtitleSelection = explicit
+    if (_uiState.value.userExplicitSubtitleSelection != explicit) {
+        _uiState.update { it.copy(userExplicitSubtitleSelection = explicit) }
+    }
+}
+
+internal fun PlayerRuntimeController.logAiSubtitleAction(
+    action: String,
+    source: String?,
+    reason: String,
+    locked: Boolean,
+    rung: AiSubtitleLadderRung?
+) {
+    Log.i(
+        PlayerRuntimeController.TAG,
+        "$action source=${source?.takeIf { it.isNotBlank() } ?: "-"} " +
+            "reason=$reason locked=$locked rung=${rung?.name ?: "-"}"
+    )
+}
+
+/**
+ * S1: clear userLocked + explicit, then re-run [applySubtitleAutoSelectPolicy] / ladder.
+ * Not a plain Stop — Smart may keep AI on (S2) or move to preferred/classic (S3/S4).
+ */
+internal fun PlayerRuntimeController.resetToSmartAutoSubtitleSelection() {
+    val prev = _uiState.value.aiSubtitleDiagnostics
+    logAiSubtitleAction(
+        action = "Reset Smart Auto",
+        source = prev?.sourceLabel ?: prev?.sourceLanguage,
+        reason = "user_reset_smart",
+        locked = false,
+        rung = prev?.rung
+    )
+    aiSubtitleUserLocked = false
+    setUserExplicitSubtitleSelection(false)
+    autoSubtitleSelected = false
+    _uiState.update {
+        it.copy(
+            aiSubtitleDiagnostics = null,
+            userExplicitSubtitleSelection = false
+        )
+    }
+    // Drop MANUAL lock state before ladder; ladder publishes the new rung/diagnostics.
+    applySubtitleAutoSelectPolicy()
+    val after = _uiState.value.aiSubtitleDiagnostics
+    logAiSubtitleAction(
+        action = "Reset Smart Auto done",
+        source = after?.sourceLabel ?: after?.sourceLanguage,
+        reason = after?.reason ?: "policy_applied",
+        locked = aiSubtitleUserLocked,
+        rung = after?.rung
+    )
+}
+
+/**
+ * Publish MANUAL diagnostics from the current playback source (A3 / toggle AI on).
+ */
+internal fun PlayerRuntimeController.publishManualAiDiagnosticsFromCurrentSource(reason: String) {
+    val state = _uiState.value
+    val addon = state.selectedAddonSubtitle
+    if (addon != null) {
+        val score = scoreAddonSubtitleCached(addon)
+        publishAiSubtitleDiagnostics(
+            AiSubtitleDiagnostics(
+                rung = AiSubtitleLadderRung.MANUAL,
+                reason = reason,
+                sourceKind = AiSubtitleSourceKind.ADDON,
+                sourceLabel = addon.addonName,
+                sourceLanguage = addon.lang,
+                matchScore = score.takeIf { it > 0 },
+                targetLanguage = resolveSubtitleAiTargetLanguageName(),
+                model = subtitleAiModel.name,
+                userLocked = true
+            )
+        )
+        return
+    }
+    val index = state.selectedSubtitleTrackIndex
+    val track = state.subtitleTracks.getOrNull(index)
+    if (track != null) {
+        publishAiSubtitleDiagnostics(
+            AiSubtitleDiagnostics(
+                rung = AiSubtitleLadderRung.MANUAL,
+                reason = reason,
+                sourceKind = AiSubtitleSourceKind.EMBEDDED,
+                sourceLabel = track.name,
+                sourceLanguage = track.language,
+                targetLanguage = resolveSubtitleAiTargetLanguageName(),
+                model = subtitleAiModel.name,
+                userLocked = true
+            )
+        )
+    }
 }
 
 internal fun PlayerRuntimeController.resolveSubtitleAiTargetLanguageName(): String {

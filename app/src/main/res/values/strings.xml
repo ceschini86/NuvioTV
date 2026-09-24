@@ -3311,6 +3311,7 @@
     <string name="sub_ai_diagnostics_locked">Manual selection</string>
     <string name="sub_ai_translate_this">Translate with AI</string>
     <string name="sub_ai_reset_to_smart">Return to automatic selection</string>
+    <string name="sub_ai_source_chip">AI source</string>
     <string name="sub_ai_method_label">Method</string>
     <string name="sub_ai_method_automatic">Automatic</string>
     <string name="sub_ai_method_user_selected">User selected</string>

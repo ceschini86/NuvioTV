@@ -1375,11 +1375,28 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
                         it.copy(aiSubtitleLastError = TRANSLATION_ERROR_RATE_LIMITED)
                     }
                 } else {
+                    // A3: enable MANUAL; runtime picks/keeps source.
                     aiSubtitleUserLocked = true
                     setAiSubtitleTranslationEnabled(true, allowPreferredUpgrade = false)
+                    publishManualAiDiagnosticsFromCurrentSource(reason = "user selected AI option")
+                    val diag = _uiState.value.aiSubtitleDiagnostics
+                    logAiSubtitleAction(
+                        action = "Select AI option",
+                        source = diag?.sourceLabel ?: diag?.sourceLanguage,
+                        reason = "user selected AI option",
+                        locked = true,
+                        rung = AiSubtitleLadderRung.MANUAL
+                    )
                 }
             } else {
                 setAiSubtitleTranslationEnabled(false, allowPreferredUpgrade = false)
+                logAiSubtitleAction(
+                    action = "Select AI option",
+                    source = _uiState.value.aiSubtitleDiagnostics?.sourceLabel,
+                    reason = "toggle_off",
+                    locked = false,
+                    rung = _uiState.value.aiSubtitleDiagnostics?.rung
+                )
             }
         }
         is PlayerEvent.OnTranslateSubtitleWithAi -> {
@@ -1391,6 +1408,15 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
                 it.copy(
                     showSubtitleTranslateMenuOverlay = false,
                     subtitleTranslateMenuOptionId = null,
+                    showSubtitleOverlay = true,
+                    showControls = true
+                )
+            }
+        }
+        PlayerEvent.OnResetToSmartAuto -> {
+            resetToSmartAutoSubtitleSelection()
+            _uiState.update {
+                it.copy(
                     showSubtitleOverlay = true,
                     showControls = true
                 )

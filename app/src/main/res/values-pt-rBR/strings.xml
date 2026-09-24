@@ -3228,6 +3228,7 @@
     <string name="sub_ai_diagnostics_locked">Escolha manual</string>
     <string name="sub_ai_translate_this">Traduzir com IA</string>
     <string name="sub_ai_reset_to_smart">Voltar à seleção automática</string>
+    <string name="sub_ai_source_chip">Fonte IA</string>
     <string name="sub_ai_method_label">Método</string>
     <string name="sub_ai_method_automatic">Automático</string>
     <string name="sub_ai_method_user_selected">Selecionado pelo usuário</string>

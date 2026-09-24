@@ -11,7 +11,7 @@
 | Escopo | **B+C** — overlay de legendas no player + estados/bloqueios. Settings (A) fora. |
 | Fonte de verdade | Working tree / `fix/ai-ladder-and-rate-limit` (`SubtitleSelectionOverlay`, `PlayerRuntimeControllerAiSubtitles`, events/UI state); base ship `release/1.0.2` |
 | Relacionados | [`prd-ai-subtitles.md`](./prd-ai-subtitles.md), [`architecture-ai-subtitles.md`](./architecture-ai-subtitles.md) |
-| Última revisão | 2026-09-23 (Smart AI = **só embutidas**) |
+| Última revisão | 2026-09-24 (overlay Info-only rail + Reset Smart + indicadores Fonte IA) |
 
 Este documento descreve **o que o usuário vê e o que acontece em cada ramificação**, de forma reproduzível. Onde o código diverge do que o usuário “espera”, isso está marcado como **comportamento atual**.
 
@@ -45,25 +45,32 @@ Nova stream / `releasePlayer(flush)` zera lock AI, diagnostics e translating. Tr
 Três rails (TV/DPAD):
 
 ```text
-[ Idiomas ] → [ Opções daquele idioma ] → [ Info | Style ]
+[ Idiomas ] → [ Opções daquele idioma ] → [ Info ]
 ```
 
-- **Idiomas:** Off + códigos presentes (embedded + addons), filtrados pelas prefs clássicas (`showOnlyPreferred…`).
-- **Opções:** No idioma **preferido**, se AI disponível, a **primeira** opção é sintética:
+- **Idiomas (Col1):** Off + códigos presentes (embedded + addons), filtrados pelas prefs clássicas (`showOnlyPreferred…`). Contador do idioma **preferido** inclui a opção sintética AI quando listada. **Sem ✓** na Col1. Com AI ativa: **ponto amarelo** no idioma da fonte atual (embedded ou addon).
+- **Opções (Col2):** No idioma **preferido**, se AI disponível, a **primeira** opção é sintética:
   - id `ai:translate`
   - source badge `AI`
   - título = nome do idioma preferido
   - meta = “AI translation to preferred language” | “Translating…” | hint de API key
-- Demais opções: embedded / stream-provided / addons daquele idioma, addons com **badge `%`** se score > 0.
-- **Info:** painel padrão ao revelar o 3º rail (primeira aba); card da fonte + ações **Translate with AI / Stop AI translation** e **Disable subtitles**.
-- **Style:** delay/estilo (segunda aba; inalterado pela AI; ASS+libass pode desabilitar style).
+- Demais opções: embedded / stream-provided / addons daquele idioma, addons com **badge `%`** se score > 0. O **✓** existe só aqui (opção ativa no playback). Com AI ativa: chip amarelo **“Fonte IA”** / **“AI source”** ao lado do chip de origem na opção que é a fonte atual.
+- **Info (Col3):** painel único (sem aba Style; sem long-press Translate/Diagnostics). Card da opção focada/selecionada + diagnostics; CTAs conforme matriz B6 (Translate with AI / Voltar à seleção automática). Desligar legendas = só **None/Off** na Col1.
 
-Overlays empilhados:
+### Estados visuais (foco)
 
-| Overlay | Abre como | Conteúdo |
-|---------|-----------|----------|
-| Translate menu | Long-press em opção **não-AI** | Translate with AI · Disable subtitles |
-| Diagnostics | Long-press na opção **AI** (ou Details) | Rung, reason, source, score, target, model, locked |
+| Papel | Visual |
+|-------|--------|
+| Foco do DPAD | Roxo 100% — **um** elemento por vez |
+| Selecionado / navegação sem foco | Roxo ~50% |
+| Demais | Neutro |
+
+### Overlays empilhados
+
+| Overlay | Status |
+|---------|--------|
+| Translate menu (long-press) | **Removido** — Translate vive no Info |
+| Diagnostics (long-press AI) | **Removido** — diagnostics vivem no Info |
 
 Chip no player: “Translating…” enquanto `isAiSubtitleTranslating && aiSubtitleTranslationActive`.
 
@@ -71,13 +78,15 @@ Chip no player: “Translating…” enquanto `isAiSubtitleTranslating && aiSubt
 
 ## 2. Resposta direta: Translate with AI “vai” para a opção Smart AI?
 
-**Sim, como representação no menu — com um detalhe importante de sessão.**
+**Sim — inclusive na mesma sessão do overlay.**
 
 | Momento | O que o usuário vê |
 |---------|---------------------|
-| **Após fechar e reabrir** o overlay, com tradução ainda ativa | Rail do **idioma preferido** focado; opção sintética **`AI` selecionada** (não a opção do idioma-fonte). A fonte real (embedded EN / addon, etc.) continua por baixo; Info mostra source/diagnostics. |
-| **Na mesma abertura** do overlay (long-press ou Info → Translate, overlay não remonta) | O rail **não salta sozinho** para o idioma preferido / opção `AI`. `selectedLanguageKey` / `selectedOptionId` da sessão ficam onde estavam. Playback já traduz; o highlight do menu só alinha no **próximo open**. |
-| **Clicar direto na opção `AI`** | Aí sim, na mesma sessão: `selectedOptionId = ai:translate` + toggle de tradução. |
+| **Após Info → Translate with AI** (mesma abertura) | Foco salta na hora para Col1 = idioma **preferido** → Col2 = opção **`AI` selecionada**. Info mostra MANUAL / User selected + fonte. |
+| **Após fechar e reabrir** o overlay, com tradução ainda ativa | Mesmo alinhamento: preferido + `AI` selecionada; indicadores Fonte IA (ponto + chip) na fonte atual. |
+| **Clicar na opção `AI` já selecionada** | No-op (G1): não reinicia Translate nem troca a fonte. |
+| **Clicar na opção `AI` com tradução já ativa** | Só alinha o highlight; mantém a fonte. |
+| **Clicar na opção `AI` com tradução off** | Liga AI em modo MANUAL; runtime escolhe/mantém a fonte; CTA “Voltar à seleção automática”. |
 
 “Smart AI” (settings) **não** é uma opção separada no menu. A opção `AI` é o **slot visual** de “estou recebendo o idioma preferido via tradução”. Smart só decide se, no 1º acesso, o player **entra sozinho** nesse modo (ladder).
 
@@ -300,44 +309,41 @@ Dismiss → volta ao overlay.
 
 ### B6 — Painel Info (rail)
 
-**Pré:** Opção efetiva selecionada (ou AI active).  
-**Card Info mostra:** título/source da opção (ou badge AI), status (erro / Translating… / meta AI / meta clássica), score, source/reason/target/model dos diagnostics quando existirem.
+**Pré:** Foco na Col2 ou Col3 (Col3 some com foco na Col1). O Info descreve a opção **focada** (read-only, sem CTA se não for a selecionada) ou a **selecionada** (com CTA quando aplicável).
 
-#### Ação primária — label e enable
+**Card Info mostra:** título/source da opção (ou badge AI), status (erro / Translating… / meta), score, e diagnostics (`rung`, `reason`, `source`, `target`, `model`, `locked`, método Automatic vs User selected).
 
-| Contexto | Label do botão | `canTranslate` |
-|----------|----------------|----------------|
-| AI indisponível | Translate with AI | **false** |
-| Opção `AI` (ou null com AI active) | **Stop AI translation** se active; senão Translate | **true** (toggle/retry) |
-| Opção clássica **e** AI ainda **não** active | Translate with AI | **true** |
-| Opção clássica **mas** AI já active | Translate with AI | **false** (evita segundo translate sem passar pela opção AI / Stop) |
+#### Matriz de CTAs (só opção selecionada)
 
-#### B6a — Translate with AI (Info, opção clássica)
+| Contexto | CTA | Notas |
+|----------|-----|-------|
+| AI automática (`AI_EMBEDDED`, sem lock) | **Nenhum** | Só diagnostics |
+| Classic automático (`CLASSIC_FALLBACK`, sem explicit) | **Nenhum** | Info explica o fallback |
+| Embedded no preferido (`PREFERRED_EMBEDDED`) ou embedded/addon qualquer (explícito) | **Traduzir com IA** | Embedded ou addon |
+| AI manual (`MANUAL` / `userLocked`) | **Voltar à seleção automática** | Reset Smart (não é Stop) |
+| AI indisponível (sem key / rate-limit / MPV) | Translate **disabled** e não focável | Col3 explica o motivo |
 
-Igual B4a (mesma event `OnTranslateSubtitleWithAi`).  
-Se a opção focada for **`AI`**, Info chama **toggle** (não “translate this source” de novo).
+**G1:** clicar numa opção já selecionada não faz nada. **G2:** trocar/desativar só via outra opção Col2 ou None/Off; Reset Smart muda o modo sem ser toggle.
 
-#### B6b — Stop AI translation (Info)
+#### B6a — Translate with AI (Info)
 
-Toggle off: tradução para; lock limpo; fonte clássica por baixo permanece.  
-**Não** é o mesmo que Disable subtitles.
+`PlayerEvent.OnTranslateSubtitleWithAi` → `userLocked=true`, AI on, diagnostics MANUAL. Na **mesma sessão**, foco → preferido + opção AI.
 
-#### B6c — Disable subtitles (Info)
+#### B6b — Voltar à seleção automática (Reset Smart)
 
-Off total; AI off; rail vai para Off; style some.
+`PlayerEvent.OnResetToSmartAuto`: limpa `userLocked` + `explicit`, re-executa `applySubtitleAutoSelectPolicy` / ladder. Resultados típicos:
 
-**“Reset via menu Info”** neste produto significa, na prática:
+| Rung após reset | Seleção | Indicadores Fonte IA |
+|-----------------|---------|----------------------|
+| `AI_EMBEDDED` | Opção AI continua | Seguem a fonte da ladder |
+| `PREFERRED_EMBEDDED` | Embedded preferido; AI off | Somem |
+| `CLASSIC_FALLBACK` | Escolha clássica do Nuvio; AI off | Somem |
 
-| Intenção do usuário | Ação Info | Estado após |
-|---------------------|-----------|-------------|
-| Parar só a tradução | Stop AI | Fonte original; sem lock AI; explicit **inalterado** (se já era explicit) |
-| Tirar legendas | Disable | Off + explicit disabled |
-| Traduzir esta fonte | Translate | MANUAL + lock AI |
-| Ver por que auto escolheu | (abrir diagnostics via long-press AI) | Só leitura |
+Foco pós-reset: Col2 da opção que ficou selecionada.
 
-Não há botão “Reset ladder” / “Voltar ao smart”. Para **rearmar** o smart após escolha manual:
+#### B6c — Disable subtitles
 
-1. Disable ou escolher algo e depois… na prática o usuário precisa de um path que limpe `explicit` (nova stream / refresh de episódio / não-explicit paths). **Gap de UX:** não há “Reset to smart auto” explícito no Info.
+Somente via **None/Off** na Col1 (não há CTA Disable no Info).
 
 ---
 

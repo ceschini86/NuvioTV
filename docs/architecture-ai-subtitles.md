@@ -312,7 +312,7 @@ val canUseAi = !isUsingMpvEngine() && style.aiEnabled && (credentials.anyUsable(
 
 **Reload vs overlay:** AI **não** introduz reload de media source. Usa overlay de cues (embedded TextOutput ou sidecar ticker). Reload de ASS+libass continua regra clássica, independente da AI.
 
-**Lock “Translate with AI”:** `aiSubtitleUserLocked = true` — auto ladder / upgrade preferido não substituem a escolha; diagnostics `userLocked=true`, rung `MANUAL`.
+**Lock “Translate with AI”:** `aiSubtitleUserLocked = true` — auto ladder / upgrade preferido não substituem a escolha; diagnostics `userLocked=true`, rung `MANUAL`. **Reset Smart** (`OnResetToSmartAuto` / `resetToSmartAutoSubtitleSelection`) limpa `userLocked` + `explicit` e re-executa a ladder — não é um Stop.
 
 ---
 
