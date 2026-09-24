@@ -24,23 +24,58 @@ In-app update checks point at **this** repository’s GitHub Releases.
 
 ## What’s different in this fork
 
-### AI subtitles
+### AI subtitles — how to use
 
-- **AI translation** (ExoPlayer only) using your own API key — Groq (`gpt-oss-120b`) or Gemini (`3.5 Flash Lite`). The key stays on-device.
-- **Smart AI subtitles** auto-picks a source in this order:
-  1. Preferred-language embedded track (no AI)
-  2. AI translation from embedded / original-language track
-  3. AI translation from a high-scoring addon subtitle (release-name match ≥ 50)
-  4. Preferred-language scored addon, then classic fallback
-- **Manual “Translate with AI”** from the subtitle menu locks that choice so auto-select won’t override it.
-- **Match score badges** and an AI source diagnostics panel show why a track was chosen.
+AI translation works on **ExoPlayer** only. You bring your own API keys; they stay **on this device** (never synced to a Nuvio cloud profile).
 
-Configure under Playback → AI subtitles.
+1. Open **Playback → AI subtitles**.
+2. Enable the providers you want (**Groq**, **Gemini**, **Claude**), paste one or more keys per provider, and use **Test key** if you want a quick validity check.
+3. Turn **Smart AI subtitles** on if you want automatic source picking while you watch.
+4. During playback, open the subtitle menu (CC). You get three columns: **Languages → Options → Info**.
+
+**Smart (automatic)** picks among **embedded** tracks only:
+
+1. Preferred-language embedded track → use as-is (**no** API call).
+2. Else a suitable embedded track (prefer the title’s original language; skip forced / songs-and-signs / bitmap) → **translate with AI**.
+3. Else classic auto-select (may pick an addon **without** translating it).
+
+Addon subtitles are **never** auto-translated. Match **%** badges on addons are informational; they do not drive Smart.
+
+**Translate with AI** (on the Info column) locks that exact source so Smart will not override it — useful for an embedded or addon track you chose yourself.
+
+**Reset to smart auto** clears that lock and runs the Smart ladder again (it is not a simple “stop translation”).
+
+While AI is active you will see a yellow cue on the source language and an **AI source** chip on the source option. Turn subtitles off with **None / Off** in Languages.
+
+If every key hits rate limits or fails quality checks, translation turns off but the **current** subtitle selection is kept — the player does not jump to another language.
+
+### AI subtitles — architecture (short)
+
+```text
+Preferred embedded ──► use as-is
+        │ (missing)
+        ▼
+Translatable embedded ──► LLM batches ──► quality gate ──► on-screen cues
+        │ (none)
+        ▼
+Classic auto-select (embedded or addon, no AI)
+```
+
+| Piece | Behavior |
+|-------|----------|
+| **Smart ladder** | Embedded-only; waits for ExoPlayer’s normal text-track scan; no Matroska deep probe for “hidden” tracks |
+| **Manual lock** | Translate with AI sets a lock; Reset to smart auto clears it and re-runs the ladder |
+| **Providers** | Groq → Gemini → Claude fallback; multiple keys per provider; 429 → cooldown → next key/provider |
+| **Quality gate** | Batches that stay in the source language (or fail coverage) are rejected so the next key/provider can retry |
+| **Not in scope** | No ASR / Whisper from audio; no AI on **MPV**; no Nuvio-hosted LLM proxy; no on-device ML Kit translation |
+
+Deeper design notes (ladder details, ADRs, file map): [`docs/architecture-ai-subtitles.md`](docs/architecture-ai-subtitles.md). Product scope: [`docs/prd-ai-subtitles.md`](docs/prd-ai-subtitles.md). Subtitle menu behavior: [`docs/prd-ai-subtitles-ui-menu.md`](docs/prd-ai-subtitles-ui-menu.md).
 
 ### Player
 
-- Slim, themed **seek / scrub bar**: light feedback on quick taps, expands while you hold and scrub.
-- Scrub polish for short seeks vs held scrubbing, so progress feels clearer on TV remotes.
+- Thin **Stremio-style** seek bar: accent played segment, discreet remaining track, solid thumb with a light ring.
+- Transport buttons stay solid on focus (no Material “bubble” scale).
+- VOD current / duration sits on the same row as the transport controls.
 
 ## Build from source
 
