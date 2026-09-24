@@ -38,9 +38,18 @@ Col1 (Idiomas + None/Off) → Col2 (embedded | addon | AI sintética) → Col3 (
 ## Processo obrigatório
 1. **Antes de editar:** produzir uma tabela `ID → arquivo/função a alterar → abordagem` cobrindo **todos** os IDs da fatia. Um ID sem linha na tabela é falha.
 2. Implementar.
-3. **Relatório final**, com uma linha por ID do DoD: `status (feito / parcial / não feito)` + `arquivo:função` + `evidência` (teste, screenshot do emulador ou log). **É proibido marcar como feito sem evidência.** Um item parcial ou não feito precisa do motivo.
+3. **Relatório final**, com uma linha por ID do DoD: `status (feito / parcial / não feito)` + `arquivo:função` + `evidência` (teste, screenshot do dispositivo ou log). **É proibido marcar como feito sem evidência.** Um item parcial ou não feito precisa do motivo.
 4. Listar os gaps e decisões tomadas por conta própria. Se algo for ambíguo, parar e reportar em vez de assumir.
 5. Não commitar. O monitor revisa e commita.
+
+## Política de build (economia de tempo)
+**Não** rodar `assemble` + install a cada fatia.
+
+| Fatia | Validação esperada |
+|-------|-------------------|
+| **A** | Já em andamento: compile Kotlin + unit tests; install/screenshots nesta fatia se forem necessários para N/V. Não repetir `assembleFullRelease` se já houver APK fresco. |
+| **B** | **Só** `:app:compile*Kotlin` (se precisar) + **unit tests** da função pura de Info/CTAs. **Sem** assemble/install/screenshots no dispositivo — evidência = testes. Screenshots de I*/C*/K1 ficam para a Fatia C. |
+| **C** | **Um** `assemble` + install + smoke/screenshots cobrindo regressão de A+B e os IDs de C (T/F/A/S/P). Estender a skill de smoke aqui. |
 
 ---
 
@@ -128,10 +137,11 @@ O Info descreve **a opção da Col2** (focada ou selecionada): nome completo, ti
 Extrair a decisão para uma **função pura**, por exemplo `(opção, focada|selecionada, origem/rung, aiDisponível) → (conteúdoInfo, ctas)`, com **testes unitários cobrindo I1–I4 e C1–C6**.
 
 ## DoD
-- [ ] Função pura + testes unitários, um caso por ID (I1–I7, C1–C6)
-- [ ] Screenshot no dispositivo de I1, I2, I3, I4, C1, C4, C5 e C6
-- [ ] K1 validado (screenshot do contador)
-- [ ] N4–N6 da Fatia A continuam válidos (sem regressão)
+- [ ] Função pura + testes unitários, um caso por ID (I1–I7, C1–C6) — **esta é a evidência principal da Fatia B**
+- [ ] K1 coberto por teste (ou deixa screenshot para Fatia C; declarar qual)
+- [ ] **Sem** assemble/install nesta fatia (ver política de build na Base)
+- [ ] Screenshots de I1–I4 / C1,C4,C5,C6 **adiados** para Fatia C
+- [ ] N4–N6 da Fatia A: não revalidar no device aqui; só garantir que o código não regride a lógica (revisão do diff)
 
 ---
 
@@ -189,8 +199,10 @@ Valem **sempre que a tradução AI estiver ativa**, seja pela ladder (automátic
 - [ ] T1–T4 validados com addon **e** com embedded (screenshots)
 - [ ] F1–F4 validados com AI automática (ladder) **e** manual, incluindo troca de fonte e desligamento (screenshots)
 - [ ] A1–A3 validados (A1: log mostrando que não houve re-translate)
-- [ ] S1–S6 validados por rung. Se um rung for difícil de reproduzir no emulador, cobrir com teste unitário da policy e declarar isso
+- [ ] S1–S6 validados por rung. Se um rung for difícil de reproduzir no device, cobrir com teste unitário da policy e declarar isso
 - [ ] P1–P3: screenshot de fechar e reabrir o overlay
+- [ ] Screenshots adiados da Fatia B (I1–I4, C1/C4/C5/C6, K1) capturados neste smoke
+- [ ] **Um** assemble + install (único da sequência A→B→C)
 - [ ] Skill `ai-subtitles-smoke` estendida com os passos novos
 - [ ] D1–D2 feitos
 - [ ] Regressão: Fatias A e B continuam válidas
