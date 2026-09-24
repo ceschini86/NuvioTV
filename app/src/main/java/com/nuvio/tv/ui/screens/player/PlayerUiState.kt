@@ -124,6 +124,8 @@ data class PlayerUiState(
     val aiSubtitleTranslationActive: Boolean = false,
     val subtitleAiFeatureEnabled: Boolean = false,
     val aiSubtitleDiagnostics: AiSubtitleDiagnostics? = null,
+    /** Mirrors runtime [isUserExplicitSubtitleSelection] for Info CTA C2 vs C5. */
+    val userExplicitSubtitleSelection: Boolean = false,
     val showAiSubtitleDiagnosticsOverlay: Boolean = false,
     val showSubtitleTranslateMenuOverlay: Boolean = false,
     val subtitleTranslateMenuOptionId: String? = null,
@@ -300,6 +302,8 @@ sealed class PlayerEvent {
         val internalTrackIndex: Int? = null,
         val addonSubtitle: Subtitle? = null
     ) : PlayerEvent()
+    /** Clear userLocked + explicit and re-run Smart ladder (Info CTA "Voltar à seleção automática"). */
+    data object OnResetToSmartAuto : PlayerEvent()
     data object OnShowAiSubtitleDiagnostics : PlayerEvent()
     data object OnDismissAiSubtitleDiagnostics : PlayerEvent()
     data class OnShowSubtitleTranslateMenu(val optionId: String) : PlayerEvent()

@@ -193,7 +193,7 @@ internal fun PlayerRuntimeController.refreshSubtitlesForCurrentEpisode() {
         rememberedTrackPreference = rememberedTrackPreference?.copy(subtitle = null)
     }
     autoSubtitleSelected = keepDisabled
-    isUserExplicitSubtitleSelection = false
+    setUserExplicitSubtitleSelection(false)
     subtitleDisabledByPersistedPreference = keepDisabled
     subtitleAddonRestoredByPersistedPreference = false
     pendingRestoredAddonSubtitle = null

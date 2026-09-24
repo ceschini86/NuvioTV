@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -72,6 +73,8 @@ internal const val SubtitleAiOptionId = "ai:translate"
 private const val RailFadeDurationMs = 120
 private val InfoRailWidth = 280.dp
 private val SelectedWithoutFocusAlpha = 0.5f
+/** F1/F2 yellow accent for the current AI translation source. */
+private val AiSourceIndicatorYellow = Color(0xFFFFD54F)
 
 @Composable
 internal fun SubtitleSelectionOverlay(
@@ -93,6 +96,7 @@ internal fun SubtitleSelectionOverlay(
     isAiSubtitleTranslating: Boolean = false,
     aiSubtitleDiagnostics: AiSubtitleDiagnostics? = null,
     aiSubtitleLastError: String? = null,
+    userExplicitSubtitleSelection: Boolean = false,
     onInternalTrackSelected: (Int) -> Unit,
     onAddonSubtitleSelected: (Subtitle) -> Unit,
     onDisableSubtitles: () -> Unit,
@@ -196,7 +200,11 @@ internal fun SubtitleSelectionOverlay(
             }
         }
     }
-    fun buildSessionOptions(languageKey: String, activeSelectedOptionId: String?): List<SubtitleOptionRailItem> {
+    fun buildSessionOptions(
+        languageKey: String,
+        activeSelectedOptionId: String?,
+        aiSourceOptionId: String? = null
+    ): List<SubtitleOptionRailItem> {
         return buildSubtitleOptionRailItems(
             selectedLanguageKey = languageKey,
             preferredLanguageKey = preferredLanguageKey,
@@ -214,11 +222,45 @@ internal fun SubtitleSelectionOverlay(
             aiOptionBadge = aiOptionBadge,
             aiOptionMeta = aiOptionMeta,
             aiOptionTranslatingMeta = aiOptionTranslatingMeta,
-            aiOptionApiKeyMeta = aiOptionApiKeyMeta
+            aiOptionApiKeyMeta = aiOptionApiKeyMeta,
+            aiSourceOptionId = aiSourceOptionId
         )
     }
+    val aiSourceIndicators = remember(
+        aiSubtitleTranslationActive,
+        aiSubtitleDiagnostics,
+        selectedInternalIndex,
+        selectedAddonSubtitle,
+        internalTracks
+    ) {
+        if (!aiSubtitleTranslationActive) {
+            AiSourceIndicatorDecision.Hidden
+        } else {
+            val diag = aiSubtitleDiagnostics
+            val sourceLangKey = when {
+                !diag?.sourceLanguage.isNullOrBlank() ->
+                    normalizeOverlayLanguageKey(diag!!.sourceLanguage)
+                selectedAddonSubtitle != null ->
+                    normalizeOverlayLanguageKey(selectedAddonSubtitle.lang)
+                selectedInternalIndex >= 0 ->
+                    internalTracks.firstOrNull { it.index == selectedInternalIndex }
+                        ?.let { normalizeOverlayLanguageKeyForTrack(it) }
+                else -> null
+            }
+            val sourceOptionId = resolveAiSourceOptionId(
+                sourceKind = diag?.sourceKind,
+                selectedInternalIndex = selectedInternalIndex,
+                selectedAddonOptionId = selectedAddonSubtitle?.let { addonSubtitleOptionId(it) }
+            )
+            decideAiSourceIndicators(
+                translationActive = true,
+                sourceLanguageKey = sourceLangKey,
+                sourceOptionId = sourceOptionId
+            )
+        }
+    }
     val sessionInitialSubtitleOptions = remember(visible) {
-        buildSessionOptions(sessionInitialLanguageKey, sessionInitialSelectedOptionId)
+        buildSessionOptions(sessionInitialLanguageKey, sessionInitialSelectedOptionId, aiSourceIndicators.optionId)
     }
     val sessionInitialOptionTargetId = remember(visible) {
         sessionInitialSelectedOptionId
@@ -248,9 +290,10 @@ internal fun SubtitleSelectionOverlay(
         aiOptionBadge,
         aiOptionMeta,
         aiOptionTranslatingMeta,
-        aiOptionApiKeyMeta
+        aiOptionApiKeyMeta,
+        aiSourceIndicators.optionId
     ) {
-        buildSessionOptions(browsedLanguageKey, selectedOptionId)
+        buildSessionOptions(browsedLanguageKey, selectedOptionId, aiSourceIndicators.optionId)
     }
     val playbackSelectedOption = remember(selectedOptionId, subtitleOptions, aiSubtitleTranslationActive) {
         subtitleOptions.firstOrNull { it.id == selectedOptionId && it.isSelected }
@@ -341,7 +384,8 @@ internal fun SubtitleSelectionOverlay(
         aiSubtitleTranslationActive,
         isUsingMpv,
         aiSubtitleDiagnostics,
-        infoStatusLine
+        infoStatusLine,
+        userExplicitSubtitleSelection
     ) {
         val optionForDecision = when {
             activeRail == OverlayFocusRail.INFO -> playbackSelectedOption ?: infoDisplayOption
@@ -357,11 +401,12 @@ internal fun SubtitleSelectionOverlay(
             aiAvailable = aiSubtitleAvailable,
             aiQuotaExhausted = aiSubtitleQuotaExhausted,
             isUsingMpv = isUsingMpv,
-            userExplicitSelection = false,
+            userExplicitSelection = userExplicitSubtitleSelection,
             translationActive = aiSubtitleTranslationActive
         )
     }
     val infoCtaState = infoRailDecision.cta
+    var pendingPostActionFocus by remember(visible) { mutableStateOf<String?>(null) }
 
     fun requestLanguageFocus(targetKey: String?) {
         val resolvedKey = targetKey
@@ -404,6 +449,55 @@ internal fun SubtitleSelectionOverlay(
             "option_restore_schedule source=$reason language=$languageKey id=$resolvedId"
         )
         optionFocusToken += 1
+    }
+
+    fun jumpFocusToPreferredAi(reason: String) {
+        browsedLanguageKey = preferredLanguageKey
+        selectedOptionId = SubtitleAiOptionId
+        optionFocusMemory = optionFocusMemory + (preferredLanguageKey to SubtitleAiOptionId)
+        infoEntryOptionId = SubtitleAiOptionId
+        activeOptionFocusId = SubtitleAiOptionId
+        activeRail = OverlayFocusRail.OPTION
+        requestOptionFocus(
+            targetId = SubtitleAiOptionId,
+            languageKey = preferredLanguageKey,
+            reason = reason
+        )
+    }
+
+    fun applyResetSmartFocusFromPlayback() {
+        val diag = aiSubtitleDiagnostics
+        val rung = diag?.rung ?: return
+        val playbackLang = when {
+            selectedAddonSubtitle != null -> normalizeOverlayLanguageKey(selectedAddonSubtitle.lang)
+            selectedInternalIndex >= 0 ->
+                internalTracks.firstOrNull { it.index == selectedInternalIndex }
+                    ?.let { normalizeOverlayLanguageKeyForTrack(it) }
+                    ?: preferredLanguageKey
+            else -> preferredLanguageKey
+        }
+        val playbackOptionId = selectedSubtitleOptionId(
+            internalTracks = internalTracks,
+            selectedInternalIndex = selectedInternalIndex,
+            selectedAddonSubtitle = selectedAddonSubtitle
+        )
+        val focus = decideResetSmartFocus(
+            rung = rung,
+            preferredLanguageKey = preferredLanguageKey,
+            playbackLanguageKey = playbackLang,
+            playbackOptionId = playbackOptionId
+        )
+        browsedLanguageKey = focus.languageKey
+        selectedOptionId = focus.optionId
+        optionFocusMemory = optionFocusMemory + (focus.languageKey to focus.optionId)
+        infoEntryOptionId = focus.optionId
+        activeOptionFocusId = focus.optionId
+        activeRail = OverlayFocusRail.OPTION
+        requestOptionFocus(
+            targetId = focus.optionId,
+            languageKey = focus.languageKey,
+            reason = "reset_smart"
+        )
     }
 
     fun requestInfoFocus(reason: String) {
@@ -461,7 +555,11 @@ internal fun SubtitleSelectionOverlay(
         activeRail = OverlayFocusRail.LANGUAGE
         activeInfoFocusKey = null
         if (languageKey != SubtitleOffLanguageKey) {
-            val nextOptions = buildSessionOptions(languageKey, selectedOptionId)
+            val nextOptions = buildSessionOptions(
+                languageKey,
+                selectedOptionId,
+                aiSourceIndicators.optionId
+            )
             val nextTargetId = selectedOptionId?.takeIf { id -> nextOptions.any { it.id == id } }
                 ?: optionFocusMemory[languageKey]?.takeIf { id -> nextOptions.any { it.id == id } }
                 ?: nextOptions.firstOrNull()?.id
@@ -509,6 +607,21 @@ internal fun SubtitleSelectionOverlay(
                 )
                 requestLanguageFocus(sessionInitialLanguageKey)
             }
+        }
+
+        // S6: after Reset Smart, wait for ladder diagnostics/selection then focus the result.
+        LaunchedEffect(
+            pendingPostActionFocus,
+            aiSubtitleDiagnostics?.rung,
+            aiSubtitleTranslationActive,
+            selectedInternalIndex,
+            selectedAddonSubtitle?.id
+        ) {
+            if (pendingPostActionFocus != "reset_smart") return@LaunchedEffect
+            // Wait until policy published a new rung (reset clears diagnostics first).
+            if (aiSubtitleDiagnostics == null) return@LaunchedEffect
+            applyResetSmartFocusFromPlayback()
+            pendingPostActionFocus = null
         }
 
         LaunchedEffect(visible, sessionInitialLanguageKey, languageItems) {
@@ -562,6 +675,7 @@ internal fun SubtitleSelectionOverlay(
                 SubtitleLanguageRail(
                     items = languageItems,
                     browsedLanguageKey = browsedLanguageKey,
+                    aiSourceLanguageKey = aiSourceIndicators.languageKey.takeIf { aiSourceIndicators.visible },
                     focusOnLanguageRail = activeRail == OverlayFocusRail.LANGUAGE || activeRail == null,
                     listState = languageListState,
                     itemFocusRequesters = languageItemRequesters,
@@ -632,15 +746,46 @@ internal fun SubtitleSelectionOverlay(
                                 onAddonSubtitleSelected(subtitle)
                             },
                             onAiOptionSelected = { optionId ->
-                                if (selectedOptionId == optionId && aiSubtitleTranslationActive) {
-                                    return@SubtitleOptionsRail // G1
+                                val action = decideAiOptionClickAction(
+                                    aiOptionAlreadySelected = selectedOptionId == optionId &&
+                                        aiSubtitleTranslationActive,
+                                    translationActive = aiSubtitleTranslationActive,
+                                    userLocked = aiSubtitleDiagnostics?.userLocked == true
+                                )
+                                when (action) {
+                                    AiOptionClickAction.NO_OP -> {
+                                        Log.d(
+                                            SubtitleFocusTag,
+                                            "Select AI option source=${aiSubtitleDiagnostics?.sourceLabel ?: "-"} " +
+                                                "reason=already_selected locked=${aiSubtitleDiagnostics?.userLocked == true} " +
+                                                "rung=${aiSubtitleDiagnostics?.rung?.name ?: "-"}"
+                                        )
+                                        return@SubtitleOptionsRail // A1 / G1
+                                    }
+                                    AiOptionClickAction.SELECT_ONLY -> {
+                                        // A2: keep current manual/auto source; only align UI.
+                                        selectedOptionId = optionId
+                                        optionFocusMemory = optionFocusMemory + (browsedLanguageKey to optionId)
+                                        infoEntryOptionId = optionId
+                                        activeOptionFocusId = optionId
+                                        activeRail = OverlayFocusRail.OPTION
+                                        Log.d(
+                                            SubtitleFocusTag,
+                                            "Select AI option source=${aiSubtitleDiagnostics?.sourceLabel ?: "-"} " +
+                                                "reason=select_only_keep_source locked=${aiSubtitleDiagnostics?.userLocked == true} " +
+                                                "rung=${aiSubtitleDiagnostics?.rung?.name ?: "-"}"
+                                        )
+                                    }
+                                    AiOptionClickAction.ENABLE_MANUAL -> {
+                                        // A3
+                                        selectedOptionId = optionId
+                                        optionFocusMemory = optionFocusMemory + (browsedLanguageKey to optionId)
+                                        infoEntryOptionId = optionId
+                                        activeOptionFocusId = optionId
+                                        activeRail = OverlayFocusRail.OPTION
+                                        onToggleAiTranslation()
+                                    }
                                 }
-                                selectedOptionId = optionId
-                                optionFocusMemory = optionFocusMemory + (browsedLanguageKey to optionId)
-                                infoEntryOptionId = optionId
-                                activeOptionFocusId = optionId
-                                activeRail = OverlayFocusRail.OPTION
-                                onToggleAiTranslation()
                             }
                         )
                     }
@@ -683,9 +828,13 @@ internal fun SubtitleSelectionOverlay(
                                         SubtitleOptionKind.AI -> onToggleAiTranslation()
                                         null -> onToggleAiTranslation()
                                     }
+                                    // T3: same-session jump to preferred + AI.
+                                    jumpFocusToPreferredAi(reason = "translate_with_ai")
                                 },
-                                // Fatia C wires reset Smart; show CTA only here (C4).
-                                onResetToSmartAuto = {}
+                                onResetToSmartAuto = {
+                                    pendingPostActionFocus = "reset_smart"
+                                    onEvent(PlayerEvent.OnResetToSmartAuto)
+                                }
                             )
                         }
                     }
@@ -729,6 +878,7 @@ private fun RailFadeIn(
 private fun SubtitleLanguageRail(
     items: List<SubtitleLanguageRailItem>,
     browsedLanguageKey: String,
+    aiSourceLanguageKey: String?,
     focusOnLanguageRail: Boolean,
     listState: LazyListState,
     itemFocusRequesters: Map<String, FocusRequester>,
@@ -776,6 +926,7 @@ private fun SubtitleLanguageRail(
                     item = item,
                     // V1: ~50% when this language's Col2 is open and focus is elsewhere.
                     emphasized = isBrowsed && !focusOnLanguageRail,
+                    showAiSourceDot = item.key == aiSourceLanguageKey,
                     onClick = { onLanguageClicked(item.key) },
                     focusRequester = itemFocusRequesters[item.key],
                     onMoveRight = onMoveRight,
@@ -1254,6 +1405,7 @@ private fun RailColumn(
 private fun SubtitleLanguageCard(
     item: SubtitleLanguageRailItem,
     emphasized: Boolean,
+    showAiSourceDot: Boolean,
     onClick: () -> Unit,
     focusRequester: FocusRequester?,
     onMoveRight: (() -> Unit)?,
@@ -1329,9 +1481,21 @@ private fun SubtitleLanguageCard(
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false)
             )
-            if (item.count > 0) {
-                androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(6.dp))
-                CountBadge(count = item.count, selected = isFocused || emphasized)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // F1: yellow dot on the AI source language (no ✓ on Col1).
+                if (showAiSourceDot) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(AiSourceIndicatorYellow, CircleShape)
+                    )
+                }
+                if (item.count > 0) {
+                    CountBadge(count = item.count, selected = isFocused || emphasized)
+                }
             }
         }
     }
@@ -1427,7 +1591,20 @@ private fun SubtitleOptionCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                SourceChip(label = item.sourceLabel, selected = isFocused || item.isSelected)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    SourceChip(label = item.sourceLabel, selected = isFocused || item.isSelected)
+                    // F2: yellow "Fonte IA" chip beside the origin chip.
+                    if (item.isAiSource) {
+                        SourceChip(
+                            label = stringResource(R.string.sub_ai_source_chip),
+                            selected = false,
+                            accentYellow = true
+                        )
+                    }
+                }
                 Text(
                     text = item.title,
                     style = MaterialTheme.typography.bodyLarge,
@@ -1515,22 +1692,35 @@ private fun CountBadge(
 }
 
 @Composable
-private fun SourceChip(label: String, selected: Boolean = false) {
+private fun SourceChip(
+    label: String,
+    selected: Boolean = false,
+    accentYellow: Boolean = false
+) {
+    val background = when {
+        accentYellow -> AiSourceIndicatorYellow.copy(alpha = 0.22f)
+        selected -> NuvioTheme.colors.OnSecondary.copy(alpha = 0.14f)
+        else -> Color.White.copy(alpha = 0.08f)
+    }
+    val textColor = when {
+        accentYellow -> AiSourceIndicatorYellow
+        selected -> NuvioTheme.colors.OnSecondary.copy(alpha = 0.9f)
+        else -> Color.White.copy(alpha = 0.78f)
+    }
     Box(
         modifier = Modifier
-            .background(
-                if (selected) {
-                    NuvioTheme.colors.OnSecondary.copy(alpha = 0.14f)
-                } else {
-                    Color.White.copy(alpha = 0.08f)
-                },
-                RoundedCornerShape(999.dp)
-            )
+            .background(background, RoundedCornerShape(999.dp))
             .then(
-                if (selected) {
+                if (selected && !accentYellow) {
                     Modifier.border(
                         width = NuvioTheme.spacing.hairline,
                         color = NuvioTheme.colors.OnSecondary.copy(alpha = 0.22f),
+                        shape = RoundedCornerShape(999.dp)
+                    )
+                } else if (accentYellow) {
+                    Modifier.border(
+                        width = NuvioTheme.spacing.hairline,
+                        color = AiSourceIndicatorYellow.copy(alpha = 0.55f),
                         shape = RoundedCornerShape(999.dp)
                     )
                 } else {
@@ -1542,11 +1732,7 @@ private fun SourceChip(label: String, selected: Boolean = false) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = if (selected) {
-                NuvioTheme.colors.OnSecondary.copy(alpha = 0.9f)
-            } else {
-                Color.White.copy(alpha = 0.78f)
-            }
+            color = textColor
         )
     }
 }
@@ -1663,7 +1849,9 @@ private data class SubtitleOptionRailItem(
     val isBitmap: Boolean = false,
     val isForced: Boolean = false,
     val isSdh: Boolean = false,
-    val fileName: String? = null
+    val fileName: String? = null,
+    /** F2: this option is the current AI translation source. */
+    val isAiSource: Boolean = false
 )
 
 private fun SubtitleOptionRailItem.toInfoSnapshot(unknownLabel: String): SubtitleInfoOptionSnapshot {
@@ -1801,7 +1989,8 @@ private fun buildSubtitleOptionRailItems(
     aiOptionBadge: String,
     aiOptionMeta: String,
     aiOptionTranslatingMeta: String,
-    aiOptionApiKeyMeta: String
+    aiOptionApiKeyMeta: String,
+    aiSourceOptionId: String? = null
 ): List<SubtitleOptionRailItem> {
     if (selectedLanguageKey == SubtitleOffLanguageKey) return emptyList()
 
@@ -1830,7 +2019,8 @@ private fun buildSubtitleOptionRailItems(
             addonSubtitle = subtitle,
             languageCode = subtitle.lang,
             formatLabel = subtitleFormatLabelFromUrl(subtitle.url),
-            fileName = fileName
+            fileName = fileName,
+            isAiSource = optionId == aiSourceOptionId
         )
     }
 
@@ -1846,8 +2036,9 @@ private fun buildSubtitleOptionRailItems(
         .filter { normalizeOverlayLanguageKeyForTrack(it) == selectedLanguageKey }
         .map { track ->
             val (formatLabel, isBitmap) = subtitleFormatLabelFromCodec(track.codec)
+            val optionId = "internal:${track.index}"
             SubtitleOptionRailItem(
-                id = "internal:${track.index}",
+                id = optionId,
                 kind = SubtitleOptionKind.INTERNAL,
                 title = track.name,
                 sourceLabel = builtInLabel,
@@ -1855,13 +2046,14 @@ private fun buildSubtitleOptionRailItems(
                     track.codec,
                     if (track.isForced) forcedLabel else null
                 ).joinToString(" • ").ifBlank { null },
-                isSelected = "internal:${track.index}" == selectedOptionId,
+                isSelected = optionId == selectedOptionId,
                 internalTrackIndex = track.index,
                 languageCode = track.language,
                 formatLabel = formatLabel,
                 isBitmap = isBitmap,
                 isForced = track.isForced,
-                isSdh = trackNameLooksSdh(track.name)
+                isSdh = trackNameLooksSdh(track.name),
+                isAiSource = optionId == aiSourceOptionId
             )
         }
 
