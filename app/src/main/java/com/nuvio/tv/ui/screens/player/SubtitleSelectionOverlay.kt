@@ -36,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -325,6 +326,8 @@ internal fun SubtitleSelectionOverlay(
     var activeInfoFocusKey by remember(visible) { mutableStateOf<String?>(null) }
     var languageFocusToken by remember(visible) { mutableStateOf(0) }
     var optionFocusToken by remember(visible) { mutableStateOf(0) }
+    /** Bumped only from Col2 `onOptionFocused` — real FocusRequester success, not optimistic state. */
+    var optionFocusGeneration by remember(visible) { mutableStateOf(0) }
     var infoFocusToken by remember(visible) { mutableStateOf(0) }
     var pendingLanguageFocusKey by remember(visible) { mutableStateOf<String?>(null) }
     var pendingOptionFocusId by remember(visible) { mutableStateOf<String?>(null) }
@@ -427,11 +430,14 @@ internal fun SubtitleSelectionOverlay(
     fun requestOptionFocus(
         targetId: String?,
         languageKey: String = browsedLanguageKey,
-        reason: String
+        reason: String,
+        force: Boolean = false
     ) {
         val resolvedId = targetId ?: subtitleOptions.firstOrNull()?.id
             ?: return
-        if (pendingOptionFocusId == resolvedId && pendingOptionFocusLanguageKey == languageKey) {
+        // Never treat "state says OPTION" as real DPAD focus when the CTA/INFO still owns it,
+        // or when a post-CTA settle must re-fire FocusRequester after the button leaves composition.
+        if (!force && pendingOptionFocusId == resolvedId && pendingOptionFocusLanguageKey == languageKey) {
             Log.d(
                 SubtitleFocusTag,
                 "option_restore_skip reason=duplicate_pending source=$reason language=$languageKey id=$resolvedId"
@@ -439,7 +445,9 @@ internal fun SubtitleSelectionOverlay(
             return
         }
         if (
+            !force &&
             activeRail == OverlayFocusRail.OPTION &&
+            activeInfoFocusKey == null &&
             languageKey == browsedLanguageKey &&
             activeOptionFocusId == resolvedId
         ) {
@@ -453,26 +461,29 @@ internal fun SubtitleSelectionOverlay(
         pendingOptionFocusLanguageKey = languageKey
         Log.d(
             SubtitleFocusTag,
-            "option_restore_schedule source=$reason language=$languageKey id=$resolvedId"
+            "option_restore_schedule source=$reason language=$languageKey id=$resolvedId force=$force"
         )
         optionFocusToken += 1
     }
 
-    fun jumpFocusToPreferredAi(reason: String) {
+    fun jumpFocusToPreferredAi(reason: String, force: Boolean = false) {
         browsedLanguageKey = preferredLanguageKey
         selectedOptionId = SubtitleAiOptionId
         optionFocusMemory = optionFocusMemory + (preferredLanguageKey to SubtitleAiOptionId)
         infoEntryOptionId = SubtitleAiOptionId
-        activeOptionFocusId = SubtitleAiOptionId
-        activeRail = OverlayFocusRail.OPTION
+        activeInfoFocusKey = null
+        // Schedule FocusRequester before claiming OPTION ownership for skip checks.
         requestOptionFocus(
             targetId = SubtitleAiOptionId,
             languageKey = preferredLanguageKey,
-            reason = reason
+            reason = reason,
+            force = force
         )
+        activeOptionFocusId = SubtitleAiOptionId
+        activeRail = OverlayFocusRail.OPTION
     }
 
-    fun applyResetSmartFocusFromPlayback() {
+    fun applyResetSmartFocusFromPlayback(force: Boolean = false) {
         val diag = aiSubtitleDiagnostics
         val rung = diag?.rung ?: return
         val playbackLang = when {
@@ -498,13 +509,15 @@ internal fun SubtitleSelectionOverlay(
         selectedOptionId = focus.optionId
         optionFocusMemory = optionFocusMemory + (focus.languageKey to focus.optionId)
         infoEntryOptionId = focus.optionId
-        activeOptionFocusId = focus.optionId
-        activeRail = OverlayFocusRail.OPTION
+        activeInfoFocusKey = null
         requestOptionFocus(
             targetId = focus.optionId,
             languageKey = focus.languageKey,
-            reason = "reset_smart"
+            reason = "reset_smart",
+            force = force
         )
+        activeOptionFocusId = focus.optionId
+        activeRail = OverlayFocusRail.OPTION
     }
 
     fun requestInfoFocus(reason: String) {
@@ -616,19 +629,115 @@ internal fun SubtitleSelectionOverlay(
             }
         }
 
-        // S6: after Reset Smart, wait for ladder diagnostics/selection then focus the result.
+        // After Translate/Reset CTAs remove or replace themselves, settle real FocusRequester on Col2.
+        // Do not trust activeOptionFocusId alone — CTA disposal orphans DPAD without requestFocus().
         LaunchedEffect(
             pendingPostActionFocus,
+            infoCtaState.action,
+            infoCtaState.canMoveFocusToCta,
             aiSubtitleDiagnostics?.rung,
             aiSubtitleTranslationActive,
             selectedInternalIndex,
-            selectedAddonSubtitle?.id
+            selectedAddonSubtitle?.id,
+            browsedLanguageKey,
+            subtitleOptions.map { it.id }
         ) {
-            if (pendingPostActionFocus != "reset_smart") return@LaunchedEffect
-            // Wait until policy published a new rung (reset clears diagnostics first).
-            if (aiSubtitleDiagnostics == null) return@LaunchedEffect
-            applyResetSmartFocusFromPlayback()
-            pendingPostActionFocus = null
+            when (pendingPostActionFocus) {
+                "translate_with_ai" -> {
+                    browsedLanguageKey = preferredLanguageKey
+                    selectedOptionId = SubtitleAiOptionId
+                    optionFocusMemory = optionFocusMemory + (preferredLanguageKey to SubtitleAiOptionId)
+                    infoEntryOptionId = SubtitleAiOptionId
+                    if (subtitleOptions.none { it.id == SubtitleAiOptionId }) {
+                        return@LaunchedEffect
+                    }
+                    val genAtStart = optionFocusGeneration
+                    // Let the Translate CTA leave (or swap to Reset) before requesting Col2 focus.
+                    repeat(2) { withFrameNanos { } }
+                    jumpFocusToPreferredAi(reason = "translate_with_ai_settle", force = true)
+                    repeat(8) { attempt ->
+                        if (
+                            optionFocusGeneration > genAtStart &&
+                            activeRail == OverlayFocusRail.OPTION &&
+                            activeOptionFocusId == SubtitleAiOptionId &&
+                            activeInfoFocusKey == null
+                        ) {
+                            Log.d(
+                                SubtitleFocusTag,
+                                "post_cta_focus_complete cta=translate target=$SubtitleAiOptionId " +
+                                    "lang=$preferredLanguageKey attempt=$attempt gen=$optionFocusGeneration"
+                            )
+                            pendingPostActionFocus = null
+                            return@LaunchedEffect
+                        }
+                        withFrameNanos { }
+                        requestOptionFocus(
+                            targetId = SubtitleAiOptionId,
+                            languageKey = preferredLanguageKey,
+                            reason = "translate_with_ai_retry_$attempt",
+                            force = true
+                        )
+                    }
+                    Log.d(
+                        SubtitleFocusTag,
+                        "post_cta_focus_timeout cta=translate target=$SubtitleAiOptionId " +
+                            "rail=$activeRail option=$activeOptionFocusId infoKey=$activeInfoFocusKey " +
+                            "gen=$optionFocusGeneration startGen=$genAtStart"
+                    )
+                    pendingPostActionFocus = null
+                }
+                "reset_smart" -> {
+                    // Wait until policy published a new rung (reset clears diagnostics first).
+                    if (aiSubtitleDiagnostics == null) return@LaunchedEffect
+                    val genAtStart = optionFocusGeneration
+                    applyResetSmartFocusFromPlayback(force = true)
+                    // CTA may disappear (C1) or change; settle FocusRequester after recomposition.
+                    repeat(2) { withFrameNanos { } }
+                    val targetId = activeOptionFocusId ?: selectedOptionId
+                    val targetLang = browsedLanguageKey
+                    if (targetId != null) {
+                        requestOptionFocus(
+                            targetId = targetId,
+                            languageKey = targetLang,
+                            reason = "reset_smart_settle",
+                            force = true
+                        )
+                    }
+                    repeat(8) { attempt ->
+                        if (
+                            optionFocusGeneration > genAtStart &&
+                            activeRail == OverlayFocusRail.OPTION &&
+                            activeOptionFocusId == targetId &&
+                            activeInfoFocusKey == null
+                        ) {
+                            Log.d(
+                                SubtitleFocusTag,
+                                "post_cta_focus_complete cta=reset target=$targetId " +
+                                    "lang=$targetLang attempt=$attempt gen=$optionFocusGeneration"
+                            )
+                            pendingPostActionFocus = null
+                            return@LaunchedEffect
+                        }
+                        withFrameNanos { }
+                        if (targetId != null) {
+                            requestOptionFocus(
+                                targetId = targetId,
+                                languageKey = targetLang,
+                                reason = "reset_smart_retry_$attempt",
+                                force = true
+                            )
+                        }
+                    }
+                    Log.d(
+                        SubtitleFocusTag,
+                        "post_cta_focus_timeout cta=reset target=$targetId " +
+                            "rail=$activeRail option=$activeOptionFocusId infoKey=$activeInfoFocusKey " +
+                            "gen=$optionFocusGeneration startGen=$genAtStart"
+                    )
+                    pendingPostActionFocus = null
+                }
+                else -> Unit
+            }
         }
 
         LaunchedEffect(visible, sessionInitialLanguageKey, languageItems) {
@@ -730,6 +839,7 @@ internal fun SubtitleSelectionOverlay(
                                 activeOptionFocusId = it
                                 activeRail = OverlayFocusRail.OPTION
                                 activeInfoFocusKey = null
+                                optionFocusGeneration += 1
                             },
                             onMoveLeft = ::moveFocusToLanguageRail,
                             onMoveRight = ::moveFocusToInfoRail,
@@ -815,11 +925,16 @@ internal fun SubtitleSelectionOverlay(
                                     pendingInfoFocusKey = null
                                 },
                                 onTranslateWithAi = {
-                                    // Capture source before jump (jump selects AI option).
+                                    // Capture source before UI jumps to preferred + AI.
                                     val option = playbackSelectedOption
                                         ?: subtitleOptions.firstOrNull { it.id == selectedOptionId }
-                                    // Focus Col2 AI first so CTA removal does not orphan DPAD focus.
-                                    jumpFocusToPreferredAi(reason = "translate_with_ai")
+                                    browsedLanguageKey = preferredLanguageKey
+                                    selectedOptionId = SubtitleAiOptionId
+                                    optionFocusMemory =
+                                        optionFocusMemory + (preferredLanguageKey to SubtitleAiOptionId)
+                                    infoEntryOptionId = SubtitleAiOptionId
+                                    activeInfoFocusKey = null
+                                    pendingPostActionFocus = "translate_with_ai"
                                     Log.d(
                                         SubtitleFocusTag,
                                         "post_cta_focus cta=translate target=$SubtitleAiOptionId lang=$preferredLanguageKey"
@@ -844,26 +959,13 @@ internal fun SubtitleSelectionOverlay(
                                     }
                                 },
                                 onResetToSmartAuto = {
-                                    // Immediate Col2 landing before CTA disappears; LaunchedEffect realigns.
-                                    val landingId = selectedOptionId ?: SubtitleAiOptionId
-                                    val landingLang = when {
-                                        landingId == SubtitleAiOptionId -> preferredLanguageKey
-                                        else -> browsedLanguageKey
-                                    }
-                                    browsedLanguageKey = landingLang
-                                    activeOptionFocusId = landingId
-                                    infoEntryOptionId = landingId
-                                    activeRail = OverlayFocusRail.OPTION
-                                    requestOptionFocus(
-                                        targetId = landingId,
-                                        languageKey = landingLang,
-                                        reason = "reset_smart_preflight"
-                                    )
+                                    activeInfoFocusKey = null
+                                    pendingPostActionFocus = "reset_smart"
                                     Log.d(
                                         SubtitleFocusTag,
-                                        "post_cta_focus cta=reset target=$landingId lang=$landingLang"
+                                        "post_cta_focus cta=reset pending=true lang=$browsedLanguageKey " +
+                                            "option=${selectedOptionId ?: SubtitleAiOptionId}"
                                     )
-                                    pendingPostActionFocus = "reset_smart"
                                     onEvent(PlayerEvent.OnResetToSmartAuto)
                                 }
                             )
@@ -1020,10 +1122,11 @@ private fun SubtitleOptionsRail(
             "option_restore_request language=$selectedLanguageKey id=$targetId index=$targetIndex firstVisible=${listState.firstVisibleItemIndex}"
         )
         listState.scrollItemIntoView(targetIndex)
-        itemFocusRequesters[targetId]?.requestFocusAfterFrames()
+        val focused = itemFocusRequesters[targetId]?.requestFocusAfterFrames(frames = 2) == true
         Log.d(
             SubtitleFocusTag,
-            "option_restore_complete language=$selectedLanguageKey id=$targetId index=$targetIndex firstVisible=${listState.firstVisibleItemIndex}"
+            "option_restore_complete language=$selectedLanguageKey id=$targetId index=$targetIndex " +
+                "firstVisible=${listState.firstVisibleItemIndex} requested=$focused"
         )
         onFocusRequestConsumed()
     }
