@@ -369,20 +369,30 @@ internal fun SubtitleSelectionOverlay(
     val rateLimitedAll = stringResource(R.string.sub_ai_error_rate_limited_all)
     val rateLimited = stringResource(R.string.sub_ai_error_rate_limited)
     val apiKeyMissing = stringResource(R.string.sub_ai_error_api_key_missing)
+    val insufficientCredits = stringResource(R.string.sub_ai_error_insufficient_credits)
+    val providerError = stringResource(R.string.sub_ai_error_generic)
     val translatingLabel = stringResource(R.string.sub_ai_translating)
     val aiOptionMetaLabel = stringResource(R.string.sub_ai_option_meta)
+    val isAiInfoOption = infoDisplayOption?.kind == SubtitleOptionKind.AI
+    val mappedAiError = when {
+        aiSubtitleLastError.isNullOrBlank() -> null
+        aiSubtitleLastError.equals("RATE_LIMITED", ignoreCase = true) ||
+            aiSubtitleLastError.contains("429") ||
+            aiSubtitleLastError.contains("rate limit", ignoreCase = true) ->
+            if (aiSubtitleQuotaExhausted) rateLimitedAll else rateLimited
+        aiSubtitleLastError.equals("API key missing", ignoreCase = true) -> apiKeyMissing
+        aiSubtitleLastError.equals("INSUFFICIENT_CREDITS", ignoreCase = true) ||
+            aiSubtitleLastError.contains("credit balance", ignoreCase = true) ||
+            aiSubtitleLastError.contains("insufficient credit", ignoreCase = true) ->
+            insufficientCredits
+        else -> providerError
+    }
+    // AI error / translating / meta only on the AI option card (Bug 3).
     val infoStatusLine = when {
-        !aiSubtitleLastError.isNullOrBlank() -> when {
-            aiSubtitleLastError.equals("RATE_LIMITED", ignoreCase = true) ||
-                aiSubtitleLastError.contains("429") ||
-                aiSubtitleLastError.contains("rate limit", ignoreCase = true) ->
-                if (aiSubtitleQuotaExhausted) rateLimitedAll else rateLimited
-            aiSubtitleLastError.equals("API key missing", ignoreCase = true) -> apiKeyMissing
-            else -> aiSubtitleLastError
-        }
-        aiSubtitleQuotaExhausted -> rateLimitedAll
-        isAiSubtitleTranslating -> translatingLabel
-        aiSubtitleTranslationActive -> aiOptionMetaLabel
+        isAiInfoOption && mappedAiError != null -> mappedAiError
+        isAiInfoOption && aiSubtitleQuotaExhausted -> rateLimitedAll
+        isAiInfoOption && isAiSubtitleTranslating -> translatingLabel
+        isAiInfoOption && aiSubtitleTranslationActive -> aiOptionMetaLabel
         else -> infoDisplayOption?.meta
     }
     val infoRailDecision = remember(
@@ -1243,9 +1253,11 @@ private fun SubtitleInfoPane(
     val cta = decision.cta
     val statusLine = content.statusLine
     val displayScore = content.matchScorePercent
-    val hasErrorTint = !aiSubtitleLastError.isNullOrBlank() ||
-        content.unavailableReason == SubtitleInfoUnavailableReason.RATE_LIMITED ||
-        content.unavailableReason == SubtitleInfoUnavailableReason.NO_API_KEY
+    val hasErrorTint = content.kind == SubtitleInfoContentKind.AI && (
+        !aiSubtitleLastError.isNullOrBlank() ||
+            content.unavailableReason == SubtitleInfoUnavailableReason.RATE_LIMITED ||
+            content.unavailableReason == SubtitleInfoUnavailableReason.NO_API_KEY
+        )
     val showCard = selectedOption != null ||
         aiSubtitleTranslationActive ||
         aiSubtitleDiagnostics != null ||

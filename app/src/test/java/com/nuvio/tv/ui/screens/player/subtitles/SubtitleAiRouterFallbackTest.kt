@@ -15,7 +15,26 @@ class SubtitleAiRouterFallbackTest {
         assertEquals(TRANSLATION_ERROR_RATE_LIMITED, normalizeProviderError("HTTP 429: quota", 429))
         assertEquals(TRANSLATION_ERROR_RATE_LIMITED, normalizeProviderError("resource_exhausted", null))
         assertEquals(TRANSLATION_ERROR_RATE_LIMITED, normalizeProviderError(null, 429))
-        assertEquals("boom", normalizeProviderError("boom", 500))
+        assertEquals(TRANSLATION_ERROR_PROVIDER, normalizeProviderError("boom", 500))
+    }
+
+    @Test
+    fun normalizeProviderError_mapsCreditBalanceAndHidesJson() {
+        val anthropicJson =
+            """HTTP 400: {"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API"}}"""
+        assertEquals(
+            TRANSLATION_ERROR_INSUFFICIENT_CREDITS,
+            normalizeProviderError(anthropicJson, 400)
+        )
+        assertEquals(
+            TRANSLATION_ERROR_INSUFFICIENT_CREDITS,
+            normalizeProviderError("insufficient_quota", null)
+        )
+        assertEquals(
+            TRANSLATION_ERROR_PROVIDER,
+            normalizeProviderError("""HTTP 500: {"type":"error","message":"internal"}""", 500)
+        )
+        assertEquals(TRANSLATION_ERROR_API_KEY_MISSING, normalizeProviderError("API key missing", 401))
     }
 
     @Test

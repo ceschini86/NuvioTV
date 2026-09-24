@@ -942,6 +942,66 @@ internal fun PlayerRuntimeController.publishManualAiDiagnosticsFromCurrentSource
     }
 }
 
+/**
+ * A3 enable from Col2 AI option: restore prior AI source or Smart embedded —
+ * never bind the incidental classic Col2 pick (CTA Translate does that).
+ */
+internal fun PlayerRuntimeController.enableAiFromOptionClick() {
+    val state = _uiState.value
+    val prior = state.aiSubtitleDiagnostics
+    val decision = decideAiOptionEnableSource(
+        priorSourceKind = prior?.sourceKind,
+        priorEmbeddedIndex = prior?.sourceInternalIndex,
+        priorSourceLabel = prior?.sourceLabel,
+        priorSourceLanguage = prior?.sourceLanguage,
+        currentEmbeddedIndex = state.selectedSubtitleTrackIndex,
+        currentAddonLabel = state.selectedAddonSubtitle?.addonName,
+        currentAddonLanguage = state.selectedAddonSubtitle?.lang,
+        tracks = state.subtitleTracks
+    )
+
+    when (decision.action) {
+        AiOptionEnableSourceAction.KEEP_CURRENT -> Unit
+        AiOptionEnableSourceAction.RESTORE_EMBEDDED -> {
+            val index = decision.embeddedIndex ?: return
+            selectSubtitleTrack(index)
+            _uiState.update {
+                it.copy(selectedSubtitleTrackIndex = index, selectedAddonSubtitle = null)
+            }
+        }
+        AiOptionEnableSourceAction.RESTORE_ADDON -> {
+            val label = prior?.sourceLabel?.trim()
+            val langKey = normalizeIndicatorLanguageKey(prior?.sourceLanguage)
+            val match = state.addonSubtitles.firstOrNull { addon ->
+                val labelOk = label.isNullOrEmpty() ||
+                    addon.addonName.equals(label, ignoreCase = true)
+                val langOk = langKey == null ||
+                    normalizeIndicatorLanguageKey(addon.lang) == langKey
+                labelOk && langOk && !addon.isStreamProvided
+            }
+            if (match != null) {
+                selectAddonSubtitle(match)
+                _uiState.update {
+                    it.copy(selectedAddonSubtitle = match, selectedSubtitleTrackIndex = -1)
+                }
+            } else {
+                selectEmbeddedAiSourceIfAvailable()
+            }
+        }
+        AiOptionEnableSourceAction.PICK_EMBEDDED_SMART -> {
+            selectEmbeddedAiSourceIfAvailable()
+        }
+    }
+
+    aiSubtitleUserLocked = true
+    setAiSubtitleTranslationEnabled(
+        true,
+        allowPreferredUpgrade = false,
+        refreshSource = false
+    )
+    publishManualAiDiagnosticsFromCurrentSource(reason = "user selected AI option")
+}
+
 internal fun PlayerRuntimeController.resolveSubtitleAiTargetLanguageName(): String {
     val code = currentPlayerSettingsForReport.subtitleStyle.preferredLanguage
     if (code.isBlank() ||

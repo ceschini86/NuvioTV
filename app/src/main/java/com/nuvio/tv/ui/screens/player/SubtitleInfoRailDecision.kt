@@ -275,7 +275,7 @@ private fun buildAiContent(
 private fun buildEmbeddedContent(
     option: SubtitleInfoOptionSnapshot,
     diagnostics: SubtitleInfoDiagnosticsSnapshot?,
-    statusLine: String?,
+    @Suppress("UNUSED_PARAMETER") statusLine: String?,
     unavailable: SubtitleInfoUnavailableReason?
 ): SubtitleInfoContentDecision {
     val format = when {
@@ -299,15 +299,13 @@ private fun buildEmbeddedContent(
             add(SubtitleInfoField(SubtitleInfoFieldKey.SDH, "true"))
         }
         appendClassicDiagnosticsFields(diagnostics)
-        statusLine?.takeIf { it.isNotBlank() }?.let {
-            add(SubtitleInfoField(SubtitleInfoFieldKey.STATUS, it))
-        }
+        // STATUS for AI errors/translating belongs on the AI card only (Bug 3).
     }
     return SubtitleInfoContentDecision(
         kind = SubtitleInfoContentKind.EMBEDDED,
         title = option.title,
         sourceChipLabel = option.sourceLabel,
-        statusLine = statusLine,
+        statusLine = null,
         fields = fields,
         matchScorePercent = option.matchScorePercent.takeIf { it > 0 },
         unavailableReason = unavailable
@@ -317,7 +315,7 @@ private fun buildEmbeddedContent(
 private fun buildAddonContent(
     option: SubtitleInfoOptionSnapshot,
     diagnostics: SubtitleInfoDiagnosticsSnapshot?,
-    statusLine: String?,
+    @Suppress("UNUSED_PARAMETER") statusLine: String?,
     unavailable: SubtitleInfoUnavailableReason?
 ): SubtitleInfoContentDecision {
     val fields = buildList {
@@ -340,26 +338,25 @@ private fun buildAddonContent(
             add(SubtitleInfoField(SubtitleInfoFieldKey.SCORE, "$it%"))
         }
         appendClassicDiagnosticsFields(diagnostics)
-        statusLine?.takeIf { it.isNotBlank() }?.let {
-            add(SubtitleInfoField(SubtitleInfoFieldKey.STATUS, it))
-        }
+        // STATUS for AI errors/translating belongs on the AI card only (Bug 3).
     }
     return SubtitleInfoContentDecision(
         kind = SubtitleInfoContentKind.ADDON,
         title = option.title,
         sourceChipLabel = option.sourceLabel,
-        statusLine = statusLine,
+        statusLine = null,
         fields = fields,
         matchScorePercent = option.matchScorePercent.takeIf { it > 0 },
         unavailableReason = unavailable
     )
 }
 
-/** C2 / classic auto: surface rung + reason on the selected classic option. */
+/** C2 / classic auto: Degrau + Motivo only for CLASSIC_FALLBACK — not AI ladder diagnostics. */
 private fun MutableList<SubtitleInfoField>.appendClassicDiagnosticsFields(
     diagnostics: SubtitleInfoDiagnosticsSnapshot?
 ) {
     if (diagnostics == null) return
+    if (diagnostics.rung != AiSubtitleLadderRung.CLASSIC_FALLBACK) return
     add(SubtitleInfoField(SubtitleInfoFieldKey.RUNG, diagnostics.rung.name))
     diagnostics.reason.takeIf { it.isNotBlank() }?.let {
         add(SubtitleInfoField(SubtitleInfoFieldKey.REASON, it))

@@ -153,6 +153,58 @@ class SubtitleAiSourceIndicatorsTest {
         )
     }
 
+    @Test
+    fun a3_enable_restoresPriorEmbedded_notIncidentalAddon() {
+        val tracks = listOf(
+            TrackInfo(index = 0, name = "en", language = "en"),
+            TrackInfo(index = 1, name = "fr", language = "fr")
+        )
+        val decision = decideAiOptionEnableSource(
+            priorSourceKind = AiSubtitleSourceKind.EMBEDDED,
+            priorEmbeddedIndex = 0,
+            priorSourceLabel = "en",
+            priorSourceLanguage = "en",
+            currentEmbeddedIndex = -1,
+            currentAddonLabel = "AIOStreams",
+            currentAddonLanguage = "en",
+            tracks = tracks
+        )
+        assertEquals(AiOptionEnableSourceAction.RESTORE_EMBEDDED, decision.action)
+        assertEquals(0, decision.embeddedIndex)
+    }
+
+    @Test
+    fun a3_enable_picksSmartWhenNoPrior_ignoresIncidentalAddon() {
+        val tracks = listOf(TrackInfo(index = 0, name = "en", language = "en"))
+        val decision = decideAiOptionEnableSource(
+            priorSourceKind = null,
+            priorEmbeddedIndex = null,
+            priorSourceLabel = null,
+            priorSourceLanguage = null,
+            currentEmbeddedIndex = -1,
+            currentAddonLabel = "AIOStreams",
+            currentAddonLanguage = "en",
+            tracks = tracks
+        )
+        assertEquals(AiOptionEnableSourceAction.PICK_EMBEDDED_SMART, decision.action)
+    }
+
+    @Test
+    fun a3_enable_keepsCurrentWhenAlreadyPriorEmbedded() {
+        val tracks = listOf(TrackInfo(index = 2, name = "en", language = "en"))
+        val decision = decideAiOptionEnableSource(
+            priorSourceKind = AiSubtitleSourceKind.EMBEDDED,
+            priorEmbeddedIndex = 2,
+            priorSourceLabel = "en",
+            priorSourceLanguage = "en",
+            currentEmbeddedIndex = 2,
+            currentAddonLabel = null,
+            currentAddonLanguage = null,
+            tracks = tracks
+        )
+        assertEquals(AiOptionEnableSourceAction.KEEP_CURRENT, decision.action)
+    }
+
     // --- F2 embedded / addon ---
 
     @Test

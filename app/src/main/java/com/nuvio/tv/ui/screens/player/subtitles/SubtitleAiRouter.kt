@@ -212,22 +212,49 @@ class SubtitleAiRouter(
         "${model.name}:${key.trim().hashCode()}"
 }
 
-/** Normalize provider error strings so UI can map rate limits reliably. */
+/** Normalize provider error strings so UI can map known failures to stable tokens. */
 internal fun normalizeProviderError(message: String?, httpCode: Int?): String? {
     if (httpCode == 429) return TRANSLATION_ERROR_RATE_LIMITED
     val raw = message?.trim().orEmpty()
     if (raw.isEmpty()) return message
-    if (raw.equals("RATE_LIMITED", ignoreCase = true)) return TRANSLATION_ERROR_RATE_LIMITED
+    if (raw.equals(TRANSLATION_ERROR_RATE_LIMITED, ignoreCase = true)) {
+        return TRANSLATION_ERROR_RATE_LIMITED
+    }
+    if (raw.equals(TRANSLATION_ERROR_API_KEY_MISSING, ignoreCase = true)) {
+        return TRANSLATION_ERROR_API_KEY_MISSING
+    }
+    if (raw.equals(TRANSLATION_ERROR_INSUFFICIENT_CREDITS, ignoreCase = true)) {
+        return TRANSLATION_ERROR_INSUFFICIENT_CREDITS
+    }
+    if (raw.equals(TRANSLATION_ERROR_PROVIDER, ignoreCase = true)) {
+        return TRANSLATION_ERROR_PROVIDER
+    }
     if (raw.contains("429") || raw.contains("rate limit", ignoreCase = true) ||
         raw.contains("resource_exhausted", ignoreCase = true) ||
         raw.contains("too many requests", ignoreCase = true)
     ) {
         return TRANSLATION_ERROR_RATE_LIMITED
     }
-    return raw
+    val lower = raw.lowercase()
+    if (lower.contains("credit balance") ||
+        lower.contains("insufficient credit") ||
+        lower.contains("insufficient_quota") ||
+        lower.contains("too low to access") ||
+        lower.contains("credits exhausted") ||
+        (lower.contains("billing") &&
+            (lower.contains("plan") || lower.contains("payment") || lower.contains("credit"))) ||
+        (lower.contains("quota exceeded") && !lower.contains("rate"))
+    ) {
+        return TRANSLATION_ERROR_INSUFFICIENT_CREDITS
+    }
+    // Never surface raw HTTP/JSON bodies in the Info rail.
+    return TRANSLATION_ERROR_PROVIDER
 }
 
 const val TRANSLATION_ERROR_RATE_LIMITED = "RATE_LIMITED"
+const val TRANSLATION_ERROR_API_KEY_MISSING = "API key missing"
+const val TRANSLATION_ERROR_INSUFFICIENT_CREDITS = "INSUFFICIENT_CREDITS"
+const val TRANSLATION_ERROR_PROVIDER = "PROVIDER_ERROR"
 
 data class ProviderAttemptResult(
     val translation: TranslationResult,

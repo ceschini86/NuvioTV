@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.player
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -315,6 +316,34 @@ class SubtitleInfoRailDecisionTest {
         val byKey = decision.content.fields.associate { it.key to it.value }
         assertEquals(AiSubtitleLadderRung.CLASSIC_FALLBACK.name, byKey[SubtitleInfoFieldKey.RUNG])
         assertEquals(classicReason, byKey[SubtitleInfoFieldKey.REASON])
+    }
+
+    @Test
+    fun bug3_addonWithAiDiagnostics_hidesRungReasonAndAiStatus() {
+        val decision = decideSubtitleInfoRail(
+            displayOption = addonOption(),
+            isPlaybackSelected = true,
+            diagnostics = diagnostics(
+                rung = AiSubtitleLadderRung.AI_EMBEDDED,
+                reason = "embedded original-language source",
+                userLocked = false,
+                sourceLanguage = "en",
+                sourceKind = AiSubtitleSourceKind.EMBEDDED
+            ),
+            statusLine = """HTTP 400: {"type":"error","message":"credit balance"}""",
+            aiAvailable = true,
+            aiQuotaExhausted = false,
+            isUsingMpv = false,
+            userExplicitSelection = true,
+            translationActive = false
+        )
+
+        assertEquals(SubtitleInfoContentKind.ADDON, decision.content.kind)
+        val keys = fieldKeys(decision)
+        assertFalse(keys.contains(SubtitleInfoFieldKey.RUNG))
+        assertFalse(keys.contains(SubtitleInfoFieldKey.REASON))
+        assertFalse(keys.contains(SubtitleInfoFieldKey.STATUS))
+        assertNull(decision.content.statusLine)
     }
 
     @Test
