@@ -7,7 +7,7 @@
 
 | Preciso de… | Abrir | Fonte canônica de |
 |-------------|--------|-------------------|
-| **Handoff overlay Info-rail (A–D fechado + bugs UX)** | [`handoff/2026-09-24-overlay-info-rail-close.md`](./handoff/2026-09-24-overlay-info-rail-close.md) | 1.0.7 publicado; hotfix foco; bugs Info/JSON + click AI + Info leak |
+| **Handoff overlay Info-rail (A–D + bugs Info 1.0.8)** | [`handoff/2026-09-24-overlay-info-rail-close.md`](./handoff/2026-09-24-overlay-info-rail-close.md) | 1.0.8: erros Info amigáveis; restore fonte no click IA; Info addon sem Degrau AI |
 | **Spec overlay: Info rail (matrizes A–D)** | [`handoff/2026-09-24-overlay-info-rail.md`](./handoff/2026-09-24-overlay-info-rail.md) | Base + fatias + log do monitor |
 | **Smoke no emulador (checklist + last results)** | [`smoke-ai-subtitles.md`](./smoke-ai-subtitles.md) | Casos PASS/FAIL no device · skill `.cursor/skills/ai-subtitles-smoke` |
 | Escopo, Must/Should/Won’t, smoke de produto | [`prd-ai-subtitles.md`](./prd-ai-subtitles.md) | Requisitos de produto |
