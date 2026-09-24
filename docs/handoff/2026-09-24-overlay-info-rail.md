@@ -53,6 +53,14 @@ Col1 (Idiomas + None/Off) → Col2 (embedded | addon | AI sintética) → Col3 (
 
 **Gate entre fatias:** se o DoD de código/testes passar sem gaps graves, o monitor **segue para a próxima fatia** sem esperar TV/emulador. Device só bloqueia se o item for impossível de validar sem runtime e for crítico.
 
+## Práticas anti-bug (a partir da Fatia B)
+1. **Regra ≠ UI:** decisões de Info/CTA (e, na C, reset Smart / indicadores F*) vivem em funções puras testáveis. Compose só renderiza o resultado.
+2. **Um ID = um teste nomeado:** cada linha I*/C*/K* (e na C: S*/F*/T* testáveis) vira teste com o ID no nome, ex. `c4_manualAi_showsResetSmartCta`. Proibido “coberto por teste genérico” sem mapear o ID.
+3. **Parcial = débito no log:** item parcial entra na tabela do monitor; não vira “feito” sem evidência.
+4. **Logs estruturados (Fatia C, e B se tocar handlers):** em Translate / reset Smart / select AI, uma linha com `source=`, `reason=`, `locked=`, `rung=` (tag existente do player se houver).
+5. **Smoke ID-named só no fechamento (C):** screenshots `.tmp_overlay_<ID>.png`; skill estendida.
+6. **Revisão adversária opcional após C:** Bugbot / segundo olhar no diff total vs esta spec (“quais IDs faltam?”).
+
 ---
 
 # FATIA A — remoções, navegação e estilo do CTA
@@ -137,14 +145,18 @@ O Info descreve **a opção da Col2** (focada ou selecionada): nome completo, ti
 | C6 | Qualquer, com AI indisponível (sem key / rate-limit / MPV) | — | "Traduzir com IA" **disabled** e **não focável**. A Col3 explica o motivo |
 
 ## Implementação exigida
-Extrair a decisão para uma **função pura**, por exemplo `(opção, focada|selecionada, origem/rung, aiDisponível) → (conteúdoInfo, ctas)`, com **testes unitários cobrindo I1–I4 e C1–C6**.
+- Extrair decisão para **função(ões) pura(s)** (ex. arquivo dedicado tipo `SubtitleInfoRailDecision.kt`): entrada `(opção, focada|selecionada, origem/rung, aiDisponível, …)` → `(conteúdoInfo, ctas)`.
+- Overlay **só consome** o resultado (não reimplementar a matriz em `if`s de Compose).
+- **Unit tests:** no mínimo **um teste por ID** I1–I7, C1–C6, K1, com o **ID no nome do método**.
+- Relatório DoD: evidência = `NomeDoTeste` por linha.
 
 ## DoD
-- [ ] Função pura + testes unitários, um caso por ID (I1–I7, C1–C6) — **esta é a evidência principal da Fatia B**
-- [ ] K1 coberto por teste (ou deixa screenshot para Fatia C; declarar qual)
-- [ ] **Sem** assemble/install nesta fatia (ver política de build na Base)
+- [ ] Função pura + wiring no overlay
+- [ ] Testes unitários: I1–I7, C1–C6, K1 (nome do teste contém o ID)
+- [ ] K1 coberto por teste (screenshot adiado para C)
+- [ ] **Sem** assemble/install/screenshots nesta fatia
 - [ ] Screenshots de I1–I4 / C1,C4,C5,C6 **adiados** para Fatia C
-- [ ] N4–N6 da Fatia A: não revalidar no device aqui; só garantir que o código não regride a lógica (revisão do diff)
+- [ ] N4–N6 da Fatia A: não revalidar no device; garantir no diff que `computeInfoCtaState` / decisão pura não regride Right/CTA
 
 ---
 
@@ -198,17 +210,25 @@ Valem **sempre que a tradução AI estiver ativa**, seja pela ladder (automátic
 | D1 | Atualizar `docs/prd-ai-subtitles-ui-menu.md`: §1 (modelo mental, sem Style, sem long-press, tabela de overlays, estados visuais, indicadores de fonte AI), §2 (salto de foco imediato), §B6 (Info por foco/seleção, matriz de CTAs, G1/G2) e fechar o gap "Reset to smart auto" |
 | D2 | Em `docs/architecture-ai-subtitles.md`, 1 frase sobre o reset Smart nos locks |
 
+## Implementação exigida (anti-bug)
+- Policy de reset Smart / escolha pós-ladder em funções testáveis quando possível.
+- Logs estruturados nos handlers: Translate, click AI, reset Smart (`source`, `reason`, `locked`, `rung`).
+- Unit tests nomeados por ID para S2–S4 e F3–F4 (e T* se der isolar).
+- Smoke no fechamento: screenshots `.tmp_overlay_<ID>.png` + skill.
+
 ## DoD
-- [ ] T1–T4 validados com addon **e** com embedded (screenshots)
+- [ ] T1–T4 validados com addon **e** com embedded (screenshots no fechamento)
 - [ ] F1–F4 validados com AI automática (ladder) **e** manual, incluindo troca de fonte e desligamento (screenshots)
 - [ ] A1–A3 validados (A1: log mostrando que não houve re-translate)
-- [ ] S1–S6 validados por rung. Se um rung for difícil de reproduzir no device, cobrir com teste unitário da policy e declarar isso
+- [ ] S1–S6: unit tests por rung onde possível + smoke; se rung difícil no device, declarar
 - [ ] P1–P3: screenshot de fechar e reabrir o overlay
 - [ ] Screenshots adiados da Fatia B (I1–I4, C1/C4/C5/C6, K1) capturados neste smoke
+- [ ] Logs estruturados presentes nos handlers críticos
 - [ ] **Um** assemble + install (único da sequência A→B→C)
-- [ ] Skill `ai-subtitles-smoke` estendida com os passos novos
+- [ ] Skill `ai-subtitles-smoke` estendida com passos ID-named
 - [ ] D1–D2 feitos
 - [ ] Regressão: Fatias A e B continuam válidas
+- [ ] (Opcional monitor) Bugbot / revisão “quais IDs faltam no diff?”
 
 ---
 
