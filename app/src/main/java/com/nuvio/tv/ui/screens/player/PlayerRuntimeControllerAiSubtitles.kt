@@ -114,10 +114,6 @@ internal fun PlayerRuntimeController.maybeHandleAiRateLimitExhaustion() {
     scheduleAiSubtitleQuotaExhaustionRefresh()
 }
 
-/** @deprecated name kept for call-site clarity in older notes; use [maybeHandleAiRateLimitExhaustion]. */
-internal fun PlayerRuntimeController.maybeFallbackAiToClassicAfterRateLimitExhaustion() =
-    maybeHandleAiRateLimitExhaustion()
-
 internal fun PlayerRuntimeController.refreshAiSubtitleQuotaExhaustedState() {
     val exhausted = subtitleTranslationManager?.allUsableKeysInCooldown() == true
     val current = _uiState.value.aiSubtitleQuotaExhausted
@@ -365,6 +361,7 @@ internal fun PlayerRuntimeController.applyAiAutoSelectLadder() {
                     sourceKind = AiSubtitleSourceKind.EMBEDDED,
                     sourceLabel = track.name,
                     sourceLanguage = track.language,
+                    sourceInternalIndex = track.index,
                     targetLanguage = resolveSubtitleAiTargetLanguageName(),
                     model = subtitleAiModel.name,
                     userLocked = false
@@ -420,6 +417,7 @@ internal fun PlayerRuntimeController.applyAiAutoSelectLadder() {
                     sourceKind = AiSubtitleSourceKind.EMBEDDED,
                     sourceLabel = track.name,
                     sourceLanguage = track.language,
+                    sourceInternalIndex = track.index,
                     targetLanguage = resolveSubtitleAiTargetLanguageName(),
                     model = subtitleAiModel.name,
                     userLocked = false
@@ -478,9 +476,8 @@ internal fun PlayerRuntimeController.resetSubtitleAiPolicyForNewMedia() {
             aiSubtitleTranslationActive = false,
             isAiSubtitleTranslating = false,
             aiSubtitleLastError = null,
-            aiSubtitleDiagnostics = null,
+                aiSubtitleDiagnostics = null,
             userExplicitSubtitleSelection = keepDisabled,
-            showAiSubtitleDiagnosticsOverlay = false,
             showSubtitleTranslateMenuOverlay = false,
             subtitleTranslateMenuOptionId = null,
             selectedAddonSubtitle = null,
@@ -593,6 +590,7 @@ internal fun PlayerRuntimeController.translateSubtitleWithAi(
                     sourceKind = AiSubtitleSourceKind.EMBEDDED,
                     sourceLabel = track.name,
                     sourceLanguage = track.language,
+                    sourceInternalIndex = track.index,
                     targetLanguage = resolveSubtitleAiTargetLanguageName(),
                     model = subtitleAiModel.name,
                     userLocked = true
@@ -935,6 +933,7 @@ internal fun PlayerRuntimeController.publishManualAiDiagnosticsFromCurrentSource
                 sourceKind = AiSubtitleSourceKind.EMBEDDED,
                 sourceLabel = track.name,
                 sourceLanguage = track.language,
+                sourceInternalIndex = track.index,
                 targetLanguage = resolveSubtitleAiTargetLanguageName(),
                 model = subtitleAiModel.name,
                 userLocked = true

@@ -69,4 +69,15 @@ Preferido = **Spanish** (perfil Mateus). Branch `fix/ai-ladder-and-rate-limit`.
 | 3 | Sem embutida → classic | **PARTIAL** | SOA: AI off + addon EN restaurado (não auto-traduz); ladder **não** publicou `CLASSIC_FALLBACK` por pref explicit |
 | 4 | Translate addon → MANUAL | **PASS** | SOA AIOStreams EN → Translate; `locked=true`; reason translate with AI (após fix de foco Info) |
 
+### Overlay Fatia D (2026-09-24) — TV `192.168.31.46:5555`
+
+Preferido = **pt-BR** (perfil Mateus). `com.nuvio.tv` **1.0.7** / 1071. Título: TWD S08E06.
+
+| ID | Resultado | Notas |
+|----|-----------|--------|
+| F2-e | **PASS** | Fonte IA em Embutida EN (`AI_EMBEDDED`) |
+| F2-a | **PASS** | Fonte IA em AIOStreams MANUAL |
+| T-focus / S-focus | **PASS** | `post_cta_focus` translate + reset → `AI_EMBEDDED` |
+| S1–S9 | **PASS** | FocusBackground vs Secondary |
+
 Atualizar esta tabela ao fechar uma sessão de smoke. Uma linha no handoff se o estado global mudar.

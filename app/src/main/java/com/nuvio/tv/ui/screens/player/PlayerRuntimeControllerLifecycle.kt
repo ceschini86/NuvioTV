@@ -30,7 +30,6 @@ internal fun PlayerRuntimeController.releasePlayer(flushPlaybackState: Boolean) 
                 aiSubtitleLastError = null,
                 aiSubtitleDiagnostics = null,
                 userExplicitSubtitleSelection = false,
-                showAiSubtitleDiagnosticsOverlay = false,
                 showSubtitleTranslateMenuOverlay = false,
                 subtitleTranslateMenuOptionId = null
             )
