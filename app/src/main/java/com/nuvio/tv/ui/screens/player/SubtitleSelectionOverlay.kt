@@ -5,11 +5,12 @@ package com.nuvio.tv.ui.screens.player
 import com.nuvio.tv.ui.theme.NuvioTheme
 
 import android.util.Log
+import android.view.KeyEvent
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -22,48 +23,36 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.res.stringResource
-import kotlin.math.roundToInt
-import androidx.tv.material3.Card
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
+import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Icon
-import androidx.tv.material3.IconButton
-import androidx.tv.material3.IconButtonDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
@@ -79,23 +68,9 @@ private const val SubtitleFocusTag = "SubtitleFocus"
 
 internal const val SubtitleAiOptionId = "ai:translate"
 
-private val OverlayTextColors = listOf(
-    Color.White,
-    Color(0xFFD9D9D9),
-    Color(0xFFFFD700),
-    Color(0xFF00E5FF),
-    Color(0xFFFF5C5C),
-    Color(0xFF00FF88)
-)
-
-private val OverlayOutlineColors = listOf(
-    Color.Black,
-    Color.White,
-    Color(0xFF00E5FF),
-    Color(0xFFFF5C5C)
-)
-
 private const val RailFadeDurationMs = 120
+private val InfoRailWidth = 280.dp
+private val SelectedWithoutFocusAlpha = 0.5f
 
 @Composable
 internal fun SubtitleSelectionOverlay(
@@ -129,8 +104,6 @@ internal fun SubtitleSelectionOverlay(
     val unknownLabel = stringResource(R.string.subtitle_language_unknown)
     val builtInLabel = stringResource(R.string.subtitle_built_in)
     val forcedLabel = stringResource(R.string.sub_forced_lang)
-    var persistedStyleFocusKey by rememberSaveable { mutableStateOf<String?>(null) }
-    var styleRailPane by remember(visible) { mutableStateOf(StyleRailPane.INFO) }
     val sessionPreferredLanguage = remember(visible) { subtitleStyle.preferredLanguage }
     val sessionSecondaryPreferredLanguage = remember(visible) { subtitleStyle.secondaryPreferredLanguage }
     val sessionShowOnlyPreferredLanguages = remember(visible) { subtitleStyle.showOnlyPreferredLanguages }
@@ -227,7 +200,7 @@ internal fun SubtitleSelectionOverlay(
             builtInLabel = builtInLabel,
             forcedLabel = forcedLabel,
             unknownLabel = unknownLabel,
-            aiSubtitleAvailable = canOfferAiTranslation,
+            aiSubtitleAvailable = canOfferAiTranslation || aiSubtitleTranslationActive,
             aiSubtitleTranslationActive = aiSubtitleTranslationActive,
             isAiSubtitleTranslating = isAiSubtitleTranslating,
             aiOptionBadge = aiOptionBadge,
@@ -236,12 +209,7 @@ internal fun SubtitleSelectionOverlay(
             aiOptionApiKeyMeta = aiOptionApiKeyMeta
         )
     }
-
-    val sessionInitialSubtitleOptions = remember(
-        visible,
-        sessionInitialLanguageKey,
-        sessionInitialSelectedOptionId
-    ) {
+    val sessionInitialSubtitleOptions = remember(visible) {
         buildSessionOptions(sessionInitialLanguageKey, sessionInitialSelectedOptionId)
     }
     val sessionInitialOptionTargetId = remember(visible) {
@@ -249,14 +217,17 @@ internal fun SubtitleSelectionOverlay(
             ?.takeIf { id -> sessionInitialSubtitleOptions.any { it.id == id } }
             ?: sessionInitialSubtitleOptions.firstOrNull()?.id
     }
-    var selectedLanguageKey by remember(visible) {
+
+    // Browsed language for Col2 (navigation only — does not drive playback).
+    var browsedLanguageKey by remember(visible) {
         mutableStateOf(sessionInitialLanguageKey)
     }
+    // Playback selection highlighted with ✓ in Col2.
     var selectedOptionId by remember(visible) {
         mutableStateOf(sessionInitialSelectedOptionId)
     }
     val subtitleOptions = remember(
-        selectedLanguageKey,
+        browsedLanguageKey,
         selectedOptionId,
         sessionInternalTracks,
         sessionAddonSubtitles,
@@ -271,18 +242,13 @@ internal fun SubtitleSelectionOverlay(
         aiOptionTranslatingMeta,
         aiOptionApiKeyMeta
     ) {
-        buildSessionOptions(selectedLanguageKey, selectedOptionId)
+        buildSessionOptions(browsedLanguageKey, selectedOptionId)
     }
-    val effectiveSelectedOptionId = selectedOptionId
-        ?: SubtitleAiOptionId.takeIf { aiSubtitleTranslationActive && selectedLanguageKey == preferredLanguageKey }
-    val effectiveSelectedOption = remember(
-        effectiveSelectedOptionId,
-        subtitleOptions,
-        aiSubtitleTranslationActive
-    ) {
-        subtitleOptions.firstOrNull { it.id == effectiveSelectedOptionId }
+    val playbackSelectedOption = remember(selectedOptionId, subtitleOptions, aiSubtitleTranslationActive) {
+        subtitleOptions.firstOrNull { it.id == selectedOptionId && it.isSelected }
             ?: subtitleOptions.firstOrNull { it.isSelected }
-            ?: subtitleOptions.firstOrNull { it.id == SubtitleAiOptionId && aiSubtitleTranslationActive }
+            ?: SubtitleAiOptionId.takeIf { aiSubtitleTranslationActive && browsedLanguageKey == preferredLanguageKey }
+                ?.let { id -> subtitleOptions.firstOrNull { it.id == id } }
     }
     var lastFocusedLanguageKey by remember(visible) {
         mutableStateOf(sessionInitialLanguageKey.takeIf { key -> languageItems.any { it.key == key } })
@@ -295,21 +261,17 @@ internal fun SubtitleSelectionOverlay(
         )
     }
     var optionEntryLanguageKey by remember(visible) { mutableStateOf(sessionInitialLanguageKey) }
-    var styleEntryOptionId by remember(visible) { mutableStateOf(sessionInitialOptionTargetId) }
+    var infoEntryOptionId by remember(visible) { mutableStateOf(sessionInitialOptionTargetId) }
     var activeRail by remember(visible) { mutableStateOf<OverlayFocusRail?>(null) }
     var activeOptionFocusId by remember(visible) { mutableStateOf<String?>(sessionInitialOptionTargetId) }
-    var activeStyleFocusKey by remember(visible) { mutableStateOf<String?>(null) }
-    var lastStyleFocusKey by remember(visible) { mutableStateOf(persistedStyleFocusKey) }
-    var revealStyleRail by remember(visible) {
-        mutableStateOf(sessionInitialSelectedOptionId != null)
-    }
+    var activeInfoFocusKey by remember(visible) { mutableStateOf<String?>(null) }
     var languageFocusToken by remember(visible) { mutableStateOf(0) }
     var optionFocusToken by remember(visible) { mutableStateOf(0) }
-    var styleFocusToken by remember(visible) { mutableStateOf(0) }
+    var infoFocusToken by remember(visible) { mutableStateOf(0) }
     var pendingLanguageFocusKey by remember(visible) { mutableStateOf<String?>(null) }
     var pendingOptionFocusId by remember(visible) { mutableStateOf<String?>(null) }
     var pendingOptionFocusLanguageKey by remember(visible) { mutableStateOf<String?>(null) }
-    var pendingStyleFocusKey by remember(visible) { mutableStateOf<String?>(null) }
+    var pendingInfoFocusKey by remember(visible) { mutableStateOf<String?>(null) }
     val overlaySessionKey = remember(visible) { Any() }
     val languageInitialVisibleIndex = remember(visible, languageItems, sessionInitialLanguageKey) {
         preferredVisibleStartIndex(languageItems.indexOfFirst { it.key == sessionInitialLanguageKey })
@@ -323,68 +285,42 @@ internal fun SubtitleSelectionOverlay(
     val optionListState = remember(overlaySessionKey) {
         LazyListState(firstVisibleItemIndex = optionInitialVisibleIndex)
     }
-    val styleListState = remember(overlaySessionKey) {
-        LazyListState(firstVisibleItemIndex = 0)
-    }
     val languageItemRequesters = rememberFocusRequesterMap(languageItems.map { it.key })
     val optionItemRequesters = rememberFocusRequesterMap(subtitleOptions.map { it.id })
-    val styleRequesters = rememberStyleFocusRequesters()
-    val optionRailVisible = selectedLanguageKey != SubtitleOffLanguageKey
-    val styleRailVisible = optionRailVisible && (revealStyleRail || selectedOptionId != null)
-    val languageTargetKey: String? = remember(languageItems, lastFocusedLanguageKey, selectedLanguageKey) {
-        lastFocusedLanguageKey?.takeIf { key -> languageItems.any { it.key == key } }
-            ?: selectedLanguageKey.takeIf { key -> languageItems.any { it.key == key } }
-            ?: languageItems.firstOrNull()?.key
-    }
-    val optionTargetId: String? = remember(subtitleOptions, optionFocusMemory, selectedLanguageKey, selectedOptionId) {
+    val infoTranslateRequester = remember { FocusRequester() }
+    val optionRailVisible = browsedLanguageKey != SubtitleOffLanguageKey
+    // N1: Col3 content only when focus is on Col2 or Col3 (not Col1).
+    val infoContentVisible = optionRailVisible &&
+        (activeRail == OverlayFocusRail.OPTION || activeRail == OverlayFocusRail.INFO)
+    val optionTargetId: String? = remember(subtitleOptions, optionFocusMemory, browsedLanguageKey, selectedOptionId) {
         selectedOptionId?.takeIf { id -> subtitleOptions.any { it.id == id } }
-            ?: optionFocusMemory[selectedLanguageKey]?.takeIf { id -> subtitleOptions.any { it.id == id } }
+            ?: optionFocusMemory[browsedLanguageKey]?.takeIf { id -> subtitleOptions.any { it.id == id } }
             ?: subtitleOptions.firstOrNull()?.id
     }
-    val styleTargetKey = remember(lastStyleFocusKey, styleRailPane) {
-        when (styleRailPane) {
-            StyleRailPane.INFO -> {
-                lastStyleFocusKey?.takeIf { StyleFocusKey.isInfoKey(it) }
-                    ?: StyleFocusKey.InfoTranslate
-            }
-            StyleRailPane.STYLE -> {
-                lastStyleFocusKey?.takeIf { !StyleFocusKey.isInfoKey(it) && it != StyleFocusKey.PaneInfoTab }
-                    ?: StyleFocusKey.DelaySet
-            }
-        }
+    val focusedOption = remember(activeOptionFocusId, subtitleOptions, playbackSelectedOption) {
+        subtitleOptions.firstOrNull { it.id == activeOptionFocusId } ?: playbackSelectedOption
     }
-    val isStyleDisabledByLibass = remember(
-        useLibass,
-        isUsingMpv,
-        subtitleOptions,
-        selectedOptionId,
-        sessionInternalTracks,
-        sessionSelectedInternalIndex,
-        sessionSelectedAddonSubtitle
+    val infoDisplayOption = when (activeRail) {
+        OverlayFocusRail.OPTION -> focusedOption
+        OverlayFocusRail.INFO -> playbackSelectedOption ?: focusedOption
+        else -> playbackSelectedOption
+    }
+    val infoCtaState = remember(
+        infoDisplayOption,
+        playbackSelectedOption,
+        activeRail,
+        aiSubtitleAvailable,
+        aiSubtitleQuotaExhausted,
+        aiSubtitleTranslationActive
     ) {
-        if (!useLibass && !isUsingMpv) return@remember false
-        val selectedOption = subtitleOptions.firstOrNull { it.id == selectedOptionId }
-        val isAss = when (selectedOption?.kind) {
-            SubtitleOptionKind.INTERNAL -> {
-                val track = selectedOption.internalTrackIndex?.let { sessionInternalTracks.getOrNull(it) }
-                val codec = track?.codec?.lowercase(java.util.Locale.US).orEmpty()
-                codec.contains("ass") || codec.contains("ssa") || track?.name?.contains("ASS", ignoreCase = true) == true
-            }
-            SubtitleOptionKind.ADDON -> {
-                val url = selectedOption.addonSubtitle?.url?.lowercase(java.util.Locale.US).orEmpty()
-                url.contains(".ass") || url.contains(".ssa")
-            }
-            SubtitleOptionKind.AI -> false
-            null -> {
-                val currentInternalTrack = sessionInternalTracks.getOrNull(sessionSelectedInternalIndex)
-                val internalCodec = currentInternalTrack?.codec?.lowercase(java.util.Locale.US).orEmpty()
-                val addonUrl = sessionSelectedAddonSubtitle?.url?.lowercase(java.util.Locale.US).orEmpty()
-                internalCodec.contains("ass") || internalCodec.contains("ssa") ||
-                    currentInternalTrack?.name?.contains("ASS", ignoreCase = true) == true ||
-                    addonUrl.contains(".ass") || addonUrl.contains(".ssa")
-            }
-        }
-        isAss && (isUsingMpv || useLibass)
+        computeInfoCtaState(
+            displayOption = infoDisplayOption,
+            playbackSelected = playbackSelectedOption,
+            focusOnInfo = activeRail == OverlayFocusRail.INFO,
+            aiSubtitleAvailable = aiSubtitleAvailable,
+            aiSubtitleQuotaExhausted = aiSubtitleQuotaExhausted,
+            aiSubtitleTranslationActive = aiSubtitleTranslationActive
+        )
     }
 
     fun requestLanguageFocus(targetKey: String?) {
@@ -398,7 +334,7 @@ internal fun SubtitleSelectionOverlay(
 
     fun requestOptionFocus(
         targetId: String?,
-        languageKey: String = selectedLanguageKey,
+        languageKey: String = browsedLanguageKey,
         reason: String
     ) {
         val resolvedId = targetId ?: subtitleOptions.firstOrNull()?.id
@@ -412,7 +348,7 @@ internal fun SubtitleSelectionOverlay(
         }
         if (
             activeRail == OverlayFocusRail.OPTION &&
-            languageKey == selectedLanguageKey &&
+            languageKey == browsedLanguageKey &&
             activeOptionFocusId == resolvedId
         ) {
             Log.d(
@@ -430,36 +366,11 @@ internal fun SubtitleSelectionOverlay(
         optionFocusToken += 1
     }
 
-    fun requestStyleFocus(targetKey: String?, reason: String) {
-        if (isStyleDisabledByLibass) return
-        val requestedKey = targetKey ?: StyleFocusKey.InfoTranslate
-        val resolvedKey = when {
-            requestedKey.startsWith("${StyleFocusKey.OutlineColorPrefix}:") && !subtitleStyle.outlineEnabled -> {
-                StyleFocusKey.OutlineToggle
-            }
-            else -> requestedKey
-        }.takeIf { key -> styleRequesters.containsKey(key) } ?: StyleFocusKey.InfoTranslate
-        if (
-            pendingStyleFocusKey == resolvedKey &&
-            activeRail == OverlayFocusRail.STYLE &&
-            activeStyleFocusKey == resolvedKey
-        ) {
-            Log.d(
-                SubtitleFocusTag,
-                "style_focus_skip reason=already_focused source=$reason key=$resolvedKey"
-            )
-            return
-        }
-        styleRailPane = when {
-            StyleFocusKey.isInfoKey(resolvedKey) || resolvedKey == StyleFocusKey.PaneInfoTab -> StyleRailPane.INFO
-            else -> StyleRailPane.STYLE
-        }
-        pendingStyleFocusKey = resolvedKey
-        Log.d(
-            SubtitleFocusTag,
-            "style_focus_schedule source=$reason key=$resolvedKey"
-        )
-        styleFocusToken += 1
+    fun requestInfoFocus(reason: String) {
+        if (!infoCtaState.showEnabledTranslate) return
+        pendingInfoFocusKey = InfoFocusKey.Translate
+        Log.d(SubtitleFocusTag, "info_focus_schedule source=$reason key=${InfoFocusKey.Translate}")
+        infoFocusToken += 1
     }
 
     fun moveFocusToLanguageRail() {
@@ -467,33 +378,65 @@ internal fun SubtitleSelectionOverlay(
     }
 
     fun moveFocusToOptionRail() {
-        optionEntryLanguageKey = lastFocusedLanguageKey ?: selectedLanguageKey
+        if (!optionRailVisible) return
+        optionEntryLanguageKey = lastFocusedLanguageKey ?: browsedLanguageKey
         requestOptionFocus(
             targetId = optionTargetId,
-            languageKey = selectedLanguageKey,
+            languageKey = browsedLanguageKey,
             reason = "language_to_option"
         )
     }
 
     fun moveFocusBackToOptionRail() {
-        val targetId = styleEntryOptionId?.takeIf { id -> subtitleOptions.any { it.id == id } }
+        val targetId = infoEntryOptionId?.takeIf { id -> subtitleOptions.any { it.id == id } }
             ?: optionTargetId
         requestOptionFocus(
             targetId = targetId,
-            languageKey = selectedLanguageKey,
-            reason = "style_to_option"
+            languageKey = browsedLanguageKey,
+            reason = "info_to_option"
         )
     }
 
-    fun moveFocusToStyleRail() {
-        if (isStyleDisabledByLibass) return
-        styleEntryOptionId = optionFocusMemory[selectedLanguageKey]?.takeIf { id ->
-            subtitleOptions.any { it.id == id }
-        } ?: selectedOptionId?.takeIf { id ->
-            subtitleOptions.any { it.id == id }
-        } ?: subtitleOptions.firstOrNull()?.id
-        revealStyleRail = true
-        requestStyleFocus(targetKey = styleTargetKey, reason = "option_to_style")
+    fun moveFocusToInfoRail() {
+        val option = focusedOption ?: return
+        // N4 / N6: only move Right when the focused option is selected and has an enabled CTA.
+        if (!option.isSelected) return
+        if (!infoCtaState.showEnabledTranslate) return
+        infoEntryOptionId = option.id
+        requestInfoFocus(reason = "option_to_info")
+    }
+
+    fun browseLanguage(languageKey: String, reason: String) {
+        Log.d(
+            SubtitleFocusTag,
+            "language_browse key=$languageKey previous=$browsedLanguageKey reason=$reason"
+        )
+        browsedLanguageKey = languageKey
+        lastFocusedLanguageKey = languageKey
+        optionEntryLanguageKey = languageKey
+        activeRail = OverlayFocusRail.LANGUAGE
+        activeInfoFocusKey = null
+        if (languageKey != SubtitleOffLanguageKey) {
+            val nextOptions = buildSessionOptions(languageKey, selectedOptionId)
+            val nextTargetId = selectedOptionId?.takeIf { id -> nextOptions.any { it.id == id } }
+                ?: optionFocusMemory[languageKey]?.takeIf { id -> nextOptions.any { it.id == id } }
+                ?: nextOptions.firstOrNull()?.id
+            if (nextTargetId != null) {
+                optionFocusMemory = optionFocusMemory + (languageKey to nextTargetId)
+            }
+        }
+    }
+
+    fun handleOverlayBack() {
+        when (activeRail) {
+            OverlayFocusRail.INFO -> moveFocusBackToOptionRail()
+            OverlayFocusRail.OPTION -> moveFocusToLanguageRail()
+            else -> onDismiss()
+        }
+    }
+
+    BackHandler(enabled = visible) {
+        handleOverlayBack()
     }
 
     PlayerOverlayScaffold(
@@ -508,7 +451,7 @@ internal fun SubtitleSelectionOverlay(
             if (sessionInitialLanguageKey != SubtitleOffLanguageKey && sessionInitialSelectedOptionId != null) {
                 Log.d(
                     SubtitleFocusTag,
-                    "overlay_open focus=option selectedLanguage=$sessionInitialLanguageKey selectedOption=$sessionInitialSelectedOptionId showStyle=true"
+                    "overlay_open focus=option selectedLanguage=$sessionInitialLanguageKey selectedOption=$sessionInitialSelectedOptionId"
                 )
                 requestOptionFocus(
                     targetId = sessionInitialSelectedOptionId,
@@ -518,7 +461,7 @@ internal fun SubtitleSelectionOverlay(
             } else {
                 Log.d(
                     SubtitleFocusTag,
-                    "overlay_open focus=language selectedLanguage=$sessionInitialLanguageKey showOption=${sessionInitialLanguageKey != SubtitleOffLanguageKey} showStyle=${sessionInitialSelectedOptionId != null}"
+                    "overlay_open focus=language selectedLanguage=$sessionInitialLanguageKey showOption=${sessionInitialLanguageKey != SubtitleOffLanguageKey}"
                 )
                 requestLanguageFocus(sessionInitialLanguageKey)
             }
@@ -532,45 +475,27 @@ internal fun SubtitleSelectionOverlay(
             }
         }
 
-        LaunchedEffect(visible, selectedOptionId) {
-            if (visible && selectedOptionId != null) {
-                revealStyleRail = true
-            }
-        }
-
-        LaunchedEffect(visible, styleRailVisible, styleFocusToken, isStyleDisabledByLibass) {
-            if (!visible || !styleRailVisible || styleFocusToken <= 0 || isStyleDisabledByLibass) return@LaunchedEffect
-            val targetKey = pendingStyleFocusKey ?: return@LaunchedEffect
-            val requester = styleRequesters[targetKey] ?: run {
-                pendingStyleFocusKey = null
+        LaunchedEffect(visible, infoContentVisible, infoFocusToken, infoCtaState.showEnabledTranslate) {
+            if (!visible || !infoContentVisible || infoFocusToken <= 0 || !infoCtaState.showEnabledTranslate) {
                 return@LaunchedEffect
             }
-            val targetIndex = styleListIndexForFocusKey(targetKey)
+            val targetKey = pendingInfoFocusKey ?: return@LaunchedEffect
             repeat(8) { attempt ->
-                // Info pane (and pane tabs) are not in the Style LazyColumn. scrollToItem on an
-                // unattached LazyListState suspends forever, so focus never reaches Translate.
-                if (StyleFocusKey.isStyleContentKey(targetKey)) {
-                    styleListState.scrollItemIntoView(targetIndex)
-                }
                 Log.d(
                     SubtitleFocusTag,
-                    "style_focus_request attempt=$attempt key=$targetKey activeRail=$activeRail activeStyleKey=$activeStyleFocusKey"
+                    "info_focus_request attempt=$attempt key=$targetKey activeRail=$activeRail activeInfoKey=$activeInfoFocusKey"
                 )
-                requester.requestFocusAfterFrames(frames = if (attempt == 0) 2 else 1)
-                if (activeRail == OverlayFocusRail.STYLE && activeStyleFocusKey == targetKey) {
-                    Log.d(
-                        SubtitleFocusTag,
-                        "style_focus_complete attempt=$attempt key=$targetKey"
-                    )
-                    pendingStyleFocusKey = null
+                runCatching {
+                    infoTranslateRequester.requestFocusAfterFrames(frames = if (attempt == 0) 2 else 1)
+                }
+                if (activeRail == OverlayFocusRail.INFO && activeInfoFocusKey == targetKey) {
+                    Log.d(SubtitleFocusTag, "info_focus_complete attempt=$attempt key=$targetKey")
+                    pendingInfoFocusKey = null
                     return@LaunchedEffect
                 }
             }
-            Log.d(
-                SubtitleFocusTag,
-                "style_focus_timeout key=$targetKey activeStyleKey=$activeStyleFocusKey"
-            )
-            pendingStyleFocusKey = null
+            Log.d(SubtitleFocusTag, "info_focus_timeout key=$targetKey activeInfoKey=$activeInfoFocusKey")
+            pendingInfoFocusKey = null
         }
 
         Column(verticalArrangement = Arrangement.Bottom) {
@@ -592,7 +517,8 @@ internal fun SubtitleSelectionOverlay(
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 SubtitleLanguageRail(
                     items = languageItems,
-                    selectedLanguageKey = selectedLanguageKey,
+                    browsedLanguageKey = browsedLanguageKey,
+                    focusOnLanguageRail = activeRail == OverlayFocusRail.LANGUAGE || activeRail == null,
                     listState = languageListState,
                     itemFocusRequesters = languageItemRequesters,
                     focusTargetKey = pendingLanguageFocusKey,
@@ -601,188 +527,169 @@ internal fun SubtitleSelectionOverlay(
                         pendingLanguageFocusKey = null
                     },
                     onMoveRight = if (optionRailVisible && subtitleOptions.isNotEmpty()) ::moveFocusToOptionRail else null,
-                    onLanguageSelected = { languageKey ->
-                        Log.d(
-                            SubtitleFocusTag,
-                            "language_select key=$languageKey previous=$selectedLanguageKey"
-                        )
-                        selectedLanguageKey = languageKey
-                        lastFocusedLanguageKey = languageKey
-                        optionEntryLanguageKey = languageKey
-                        activeRail = OverlayFocusRail.LANGUAGE
+                    onBack = ::handleOverlayBack,
+                    onLanguageClicked = { languageKey ->
                         if (languageKey == SubtitleOffLanguageKey) {
+                            browsedLanguageKey = SubtitleOffLanguageKey
                             selectedOptionId = null
-                            revealStyleRail = false
+                            activeRail = OverlayFocusRail.LANGUAGE
                             onDisableSubtitles()
                         } else {
-                            val nextOptions = buildSessionOptions(languageKey, selectedOptionId)
-                            val nextSelectedId = selectedOptionId?.takeIf { id ->
-                                nextOptions.any { it.id == id }
-                            }
-                            selectedOptionId = nextSelectedId
-                            val nextTargetId = nextSelectedId
-                                ?: optionFocusMemory[languageKey]?.takeIf { id ->
-                                    nextOptions.any { it.id == id }
-                                }
-                                ?: nextOptions.firstOrNull()?.id
-                            if (nextTargetId != null) {
-                                optionFocusMemory = optionFocusMemory + (languageKey to nextTargetId)
-                            }
-                            revealStyleRail = nextSelectedId != null
-                            requestOptionFocus(
-                                targetId = nextTargetId,
-                                languageKey = languageKey,
-                                reason = "language_select"
-                            )
+                            // N3: click on a language only browses; playback unchanged.
+                            browseLanguage(languageKey, reason = "language_click")
                         }
                     },
                     onLanguageFocused = { key ->
-                        lastFocusedLanguageKey = key
-                        optionEntryLanguageKey = key
-                        activeRail = OverlayFocusRail.LANGUAGE
-                        activeStyleFocusKey = null
+                        browseLanguage(key, reason = "language_focused")
                     }
                 )
 
-                RailFadeIn(visible = optionRailVisible) {
-                    SubtitleOptionsRail(
-                        selectedLanguageKey = selectedLanguageKey,
-                        options = subtitleOptions,
-                        isLoadingAddons = sessionIsLoadingAddons,
-                        listState = optionListState,
-                        itemFocusRequesters = optionItemRequesters,
-                        focusTargetId = pendingOptionFocusId,
-                        focusLanguageKey = pendingOptionFocusLanguageKey,
-                        focusToken = optionFocusToken,
-                        onFocusRequestConsumed = {
-                            pendingOptionFocusId = null
-                            pendingOptionFocusLanguageKey = null
-                        },
-                        onOptionFocused = {
-                            optionFocusMemory = optionFocusMemory + (selectedLanguageKey to it)
-                            styleEntryOptionId = it
-                            activeOptionFocusId = it
-                            activeRail = OverlayFocusRail.OPTION
-                            activeStyleFocusKey = null
-                        },
-                        onMoveLeft = ::moveFocusToLanguageRail,
-                        onMoveRight = ::moveFocusToStyleRail,
-                        onInternalTrackSelected = { optionId, trackIndex ->
-                            selectedOptionId = optionId
-                            optionFocusMemory = optionFocusMemory + (selectedLanguageKey to optionId)
-                            styleEntryOptionId = optionId
-                            activeOptionFocusId = optionId
-                            activeRail = OverlayFocusRail.OPTION
-                            onInternalTrackSelected(trackIndex)
-                            revealStyleRail = true
-                        },
-                        onAddonSubtitleSelected = { optionId, subtitle ->
-                            selectedOptionId = optionId
-                            optionFocusMemory = optionFocusMemory + (selectedLanguageKey to optionId)
-                            styleEntryOptionId = optionId
-                            activeOptionFocusId = optionId
-                            activeRail = OverlayFocusRail.OPTION
-                            onAddonSubtitleSelected(subtitle)
-                            revealStyleRail = true
-                        },
-                        onAiOptionSelected = { optionId ->
-                            selectedOptionId = optionId
-                            optionFocusMemory = optionFocusMemory + (selectedLanguageKey to optionId)
-                            styleEntryOptionId = optionId
-                            activeOptionFocusId = optionId
-                            activeRail = OverlayFocusRail.OPTION
-                            onToggleAiTranslation()
-                            revealStyleRail = true
-                        },
-                        onOptionLongPressed = { option ->
-                            activeOptionFocusId = option.id
-                            activeRail = OverlayFocusRail.OPTION
-                            when (option.kind) {
-                                SubtitleOptionKind.AI -> onEvent(PlayerEvent.OnShowAiSubtitleDiagnostics)
-                                else -> onEvent(PlayerEvent.OnShowSubtitleTranslateMenu(option.id))
+                if (optionRailVisible) {
+                    RailFadeIn(visible = true) {
+                        SubtitleOptionsRail(
+                            selectedLanguageKey = browsedLanguageKey,
+                            options = subtitleOptions,
+                            isLoadingAddons = sessionIsLoadingAddons,
+                            listState = optionListState,
+                            itemFocusRequesters = optionItemRequesters,
+                            focusTargetId = pendingOptionFocusId,
+                            focusLanguageKey = pendingOptionFocusLanguageKey,
+                            focusToken = optionFocusToken,
+                            onFocusRequestConsumed = {
+                                pendingOptionFocusId = null
+                                pendingOptionFocusLanguageKey = null
+                            },
+                            onOptionFocused = {
+                                optionFocusMemory = optionFocusMemory + (browsedLanguageKey to it)
+                                infoEntryOptionId = it
+                                activeOptionFocusId = it
+                                activeRail = OverlayFocusRail.OPTION
+                                activeInfoFocusKey = null
+                            },
+                            onMoveLeft = ::moveFocusToLanguageRail,
+                            onMoveRight = ::moveFocusToInfoRail,
+                            onBack = ::handleOverlayBack,
+                            onInternalTrackSelected = { optionId, trackIndex ->
+                                if (selectedOptionId == optionId) return@SubtitleOptionsRail // G1
+                                selectedOptionId = optionId
+                                optionFocusMemory = optionFocusMemory + (browsedLanguageKey to optionId)
+                                infoEntryOptionId = optionId
+                                activeOptionFocusId = optionId
+                                activeRail = OverlayFocusRail.OPTION
+                                onInternalTrackSelected(trackIndex)
+                            },
+                            onAddonSubtitleSelected = { optionId, subtitle ->
+                                if (selectedOptionId == optionId) return@SubtitleOptionsRail // G1
+                                selectedOptionId = optionId
+                                optionFocusMemory = optionFocusMemory + (browsedLanguageKey to optionId)
+                                infoEntryOptionId = optionId
+                                activeOptionFocusId = optionId
+                                activeRail = OverlayFocusRail.OPTION
+                                onAddonSubtitleSelected(subtitle)
+                            },
+                            onAiOptionSelected = { optionId ->
+                                if (selectedOptionId == optionId && aiSubtitleTranslationActive) {
+                                    return@SubtitleOptionsRail // G1
+                                }
+                                selectedOptionId = optionId
+                                optionFocusMemory = optionFocusMemory + (browsedLanguageKey to optionId)
+                                infoEntryOptionId = optionId
+                                activeOptionFocusId = optionId
+                                activeRail = OverlayFocusRail.OPTION
+                                onToggleAiTranslation()
                             }
-                        }
-                    )
-                }
+                        )
+                    }
 
-                RailFadeIn(visible = styleRailVisible) {
-                    SubtitleStyleRail(
-                        pane = styleRailPane,
-                        onPaneChange = { pane ->
-                            styleRailPane = pane
-                            val target = if (pane == StyleRailPane.INFO) {
-                                StyleFocusKey.InfoTranslate
-                            } else {
-                                lastStyleFocusKey?.takeIf {
-                                    !StyleFocusKey.isInfoKey(it) &&
-                                        it != StyleFocusKey.PaneStyleTab &&
-                                        it != StyleFocusKey.PaneInfoTab
-                                } ?: StyleFocusKey.DelaySet
-                            }
-                            requestStyleFocus(targetKey = target, reason = "pane_change")
-                        },
-                        selectedOption = effectiveSelectedOption,
-                        aiSubtitleAvailable = aiSubtitleAvailable,
-                        aiSubtitleQuotaExhausted = aiSubtitleQuotaExhausted,
-                        aiSubtitleTranslationActive = aiSubtitleTranslationActive,
-                        isAiSubtitleTranslating = isAiSubtitleTranslating,
-                        aiSubtitleDiagnostics = aiSubtitleDiagnostics,
-                        aiSubtitleLastError = aiSubtitleLastError,
-                        subtitleStyle = subtitleStyle,
-                        subtitleDelayMs = subtitleDelayMs,
-                        listState = styleListState,
-                        onMoveLeft = ::moveFocusBackToOptionRail,
-                        focusRequesters = styleRequesters,
-                        onStyleFocused = {
-                            activeRail = OverlayFocusRail.STYLE
-                            activeStyleFocusKey = it
-                            pendingStyleFocusKey = null
-                            lastStyleFocusKey = it
-                            persistedStyleFocusKey = it
-                            if (StyleFocusKey.isInfoKey(it) || it == StyleFocusKey.PaneInfoTab) {
-                                styleRailPane = StyleRailPane.INFO
-                            } else if (it == StyleFocusKey.PaneStyleTab || StyleFocusKey.isStyleContentKey(it)) {
-                                styleRailPane = StyleRailPane.STYLE
-                            }
-                        },
-                        onTranslateWithAi = {
-                            val option = effectiveSelectedOption
-                                ?: subtitleOptions.firstOrNull { it.id == selectedOptionId }
-                            when (option?.kind) {
-                                SubtitleOptionKind.INTERNAL -> {
-                                    onEvent(
-                                        PlayerEvent.OnTranslateSubtitleWithAi(
-                                            internalTrackIndex = option.internalTrackIndex
-                                        )
-                                    )
+                    // L1: always reserve Col3 width when Col2 exists; content only when N1 allows.
+                    Box(modifier = Modifier.width(InfoRailWidth)) {
+                        if (infoContentVisible) {
+                            SubtitleInfoRail(
+                                selectedOption = infoDisplayOption,
+                                aiSubtitleAvailable = aiSubtitleAvailable,
+                                aiSubtitleQuotaExhausted = aiSubtitleQuotaExhausted,
+                                aiSubtitleTranslationActive = aiSubtitleTranslationActive,
+                                isAiSubtitleTranslating = isAiSubtitleTranslating,
+                                aiSubtitleDiagnostics = aiSubtitleDiagnostics,
+                                aiSubtitleLastError = aiSubtitleLastError,
+                                ctaState = infoCtaState,
+                                onMoveLeft = ::moveFocusBackToOptionRail,
+                                onBack = ::handleOverlayBack,
+                                translateFocusRequester = infoTranslateRequester,
+                                onInfoFocused = {
+                                    activeRail = OverlayFocusRail.INFO
+                                    activeInfoFocusKey = it
+                                    pendingInfoFocusKey = null
+                                },
+                                onTranslateWithAi = {
+                                    val option = playbackSelectedOption
+                                        ?: subtitleOptions.firstOrNull { it.id == selectedOptionId }
+                                    when (option?.kind) {
+                                        SubtitleOptionKind.INTERNAL -> {
+                                            onEvent(
+                                                PlayerEvent.OnTranslateSubtitleWithAi(
+                                                    internalTrackIndex = option.internalTrackIndex
+                                                )
+                                            )
+                                        }
+                                        SubtitleOptionKind.ADDON -> {
+                                            onEvent(
+                                                PlayerEvent.OnTranslateSubtitleWithAi(
+                                                    addonSubtitle = option.addonSubtitle
+                                                )
+                                            )
+                                        }
+                                        SubtitleOptionKind.AI -> onToggleAiTranslation()
+                                        null -> onToggleAiTranslation()
+                                    }
                                 }
-                                SubtitleOptionKind.ADDON -> {
-                                    onEvent(
-                                        PlayerEvent.OnTranslateSubtitleWithAi(
-                                            addonSubtitle = option.addonSubtitle
-                                        )
-                                    )
-                                }
-                                SubtitleOptionKind.AI -> {
-                                    // Re-toggle AI using current ladder source / diagnostics.
-                                    onToggleAiTranslation()
-                                }
-                                null -> onToggleAiTranslation()
-                            }
-                        },
-                        onDisableSubtitles = {
-                            selectedOptionId = null
-                            revealStyleRail = false
-                            selectedLanguageKey = SubtitleOffLanguageKey
-                            onDisableSubtitles()
-                        },
-                        onEvent = onEvent,
-                        isStyleDisabledByLibass = isStyleDisabledByLibass
-                    )
+                            )
+                        }
+                    }
                 }
             }
         }
     }
+}
+
+private data class InfoCtaState(
+    val showTranslate: Boolean,
+    val translateEnabled: Boolean
+) {
+    val showEnabledTranslate: Boolean get() = showTranslate && translateEnabled
+}
+
+private fun computeInfoCtaState(
+    displayOption: SubtitleOptionRailItem?,
+    playbackSelected: SubtitleOptionRailItem?,
+    focusOnInfo: Boolean,
+    aiSubtitleAvailable: Boolean,
+    aiSubtitleQuotaExhausted: Boolean,
+    aiSubtitleTranslationActive: Boolean
+): InfoCtaState {
+    val option = if (focusOnInfo) playbackSelected else displayOption
+    val isSelected = option != null && (
+        option.isSelected ||
+            option.id == playbackSelected?.id
+        )
+    // N4: non-selected → no CTA.
+    if (!isSelected) {
+        return InfoCtaState(showTranslate = false, translateEnabled = false)
+    }
+    val isAiOption = option.kind == SubtitleOptionKind.AI
+    // R3: no Stop AI CTA when translation is already active.
+    if (isAiOption && aiSubtitleTranslationActive) {
+        return InfoCtaState(showTranslate = false, translateEnabled = false)
+    }
+    if (aiSubtitleQuotaExhausted || !aiSubtitleAvailable) {
+        return InfoCtaState(showTranslate = false, translateEnabled = false)
+    }
+    val canTranslate = when {
+        isAiOption -> true
+        option.kind != SubtitleOptionKind.AI && !aiSubtitleTranslationActive -> true
+        else -> false
+    }
+    return InfoCtaState(showTranslate = canTranslate, translateEnabled = canTranslate)
 }
 
 @Composable
@@ -813,14 +720,16 @@ private fun RailFadeIn(
 @Composable
 private fun SubtitleLanguageRail(
     items: List<SubtitleLanguageRailItem>,
-    selectedLanguageKey: String,
+    browsedLanguageKey: String,
+    focusOnLanguageRail: Boolean,
     listState: LazyListState,
     itemFocusRequesters: Map<String, FocusRequester>,
     focusTargetKey: String?,
     focusToken: Int,
     onFocusRequestConsumed: () -> Unit,
     onMoveRight: (() -> Unit)?,
-    onLanguageSelected: (String) -> Unit,
+    onBack: () -> Unit,
+    onLanguageClicked: (String) -> Unit,
     onLanguageFocused: (String) -> Unit
 ) {
     LaunchedEffect(focusToken) {
@@ -834,7 +743,7 @@ private fun SubtitleLanguageRail(
             }
         Log.d(
             SubtitleFocusTag,
-            "language_restore_request key=$targetKey index=$targetIndex selected=$selectedLanguageKey firstVisible=${listState.firstVisibleItemIndex}"
+            "language_restore_request key=$targetKey index=$targetIndex browsed=$browsedLanguageKey firstVisible=${listState.firstVisibleItemIndex}"
         )
         listState.scrollItemIntoView(targetIndex)
         itemFocusRequesters[targetKey]?.requestFocusAfterFrames()
@@ -854,12 +763,15 @@ private fun SubtitleLanguageRail(
                 .heightIn(max = 720.dp)
         ) {
             items(items = items, key = { item -> item.key }) { item ->
+                val isBrowsed = item.key == browsedLanguageKey
                 SubtitleLanguageCard(
                     item = item,
-                    isSelected = item.key == selectedLanguageKey,
-                    onClick = { onLanguageSelected(item.key) },
+                    // V1: ~50% when this language's Col2 is open and focus is elsewhere.
+                    emphasized = isBrowsed && !focusOnLanguageRail,
+                    onClick = { onLanguageClicked(item.key) },
                     focusRequester = itemFocusRequesters[item.key],
                     onMoveRight = onMoveRight,
+                    onBack = onBack,
                     onFocused = { onLanguageFocused(item.key) }
                 )
             }
@@ -881,10 +793,10 @@ private fun SubtitleOptionsRail(
     onOptionFocused: (String) -> Unit,
     onMoveLeft: () -> Unit,
     onMoveRight: () -> Unit,
+    onBack: () -> Unit,
     onInternalTrackSelected: (String, Int) -> Unit,
     onAddonSubtitleSelected: (String, Subtitle) -> Unit,
-    onAiOptionSelected: (String) -> Unit,
-    onOptionLongPressed: (SubtitleOptionRailItem) -> Unit
+    onAiOptionSelected: (String) -> Unit
 ) {
     LaunchedEffect(focusToken) {
         if (focusToken <= 0) return@LaunchedEffect
@@ -954,6 +866,7 @@ private fun SubtitleOptionsRail(
                             focusRequester = itemFocusRequesters[option.id],
                             onMoveLeft = onMoveLeft,
                             onMoveRight = onMoveRight,
+                            onBack = onBack,
                             onFocused = { onOptionFocused(option.id) },
                             onClick = {
                                 when (option.kind) {
@@ -971,8 +884,7 @@ private fun SubtitleOptionsRail(
 
                                     SubtitleOptionKind.AI -> onAiOptionSelected(option.id)
                                 }
-                            },
-                            onLongClick = { onOptionLongPressed(option) }
+                            }
                         )
                     }
                 }
@@ -982,410 +894,42 @@ private fun SubtitleOptionsRail(
 }
 
 @Composable
-private fun SubtitleStyleRail(
-    pane: StyleRailPane,
-    onPaneChange: (StyleRailPane) -> Unit,
+private fun SubtitleInfoRail(
     selectedOption: SubtitleOptionRailItem?,
     aiSubtitleAvailable: Boolean,
-    aiSubtitleQuotaExhausted: Boolean = false,
+    aiSubtitleQuotaExhausted: Boolean,
     aiSubtitleTranslationActive: Boolean,
     isAiSubtitleTranslating: Boolean,
     aiSubtitleDiagnostics: AiSubtitleDiagnostics?,
     aiSubtitleLastError: String?,
-    subtitleStyle: SubtitleStyleSettings,
-    subtitleDelayMs: Int,
-    listState: LazyListState,
+    ctaState: InfoCtaState,
     onMoveLeft: () -> Unit,
-    focusRequesters: Map<String, FocusRequester>,
-    onStyleFocused: (String) -> Unit,
-    onTranslateWithAi: () -> Unit,
-    onDisableSubtitles: () -> Unit,
-    onEvent: (PlayerEvent) -> Unit,
-    isStyleDisabledByLibass: Boolean = false
+    onBack: () -> Unit,
+    translateFocusRequester: FocusRequester,
+    onInfoFocused: (String) -> Unit,
+    onTranslateWithAi: () -> Unit
 ) {
-    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    val moveLeftKey = if (isRtl) android.view.KeyEvent.KEYCODE_DPAD_RIGHT else android.view.KeyEvent.KEYCODE_DPAD_LEFT
-    val dispatchStyleEvent: (PlayerEvent) -> Unit = { event ->
-        if (!isStyleDisabledByLibass) {
-            onEvent(event)
-        }
-    }
-    val styleCardModifier = if (isStyleDisabledByLibass) Modifier.alpha(0.35f) else Modifier
-    val styleContentModifier = if (isStyleDisabledByLibass && pane == StyleRailPane.STYLE) {
-        Modifier.focusProperties { canFocus = false }
-    } else {
-        Modifier
-    }
-
+    // L2: no "Info" header — content only.
     Column(
-        modifier = Modifier.width(280.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 720.dp),
         verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
     ) {
-        SubtitleStylePaneTabs(
-            pane = pane,
-            onPaneChange = onPaneChange,
+        SubtitleInfoPane(
+            selectedOption = selectedOption,
+            aiSubtitleAvailable = aiSubtitleAvailable,
+            aiSubtitleQuotaExhausted = aiSubtitleQuotaExhausted,
+            aiSubtitleTranslationActive = aiSubtitleTranslationActive,
+            isAiSubtitleTranslating = isAiSubtitleTranslating,
+            diagnostics = aiSubtitleDiagnostics,
+            lastError = aiSubtitleLastError,
+            ctaState = ctaState,
             onMoveLeft = onMoveLeft,
-            focusRequesters = focusRequesters,
-            onStyleFocused = onStyleFocused
-        )
-
-        when (pane) {
-            StyleRailPane.INFO -> {
-                SubtitleInfoPane(
-                    selectedOption = selectedOption,
-                    aiSubtitleAvailable = aiSubtitleAvailable,
-                    aiSubtitleQuotaExhausted = aiSubtitleQuotaExhausted,
-                    aiSubtitleTranslationActive = aiSubtitleTranslationActive,
-                    isAiSubtitleTranslating = isAiSubtitleTranslating,
-                    diagnostics = aiSubtitleDiagnostics,
-                    lastError = aiSubtitleLastError,
-                    onMoveLeft = onMoveLeft,
-                    focusRequesters = focusRequesters,
-                    onStyleFocused = onStyleFocused,
-                    onTranslateWithAi = onTranslateWithAi,
-                    onDisableSubtitles = onDisableSubtitles
-                )
-            }
-
-            StyleRailPane.STYLE -> {
-                LazyColumn(
-                    state = listState,
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    contentPadding = PaddingValues(bottom = NuvioTheme.spacing.sm),
-                    modifier = Modifier
-                        .heightIn(max = 720.dp)
-                        .then(styleContentModifier)
-                ) {
-                    item {
-                        Card(
-                            onClick = { dispatchStyleEvent(PlayerEvent.OnShowSubtitleDelayOverlay) },
-                            colors = overlayCardColors(selected = false),
-                            shape = CardDefaults.shape(RoundedCornerShape(NuvioTheme.radii.md)),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .then(styleCardModifier)
-                                .focusRequester(requireNotNull(focusRequesters[StyleFocusKey.DelaySet]))
-                                .onPreviewKeyEvent { event ->
-                                    when (event.nativeKeyEvent.keyCode) {
-                                        moveLeftKey -> {
-                                            when (event.nativeKeyEvent.action) {
-                                                android.view.KeyEvent.ACTION_DOWN -> {
-                                                    onMoveLeft()
-                                                    true
-                                                }
-
-                                                android.view.KeyEvent.ACTION_UP -> true
-                                                else -> false
-                                            }
-                                        }
-
-                                        else -> false
-                                    }
-                                }
-                                .onFocusChanged { if (it.isFocused) onStyleFocused(StyleFocusKey.DelaySet) },
-                            scale = CardDefaults.scale(focusedScale = 1f, pressedScale = 1f)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = NuvioTheme.spacing.md, vertical = 10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.subtitle_tab_delay),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Color.White
-                                )
-                                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                                    Text(
-                                        text = formatSubtitleDelay(subtitleDelayMs),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = Color.White.copy(alpha = 0.7f)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    item {
-                        OverlaySectionCard(
-                            title = stringResource(R.string.subtitle_style_font_size),
-                            modifier = styleCardModifier
-                        ) {
-                            StepperRow(
-                                value = "${subtitleStyle.size}%",
-                                onDecrease = { dispatchStyleEvent(PlayerEvent.OnSetSubtitleSize(subtitleStyle.size - 10)) },
-                                onIncrease = { dispatchStyleEvent(PlayerEvent.OnSetSubtitleSize(subtitleStyle.size + 10)) },
-                                onMoveLeft = onMoveLeft,
-                                decrementFocusRequester = focusRequesters[StyleFocusKey.FontSizeDecrease],
-                                incrementFocusRequester = focusRequesters[StyleFocusKey.FontSizeIncrease],
-                                decrementFocusKey = StyleFocusKey.FontSizeDecrease,
-                                incrementFocusKey = StyleFocusKey.FontSizeIncrease,
-                                onFocusChanged = onStyleFocused
-                            )
-                        }
-                    }
-                    item {
-                        OverlaySectionCard(
-                            title = stringResource(R.string.subtitle_style_bold),
-                            modifier = styleCardModifier
-                        ) {
-                            ToggleChip(
-                                label = if (subtitleStyle.bold) stringResource(R.string.subtitle_style_on) else stringResource(R.string.subtitle_style_off),
-                                isEnabled = subtitleStyle.bold,
-                                onMoveLeft = onMoveLeft,
-                                focusRequester = focusRequesters[StyleFocusKey.Bold],
-                                focusKey = StyleFocusKey.Bold,
-                                onFocused = onStyleFocused,
-                                onClick = { dispatchStyleEvent(PlayerEvent.OnSetSubtitleBold(!subtitleStyle.bold)) }
-                            )
-                        }
-                    }
-                    item {
-                        OverlaySectionCard(
-                            title = stringResource(R.string.subtitle_style_text_color),
-                            modifier = styleCardModifier
-                        ) {
-                            ColorChipRow(
-                                colors = OverlayTextColors,
-                                selectedColor = subtitleStyle.textColor,
-                                onMoveLeft = onMoveLeft,
-                                focusRequesters = focusRequesters,
-                                focusKeyPrefix = StyleFocusKey.TextColorPrefix,
-                                onFocused = onStyleFocused,
-                                onColorSelected = { color -> dispatchStyleEvent(PlayerEvent.OnSetSubtitleTextColor(color)) }
-                            )
-                        }
-                    }
-                    item {
-                        OverlaySectionCard(
-                            title = stringResource(R.string.subtitle_style_text_opacity),
-                            modifier = styleCardModifier
-                        ) {
-                            val currentColor = Color(subtitleStyle.textColor)
-                            val currentAlphaPercent = (currentColor.alpha * 100f).roundToInt().coerceIn(0, 100)
-                            StepperRow(
-                                value = "$currentAlphaPercent%",
-                                onDecrease = {
-                                    val newAlpha = (currentAlphaPercent - 10).coerceAtLeast(0) / 100f
-                                    dispatchStyleEvent(PlayerEvent.OnSetSubtitleTextColor(currentColor.copy(alpha = newAlpha).toArgb()))
-                                },
-                                onIncrease = {
-                                    val newAlpha = (currentAlphaPercent + 10).coerceAtMost(100) / 100f
-                                    dispatchStyleEvent(PlayerEvent.OnSetSubtitleTextColor(currentColor.copy(alpha = newAlpha).toArgb()))
-                                },
-                                onMoveLeft = onMoveLeft,
-                                decrementFocusRequester = focusRequesters[StyleFocusKey.OpacityDecrease],
-                                incrementFocusRequester = focusRequesters[StyleFocusKey.OpacityIncrease],
-                                decrementFocusKey = StyleFocusKey.OpacityDecrease,
-                                incrementFocusKey = StyleFocusKey.OpacityIncrease,
-                                onFocusChanged = onStyleFocused
-                            )
-                        }
-                    }
-                    item {
-                        OverlaySectionCard(
-                            title = stringResource(R.string.subtitle_style_outline),
-                            modifier = styleCardModifier
-                        ) {
-                            Column(verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)) {
-                                ToggleChip(
-                                    label = if (subtitleStyle.outlineEnabled) stringResource(R.string.subtitle_style_on) else stringResource(R.string.subtitle_style_off),
-                                    isEnabled = subtitleStyle.outlineEnabled,
-                                    onMoveLeft = onMoveLeft,
-                                    focusRequester = focusRequesters[StyleFocusKey.OutlineToggle],
-                                    focusKey = StyleFocusKey.OutlineToggle,
-                                    onFocused = onStyleFocused,
-                                    onClick = { dispatchStyleEvent(PlayerEvent.OnSetSubtitleOutlineEnabled(!subtitleStyle.outlineEnabled)) }
-                                )
-                                ColorChipRow(
-                                    colors = OverlayOutlineColors,
-                                    selectedColor = subtitleStyle.outlineColor,
-                                    enabled = subtitleStyle.outlineEnabled,
-                                    onMoveLeft = onMoveLeft,
-                                    focusRequesters = focusRequesters,
-                                    focusKeyPrefix = StyleFocusKey.OutlineColorPrefix,
-                                    onFocused = onStyleFocused,
-                                    onColorSelected = { color ->
-                                        if (!subtitleStyle.outlineEnabled) {
-                                            dispatchStyleEvent(PlayerEvent.OnSetSubtitleOutlineEnabled(true))
-                                        }
-                                        dispatchStyleEvent(PlayerEvent.OnSetSubtitleOutlineColor(color))
-                                    }
-                                )
-                            }
-                        }
-                    }
-                    item {
-                        OverlaySectionCard(
-                            title = stringResource(R.string.subtitle_style_bottom_offset),
-                            modifier = styleCardModifier
-                        ) {
-                            StepperRow(
-                                value = subtitleStyle.verticalOffset.toString(),
-                                onDecrease = { dispatchStyleEvent(PlayerEvent.OnSetSubtitleVerticalOffset(subtitleStyle.verticalOffset - 5)) },
-                                onIncrease = { dispatchStyleEvent(PlayerEvent.OnSetSubtitleVerticalOffset(subtitleStyle.verticalOffset + 5)) },
-                                onMoveLeft = onMoveLeft,
-                                decrementFocusRequester = focusRequesters[StyleFocusKey.OffsetDecrease],
-                                incrementFocusRequester = focusRequesters[StyleFocusKey.OffsetIncrease],
-                                decrementFocusKey = StyleFocusKey.OffsetDecrease,
-                                incrementFocusKey = StyleFocusKey.OffsetIncrease,
-                                onFocusChanged = onStyleFocused
-                            )
-                        }
-                    }
-                    item {
-                        Card(
-                            onClick = { dispatchStyleEvent(PlayerEvent.OnResetSubtitleDefaults) },
-                            colors = overlayCardColors(selected = false),
-                            shape = CardDefaults.shape(RoundedCornerShape(NuvioTheme.radii.md)),
-                            modifier = Modifier
-                                .then(styleCardModifier)
-                                .focusRequester(requireNotNull(focusRequesters[StyleFocusKey.Reset]))
-                                .onPreviewKeyEvent { event ->
-                                    when (event.nativeKeyEvent.keyCode) {
-                                        moveLeftKey -> {
-                                            when (event.nativeKeyEvent.action) {
-                                                android.view.KeyEvent.ACTION_DOWN -> {
-                                                    onMoveLeft()
-                                                    true
-                                                }
-
-                                                android.view.KeyEvent.ACTION_UP -> true
-                                                else -> false
-                                            }
-                                        }
-
-                                        else -> false
-                                    }
-                                }
-                                .onFocusChanged { if (it.isFocused) onStyleFocused(StyleFocusKey.Reset) },
-                            scale = CardDefaults.scale(focusedScale = 1f, pressedScale = 1f)
-                        ) {
-                            Text(
-                                text = stringResource(R.string.subtitle_reset_defaults),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = NuvioTheme.spacing.md, vertical = 10.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SubtitleStylePaneTabs(
-    pane: StyleRailPane,
-    onPaneChange: (StyleRailPane) -> Unit,
-    onMoveLeft: () -> Unit,
-    focusRequesters: Map<String, FocusRequester>,
-    onStyleFocused: (String) -> Unit
-) {
-    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    val moveLeftKey = if (isRtl) android.view.KeyEvent.KEYCODE_DPAD_RIGHT else android.view.KeyEvent.KEYCODE_DPAD_LEFT
-    val moveRightKey = if (isRtl) android.view.KeyEvent.KEYCODE_DPAD_LEFT else android.view.KeyEvent.KEYCODE_DPAD_RIGHT
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)
-    ) {
-        SubtitleStylePaneTab(
-            label = stringResource(R.string.subtitle_tab_info),
-            selected = pane == StyleRailPane.INFO,
-            focusKey = StyleFocusKey.PaneInfoTab,
-            focusRequester = focusRequesters[StyleFocusKey.PaneInfoTab],
-            onClick = { onPaneChange(StyleRailPane.INFO) },
-            onFocused = onStyleFocused,
-            onMoveLeft = onMoveLeft,
-            onMoveRight = { onPaneChange(StyleRailPane.STYLE) },
-            moveLeftKey = moveLeftKey,
-            moveRightKey = moveRightKey,
-            modifier = Modifier.weight(1f)
-        )
-        SubtitleStylePaneTab(
-            label = stringResource(R.string.subtitle_tab_style),
-            selected = pane == StyleRailPane.STYLE,
-            focusKey = StyleFocusKey.PaneStyleTab,
-            focusRequester = focusRequesters[StyleFocusKey.PaneStyleTab],
-            onClick = { onPaneChange(StyleRailPane.STYLE) },
-            onFocused = onStyleFocused,
-            onMoveLeft = { onPaneChange(StyleRailPane.INFO) },
-            onMoveRight = null,
-            moveLeftKey = moveLeftKey,
-            moveRightKey = moveRightKey,
-            modifier = Modifier.weight(1f)
-        )
-    }
-}
-
-@Composable
-private fun SubtitleStylePaneTab(
-    label: String,
-    selected: Boolean,
-    focusKey: String,
-    focusRequester: FocusRequester?,
-    onClick: () -> Unit,
-    onFocused: (String) -> Unit,
-    onMoveLeft: (() -> Unit)?,
-    onMoveRight: (() -> Unit)?,
-    moveLeftKey: Int,
-    moveRightKey: Int,
-    modifier: Modifier = Modifier
-) {
-    var isFocused by remember { mutableStateOf(false) }
-    Card(
-        onClick = onClick,
-        colors = overlayCardColors(selected = selected),
-        shape = CardDefaults.shape(RoundedCornerShape(NuvioTheme.radii.md)),
-        border = overlayCardBorder(),
-        modifier = modifier
-            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-            .onPreviewKeyEvent { event ->
-                when (event.nativeKeyEvent.keyCode) {
-                    moveLeftKey -> {
-                        when (event.nativeKeyEvent.action) {
-                            android.view.KeyEvent.ACTION_DOWN -> {
-                                onMoveLeft?.invoke()
-                                true
-                            }
-                            android.view.KeyEvent.ACTION_UP -> true
-                            else -> false
-                        }
-                    }
-                    moveRightKey -> {
-                        when (event.nativeKeyEvent.action) {
-                            android.view.KeyEvent.ACTION_DOWN -> {
-                                onMoveRight?.invoke()
-                                true
-                            }
-                            android.view.KeyEvent.ACTION_UP -> true
-                            else -> false
-                        }
-                    }
-                    else -> false
-                }
-            }
-            .onFocusChanged {
-                isFocused = it.isFocused
-                if (it.isFocused) onFocused(focusKey)
-            },
-        scale = CardDefaults.scale(focusedScale = 1f, pressedScale = 1f)
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            color = when {
-                selected -> NuvioTheme.colors.OnSecondary
-                isFocused -> Color.White
-                else -> Color.White.copy(alpha = 0.78f)
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = NuvioTheme.spacing.sm, vertical = 10.dp),
-            textAlign = TextAlign.Center
+            onBack = onBack,
+            translateFocusRequester = translateFocusRequester,
+            onInfoFocused = onInfoFocused,
+            onTranslateWithAi = onTranslateWithAi
         )
     }
 }
@@ -1399,35 +943,15 @@ private fun SubtitleInfoPane(
     isAiSubtitleTranslating: Boolean,
     diagnostics: AiSubtitleDiagnostics?,
     lastError: String?,
+    ctaState: InfoCtaState,
     onMoveLeft: () -> Unit,
-    focusRequesters: Map<String, FocusRequester>,
-    onStyleFocused: (String) -> Unit,
-    onTranslateWithAi: () -> Unit,
-    onDisableSubtitles: () -> Unit
+    onBack: () -> Unit,
+    translateFocusRequester: FocusRequester,
+    onInfoFocused: (String) -> Unit,
+    onTranslateWithAi: () -> Unit
 ) {
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    val moveLeftKey = if (isRtl) android.view.KeyEvent.KEYCODE_DPAD_RIGHT else android.view.KeyEvent.KEYCODE_DPAD_LEFT
-    val isAiOption = selectedOption?.kind == SubtitleOptionKind.AI ||
-        (selectedOption == null && aiSubtitleTranslationActive)
-    val canOfferAiTranslation = aiSubtitleAvailable && !aiSubtitleQuotaExhausted
-    val canTranslate = when {
-        isAiOption && aiSubtitleTranslationActive -> true // Stop always available
-        !canOfferAiTranslation -> false
-        isAiOption -> true
-        selectedOption != null && selectedOption.kind != SubtitleOptionKind.AI && !aiSubtitleTranslationActive -> true
-        else -> false
-    }
-    // Hide Translate entirely when quota is exhausted (Stop still shows if AI active).
-    val showTranslateAction = when {
-        isAiOption && aiSubtitleTranslationActive -> true
-        aiSubtitleQuotaExhausted -> false
-        aiSubtitleAvailable -> true
-        else -> false
-    }
-    val translateLabel = when {
-        isAiOption && aiSubtitleTranslationActive -> stringResource(R.string.sub_ai_menu_disable_ai)
-        else -> stringResource(R.string.sub_ai_translate_this)
-    }
+    val moveLeftKey = if (isRtl) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT
     val sourceValue = listOfNotNull(
         diagnostics?.sourceLabel,
         diagnostics?.sourceLanguage?.let { Subtitle.languageCodeToName(it) }
@@ -1455,9 +979,7 @@ private fun SubtitleInfoPane(
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 720.dp),
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
     ) {
         if (selectedOption != null || aiSubtitleTranslationActive || diagnostics != null) {
@@ -1548,31 +1070,20 @@ private fun SubtitleInfoPane(
             OverlayEmptyCard(text = stringResource(R.string.subtitle_none))
         }
 
-        if (showTranslateAction) {
+        // R3: Translate with AI only (no Disable / Stop). N4: hidden when not selected.
+        if (ctaState.showTranslate) {
             SubtitleInfoActionCard(
-                label = translateLabel,
-                focusKey = StyleFocusKey.InfoTranslate,
-                focusRequester = focusRequesters[StyleFocusKey.InfoTranslate],
-                primary = true,
-                enabled = canTranslate,
-                onClick = { if (canTranslate) onTranslateWithAi() },
+                label = stringResource(R.string.sub_ai_translate_this),
+                focusKey = InfoFocusKey.Translate,
+                focusRequester = translateFocusRequester,
+                enabled = ctaState.translateEnabled,
+                onClick = { if (ctaState.translateEnabled) onTranslateWithAi() },
                 onMoveLeft = onMoveLeft,
-                onFocused = onStyleFocused,
+                onBack = onBack,
+                onFocused = onInfoFocused,
                 moveLeftKey = moveLeftKey
             )
         }
-
-        SubtitleInfoActionCard(
-            label = stringResource(R.string.sub_ai_menu_disable),
-            focusKey = StyleFocusKey.InfoDisable,
-            focusRequester = focusRequesters[StyleFocusKey.InfoDisable],
-            primary = false,
-            enabled = true,
-            onClick = onDisableSubtitles,
-            onMoveLeft = onMoveLeft,
-            onFocused = onStyleFocused,
-            moveLeftKey = moveLeftKey
-        )
     }
 }
 
@@ -1581,16 +1092,17 @@ private fun SubtitleInfoActionCard(
     label: String,
     focusKey: String,
     focusRequester: FocusRequester?,
-    primary: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
     onMoveLeft: () -> Unit,
+    onBack: () -> Unit,
     onFocused: (String) -> Unit,
     moveLeftKey: Int
 ) {
+    // V3: unfocused visible CTA → ~50%; focused → 100% via focusedContainerColor.
     Card(
         onClick = { if (enabled) onClick() },
-        colors = overlayCardColors(selected = primary && enabled),
+        colors = overlayRailCardColors(emphasized = enabled),
         shape = CardDefaults.shape(RoundedCornerShape(NuvioTheme.radii.md)),
         border = overlayCardBorder(),
         modifier = Modifier
@@ -1601,11 +1113,21 @@ private fun SubtitleInfoActionCard(
                 when (event.nativeKeyEvent.keyCode) {
                     moveLeftKey -> {
                         when (event.nativeKeyEvent.action) {
-                            android.view.KeyEvent.ACTION_DOWN -> {
+                            KeyEvent.ACTION_DOWN -> {
                                 onMoveLeft()
                                 true
                             }
-                            android.view.KeyEvent.ACTION_UP -> true
+                            KeyEvent.ACTION_UP -> true
+                            else -> false
+                        }
+                    }
+                    KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
+                        when (event.nativeKeyEvent.action) {
+                            KeyEvent.ACTION_DOWN -> {
+                                onBack()
+                                true
+                            }
+                            KeyEvent.ACTION_UP -> true
                             else -> false
                         }
                     }
@@ -1618,7 +1140,7 @@ private fun SubtitleInfoActionCard(
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
-            color = if (primary && enabled) NuvioTheme.colors.OnSecondary else Color.White,
+            color = if (enabled) NuvioTheme.colors.OnSecondary else Color.White,
             modifier = Modifier.padding(horizontal = NuvioTheme.spacing.md, vertical = 12.dp)
         )
     }
@@ -1647,15 +1169,20 @@ private fun RailColumn(
 @Composable
 private fun SubtitleLanguageCard(
     item: SubtitleLanguageRailItem,
-    isSelected: Boolean,
+    emphasized: Boolean,
     onClick: () -> Unit,
     focusRequester: FocusRequester?,
     onMoveRight: (() -> Unit)?,
+    onBack: () -> Unit,
     onFocused: () -> Unit
 ) {
-    val textColor = if (isSelected) NuvioTheme.colors.OnSecondary else Color.White
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    val moveToOptionsKey = if (isRtl) android.view.KeyEvent.KEYCODE_DPAD_LEFT else android.view.KeyEvent.KEYCODE_DPAD_RIGHT
+    val moveToOptionsKey = if (isRtl) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT
+    var isFocused by remember { mutableStateOf(false) }
+    val textColor = when {
+        isFocused || emphasized -> NuvioTheme.colors.OnSecondary
+        else -> Color.White
+    }
 
     Card(
         onClick = onClick,
@@ -1667,20 +1194,29 @@ private fun SubtitleLanguageCard(
                     moveToOptionsKey -> {
                         val moveRight = onMoveRight ?: return@onPreviewKeyEvent false
                         when (event.nativeKeyEvent.action) {
-                            android.view.KeyEvent.ACTION_DOWN -> {
+                            KeyEvent.ACTION_DOWN -> {
                                 moveRight()
                                 true
                             }
-
-                            android.view.KeyEvent.ACTION_UP -> true
+                            KeyEvent.ACTION_UP -> true
                             else -> false
                         }
                     }
-
+                    KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
+                        when (event.nativeKeyEvent.action) {
+                            KeyEvent.ACTION_DOWN -> {
+                                onBack()
+                                true
+                            }
+                            KeyEvent.ACTION_UP -> true
+                            else -> false
+                        }
+                    }
                     else -> false
                 }
             }
             .onFocusChanged {
+                isFocused = it.isFocused
                 if (it.isFocused) {
                     Log.d(
                         SubtitleFocusTag,
@@ -1689,7 +1225,7 @@ private fun SubtitleLanguageCard(
                     onFocused()
                 }
             },
-        colors = overlayCardColors(selected = isSelected),
+        colors = overlayRailCardColors(emphasized = emphasized),
         shape = CardDefaults.shape(RoundedCornerShape(NuvioTheme.radii.md)),
         border = overlayCardBorder(),
         scale = CardDefaults.scale(focusedScale = 1f, pressedScale = 1f)
@@ -1711,7 +1247,7 @@ private fun SubtitleLanguageCard(
             )
             if (item.count > 0) {
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(6.dp))
-                CountBadge(count = item.count, selected = isSelected)
+                CountBadge(count = item.count, selected = isFocused || emphasized)
             }
         }
     }
@@ -1723,23 +1259,25 @@ private fun SubtitleOptionCard(
     focusRequester: FocusRequester?,
     onMoveLeft: () -> Unit,
     onMoveRight: () -> Unit,
+    onBack: () -> Unit,
     onFocused: () -> Unit,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onClick: () -> Unit
 ) {
-    val titleColor = if (item.isSelected) NuvioTheme.colors.OnSecondary else Color.White
-    val metaColor = if (item.isSelected) {
-        NuvioTheme.colors.OnSecondary.copy(alpha = 0.72f)
-    } else {
-        NuvioTheme.colors.TextTertiary
+    var isFocused by remember { mutableStateOf(false) }
+    val titleColor = when {
+        isFocused || item.isSelected -> NuvioTheme.colors.OnSecondary
+        else -> Color.White
+    }
+    val metaColor = when {
+        isFocused || item.isSelected -> NuvioTheme.colors.OnSecondary.copy(alpha = 0.72f)
+        else -> NuvioTheme.colors.TextTertiary
     }
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    val moveLeftKey = if (isRtl) android.view.KeyEvent.KEYCODE_DPAD_RIGHT else android.view.KeyEvent.KEYCODE_DPAD_LEFT
-    val moveRightKey = if (isRtl) android.view.KeyEvent.KEYCODE_DPAD_LEFT else android.view.KeyEvent.KEYCODE_DPAD_RIGHT
+    val moveLeftKey = if (isRtl) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT
+    val moveRightKey = if (isRtl) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT
 
     Card(
         onClick = onClick,
-        onLongClick = onLongClick,
         modifier = Modifier
             .fillMaxWidth()
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
@@ -1747,32 +1285,39 @@ private fun SubtitleOptionCard(
                 when (event.nativeKeyEvent.keyCode) {
                     moveLeftKey -> {
                         when (event.nativeKeyEvent.action) {
-                            android.view.KeyEvent.ACTION_DOWN -> {
+                            KeyEvent.ACTION_DOWN -> {
                                 onMoveLeft()
                                 true
                             }
-
-                            android.view.KeyEvent.ACTION_UP -> true
+                            KeyEvent.ACTION_UP -> true
                             else -> false
                         }
                     }
-
                     moveRightKey -> {
                         when (event.nativeKeyEvent.action) {
-                            android.view.KeyEvent.ACTION_DOWN -> {
+                            KeyEvent.ACTION_DOWN -> {
                                 onMoveRight()
                                 true
                             }
-
-                            android.view.KeyEvent.ACTION_UP -> true
+                            KeyEvent.ACTION_UP -> true
                             else -> false
                         }
                     }
-
+                    KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
+                        when (event.nativeKeyEvent.action) {
+                            KeyEvent.ACTION_DOWN -> {
+                                onBack()
+                                true
+                            }
+                            KeyEvent.ACTION_UP -> true
+                            else -> false
+                        }
+                    }
                     else -> false
                 }
             }
             .onFocusChanged {
+                isFocused = it.isFocused
                 if (it.isFocused) {
                     Log.d(
                         SubtitleFocusTag,
@@ -1781,7 +1326,8 @@ private fun SubtitleOptionCard(
                     onFocused()
                 }
             },
-        colors = overlayCardColors(selected = item.isSelected),
+        // V2: selected without focus → ~50%; focused → 100%.
+        colors = overlayRailCardColors(emphasized = item.isSelected),
         shape = CardDefaults.shape(RoundedCornerShape(NuvioTheme.radii.md)),
         border = overlayCardBorder(),
         scale = CardDefaults.scale(focusedScale = 1f, pressedScale = 1f)
@@ -1797,7 +1343,7 @@ private fun SubtitleOptionCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                SourceChip(label = item.sourceLabel, selected = item.isSelected)
+                SourceChip(label = item.sourceLabel, selected = isFocused || item.isSelected)
                 Text(
                     text = item.title,
                     style = MaterialTheme.typography.bodyLarge,
@@ -1818,9 +1364,10 @@ private fun SubtitleOptionCard(
                 if (item.matchScore > 0) {
                     MatchScoreBadge(
                         scorePercent = item.matchScore,
-                        selected = item.isSelected
+                        selected = isFocused || item.isSelected
                     )
                 }
+                // V2: ✓ only on Col2 selected (playback) option.
                 if (item.isSelected) {
                     Icon(
                         imageVector = Icons.Default.Check,
@@ -1878,7 +1425,7 @@ private fun CountBadge(
         Text(
             text = count.toString(),
             style = MaterialTheme.typography.labelSmall,
-            color = if (selected) NuvioTheme.colors.OnSecondary else NuvioTheme.colors.OnSecondary
+            color = NuvioTheme.colors.OnSecondary
         )
     }
 }
@@ -1958,305 +1505,15 @@ private fun OverlayEmptyCard(text: String) {
 }
 
 @Composable
-private fun OverlaySectionCard(
-    title: String,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit
-) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.White
-        )
-        content()
-    }
-}
-
-@Composable
-private fun StepperRow(
-    value: String,
-    onDecrease: () -> Unit,
-    onIncrease: () -> Unit,
-    valueWidth: Dp = 84.dp,
-    onMoveLeft: (() -> Unit)? = null,
-    decrementFocusRequester: FocusRequester? = null,
-    incrementFocusRequester: FocusRequester? = null,
-    decrementFocusKey: String? = null,
-    incrementFocusKey: String? = null,
-    onFocusChanged: ((String) -> Unit)? = null
-) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        StepperButton(
-            icon = Icons.Default.Remove,
-            onClick = onDecrease,
-            onMoveLeft = onMoveLeft,
-            focusRequester = decrementFocusRequester,
-            focusKey = decrementFocusKey,
-            onFocused = onFocusChanged
-        )
-        Box(
-            modifier = Modifier
-                .width(valueWidth)
-                .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(NuvioTheme.radii.md))
-                .padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.sm),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = value,
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White
-            )
-        }
-        StepperButton(
-            icon = Icons.Default.Add,
-            onClick = onIncrease,
-            focusRequester = incrementFocusRequester,
-            focusKey = incrementFocusKey,
-            onFocused = onFocusChanged
-        )
-    }
-}
-
-@Composable
-private fun StepperButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit,
-    onMoveLeft: (() -> Unit)? = null,
-    focusRequester: FocusRequester? = null,
-    focusKey: String? = null,
-    onFocused: ((String) -> Unit)? = null
-) {
-    var isFocused by remember { mutableStateOf(false) }
-    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    val moveLeftKey = if (isRtl) android.view.KeyEvent.KEYCODE_DPAD_RIGHT else android.view.KeyEvent.KEYCODE_DPAD_LEFT
-
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier
-            .size(40.dp)
-            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-            .onPreviewKeyEvent { event ->
-                when (event.nativeKeyEvent.keyCode) {
-                    moveLeftKey -> {
-                        val moveLeft = onMoveLeft ?: return@onPreviewKeyEvent false
-                        when (event.nativeKeyEvent.action) {
-                            android.view.KeyEvent.ACTION_DOWN -> {
-                                moveLeft()
-                                true
-                            }
-
-                            android.view.KeyEvent.ACTION_UP -> true
-                            else -> false
-                        }
-                    }
-
-                    else -> false
-                }
-            }
-            .then(
-                if (isFocused) {
-                    Modifier.border(
-                        NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs),
-                        RoundedCornerShape(NuvioTheme.radii.md)
-                    )
-                } else {
-                    Modifier
-                }
-            )
-            .onFocusChanged {
-                isFocused = it.isFocused
-                if (it.isFocused && focusKey != null) {
-                    onFocused?.invoke(focusKey)
-                }
-            },
-        colors = IconButtonDefaults.colors(
-            containerColor = Color.White.copy(alpha = 0.08f),
-            focusedContainerColor = Color.White.copy(alpha = 0.14f),
-            contentColor = Color.White,
-            focusedContentColor = Color.White
-        ),
-        shape = IconButtonDefaults.shape(shape = RoundedCornerShape(NuvioTheme.radii.md)),
-        scale = IconButtonDefaults.scale(focusedScale = 1f, pressedScale = 1f)
-    ) {
-        Icon(imageVector = icon, contentDescription = null)
-    }
-}
-
-@Composable
-private fun ToggleChip(
-    label: String,
-    isEnabled: Boolean,
-    onMoveLeft: (() -> Unit)? = null,
-    focusRequester: FocusRequester? = null,
-    focusKey: String? = null,
-    onFocused: ((String) -> Unit)? = null,
-    onClick: () -> Unit
-) {
-    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    val moveLeftKey = if (isRtl) android.view.KeyEvent.KEYCODE_DPAD_RIGHT else android.view.KeyEvent.KEYCODE_DPAD_LEFT
-    Card(
-        onClick = onClick,
-        modifier = if (focusRequester != null) {
-            Modifier
-                .focusRequester(focusRequester)
-                .onPreviewKeyEvent { event ->
-                    when (event.nativeKeyEvent.keyCode) {
-                        moveLeftKey -> {
-                            val moveLeft = onMoveLeft ?: return@onPreviewKeyEvent false
-                            when (event.nativeKeyEvent.action) {
-                                android.view.KeyEvent.ACTION_DOWN -> {
-                                    moveLeft()
-                                    true
-                                }
-
-                                android.view.KeyEvent.ACTION_UP -> true
-                                else -> false
-                            }
-                        }
-
-                        else -> false
-                    }
-                }
-                .onFocusChanged {
-                    if (it.isFocused && focusKey != null) onFocused?.invoke(focusKey)
-                }
-        } else {
-            Modifier
-                .onPreviewKeyEvent { event ->
-                    when (event.nativeKeyEvent.keyCode) {
-                        moveLeftKey -> {
-                            val moveLeft = onMoveLeft ?: return@onPreviewKeyEvent false
-                            when (event.nativeKeyEvent.action) {
-                                android.view.KeyEvent.ACTION_DOWN -> {
-                                    moveLeft()
-                                    true
-                                }
-
-                                android.view.KeyEvent.ACTION_UP -> true
-                                else -> false
-                            }
-                        }
-
-                        else -> false
-                    }
-                }
-                .onFocusChanged {
-                    if (it.isFocused && focusKey != null) onFocused?.invoke(focusKey)
-                }
-        },
-        colors = overlayCardColors(selected = isEnabled),
-        shape = CardDefaults.shape(RoundedCornerShape(NuvioTheme.radii.md)),
-        scale = CardDefaults.scale(focusedScale = 1f, pressedScale = 1f)
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (isEnabled) NuvioTheme.colors.OnSecondary else Color.White,
-            modifier = Modifier.padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.sm)
-        )
-    }
-}
-
-@Composable
-private fun ColorChipRow(
-    colors: List<Color>,
-    selectedColor: Int,
-    enabled: Boolean = true,
-    onMoveLeft: (() -> Unit)? = null,
-    focusRequesters: Map<String, FocusRequester>,
-    focusKeyPrefix: String,
-    onFocused: ((String) -> Unit)? = null,
-    onColorSelected: (Int) -> Unit
-) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        items(colors) { color ->
-            val focusKey = "$focusKeyPrefix:${color.toArgb()}"
-            ColorChip(
-                color = if (enabled) color else color.copy(alpha = 0.35f),
-                isSelected = color.toArgb() == selectedColor,
-                enabled = enabled,
-                onMoveLeft = if (color == colors.firstOrNull()) onMoveLeft else null,
-                focusRequester = focusRequesters[focusKey],
-                focusKey = focusKey,
-                onFocused = onFocused,
-                onClick = { onColorSelected(color.toArgb()) }
-            )
-        }
-    }
-}
-
-@Composable
-private fun ColorChip(
-    color: Color,
-    isSelected: Boolean,
-    enabled: Boolean,
-    onMoveLeft: (() -> Unit)? = null,
-    focusRequester: FocusRequester? = null,
-    focusKey: String? = null,
-    onFocused: ((String) -> Unit)? = null,
-    onClick: () -> Unit
-) {
-    var isFocused by remember { mutableStateOf(false) }
-    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    val moveLeftKey = if (isRtl) android.view.KeyEvent.KEYCODE_DPAD_RIGHT else android.view.KeyEvent.KEYCODE_DPAD_LEFT
-
-    Card(
-        onClick = { if (enabled) onClick() },
-        colors = CardDefaults.colors(
-            containerColor = color,
-            focusedContainerColor = color
-        ),
-        modifier = Modifier
-            .size(NuvioTheme.spacing.xxl)
-            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-            .onPreviewKeyEvent { event ->
-                when (event.nativeKeyEvent.keyCode) {
-                    moveLeftKey -> {
-                        val moveLeft = onMoveLeft ?: return@onPreviewKeyEvent false
-                        when (event.nativeKeyEvent.action) {
-                            android.view.KeyEvent.ACTION_DOWN -> {
-                                moveLeft()
-                                true
-                            }
-
-                            android.view.KeyEvent.ACTION_UP -> true
-                            else -> false
-                        }
-                    }
-
-                    else -> false
-                }
-            }
-            .then(
-                when {
-                    isSelected -> Modifier.border(NuvioTheme.spacing.xxs, Color.White, CircleShape)
-                    isFocused -> Modifier.border(NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), CircleShape)
-                    else -> Modifier
-                }
-            )
-            .onFocusChanged {
-                isFocused = it.isFocused
-                if (it.isFocused && focusKey != null) {
-                    onFocused?.invoke(focusKey)
-                }
-            },
-        shape = CardDefaults.shape(CircleShape)
-        ,
-        scale = CardDefaults.scale(focusedScale = 1f, pressedScale = 1f)
-    ) {}
-}
-
-@Composable
-private fun overlayCardColors(selected: Boolean) = CardDefaults.colors(
-    containerColor = if (selected) NuvioTheme.colors.Secondary else Color.Transparent,
-    focusedContainerColor = if (selected) NuvioTheme.colors.Secondary else Color.Transparent
+private fun overlayRailCardColors(emphasized: Boolean) = CardDefaults.colors(
+    // V1–V3: navigated/selected without focus → ~50%; focused → 100%.
+    containerColor = if (emphasized) {
+        NuvioTheme.colors.Secondary.copy(alpha = SelectedWithoutFocusAlpha)
+    } else {
+        Color.Transparent
+    },
+    focusedContainerColor = NuvioTheme.colors.Secondary,
+    pressedContainerColor = NuvioTheme.colors.Secondary
 )
 
 @Composable
@@ -2271,90 +1528,19 @@ private fun overlayCardBorder() = CardDefaults.border(
     )
 )
 
-private object StyleFocusKey {
-    const val PaneStyleTab = "pane_style_tab"
-    const val PaneInfoTab = "pane_info_tab"
-    const val InfoTranslate = "info_translate"
-    const val InfoDisable = "info_disable"
-    const val FontSizeDecrease = "font_size_decrease"
-    const val FontSizeIncrease = "font_size_increase"
-    const val Bold = "bold"
-    const val OutlineToggle = "outline_toggle"
-    const val OffsetDecrease = "offset_decrease"
-    const val OffsetIncrease = "offset_increase"
-    const val DelaySet = "delay_set"
-    const val Reset = "reset"
-    const val TextColorPrefix = "text_color"
-    const val OpacityDecrease = "opacity_decrease"
-    const val OpacityIncrease = "opacity_increase"
-    const val OutlineColorPrefix = "outline_color"
-
-    fun isInfoKey(key: String): Boolean =
-        key == PaneInfoTab || key == InfoTranslate || key == InfoDisable
-
-    fun isStyleContentKey(key: String): Boolean =
-        key != PaneStyleTab && key != PaneInfoTab && !isInfoKey(key)
-}
-
-private enum class StyleRailPane {
-    STYLE,
-    INFO
+private object InfoFocusKey {
+    const val Translate = "info_translate"
 }
 
 private enum class OverlayFocusRail {
     LANGUAGE,
     OPTION,
-    STYLE
-}
-
-private fun styleListIndexForFocusKey(focusKey: String): Int {
-    return when {
-        focusKey == StyleFocusKey.PaneStyleTab || focusKey == StyleFocusKey.PaneInfoTab -> 0
-        focusKey == StyleFocusKey.InfoTranslate -> 0
-        focusKey == StyleFocusKey.InfoDisable -> 1
-        focusKey == StyleFocusKey.DelaySet -> 0
-        focusKey == StyleFocusKey.FontSizeDecrease || focusKey == StyleFocusKey.FontSizeIncrease -> 1
-        focusKey == StyleFocusKey.Bold -> 2
-        focusKey.startsWith("${StyleFocusKey.TextColorPrefix}:") -> 3
-        focusKey == StyleFocusKey.OpacityDecrease || focusKey == StyleFocusKey.OpacityIncrease -> 4
-        focusKey == StyleFocusKey.OutlineToggle || focusKey.startsWith("${StyleFocusKey.OutlineColorPrefix}:") -> 5
-        focusKey == StyleFocusKey.OffsetDecrease || focusKey == StyleFocusKey.OffsetIncrease -> 6
-        focusKey == StyleFocusKey.Reset -> 7
-        else -> 0
-    }
+    INFO
 }
 
 @Composable
 private fun rememberFocusRequesterMap(keys: List<String>): Map<String, FocusRequester> {
     return remember(keys) { keys.associateWith { FocusRequester() } }
-}
-
-@Composable
-private fun rememberStyleFocusRequesters(): Map<String, FocusRequester> {
-    return remember {
-        listOf(
-            StyleFocusKey.PaneStyleTab,
-            StyleFocusKey.PaneInfoTab,
-            StyleFocusKey.InfoTranslate,
-            StyleFocusKey.InfoDisable,
-            StyleFocusKey.FontSizeDecrease,
-            StyleFocusKey.FontSizeIncrease,
-            StyleFocusKey.Bold,
-            StyleFocusKey.OpacityDecrease,
-            StyleFocusKey.OpacityIncrease,
-            StyleFocusKey.OutlineToggle,
-            StyleFocusKey.OffsetDecrease,
-            StyleFocusKey.OffsetIncrease,
-            StyleFocusKey.DelaySet,
-            StyleFocusKey.Reset
-        ).associateWith { FocusRequester() } +
-            OverlayTextColors.associate { color ->
-                "${StyleFocusKey.TextColorPrefix}:${color.toArgb()}" to FocusRequester()
-            } +
-            OverlayOutlineColors.associate { color ->
-                "${StyleFocusKey.OutlineColorPrefix}:${color.toArgb()}" to FocusRequester()
-            }
-    }
 }
 
 private suspend fun androidx.compose.foundation.lazy.LazyListState.scrollItemIntoView(
@@ -2694,12 +1880,4 @@ private fun subtitleLanguageSortLabel(key: String): String = when (key) {
     SubtitleUnknownLanguageKey -> "\uFFFF"
     SubtitleOffLanguageKey -> Subtitle.languageCodeToName("none").lowercase()
     else -> Subtitle.languageCodeToName(key).lowercase()
-}
-
-private fun formatSubtitleDelay(delayMs: Int): String {
-    return when {
-        delayMs > 0 -> "+${delayMs}ms"
-        delayMs < 0 -> "${delayMs}ms"
-        else -> "0ms"
-    }
 }
