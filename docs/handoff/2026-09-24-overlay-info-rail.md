@@ -61,15 +61,31 @@ Col1 (Idiomas + None/Off) → Col2 (embedded | addon | AI sintética) → Col3 (
 | N6 | Opção selecionada **sem CTA habilitado** (ex.: AI automática) → Right **não faz nada** |
 | N7 | Com foco no CTA, a Col2 continua destacando a opção selecionada |
 | N8 | Left/Back volta uma coluna por vez. Ao chegar na Col1, a Col3 some na hora. A seleção não muda |
-| V1 | O CTA **não pode ficar roxo** (nem com outro destaque) sem foco. Sem foco, usar estilo neutro (hoje ele parece selecionado com o foco em outro lugar) |
+| L1 | Quando a Col3 não é renderizada (N1), o **espaço dela fica reservado**: a Col2 não muda de largura nem de posição |
+| L2 | A Col3 **não tem cabeçalho** (sem título "Info") |
+
+## Requisitos: estados visuais (padrão do app)
+Hoje há vários elementos em roxo cheio ao mesmo tempo e não dá para saber onde está o foco. Regra única para as três colunas:
+
+| Papel | Visual |
+|-------|--------|
+| Foco do DPAD | Roxo 100%. **Só um elemento por vez** na tela inteira |
+| Navegação / selecionado sem foco | Roxo ~50% (`Secondary.copy(alpha ≈ 0.5f)`, seguindo o padrão já usado no app) |
+| Demais | Neutro, sem fundo roxo |
+
+| ID | Coluna | Regra |
+|----|--------|-------|
+| V1 | Col1 | Linha focada → 100%. Idioma cuja lista está aberta na Col2, com o foco já na Col2/Col3 → ~50%. Outros → neutro. **Sem ✓** e sem marcar o idioma da legenda em playback (a única exceção é o ponto amarelo da fonte AI, Fatia C) |
+| V2 | Col2 | O ✓ existe **só aqui**, na opção ativa no playback. Focada → 100% (com ✓ se também estiver selecionada). Selecionada sem foco → ~50% + ✓. Demais → neutro |
+| V3 | Col3 | CTA focado → 100%. CTA visível sem foco → ~50%. Nunca roxo cheio sem foco |
 
 ## Nesta fatia
-Os CTAs podem continuar com a lógica atual de quais aparecem. A matriz completa é da Fatia B. O objetivo aqui é a navegação e a estrutura.
+Os CTAs podem continuar com a lógica atual de quais aparecem. A matriz completa é da Fatia B. O objetivo aqui é a navegação, a estrutura e os estados visuais. O nome das tracks embutidas continua como está hoje (ex.: "en"); não alterar.
 
 ## DoD
 - [ ] R1–R4 removidos, sem código morto sobrando
-- [ ] N1–N8 validados no emulador, com screenshot por item
-- [ ] V1: screenshot com o CTA sem foco (neutro) e com foco (destacado)
+- [ ] N1–N8, L1–L2 validados no dispositivo, com screenshot por item
+- [ ] V1–V3: screenshots com o foco em cada coluna, mostrando só um elemento em roxo 100%
 - [ ] Build ok + testes existentes passando
 
 ---
@@ -86,6 +102,18 @@ O Info descreve **a opção da Col2** (focada ou selecionada): nome completo, ti
 | I3 | Idioma X → addon X | Infos do addon (nome completo etc.) |
 | I4 | AI ativa + foco sem seleção em outra opção | Infos da **focada**, read-only e sem CTA. O playback continua na AI |
 
+### Campos mínimos por tipo
+| ID | Tipo | Campos |
+|----|------|--------|
+| I5 | Addon | Nome do addon, nome completo do arquivo, idioma, formato (SRT/VTT/ASS), score % (se houver) |
+| I6 | Embedded | Idioma, nome da track, formato (texto ou bitmap/PGS, indicando que bitmap não é traduzível), forced/SDH |
+| I7 | AI | Fonte, método (automático ou manual/User selected), rung/motivo, status, target, model |
+
+### Contadores da Col1
+| ID | Requisito |
+|----|-----------|
+| K1 | O contador do idioma preferido **inclui** a opção AI sintética quando ela está listada |
+
 ## Requisitos: CTAs (só com opção selecionada)
 | ID | Opção selecionada | Origem | CTA |
 |----|-------------------|--------|-----|
@@ -100,8 +128,9 @@ O Info descreve **a opção da Col2** (focada ou selecionada): nome completo, ti
 Extrair a decisão para uma **função pura**, por exemplo `(opção, focada|selecionada, origem/rung, aiDisponível) → (conteúdoInfo, ctas)`, com **testes unitários cobrindo I1–I4 e C1–C6**.
 
 ## DoD
-- [ ] Função pura + testes unitários, um caso por ID
-- [ ] Screenshot no emulador de I1, I2, I3, I4, C1, C4, C5 e C6
+- [ ] Função pura + testes unitários, um caso por ID (I1–I7, C1–C6)
+- [ ] Screenshot no dispositivo de I1, I2, I3, I4, C1, C4, C5 e C6
+- [ ] K1 validado (screenshot do contador)
 - [ ] N4–N6 da Fatia A continuam válidos (sem regressão)
 
 ---
@@ -112,9 +141,19 @@ Extrair a decisão para uma **função pura**, por exemplo `(opção, focada|sel
 | ID | Requisito |
 |----|-----------|
 | T1 | O CTA "Traduzir com IA" ativa a tradução daquela fonte (reutilizando `OnTranslateSubtitleWithAi` ou equivalente): `userLocked=true`, AI on, diagnostics MANUAL |
-| T2 | Na Col2 da fonte, mostrar o label **"Fonte IA"** abaixo do nome do addon ou da track embutida |
+| T2 | Os indicadores de fonte AI (F1–F4) passam a apontar para esta fonte |
 | T3 | **Na mesma sessão do overlay**, o foco vai para Col1 = preferido → Col2 = AI, já selecionada. Isso muda o §2 atual do UI menu (que só alinha no reopen) |
 | T4 | O Info da AI mostra **User selected / MANUAL** + nome da fonte + diagnostics |
+
+## Requisitos: indicadores da fonte AI
+Valem **sempre que a tradução AI estiver ativa**, seja pela ladder (automático) ou por escolha do usuário (manual).
+
+| ID | Requisito |
+|----|-----------|
+| F1 | Col1: **ponto amarelo pequeno** no idioma da fonte (embedded ou addon). Sem ✓ |
+| F2 | Col2: chip amarelo **"Fonte IA"** na opção que é a fonte atual, como **segundo chip ao lado** do chip de origem (ex.: `AIOStreams` `Fonte IA`, `Built in` `Fonte IA`) |
+| F3 | Ponto e chip acompanham a fonte: se o usuário ou a policy mudar a fonte da AI, eles mudam **na hora** para o novo idioma/opção |
+| F4 | Ponto e chip **somem** quando a AI desliga: None/Off, reset Smart que termina sem tradução (`PREFERRED_EMBEDDED` ou classic), ou seleção de uma legenda sem AI |
 
 ## Requisitos: click na opção AI
 | ID | Requisito |
@@ -130,24 +169,25 @@ Extrair a decisão para uma **função pura**, por exemplo `(opção, focada|sel
 | S2 | Rung `AI_EMBEDDED` → a AI **continua selecionada**. O Info mostra a track escolhida pela ladder, sem CTA |
 | S3 | Rung `PREFERRED_EMBEDDED` → a seleção passa para a **track embedded no idioma preferido** (tradução off) |
 | S4 | Fallback classic → **o Nuvio escolhe** a legenda. O Info explica o motivo |
-| S5 | O badge "Fonte IA" da fonte manual anterior é removido |
+| S5 | Os indicadores F1–F2 seguem o resultado do reset: apontam para a fonte da ladder (`AI_EMBEDDED`) ou somem (F4) |
 | S6 | Foco após o reset: vai para a opção que ficou selecionada, na Col2 do idioma dela |
 
 ## Requisitos: persistência
 | ID | Requisito |
 |----|-----------|
 | P1 | Enquanto a tradução manual estiver ativa, o reopen mostra Col1 = preferido → Col2 = AI selecionada → Info MANUAL |
-| P2 | O badge "Fonte IA" continua na fonte (idioma dela → addon/embedded) no reopen |
-| P3 | O badge só some quando a fonte muda: outra opção na Col2, reset Smart, None/Off ou AI desligada |
+| P2 | Enquanto a AI estiver ativa (automática ou manual), o reopen mantém o ponto amarelo (F1) e o chip "Fonte IA" (F2) na fonte atual |
+| P3 | Os indicadores só mudam ou somem conforme F3/F4 |
 
 ## Docs
 | ID | Requisito |
 |----|-----------|
-| D1 | Atualizar `docs/prd-ai-subtitles-ui-menu.md`: §1 (modelo mental, sem Style, sem long-press, tabela de overlays), §2 (salto de foco imediato), §B6 (Info por foco/seleção, matriz de CTAs, G1/G2) e fechar o gap "Reset to smart auto" |
+| D1 | Atualizar `docs/prd-ai-subtitles-ui-menu.md`: §1 (modelo mental, sem Style, sem long-press, tabela de overlays, estados visuais, indicadores de fonte AI), §2 (salto de foco imediato), §B6 (Info por foco/seleção, matriz de CTAs, G1/G2) e fechar o gap "Reset to smart auto" |
 | D2 | Em `docs/architecture-ai-subtitles.md`, 1 frase sobre o reset Smart nos locks |
 
 ## DoD
 - [ ] T1–T4 validados com addon **e** com embedded (screenshots)
+- [ ] F1–F4 validados com AI automática (ladder) **e** manual, incluindo troca de fonte e desligamento (screenshots)
 - [ ] A1–A3 validados (A1: log mostrando que não houve re-translate)
 - [ ] S1–S6 validados por rung. Se um rung for difícil de reproduzir no emulador, cobrir com teste unitário da policy e declarar isso
 - [ ] P1–P3: screenshot de fechar e reabrir o overlay
