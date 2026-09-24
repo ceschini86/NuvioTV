@@ -216,6 +216,6 @@ Valem **sempre que a tradução AI estiver ativa**, seja pela ladder (automátic
 
 | Fatia | Status | Commit | Observações |
 |-------|--------|--------|-------------|
-| A | pendente | — | — |
-| B | pendente | — | — |
-| C | pendente | — | — |
+| A | aprovada (código) | (ver git: Simplify subtitle overlay…) | R4 parcial: flags/events de diagnostics/long-press sem UI. Device adiado. |
+| B | em andamento | — | Sem device |
+| C | pendente | — | Smoke/device no fechamento |
