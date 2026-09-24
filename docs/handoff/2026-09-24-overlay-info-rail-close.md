@@ -8,6 +8,7 @@
 |-------|--------|
 | Branch | `feat/subtitle-overlay-info-rail` (pushed; tracking `origin`) |
 | Smoke Fatia D (TV) | **PASS** 2026-09-24 — `192.168.31.46:5555` · TWD S08E06 · preferred **pt-BR** · evidência `.tmp_overlay_*.png` + `.tmp_overlay_smoke.logcat` |
+| Commits | `2b0085ba8` Fatia D · `3992cc496` bump version (**1.0.7** / 1071) — pushed |
 | Package / TV | `com.nuvio.tv` · **1.0.7** · versionCode **1071** · sideload `armeabi-v7a` |
 | GitHub releases | **1.0.6** publicado; **1.0.7** aguarda aprovação explícita do user |
 
@@ -20,7 +21,7 @@
 | **A** | `f1385ce91` | Info-only Col3; sem Style/long-press/Disable-Stop; navegação N*; layout L*; (V1–V3 **depois substituídos**) |
 | **B** | `50dc371b8` | `SubtitleInfoRailDecision` + 14 testes ID-named (I*/C*/K1) |
 | **C** | `c9611a57c` | Translate T*, Fonte IA F*, Reset Smart S*, click AI A*, logs, docs D1–D2, skill smoke |
-| **D** | smoke PASS → commit | F2 embedded (`sourceInternalIndex` + resolver); foco pós-CTA; S1–S9 FocusBackground; limpeza R4 diagnostics handlers |
+| **D** | `2b0085ba8` + bump `3992cc496` | F2 embedded (`sourceInternalIndex` + resolver); foco pós-CTA; S1–S9 FocusBackground; limpeza R4 diagnostics handlers |
 
 ### Fatia D — detalhes (working tree)
 
