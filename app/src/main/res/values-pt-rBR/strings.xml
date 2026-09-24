@@ -3254,6 +3254,7 @@
     <string name="sub_ai_rung_manual">Manual</string>
     <string name="sub_ai_rung_none">Nenhuma</string>
     <string name="sub_ai_option_meta">Tradução com IA para o idioma preferido</string>
+    <string name="sub_ai_translating">Traduzindo…</string>
     <string name="sub_ai_option_badge">IA</string>
     <string name="sub_ai_auto_select">Legendas inteligentes com IA</string>
     <string name="sub_ai_auto_select_desc">Embutida no idioma preferido, depois IA a partir da embutida; senão seleção clássica. Addons só com Traduzir com IA</string>

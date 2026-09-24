@@ -105,7 +105,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1073
+        versionCode = 1076
         versionName = "1.0.9"
 
         buildConfigField("String", "PARENTAL_GUIDE_API_URL", "\"${localProperties.getProperty("PARENTAL_GUIDE_API_URL", "")}\"")
@@ -275,8 +275,16 @@ android {
         abi {
             isEnable = !buildingAppBundle
             reset()
-            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
-            isUniversalApk = true
+            // Local TV sideload: ./gradlew :app:assembleFullRelease -PlocalSideloadAbi=armeabi-v7a
+            // skips other ABI/CMake targets and the universal APK.
+            val localSideloadAbi = (findProperty("localSideloadAbi") as String?)?.trim().orEmpty()
+            if (localSideloadAbi.isNotEmpty()) {
+                include(localSideloadAbi)
+                isUniversalApk = false
+            } else {
+                include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+                isUniversalApk = true
+            }
         }
     }
 

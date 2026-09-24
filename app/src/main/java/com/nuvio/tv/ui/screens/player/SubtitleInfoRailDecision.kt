@@ -372,8 +372,7 @@ private fun decideInfoCta(
     isUsingMpv: Boolean,
     userExplicitSelection: Boolean
 ): SubtitleInfoCtaDecision {
-    // I4 / N4: focused but not selected → read-only, no CTA.
-    if (displayOption == null || !isPlaybackSelected) {
+    if (displayOption == null) {
         return SubtitleInfoCtaDecision.None
     }
 
@@ -388,6 +387,10 @@ private fun decideInfoCta(
 
     when (displayOption.kind) {
         SubtitleInfoOptionKind.AI -> {
+            // AI focused but not selected → no CTA (click option = A2/A3).
+            if (!isPlaybackSelected) {
+                return SubtitleInfoCtaDecision.None
+            }
             // C4: AI manual → reset to smart.
             if (isManualAi) {
                 return SubtitleInfoCtaDecision(
@@ -400,24 +403,24 @@ private fun decideInfoCta(
             return SubtitleInfoCtaDecision.None
         }
         SubtitleInfoOptionKind.INTERNAL, SubtitleInfoOptionKind.ADDON -> {
-            // C2: classic automatic fallback → no CTA (unless user later re-selected).
-            if (rung == AiSubtitleLadderRung.CLASSIC_FALLBACK && !userLocked && !userExplicitSelection) {
+            // C2: classic automatic fallback → no CTA only for the auto-picked
+            // selected option (unless user later re-selected). Other focused
+            // tracks/addons still get Translate.
+            if (isPlaybackSelected &&
+                rung == AiSubtitleLadderRung.CLASSIC_FALLBACK &&
+                !userLocked &&
+                !userExplicitSelection
+            ) {
                 return SubtitleInfoCtaDecision.None
             }
-            // C3 / C5: Translate with AI; C6 when AI unavailable.
-            return if (unavailable != null) {
-                SubtitleInfoCtaDecision(
-                    action = SubtitleInfoCtaAction.TRANSLATE_WITH_AI,
-                    enabled = false,
-                    focusable = false
-                )
-            } else {
-                SubtitleInfoCtaDecision(
-                    action = SubtitleInfoCtaAction.TRANSLATE_WITH_AI,
-                    enabled = true,
-                    focusable = true
-                )
-            }
+            // Bitmap / C6: Translate visible but disabled and not focusable.
+            // C3 / C5: Translate with AI when available.
+            val translateEnabled = unavailable == null && !displayOption.isBitmap
+            return SubtitleInfoCtaDecision(
+                action = SubtitleInfoCtaAction.TRANSLATE_WITH_AI,
+                enabled = translateEnabled,
+                focusable = translateEnabled
+            )
         }
     }
 }

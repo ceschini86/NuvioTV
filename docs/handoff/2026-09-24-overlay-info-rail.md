@@ -74,12 +74,12 @@ Col1 (Idiomas + None/Off) → Col2 (embedded | addon | AI sintética) → Col3 (
 | R4 | Remover o **long-press** nas opções (menu Translate e overlay de Diagnostics). Os diagnostics passam a aparecer no Info |
 | N1 | Foco na Col1 → a Col3 **não é renderizada** |
 | N2 | Col1 = None/Off → **não existem** Col2 nem Col3 |
-| N3 | Trocar de idioma na Col1 só navega. **Não altera** a seleção nem o playback |
-| N4 | Foco na Col2 com opção **não selecionada** → Col3 read-only, **sem CTA**, e Right **não faz nada** |
+| N3 | Trocar de idioma na Col1 só navega (**não** altera seleção/playback). **OK/click** num idioma ≠ Off move o foco real para Col2 (como Right). Off continua a desligar legendas sem abrir Col2 |
+| N4 | Foco na Col2 com opção **não selecionada** → Col3 mostra Info da focada; se houver CTA Translate habilitado, Right foca o CTA (**superseded 2026-09-24**: CTA já não exige seleção) |
 | N5 | Foco na Col2 com opção **selecionada** e **pelo menos um CTA habilitado** → Right foca o **primeiro CTA habilitado** |
-| N6 | Opção selecionada **sem CTA habilitado** (ex.: AI automática) → Right **não faz nada** |
+| N6 | Opção **sem CTA habilitado** (ex.: AI automática, bitmap, C6) → Right **não faz nada** |
 | N7 | Com foco no CTA, a Col2 continua destacando a opção selecionada |
-| N8 | Left/Back volta uma coluna por vez. Ao chegar na Col1, a Col3 some na hora. A seleção não muda |
+| N8 | **Back** em Col1 ou Col2 **fecha** o overlay (não sobe Col2→Col1). Em Col3, Back/Left volta à Col2. Left em Col2 continua a ir à Col1. A seleção não muda |
 | L1 | Quando a Col3 não é renderizada (N1), o **espaço dela fica reservado**: a Col2 não muda de largura nem de posição |
 | L2 | A Col3 **não tem cabeçalho** (sem título "Info") |
 
@@ -123,7 +123,7 @@ O Info descreve **a opção da Col2** (focada ou selecionada): nome completo, ti
 | I1 | Preferido → **AI** | Fonte da tradução (embedded/addon), método/motivo, status, target, model |
 | I2 | Idioma X → embedded X | Infos da track embutida |
 | I3 | Idioma X → addon X | Infos do addon (nome completo etc.) |
-| I4 | AI ativa + foco sem seleção em outra opção | Infos da **focada**, read-only e sem CTA. O playback continua na AI |
+| I4 | AI ativa + foco sem seleção em outra opção | Infos da **focada** + CTA **Traduzir com IA** (se C* permitir). O playback continua na AI até Translate. Col3 ancora em `infoEntryOptionId` ao focar o CTA |
 
 ### Campos mínimos por tipo
 | ID | Tipo | Campos |
@@ -137,15 +137,15 @@ O Info descreve **a opção da Col2** (focada ou selecionada): nome completo, ti
 |----|-----------|
 | K1 | O contador do idioma preferido **inclui** a opção AI sintética quando ela está listada |
 
-## Requisitos: CTAs (só com opção selecionada)
-| ID | Opção selecionada | Origem | CTA |
-|----|-------------------|--------|-----|
+## Requisitos: CTAs (opção em display — focada ou selecionada)
+| ID | Opção em display | Origem | CTA |
+|----|------------------|--------|-----|
 | C1 | AI | Automático (`AI_EMBEDDED`) | **Nenhum**. O Info mostra os diagnostics |
-| C2 | Legenda escolhida pelo Nuvio | Automático, fallback classic | **Nenhum**. O Info explica o motivo do fallback nos diagnostics |
+| C2 | Legenda escolhida pelo Nuvio **e selecionada** | Automático, fallback classic | **Nenhum**. O Info explica o motivo do fallback nos diagnostics. Focar **outra** opção → C5 |
 | C3 | Embedded no preferido | Automático (`PREFERRED_EMBEDDED`) | "Traduzir com IA" (é embedded selecionado) |
-| C4 | AI | Manual | Único: **"Voltar à seleção automática"** |
-| C5 | Embedded ou addon | Qualquer | Único: **"Traduzir com IA"** |
-| C6 | Qualquer, com AI indisponível (sem key / rate-limit / MPV) | — | "Traduzir com IA" **disabled** e **não focável**. A Col3 explica o motivo |
+| C4 | AI **selecionada** | Manual | Único: **"Voltar à seleção automática"**. AI focada sem seleção → nenhum CTA |
+| C5 | Embedded ou addon (selecionada **ou só focada**) | Qualquer | Único: **"Traduzir com IA"** |
+| C6 | Qualquer, com AI indisponível (sem key / rate-limit / MPV) **ou bitmap** | — | "Traduzir com IA" **disabled** e **não focável**. A Col3 explica o motivo (ou formato bitmap) |
 
 ## Implementação exigida
 - Extrair decisão para **função(ões) pura(s)** (ex. arquivo dedicado tipo `SubtitleInfoRailDecision.kt`): entrada `(opção, focada|selecionada, origem/rung, aiDisponível, …)` → `(conteúdoInfo, ctas)`.
@@ -178,10 +178,10 @@ Valem **sempre que a tradução AI estiver ativa**, seja pela ladder (automátic
 
 | ID | Requisito |
 |----|-----------|
-| F1 | Col1: **ponto amarelo pequeno** no idioma da fonte (embedded ou addon). Sem ✓ |
+| F1 | Col1: **ponto amarelo pequeno** no idioma da fonte (embedded ou addon). Sem ✓. Match de key via rail (`pt`↔`pt-br` etc.) para não perder o ponto no preferido |
 | F2 | Col2: chip amarelo **"Fonte IA"** na opção que é a fonte atual, como **segundo chip ao lado** do chip de origem (ex.: `AIOStreams` `Fonte IA`, `Built in` `Fonte IA`) |
 | F3 | Ponto e chip acompanham a fonte: se o usuário ou a policy mudar a fonte da AI, eles mudam **na hora** para o novo idioma/opção |
-| F4 | Ponto e chip **somem** quando a AI desliga: None/Off, reset Smart que termina sem tradução (`PREFERRED_EMBEDDED` ou classic), ou seleção de uma legenda sem AI |
+| F4 | Ponto e chip **somem** quando a AI desliga: None/Off, reset Smart que termina sem tradução (`PREFERRED_EMBEDDED` ou classic), ou seleção de uma legenda sem AI. Também se `translationActive=false` ou rung `PREFERRED_EMBEDDED`/`CLASSIC_FALLBACK`/`NONE` |
 
 ## Requisitos: click na opção AI
 | ID | Requisito |

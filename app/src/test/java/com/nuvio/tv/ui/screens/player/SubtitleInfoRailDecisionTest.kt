@@ -156,7 +156,7 @@ class SubtitleInfoRailDecisionTest {
     }
 
     @Test
-    fun i4_aiActive_focusOtherOption_showsFocusedReadOnlyNoCta() {
+    fun i4_aiActive_focusOtherOption_showsFocusedInfoWithTranslateCta() {
         val focusedAddon = addonOption(id = "addon:other:x:https://x/b.srt")
         val decision = decideSubtitleInfoRail(
             displayOption = focusedAddon,
@@ -173,6 +173,29 @@ class SubtitleInfoRailDecisionTest {
         )
 
         assertEquals(SubtitleInfoContentKind.ADDON, decision.content.kind)
+        assertEquals(SubtitleInfoCtaAction.TRANSLATE_WITH_AI, decision.cta.action)
+        assertTrue(decision.cta.enabled)
+        assertTrue(decision.cta.focusable)
+        assertTrue(decision.cta.canMoveFocusToCta)
+    }
+
+    @Test
+    fun i4_aiFocusedNotSelected_showsNoCta() {
+        val decision = decideSubtitleInfoRail(
+            displayOption = aiOption(),
+            isPlaybackSelected = false,
+            diagnostics = diagnostics(
+                rung = AiSubtitleLadderRung.MANUAL,
+                reason = "user chose translate with AI",
+                userLocked = true
+            ),
+            statusLine = null,
+            aiAvailable = true,
+            aiQuotaExhausted = false,
+            isUsingMpv = false,
+            translationActive = true
+        )
+
         assertEquals(SubtitleInfoCtaAction.NONE, decision.cta.action)
         assertFalse(decision.cta.canMoveFocusToCta)
     }
@@ -316,6 +339,55 @@ class SubtitleInfoRailDecisionTest {
         val byKey = decision.content.fields.associate { it.key to it.value }
         assertEquals(AiSubtitleLadderRung.CLASSIC_FALLBACK.name, byKey[SubtitleInfoFieldKey.RUNG])
         assertEquals(classicReason, byKey[SubtitleInfoFieldKey.REASON])
+    }
+
+    @Test
+    fun c2_classicFallback_focusOtherOption_showsTranslateCta() {
+        val decision = decideSubtitleInfoRail(
+            displayOption = embeddedOption(id = "internal:1", title = "English", languageCode = "en"),
+            isPlaybackSelected = false,
+            diagnostics = diagnostics(
+                rung = AiSubtitleLadderRung.CLASSIC_FALLBACK,
+                reason = "classic preferred-language auto-select (primary only)",
+                userLocked = false,
+                sourceLabel = null,
+                sourceLanguage = null,
+                sourceKind = null
+            ),
+            statusLine = null,
+            aiAvailable = true,
+            aiQuotaExhausted = false,
+            isUsingMpv = false,
+            userExplicitSelection = false
+        )
+
+        assertEquals(SubtitleInfoCtaAction.TRANSLATE_WITH_AI, decision.cta.action)
+        assertTrue(decision.cta.enabled)
+        assertTrue(decision.cta.canMoveFocusToCta)
+    }
+
+    @Test
+    fun c5_bitmapTrack_showsDisabledNonFocusableTranslate() {
+        val decision = decideSubtitleInfoRail(
+            displayOption = embeddedOption(
+                title = "English PGS",
+                languageCode = "en",
+                formatLabel = "PGS",
+                isBitmap = true
+            ),
+            isPlaybackSelected = true,
+            diagnostics = null,
+            statusLine = null,
+            aiAvailable = true,
+            aiQuotaExhausted = false,
+            isUsingMpv = false,
+            userExplicitSelection = true
+        )
+
+        assertEquals(SubtitleInfoCtaAction.TRANSLATE_WITH_AI, decision.cta.action)
+        assertFalse(decision.cta.enabled)
+        assertFalse(decision.cta.focusable)
+        assertFalse(decision.cta.canMoveFocusToCta)
     }
 
     @Test

@@ -18,8 +18,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -234,14 +234,16 @@ internal fun SubtitleSelectionOverlay(
         selectedInternalIndex,
         selectedAddonSubtitle,
         internalTracks,
-        sessionInternalTracks
+        sessionInternalTracks,
+        sessionAddonSubtitles,
+        languageItems
     ) {
         if (!aiSubtitleTranslationActive) {
             AiSourceIndicatorDecision.Hidden
         } else {
             val diag = aiSubtitleDiagnostics
             val tracksForResolve = sessionInternalTracks.ifEmpty { internalTracks }
-            val sourceLangKey = when {
+            val rawSourceLangKey = when {
                 !diag?.sourceLanguage.isNullOrBlank() ->
                     normalizeOverlayLanguageKey(diag!!.sourceLanguage)
                 selectedAddonSubtitle != null ->
@@ -251,6 +253,10 @@ internal fun SubtitleSelectionOverlay(
                         ?.let { normalizeOverlayLanguageKeyForTrack(it) }
                 else -> null
             }
+            val addonMeta = sessionAddonSubtitles.map { subtitle ->
+                addonSubtitleOptionId(subtitle) to
+                    "${subtitle.addonName}\u0000${normalizeOverlayLanguageKey(subtitle.lang)}"
+            }
             val sourceOptionId = resolveAiSourceOptionId(
                 sourceKind = diag?.sourceKind,
                 selectedInternalIndex = selectedInternalIndex,
@@ -258,12 +264,18 @@ internal fun SubtitleSelectionOverlay(
                 tracks = tracksForResolve,
                 diagnosticsInternalIndex = diag?.sourceInternalIndex,
                 sourceLanguage = diag?.sourceLanguage,
-                sourceLabel = diag?.sourceLabel
+                sourceLabel = diag?.sourceLabel,
+                addonOptionIdsByLabelLang = addonMeta
+            )
+            val railLangKey = resolveIndicatorLanguageKeyForRail(
+                sourceLanguageKey = rawSourceLangKey,
+                availableLanguageKeys = languageItems.map { it.key }
             )
             decideAiSourceIndicators(
                 translationActive = true,
-                sourceLanguageKey = sourceLangKey,
-                sourceOptionId = sourceOptionId
+                sourceLanguageKey = railLangKey,
+                sourceOptionId = sourceOptionId,
+                rung = diag?.rung
             )
         }
     }
@@ -361,9 +373,14 @@ internal fun SubtitleSelectionOverlay(
     val focusedOption = remember(activeOptionFocusId, subtitleOptions, playbackSelectedOption) {
         subtitleOptions.firstOrNull { it.id == activeOptionFocusId } ?: playbackSelectedOption
     }
+    val infoAnchorOption = remember(infoEntryOptionId, subtitleOptions) {
+        infoEntryOptionId?.let { id -> subtitleOptions.firstOrNull { it.id == id } }
+    }
+    // Col3 shows the focused Col2 option; when on INFO, keep the option that
+    // was focused at Right (infoEntryOptionId) so CTA/Info do not jump to playback.
     val infoDisplayOption = when (activeRail) {
         OverlayFocusRail.OPTION -> focusedOption
-        OverlayFocusRail.INFO -> playbackSelectedOption ?: focusedOption
+        OverlayFocusRail.INFO -> infoAnchorOption ?: focusedOption ?: playbackSelectedOption
         else -> playbackSelectedOption
     }
     val rateLimitedAll = stringResource(R.string.sub_ai_error_rate_limited_all)
@@ -407,11 +424,7 @@ internal fun SubtitleSelectionOverlay(
         infoStatusLine,
         userExplicitSubtitleSelection
     ) {
-        val optionForDecision = when {
-            activeRail == OverlayFocusRail.INFO -> playbackSelectedOption ?: infoDisplayOption
-            else -> infoDisplayOption
-        }
-        val snapshot = optionForDecision?.toInfoSnapshot(unknownLabel = unknownLabel)
+        val snapshot = infoDisplayOption?.toInfoSnapshot(unknownLabel = unknownLabel)
         val selectedId = playbackSelectedOption?.id
         decideSubtitleInfoRail(
             displayOption = snapshot,
@@ -567,8 +580,8 @@ internal fun SubtitleSelectionOverlay(
 
     fun moveFocusToInfoRail() {
         val option = focusedOption ?: return
-        // N4 / N6: only move Right when the focused option is selected and has an enabled CTA.
-        if (!option.isSelected) return
+        // N6: only move Right when the focused option has an enabled CTA.
+        // CTA may apply to a focused-but-not-selected option (Translate).
         if (!infoCtaState.canMoveFocusToCta) return
         infoEntryOptionId = option.id
         requestInfoFocus(reason = "option_to_info")
@@ -601,8 +614,8 @@ internal fun SubtitleSelectionOverlay(
 
     fun handleOverlayBack() {
         when (activeRail) {
+            // Col3: one column back to Col2. Col1/Col2 Back always dismisses.
             OverlayFocusRail.INFO -> moveFocusBackToOptionRail()
-            OverlayFocusRail.OPTION -> moveFocusToLanguageRail()
             else -> onDismiss()
         }
     }
@@ -781,7 +794,10 @@ internal fun SubtitleSelectionOverlay(
             pendingInfoFocusKey = null
         }
 
-        Column(verticalArrangement = Arrangement.Bottom) {
+        Column(
+            modifier = Modifier.fillMaxHeight().fillMaxWidth(),
+            verticalArrangement = Arrangement.Bottom
+        ) {
             Text(
                 text = stringResource(R.string.subtitle_dialog_title),
                 style = MaterialTheme.typography.headlineMedium,
@@ -797,7 +813,12 @@ internal fun SubtitleSelectionOverlay(
                 )
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
                 SubtitleLanguageRail(
                     items = languageItems,
                     browsedLanguageKey = browsedLanguageKey,
@@ -819,8 +840,29 @@ internal fun SubtitleSelectionOverlay(
                             activeRail = OverlayFocusRail.LANGUAGE
                             onDisableSubtitles()
                         } else {
-                            // N3: click on a language only browses; playback unchanged.
+                            // N3: click browses only (no playback change). Like Right, OK
+                            // also moves real focus into Col2. Resolve the target from the
+                            // clicked language immediately — subtitleOptions is still stale
+                            // until the next composition.
                             browseLanguage(languageKey, reason = "language_click")
+                            val nextOptions = buildSessionOptions(
+                                languageKey,
+                                selectedOptionId,
+                                aiSourceIndicators.optionId
+                            )
+                            val nextTargetId = selectedOptionId
+                                ?.takeIf { id -> nextOptions.any { it.id == id } }
+                                ?: optionFocusMemory[languageKey]
+                                    ?.takeIf { id -> nextOptions.any { it.id == id } }
+                                ?: nextOptions.firstOrNull()?.id
+                            if (nextTargetId != null) {
+                                optionEntryLanguageKey = languageKey
+                                requestOptionFocus(
+                                    targetId = nextTargetId,
+                                    languageKey = languageKey,
+                                    reason = "language_click_to_option"
+                                )
+                            }
                         }
                     },
                     onLanguageFocused = { key ->
@@ -918,7 +960,11 @@ internal fun SubtitleSelectionOverlay(
                     }
 
                     // L1: always reserve Col3 width when Col2 exists; content only when N1 allows.
-                    Box(modifier = Modifier.width(InfoRailWidth)) {
+                    Box(
+                        modifier = Modifier
+                            .width(InfoRailWidth)
+                            .fillMaxHeight()
+                    ) {
                         if (infoContentVisible) {
                             SubtitleInfoRail(
                                 selectedOption = infoDisplayOption,
@@ -935,8 +981,11 @@ internal fun SubtitleSelectionOverlay(
                                     pendingInfoFocusKey = null
                                 },
                                 onTranslateWithAi = {
-                                    // Capture source before UI jumps to preferred + AI.
-                                    val option = playbackSelectedOption
+                                    // Capture the anchored/focused source (may not be playback-selected).
+                                    val option = infoDisplayOption
+                                        ?: infoAnchorOption
+                                        ?: focusedOption
+                                        ?: playbackSelectedOption
                                         ?: subtitleOptions.firstOrNull { it.id == selectedOptionId }
                                     browsedLanguageKey = preferredLanguageKey
                                     selectedOptionId = SubtitleAiOptionId
@@ -1012,7 +1061,11 @@ private fun RailFadeIn(
         )
     }
 
-    Box(modifier = Modifier.graphicsLayer(alpha = alpha.value)) {
+    Box(
+        modifier = Modifier
+            .fillMaxHeight()
+            .graphicsLayer(alpha = alpha.value)
+    ) {
         content()
     }
 }
@@ -1060,8 +1113,7 @@ private fun SubtitleLanguageRail(
             state = listState,
             verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
             contentPadding = PaddingValues(top = NuvioTheme.spacing.sm, bottom = NuvioTheme.spacing.sm),
-            modifier = Modifier
-                .heightIn(max = 720.dp)
+            modifier = Modifier.fillMaxHeight()
         ) {
             items(items = items, key = { item -> item.key }) { item ->
                 val isBrowsed = item.key == browsedLanguageKey
@@ -1160,8 +1212,7 @@ private fun SubtitleOptionsRail(
                     state = listState,
                     verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
                     contentPadding = PaddingValues(top = NuvioTheme.spacing.sm, bottom = NuvioTheme.spacing.sm),
-                    modifier = Modifier
-                        .heightIn(max = 720.dp)
+                    modifier = Modifier.fillMaxHeight()
                 ) {
                     items(items = options, key = { option -> option.id }) { option ->
                         SubtitleOptionCard(
@@ -1210,11 +1261,11 @@ private fun SubtitleInfoRail(
     onTranslateWithAi: () -> Unit,
     onResetToSmartAuto: () -> Unit
 ) {
-    // L2: no "Info" header — content only.
+    // L2: no "Info" header — content only. Fill remaining overlay height; no hard 720dp clip.
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(max = 720.dp),
+            .fillMaxHeight(),
         verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
     ) {
         SubtitleInfoPane(
@@ -1535,7 +1586,9 @@ private fun RailColumn(
     content: @Composable () -> Unit
 ) {
     Column(
-        modifier = modifier.width(width),
+        modifier = modifier
+            .width(width)
+            .fillMaxHeight(),
         verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
     ) {
         Text(
@@ -1543,7 +1596,9 @@ private fun RailColumn(
             style = MaterialTheme.typography.labelLarge,
             color = NuvioTheme.colors.TextTertiary
         )
-        content()
+        Box(modifier = Modifier.weight(1f)) {
+            content()
+        }
     }
 }
 

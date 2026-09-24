@@ -48,7 +48,6 @@ import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
@@ -2261,7 +2260,7 @@ private fun PlayerControlsOverlay(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(NuvioTheme.spacing.md))
+                Spacer(modifier = Modifier.height(NuvioTheme.spacing.xs))
             } else {
                 Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
             }
@@ -2448,9 +2447,7 @@ private fun PlayerControlsOverlay(
                     )
                 }
 
-                if (isLivePlayback) {
-                    PlayerControlsTimeTextHost(viewModel = viewModel)
-                }
+                PlayerControlsTimeTextHost(viewModel = viewModel)
             }
             }
         }
@@ -2469,40 +2466,27 @@ private fun PlayerControlsProgressBarHost(
     val playbackTimeline by viewModel.playbackTimeline.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
 
-    Row(
+    ProgressBar(
+        currentPosition = playbackTimeline.currentPosition,
+        duration = playbackTimeline.duration,
+        onSeekPreview = { delta ->
+            viewModel.onEvent(PlayerEvent.OnPreviewSeekBy(delta))
+        },
+        onSeekCommit = {
+            viewModel.onEvent(PlayerEvent.OnCommitPreviewSeek)
+        },
+        onPlayPause = {
+            viewModel.onEvent(PlayerEvent.OnPlayPause)
+        },
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
-    ) {
-        PlayerProgressTimeLabel(millis = playbackTimeline.currentPosition)
-
-        ProgressBar(
-            currentPosition = playbackTimeline.currentPosition,
-            duration = playbackTimeline.duration,
-            onSeekPreview = { delta ->
-                viewModel.onEvent(PlayerEvent.OnPreviewSeekBy(delta))
-            },
-            onSeekCommit = {
-                viewModel.onEvent(PlayerEvent.OnCommitPreviewSeek)
-            },
-            onPlayPause = {
-                viewModel.onEvent(PlayerEvent.OnPlayPause)
-            },
-            modifier = Modifier.weight(1f),
-            focusRequester = focusRequester,
-            upFocusRequester = upFocusRequester,
-            downFocusRequester = downFocusRequester,
-            onUpKey = onUpKey,
-            onFocused = onFocused,
-            isScrubbing = uiState.pendingPreviewSeekPosition != null,
-            bufferedPosition = playbackTimeline.bufferedPosition
-        )
-
-        PlayerProgressTimeLabel(
-            millis = playbackTimeline.duration,
-            textAlign = TextAlign.End
-        )
-    }
+        focusRequester = focusRequester,
+        upFocusRequester = upFocusRequester,
+        downFocusRequester = downFocusRequester,
+        onUpKey = onUpKey,
+        onFocused = onFocused,
+        isScrubbing = uiState.pendingPreviewSeekPosition != null,
+        bufferedPosition = playbackTimeline.bufferedPosition
+    )
 }
 
 @Composable
@@ -2516,25 +2500,28 @@ private fun PlayerControlsTimeTextHost(viewModel: PlayerViewModel) {
 
     Text(
         text = timeText,
-        style = MaterialTheme.typography.bodyMedium,
-        color = Color.White.copy(alpha = 0.9f)
+        style = MaterialTheme.typography.bodyMedium.copy(
+            fontFeatureSettings = "tnum"
+        ),
+        color = Color.White.copy(alpha = 0.9f),
+        maxLines = 1
     )
 }
 
 @Composable
-private fun PlayerProgressTimeLabel(
-    millis: Long,
-    textAlign: TextAlign = TextAlign.Start
+private fun PlayerProgressTimePair(
+    currentPosition: Long,
+    duration: Long
 ) {
     Text(
-        text = formatTime(millis),
+        text = "${formatTime(currentPosition)} / ${formatTime(duration)}",
         style = MaterialTheme.typography.bodyMedium.copy(
             fontFeatureSettings = "tnum"
         ),
-        color = Color.White.copy(alpha = 0.92f),
-        textAlign = textAlign,
+        color = Color.White,
+        textAlign = TextAlign.End,
         maxLines = 1,
-        modifier = Modifier.widthIn(min = 52.dp)
+        modifier = Modifier.fillMaxWidth()
     )
 }
 
@@ -2726,30 +2713,33 @@ private fun ProgressBar(
     // Stremio Android TV–like scrubber: thin flat track, accent fill, white-ring thumb.
     val thumbSize by animateDpAsState(
         targetValue = when {
-            fullScrubbing -> 14.dp
-            lightScrubbing -> 12.dp
-            isFocused -> 12.dp
-            else -> 11.dp
+            fullScrubbing -> 22.dp
+            lightScrubbing -> 20.dp
+            isFocused -> 20.dp
+            else -> 18.dp
         },
         animationSpec = NuvioMotion.focusTween(),
         label = "thumbSize"
     )
     val trackHeight by animateDpAsState(
         targetValue = when {
-            fullScrubbing -> 4.dp
-            lightScrubbing -> 3.dp
-            isFocused -> 3.dp
-            else -> 2.dp
+            fullScrubbing -> 9.dp
+            lightScrubbing -> 7.dp
+            isFocused -> 7.dp
+            else -> 5.dp
         },
         animationSpec = NuvioMotion.focusTween(),
         label = "trackHeight"
     )
-    val sliderHeight = 28.dp
+    // Clears the largest scrub thumb without clipping (22dp + 2dp ring).
+    val sliderHeight = 30.dp
     val trackShape = RoundedCornerShape(percent = 50)
     val themeAccent = NuvioTheme.colors.Secondary
     val trackBackground = Color.White.copy(alpha = 0.26f)
     val bufferedTrack = Color.White.copy(alpha = 0.16f)
-    val thumbBorder = BorderStroke(1.5.dp, Color.White)
+    // White ring only when seek bar is focused or actively scrubbing (size states 2/3).
+    val showThumbRing = isFocused || lightScrubbing || fullScrubbing
+    val thumbBorder = BorderStroke(2.dp, Color.White)
 
     BoxWithConstraints(
         modifier = modifier
@@ -2907,7 +2897,10 @@ private fun ProgressBar(
                 .padding(start = thumbStart)
                 .size(thumbSize)
                 .background(themeAccent, CircleShape)
-                .border(thumbBorder, CircleShape)
+                .then(
+                    if (showThumbRing) Modifier.border(thumbBorder, CircleShape)
+                    else Modifier
+                )
         )
     }
 }
@@ -2925,29 +2918,23 @@ private fun SeekOverlay(
             .padding(horizontal = NuvioTheme.spacing.xxl, vertical = NuvioTheme.spacing.xl)
     ) {
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-            Row(
+            ProgressBar(
+                currentPosition = currentPosition,
+                duration = duration,
+                onSeekPreview = {},
+                onSeekCommit = {},
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
-            ) {
-                PlayerProgressTimeLabel(millis = currentPosition)
+                isScrubbing = isScrubbing,
+                preferFullScrubVisual = true,
+                bufferedPosition = bufferedPosition
+            )
 
-                ProgressBar(
-                    currentPosition = currentPosition,
-                    duration = duration,
-                    onSeekPreview = {},
-                    onSeekCommit = {},
-                    modifier = Modifier.weight(1f),
-                    isScrubbing = isScrubbing,
-                    preferFullScrubVisual = true,
-                    bufferedPosition = bufferedPosition
-                )
+            Spacer(modifier = Modifier.height(NuvioTheme.spacing.xs))
 
-                PlayerProgressTimeLabel(
-                    millis = duration,
-                    textAlign = TextAlign.End
-                )
-            }
+            PlayerProgressTimePair(
+                currentPosition = currentPosition,
+                duration = duration
+            )
         }
     }
 }
@@ -3827,7 +3814,7 @@ private fun formatTime(millis: Long): String {
     val seconds = TimeUnit.MILLISECONDS.toSeconds(millis) % 60
 
     return if (hours > 0) {
-        String.format("%d:%02d:%02d", hours, minutes, seconds)
+        String.format("%02d:%02d:%02d", hours, minutes, seconds)
     } else {
         String.format("%d:%02d", minutes, seconds)
     }

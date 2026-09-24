@@ -7,8 +7,10 @@
 
 | Preciso de… | Abrir | Fonte canônica de |
 |-------------|--------|-------------------|
-| **Handoff overlay Info-rail (A–D fechado + bugs UX)** | [`handoff/2026-09-24-overlay-info-rail-close.md`](./handoff/2026-09-24-overlay-info-rail-close.md) | 1.0.7 publicado; hotfix foco; bugs Info/JSON + click AI + Info leak |
-| **Spec overlay: Info rail (matrizes A–D)** | [`handoff/2026-09-24-overlay-info-rail.md`](./handoff/2026-09-24-overlay-info-rail.md) | Base + fatias + log do monitor |
+| **Handoff actual — OSD + overlay WIP (1075 sideload)** | [`handoff/2026-09-24-player-osd-overlay-wip.md`](./handoff/2026-09-24-player-osd-overlay-wip.md) | `release/1.0.9` uncommitted; N3 click→Col2; F1/F4; altura rails; thumb 18/20/22 |
+| **Handoff player seek bar Stremio (histórico 1.0.9)** | [`handoff/2026-09-24-player-stremio-seeker.md`](./handoff/2026-09-24-player-stremio-seeker.md) | Seek Stremio publicado; supersedido em parte pelo handoff OSD+overlay |
+| **Handoff overlay Info-rail (A–D fechado + bugs UX)** | [`handoff/2026-09-24-overlay-info-rail-close.md`](./handoff/2026-09-24-overlay-info-rail-close.md) | 1.0.7/1.0.8 publicado; hotfix foco; bugs Info |
+| **Spec overlay: Info rail (matrizes A–D)** | [`handoff/2026-09-24-overlay-info-rail.md`](./handoff/2026-09-24-overlay-info-rail.md) | Base + fatias; N4/I4/N8 actualizados 2026-09-24 |
 | **Smoke no emulador (checklist + last results)** | [`smoke-ai-subtitles.md`](./smoke-ai-subtitles.md) | Casos PASS/FAIL no device · skill `.cursor/skills/ai-subtitles-smoke` |
 | Escopo, Must/Should/Won’t, smoke de produto | [`prd-ai-subtitles.md`](./prd-ai-subtitles.md) | Requisitos de produto |
 | Ladder real, pipeline, keys, ADRs, mapa de arquivos | [`architecture-ai-subtitles.md`](./architecture-ai-subtitles.md) | Implementação / ordem da ladder |

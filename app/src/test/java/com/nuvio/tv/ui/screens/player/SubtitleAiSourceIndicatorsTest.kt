@@ -107,12 +107,69 @@ class SubtitleAiSourceIndicatorsTest {
             sourceLanguageKey = null,
             sourceOptionId = "internal:1"
         )
+        val preferredEmbeddedStale = decideAiSourceIndicators(
+            translationActive = true, // stale flag — rung still wins F4
+            sourceLanguageKey = "pt-br",
+            sourceOptionId = "internal:0",
+            rung = AiSubtitleLadderRung.PREFERRED_EMBEDDED
+        )
+        val classicStale = decideAiSourceIndicators(
+            translationActive = true,
+            sourceLanguageKey = "en",
+            sourceOptionId = "addon:x:y:https://z",
+            rung = AiSubtitleLadderRung.CLASSIC_FALLBACK
+        )
 
         assertTrue(whileOn.visible)
         assertFalse(afterOff.visible)
         assertNull(afterOff.languageKey)
         assertNull(afterOff.optionId)
         assertFalse(afterMissingSource.visible)
+        assertFalse(preferredEmbeddedStale.visible)
+        assertFalse(classicStale.visible)
+    }
+
+    @Test
+    fun f1_preferredLanguage_mapsPtBrSourceOntoPreferredRailKey() {
+        val railKey = resolveIndicatorLanguageKeyForRail(
+            sourceLanguageKey = "pt",
+            availableLanguageKeys = listOf("off", "pt-br", "en", "fr")
+        )
+        assertEquals("pt-br", railKey)
+
+        val exact = resolveIndicatorLanguageKeyForRail(
+            sourceLanguageKey = "pt-br",
+            availableLanguageKeys = listOf("off", "pt-br", "en")
+        )
+        assertEquals("pt-br", exact)
+
+        val indicators = decideAiSourceIndicators(
+            translationActive = true,
+            sourceLanguageKey = railKey,
+            sourceOptionId = "addon:AIOStreams:x:https://x/a.srt",
+            rung = AiSubtitleLadderRung.MANUAL
+        )
+        assertTrue(indicators.visible)
+        assertEquals("pt-br", indicators.languageKey)
+    }
+
+    @Test
+    fun f2_addon_resolvesViaDiagnosticsWhenSelectionCleared() {
+        val addonId = "addon:AIOStreams:x:https://x/a.srt"
+        val optionId = resolveAiSourceOptionId(
+            sourceKind = AiSubtitleSourceKind.ADDON,
+            selectedInternalIndex = -1,
+            selectedAddonOptionId = null,
+            tracks = emptyList(),
+            diagnosticsInternalIndex = null,
+            sourceLanguage = "pt-br",
+            sourceLabel = "AIOStreams",
+            addonOptionIdsByLabelLang = listOf(
+                addonId to "AIOStreams\u0000pt-br",
+                "addon:Other:y:https://y" to "Other\u0000en"
+            )
+        )
+        assertEquals(addonId, optionId)
     }
 
     // --- A1–A3 ---

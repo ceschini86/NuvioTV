@@ -47,7 +47,7 @@ Título: TWD S08E06 · preferred **pt-BR**. Evidência local `.tmp_overlay_*.png
 
 ## Pendente (próximo chat)
 
-1. **Bugs UX overlay** (repro na TV 1.0.7 — ver prompt abaixo).
+1. **WIP actual (OSD + overlay + i18n + Back):** [`2026-09-24-player-osd-overlay-wip.md`](./2026-09-24-player-osd-overlay-wip.md) — branch `release/1.0.9`, sideload 1074.
 2. Residual **TranslateMenu** (`showSubtitleTranslateMenuOverlay` / events) sem UI long-press — só se bloquear algo.
 3. Commit da rule `release-notes-user-facing.mdc` se ainda untracked.
 4. Merge branch → `dev` / PR quando o user pedir (não forçar).
@@ -63,31 +63,20 @@ Título: TWD S08E06 · preferred **pt-BR**. Evidência local `.tmp_overlay_*.png
 ## Prompt — próximo chat (copiar)
 
 ```text
-@docs/README.md @docs/handoff/2026-09-24-overlay-info-rail-close.md @docs/prd-ai-subtitles-ui-menu.md
+@docs/README.md @docs/handoff/2026-09-24-player-osd-overlay-wip.md
 
-# Bugs overlay legendas (pós 1.0.7)
-
-## Contexto
-Branch `feat/subtitle-overlay-info-rail` @ `ba8bcca70`. Release **1.0.7** publicada e universal na TV `192.168.31.46:5555` (`com.nuvio.tv` / 1071). Fatias A–D fechadas. Hotfix foco pós-CTA já no release.
-
-Regra: `.cursor/rules/release-notes-user-facing.mdc` — se houver release novo, notas só para o utilizador.
-
-## Bug 1 — Erro de tradução no Info como JSON cru
-- **Onde:** Col3 Info, opção **IA** (também vaza no Info de addon — Bug 3).
-- **Sintoma:** Corpo HTTP bruto, ex. `HTTP 400: {"type":"error",… Anthropic credit balance…}`.
-- **Esperado:** Mensagem curta i18n (estilo rate-limit / API key missing), sem JSON/`request_id`.
-- **Âncora:** mapeamento de `aiSubtitleLastError` em `SubtitleSelectionOverlay.kt` (~só RATE_LIMITED/429/API key hoje). Pode haver inconsistência modelo vs provider no Info — DoD deste bug é **UX do texto**.
-
-## Bug 2 — Click na opção IA usa addon acabado de selecionar como fonte
-- **Repro:** (1) AI ativa com fonte prévia (ex. `AI_EMBEDDED` ou MANUAL antiga). (2) Col2: selecionar **addon** (playback → addon). (3) Sem CTA Translate, clicar opção **IA**.
-- **Atual:** MANUAL / Fonte IA aponta para o addon.
-- **Esperado (A2/A3):** reativar IA por click na opção mantém a **fonte que já estava** na tradução; CTA «Traduzir com IA» é o caminho para traduzir *esta* opção.
-
-## Bug 3 — Diagnostics / erro da IA no Info de opção não-IA
-- Info de addon (ou outra opção focada) mostra degrau/motivo/erro da tradução AI em vez de (só) infos da opção focada (I4 / campos por tipo).
-
-## DoD
-- Patch mínimo por bug; evidência screenshot/log na TV.
-- Sem mudar ladder C1–C6 product; sem reabrir Style/long-press.
-- Não commit/release sem eu pedir. Notas de release = user-facing se houver bump.
+# Usar o handoff WIP (OSD + overlay) — este close file é histórico 1.0.7/1.0.8.
 ```
+
+### Histórico — Bugs 1–3 (fechados em 1.0.8)
+
+Já resolvidos na release 1.0.8 (`287b6b36a`): erros Info amigáveis, restore de fonte no click IA, Info addon sem Degrau AI. Manter abaixo só como referência.
+
+<details>
+<summary>Texto original dos bugs (arquivo)</summary>
+
+- Bug 1: JSON cru no Info → i18n curta
+- Bug 2: click IA usava addon acabado de selecionar → manter fonte prévia
+- Bug 3: diagnostics AI no Info de opção não-IA
+
+</details>

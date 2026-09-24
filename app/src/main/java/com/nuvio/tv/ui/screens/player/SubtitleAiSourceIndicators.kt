@@ -20,13 +20,24 @@ internal data class AiSourceIndicatorDecision(
 /**
  * F1–F4: yellow indicators follow the active AI translation source, or hide when AI is off.
  * F1 without a resolvable F2 optionId stays Hidden (never show the Col1 dot alone).
+ *
+ * F4: [translationActive] must be true — PREFERRED_EMBEDDED / classic (AI off) never show
+ * indicators even if stale diagnostics still carry a source language/option.
  */
 internal fun decideAiSourceIndicators(
     translationActive: Boolean,
     sourceLanguageKey: String?,
-    sourceOptionId: String?
+    sourceOptionId: String?,
+    rung: AiSubtitleLadderRung? = null
 ): AiSourceIndicatorDecision {
     if (!translationActive) return AiSourceIndicatorDecision.Hidden
+    // Defense: non-translating ladder outcomes must never paint Fonte IA.
+    when (rung) {
+        AiSubtitleLadderRung.PREFERRED_EMBEDDED,
+        AiSubtitleLadderRung.CLASSIC_FALLBACK,
+        AiSubtitleLadderRung.NONE -> return AiSourceIndicatorDecision.Hidden
+        else -> Unit
+    }
     val languageKey = sourceLanguageKey?.takeIf { it.isNotBlank() } ?: return AiSourceIndicatorDecision.Hidden
     val optionId = sourceOptionId?.takeIf { it.isNotBlank() } ?: return AiSourceIndicatorDecision.Hidden
     return AiSourceIndicatorDecision(
@@ -34,6 +45,42 @@ internal fun decideAiSourceIndicators(
         languageKey = languageKey,
         optionId = optionId
     )
+}
+
+/**
+ * Pick the Col1 language key that should show F1 for [sourceLanguageKey].
+ *
+ * Exact match wins. Otherwise, when the rail only has a regional sibling
+ * (pt ↔ pt-br, es ↔ es-419), map onto the key that actually exists so the
+ * yellow dot is not lost on the preferred row.
+ */
+internal fun resolveIndicatorLanguageKeyForRail(
+    sourceLanguageKey: String?,
+    availableLanguageKeys: Collection<String>
+): String? {
+    val source = sourceLanguageKey?.takeIf { it.isNotBlank() } ?: return null
+    if (availableLanguageKeys.contains(source)) return source
+
+    val normalizedSource = normalizeIndicatorLanguageKey(source) ?: source
+    if (availableLanguageKeys.contains(normalizedSource)) return normalizedSource
+
+    val family = normalizedSource.substringBefore('-')
+    val siblings = availableLanguageKeys.filter { key ->
+        val n = normalizeIndicatorLanguageKey(key) ?: key
+        n == family || n.startsWith("$family-") || key == family || key.startsWith("$family-")
+    }
+    if (siblings.isEmpty()) return null
+    // Prefer the rail key that shares the most specific form with the source.
+    siblings.firstOrNull { key ->
+        val n = normalizeIndicatorLanguageKey(key) ?: key
+        n == normalizedSource || key == source
+    }?.let { return it }
+    siblings.firstOrNull { key ->
+        val n = normalizeIndicatorLanguageKey(key) ?: key
+        normalizedSource.startsWith(n) || n.startsWith(normalizedSource) ||
+            key.startsWith(family) || normalizedSource.startsWith(family)
+    }?.let { return it }
+    return siblings.singleOrNull()
 }
 
 /**
@@ -46,9 +93,16 @@ internal fun resolveAiSourceOptionId(
     tracks: List<TrackInfo> = emptyList(),
     diagnosticsInternalIndex: Int? = null,
     sourceLanguage: String? = null,
-    sourceLabel: String? = null
+    sourceLabel: String? = null,
+    addonOptionIdsByLabelLang: List<Pair<String, String>> = emptyList()
 ): String? = when (sourceKind) {
     AiSubtitleSourceKind.ADDON -> selectedAddonOptionId
+        ?: resolveAddonAiSourceOptionId(
+            selectedAddonOptionId = null,
+            sourceLanguage = sourceLanguage,
+            sourceLabel = sourceLabel,
+            addonOptionIdsByLabelLang = addonOptionIdsByLabelLang
+        )
     AiSubtitleSourceKind.EMBEDDED -> resolveEmbeddedAiSourceOptionId(
         diagnosticsIndex = diagnosticsInternalIndex,
         selectedInternalIndex = selectedInternalIndex,
@@ -57,6 +111,12 @@ internal fun resolveAiSourceOptionId(
         sourceLabel = sourceLabel
     )
     null -> selectedAddonOptionId
+        ?: resolveAddonAiSourceOptionId(
+            selectedAddonOptionId = null,
+            sourceLanguage = sourceLanguage,
+            sourceLabel = sourceLabel,
+            addonOptionIdsByLabelLang = addonOptionIdsByLabelLang
+        )
         ?: resolveEmbeddedAiSourceOptionId(
             diagnosticsIndex = diagnosticsInternalIndex,
             selectedInternalIndex = selectedInternalIndex,
@@ -64,6 +124,55 @@ internal fun resolveAiSourceOptionId(
             sourceLanguage = sourceLanguage,
             sourceLabel = sourceLabel
         )
+}
+
+/**
+ * F2 addon: prefer the live selected addon id; else unique match by label and/or language.
+ *
+ * @param addonOptionIdsByLabelLang triples flattened as (optionId to "label|langKey")
+ *        — pass list of (optionId, "label\u0000langKey") pairs from the overlay.
+ */
+internal fun resolveAddonAiSourceOptionId(
+    selectedAddonOptionId: String?,
+    sourceLanguage: String?,
+    sourceLabel: String?,
+    addonOptionIdsByLabelLang: List<Pair<String, String>>
+): String? {
+    selectedAddonOptionId?.takeIf { it.isNotBlank() }?.let { return it }
+    if (addonOptionIdsByLabelLang.isEmpty()) return null
+
+    val label = sourceLabel?.trim()?.takeIf { it.isNotEmpty() }
+    val lang = normalizeIndicatorLanguageKey(sourceLanguage)
+
+    fun parseMeta(meta: String): Pair<String?, String?> {
+        val parts = meta.split('\u0000', limit = 2)
+        return parts.getOrNull(0)?.takeIf { it.isNotBlank() } to
+            parts.getOrNull(1)?.takeIf { it.isNotBlank() }
+    }
+
+    if (label != null) {
+        val byLabel = addonOptionIdsByLabelLang.filter { (_, meta) ->
+            val (addonLabel, _) = parseMeta(meta)
+            addonLabel != null && addonLabel.equals(label, ignoreCase = true)
+        }
+        if (byLabel.size == 1) return byLabel.first().first
+        if (lang != null && byLabel.isNotEmpty()) {
+            val byLabelLang = byLabel.filter { (_, meta) ->
+                val (_, addonLang) = parseMeta(meta)
+                normalizeIndicatorLanguageKey(addonLang) == lang
+            }
+            if (byLabelLang.size == 1) return byLabelLang.first().first
+        }
+    }
+
+    if (lang != null) {
+        val byLang = addonOptionIdsByLabelLang.filter { (_, meta) ->
+            val (_, addonLang) = parseMeta(meta)
+            normalizeIndicatorLanguageKey(addonLang) == lang
+        }
+        if (byLang.size == 1) return byLang.first().first
+    }
+    return null
 }
 
 /**
