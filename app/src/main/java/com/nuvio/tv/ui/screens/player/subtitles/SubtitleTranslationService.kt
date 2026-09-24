@@ -16,6 +16,7 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 private const val TAG = "SubtitleTranslation"
+private const val HTTP_TAG = "SubtitleAiHttp"
 
 private val RTL_LANGUAGES = setOf("hebrew", "arabic", "urdu", "persian", "farsi", "yiddish")
 
@@ -82,12 +83,13 @@ class SubtitleTranslationService(
     private val geminiRequestLock = Mutex()
     private val lastGeminiRequestAtMs = AtomicLong(0L)
 
-    private suspend fun throttleGeminiRequests() {
-        geminiRequestLock.withLock {
+    private suspend fun throttleGeminiRequests(): Long {
+        return geminiRequestLock.withLock {
             val now = System.currentTimeMillis()
-            val waitMs = GEMINI_MIN_INTERVAL_MS - (now - lastGeminiRequestAtMs.get())
+            val waitMs = (GEMINI_MIN_INTERVAL_MS - (now - lastGeminiRequestAtMs.get())).coerceAtLeast(0L)
             if (waitMs > 0L) delay(waitMs)
             lastGeminiRequestAtMs.set(System.currentTimeMillis())
+            waitMs
         }
     }
 
@@ -477,10 +479,12 @@ class SubtitleTranslationService(
         attempt: Int = 0,
         transientAttempt: Int = 0
     ): TranslationResult {
-        throttleGeminiRequests()
+        val throttleWaitMs = throttleGeminiRequests()
         val NL = "⏎"
         val inputArray = encodeIndexed(lines, NL)
         val systemPrompt = buildSystemPrompt(targetLanguage, NL)
+        val keySuffix = apiKey.takeLast(4)
+        val preview = lines.firstOrNull()?.take(80).orEmpty()
 
         val body = JSONObject().apply {
             put("system_instruction", JSONObject().apply {
@@ -534,20 +538,47 @@ class SubtitleTranslationService(
             .post(body.toString().toRequestBody("application/json".toMediaType()))
             .build()
 
+        Log.i(
+            HTTP_TAG,
+            "Gemini POST start lines=${lines.size} key=…$keySuffix " +
+                "throttleWaitMs=$throttleWaitMs attempt=$attempt transient=$transientAttempt " +
+                "preview=$preview"
+        )
+        val httpStartedAt = System.currentTimeMillis()
+
         return withContext(Dispatchers.IO) {
             try {
                 val response = client.newCall(request).execute()
+                val latencyMs = System.currentTimeMillis() - httpStartedAt
                 val responseBody = response.body?.string() ?: run {
                     Log.e(TAG, "Empty Gemini response body (HTTP ${response.code})")
+                    Log.w(
+                        HTTP_TAG,
+                        "Gemini POST end lines=${lines.size} key=…$keySuffix " +
+                            "httpCode=${response.code} latencyMs=$latencyMs " +
+                            "throttleWaitMs=$throttleWaitMs success=false error=empty_body"
+                    )
                     return@withContext TranslationResult(lines, false, "Empty response (${response.code})")
                 }
                 if (!response.isSuccessful) {
                     if (response.code in GEMINI_RETRYABLE_HTTP && transientAttempt < GEMINI_MAX_TRANSIENT_RETRIES) {
+                        Log.w(
+                            HTTP_TAG,
+                            "Gemini POST end lines=${lines.size} key=…$keySuffix " +
+                                "httpCode=${response.code} latencyMs=$latencyMs " +
+                                "throttleWaitMs=$throttleWaitMs success=false retry=transient"
+                        )
                         Log.w(TAG, "Gemini HTTP ${response.code} (transient) — retry ${transientAttempt + 1}/$GEMINI_MAX_TRANSIENT_RETRIES")
                         geminiBackoff(transientAttempt)
                         return@withContext translateGemini(lines, targetLanguage, apiKey, attempt, transientAttempt + 1)
                     }
                     val errorMsg = if (response.code == 429) "RATE_LIMITED" else "HTTP ${response.code}: $responseBody"
+                    Log.w(
+                        HTTP_TAG,
+                        "Gemini POST end lines=${lines.size} key=…$keySuffix " +
+                            "httpCode=${response.code} latencyMs=$latencyMs " +
+                            "throttleWaitMs=$throttleWaitMs success=false error=$errorMsg"
+                    )
                     return@withContext TranslationResult(lines, false, errorMsg)
                 }
 
@@ -558,6 +589,12 @@ class SubtitleTranslationService(
                     val blockReason = json.optJSONObject("promptFeedback")
                         ?.optString("blockReason").orEmpty()
                     Log.e(TAG, "Gemini missing candidates (block=$blockReason): ${responseBody.take(400)}")
+                    Log.w(
+                        HTTP_TAG,
+                        "Gemini POST end lines=${lines.size} key=…$keySuffix " +
+                            "httpCode=200 latencyMs=$latencyMs throttleWaitMs=$throttleWaitMs " +
+                            "success=false error=no_candidates block=$blockReason"
+                    )
                     return@withContext TranslationResult(
                         lines, false,
                         if (blockReason.isNotBlank()) TRANSLATION_ERROR_CONTENT_BLOCKED else "No candidates in response"
@@ -577,6 +614,12 @@ class SubtitleTranslationService(
                 val finishReason = candidate.optString("finishReason")
                 if (rawText.isBlank()) {
                     Log.e(TAG, "Gemini candidate has no text (finish=$finishReason): ${responseBody.take(400)}")
+                    Log.w(
+                        HTTP_TAG,
+                        "Gemini POST end lines=${lines.size} key=…$keySuffix " +
+                            "httpCode=200 latencyMs=$latencyMs throttleWaitMs=$throttleWaitMs " +
+                            "success=false error=empty_candidate finish=$finishReason"
+                    )
                     return@withContext TranslationResult(
                         lines, false,
                         if (finishReason in BLOCKED_FINISH_REASONS) TRANSLATION_ERROR_CONTENT_BLOCKED
@@ -589,27 +632,64 @@ class SubtitleTranslationService(
                     // The policy filter can also cut generation mid-array: partial text +
                     // blocked finishReason parses as garbage. Same treatment — bisect upstream.
                     Log.e(TAG, "Gemini output truncated by policy (finish=$finishReason)")
+                    Log.w(
+                        HTTP_TAG,
+                        "Gemini POST end lines=${lines.size} key=…$keySuffix " +
+                            "httpCode=200 latencyMs=$latencyMs throttleWaitMs=$throttleWaitMs " +
+                            "success=false error=content_blocked finish=$finishReason"
+                    )
                     return@withContext TranslationResult(lines, false, TRANSLATION_ERROR_CONTENT_BLOCKED)
                 }
                 if (!parsed.success && attempt == 0) {
                     // Intermittent JSON-mode malformation (e.g. tail truncation with STOP) —
                     // one re-roll usually returns a clean array.
                     Log.w(TAG, "Parse failed (${parsed.errorMessage}, finish=$finishReason) — retrying batch once")
+                    Log.w(
+                        HTTP_TAG,
+                        "Gemini POST end lines=${lines.size} key=…$keySuffix " +
+                            "httpCode=200 latencyMs=$latencyMs throttleWaitMs=$throttleWaitMs " +
+                            "success=false retry=parse"
+                    )
                     return@withContext translateGemini(lines, targetLanguage, apiKey, attempt = 1)
                 }
                 if (!parsed.success) {
                     Log.e(TAG, "Parse failed after retry (finish=$finishReason) body=${responseBody.take(400)}")
+                    Log.w(
+                        HTTP_TAG,
+                        "Gemini POST end lines=${lines.size} key=…$keySuffix " +
+                            "httpCode=200 latencyMs=$latencyMs throttleWaitMs=$throttleWaitMs " +
+                            "success=false error=${parsed.errorMessage}"
+                    )
+                } else {
+                    Log.i(
+                        HTTP_TAG,
+                        "Gemini POST end lines=${lines.size} key=…$keySuffix " +
+                            "httpCode=200 latencyMs=$latencyMs throttleWaitMs=$throttleWaitMs success=true"
+                    )
                 }
                 parsed
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
 
+                val latencyMs = System.currentTimeMillis() - httpStartedAt
                 if (e is java.io.IOException && transientAttempt < GEMINI_MAX_TRANSIENT_RETRIES) {
+                    Log.w(
+                        HTTP_TAG,
+                        "Gemini POST end lines=${lines.size} key=…$keySuffix " +
+                            "httpCode=null latencyMs=$latencyMs throttleWaitMs=$throttleWaitMs " +
+                            "success=false retry=network error=${e.message}"
+                    )
                     Log.w(TAG, "translateGemini network error (${e.message}) — retry ${transientAttempt + 1}/$GEMINI_MAX_TRANSIENT_RETRIES")
                     geminiBackoff(transientAttempt)
                     return@withContext translateGemini(lines, targetLanguage, apiKey, attempt, transientAttempt + 1)
                 }
                 Log.e(TAG, "translateGemini exception: ${e.message}", e)
+                Log.w(
+                    HTTP_TAG,
+                    "Gemini POST end lines=${lines.size} key=…$keySuffix " +
+                        "httpCode=null latencyMs=$latencyMs throttleWaitMs=$throttleWaitMs " +
+                        "success=false error=${e.message}"
+                )
                 TranslationResult(lines, false, e.message)
             }
         }

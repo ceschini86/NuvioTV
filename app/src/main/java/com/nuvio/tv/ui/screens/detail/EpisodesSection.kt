@@ -84,7 +84,6 @@ import com.nuvio.tv.domain.model.Video
 import com.nuvio.tv.domain.model.EpisodeOptionsOverlayStyle
 import com.nuvio.tv.ui.components.FocusMarqueeText
 import com.nuvio.tv.ui.components.SeriesGraphRatingColors
-import com.nuvio.tv.ui.components.SeriesGraphRatingSourceLabel
 import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.components.WatchedMarker
 import com.nuvio.tv.ui.theme.NuvioTheme
@@ -874,23 +873,13 @@ private fun EpisodeCard(
                         }
 
                         ratingLabel?.let { rating ->
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                SeriesGraphRatingSourceLabel(
-                                    textStyle = metaLabelStyle,
-                                    textColor = textSecondary,
-                                    compact = true
-                                )
-                                Text(
-                                    text = rating,
-                                    style = ratingStyle.copy(
-                                        color = ratingColor ?: textSecondary
-                                    ),
-                                    maxLines = 1
-                                )
-                            }
+                            Text(
+                                text = rating,
+                                style = ratingStyle.copy(
+                                    color = ratingColor ?: textSecondary
+                                ),
+                                maxLines = 1
+                            )
                         }
 
                         if (formattedDate.isNotBlank()) {

@@ -241,7 +241,7 @@ Cache: `scoreAddonSubtitleCached` no controller (invalida se o nome de release d
    - Blank → `onUntranslatableSource` (PGS etc.).
    - Opcional strip SDH (`[…]`, ♪) se `removeHearingImpaired`.
    - Cache hit → reescreve cues (`applyTranslatedLinesToCues`, marca RTL se necessário).
-   - Cache miss → mostra vazio (“Translating…” na UI) + `manager.translate(text)` async; reaplica se ainda for o último cue group.
+   - Cache miss → mostra **texto fonte** até a tradução chegar (`kind=waiting`) + `manager.translate(text)` async; reaplica se ainda for o último cue group.
 
 **Lookahead:** `SubtitleOffsetRenderer` / prefetch chama `BufferedCueReader.allCueTexts(renderer, …)` (reflection no buffer interno do text renderer) → `manager.preTranslateWindow` (chunks de 40). Só se `manager.isEnabled`.
 
@@ -256,13 +256,13 @@ Cache: `scoreAddonSubtitleCached` no controller (invalida se o nome de release d
 
 | Classe | Path | Papel |
 |--------|------|-------|
-| `SubtitleTranslationManager` | `…/subtitles/SubtitleTranslationManager.kt` | Fila, batch ≤40 / janela 150 ms, cache, inFlight, preTranslate, callbacks UI |
+| `SubtitleTranslationManager` | `…/subtitles/SubtitleTranslationManager.kt` | Fila única live+prefetch, batch ≤40 / janela 150 ms (Groq/Claude) ou ~2 s (Gemini), cache, inFlight, callbacks UI |
 | `SubtitleAiRouter` | `…/subtitles/SubtitleAiRouter.kt` | Ordem de providers (preferred primeiro), multi-key, cooldown 429 (~60 s), ping |
 | `SubtitleTranslationService` | `…/subtitles/SubtitleTranslationService.kt` | HTTP por provider, parse JSON array, retries Gemini transient, throttle Gemini |
 | `SubtitleAiCredentials` | `…/subtitles/SubtitleAiCredentials.kt` | Multi-provider JSON |
 | `SubtitleAiModel` | `…/subtitles/SubtitleAiModel.kt` | Enum persistido |
 
-**Batching:** channel ilimitado; junta até 40 linhas ou 150 ms; erro → completa com texto original **sem cache** + delay 5 s (retry na próxima renderização).
+**Batching:** channel ilimitado; junta até 40 linhas na janela do provider (150 ms Groq/Claude, ~2000 ms Gemini); prefetch enfileira na mesma fila (`source=prefetch`); erro → completa com texto original **sem cache** + delay 5 s (retry na próxima renderização).
 
 **Providers / modelos reais (IDs no Service; enum estável no DataStore):**
 
@@ -455,13 +455,14 @@ Não há unit test dedicado só da ladder no tree analisado; a lógica está con
 
 - **Contexto:** Rate limits e keys inválidas.  
 - **Decisão:** `SubtitleAiRouter` com preferred, fallback de providers/keys, ping, cooldown 429.  
-- **Consequência:** Enum de model ids estáveis no DataStore apesar de IDs HTTP mudarem (Groq/Gemini renomeados nos comentários).
+- **Consequência:** Enum de model ids estáveis no DataStore apesar de IDs HTTP mudarem (Groq/Gemini renomeados nos comentários).  
+- **Gemini:** cota RPM/TPM/RPD é **por projeto AI Studio**, não por key — multi-key só ajuda com projetos distintos.
 
 ### ADR-AI-7 — Falha sem cache permanente do original
 
 - **Contexto:** Cachear inglês após erro “gruda” tradução errada.  
 - **Decisão:** Em erro de batch, completa deferred com original **sem** `cache[]`; retry na próxima cue.  
-- **Consequência:** Pode piscar vazio/`Translating…` de novo; melhor que stuck wrong language.
+- **Consequência:** Pode mostrar fonte de novo no wait (`waiting`); melhor que stuck wrong language.
 
 ### ADR-AI-8 — Runtime backstop para bitmap
 

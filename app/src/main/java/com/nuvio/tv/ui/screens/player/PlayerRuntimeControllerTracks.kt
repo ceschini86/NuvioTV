@@ -310,10 +310,16 @@ internal fun PlayerRuntimeController.updateAvailableTracks(tracks: Tracks) {
         subtitleTracks = subtitleTracks,
         selectedSubtitleIndex = selectedSubtitleIndex
     )
+    val hasUserAudioPreference = hasRememberedOrPersistedAudioPreference()
     applyPersistedTrackPreference(
         audioTracks = audioTracks,
         subtitleTracks = subtitleTracks
     )
+    if (hasUserAudioPreference) {
+        originalAudioAutoSelectAttemptedForStreamUrl = currentStreamUrl.takeIf { it.isNotBlank() }
+    } else {
+        maybeAutoSelectOriginalAudioTrack(audioTracks)
+    }
     if (currentStreamHasVideoTrack) {
         maybeScheduleFirstFrameWatchdog()
     } else {
@@ -321,6 +327,55 @@ internal fun PlayerRuntimeController.updateAvailableTracks(tracks: Tracks) {
     }
     applySubtitleAutoSelectPolicy()
     maybeAdjustLibassPipelineForTracks(tracks)
+}
+
+internal fun PlayerRuntimeController.hasRememberedOrPersistedAudioPreference(): Boolean {
+    val streamUrl = currentStreamUrl
+    return rememberedTrackPreference?.audio != null ||
+        persistedTrackPreference?.audio != null ||
+        pendingEngineSwitchTrackPreference
+            ?.takeIf { it.streamUrl == streamUrl }
+            ?.preference
+            ?.audio != null
+}
+
+/**
+ * Prefer an audio track explicitly tagged as original in the file (label/title).
+ * If none is tagged, leave Exo/mpv selection untouched.
+ * Never overrides a remembered/persisted/pending user audio preference for this content.
+ */
+internal fun PlayerRuntimeController.maybeAutoSelectOriginalAudioTrack(
+    audioTracks: List<TrackInfo>
+) {
+    val streamUrl = currentStreamUrl
+    if (streamUrl.isBlank()) return
+    if (originalAudioAutoSelectAttemptedForStreamUrl == streamUrl) return
+
+    val originalIndex = OriginalAudioTrackHeuristics.findOriginalAudioTrackIndex(audioTracks)
+    if (originalIndex < 0) {
+        // No tagged original yet — leave selection alone. Retry on later track updates
+        // until a hint appears or we settle with none.
+        return
+    }
+
+    originalAudioAutoSelectAttemptedForStreamUrl = streamUrl
+    val alreadySelected = audioTracks.getOrNull(originalIndex)?.isSelected == true ||
+        _uiState.value.selectedAudioTrackIndex == originalIndex
+    if (alreadySelected) {
+        Log.d(
+            PlayerRuntimeController.TAG,
+            "ORIGINAL_AUDIO: already selected index=$originalIndex name=${audioTracks[originalIndex].name}"
+        )
+        return
+    }
+
+    Log.d(
+        PlayerRuntimeController.TAG,
+        "ORIGINAL_AUDIO: auto-select index=$originalIndex name=${audioTracks[originalIndex].name} " +
+            "lang=${audioTracks[originalIndex].language}"
+    )
+    selectAudioTrack(originalIndex)
+    _uiState.update { it.copy(selectedAudioTrackIndex = originalIndex) }
 }
 
 private fun formatSupportRank(@C.FormatSupport formatSupport: Int): Int {

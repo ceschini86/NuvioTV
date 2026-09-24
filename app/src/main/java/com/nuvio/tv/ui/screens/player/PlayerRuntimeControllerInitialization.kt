@@ -173,6 +173,7 @@ internal fun PlayerRuntimeController.initializePlayer(
             }
             autoSubtitleSelected = false
             hasScannedTextTracksOnce = false
+            originalAudioAutoSelectAttemptedForStreamUrl = null
             lastPlaybackDiagnosticsForReport = LastPlaybackDiagnostics.EMPTY
             lastPlaybackIssueError = null
             playbackIssueReportRequestVersion.incrementAndGet()

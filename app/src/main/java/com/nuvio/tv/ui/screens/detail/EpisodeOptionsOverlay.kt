@@ -67,7 +67,6 @@ import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.EpisodeOptionsOverlayStyle
 import com.nuvio.tv.domain.model.Video
 import com.nuvio.tv.ui.components.SeriesGraphRatingColors
-import com.nuvio.tv.ui.components.SeriesGraphRatingSourceLabel
 import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.BlurTransformation
 import com.nuvio.tv.ui.util.contentTextDirection
@@ -393,22 +392,11 @@ internal fun EpisodeOptionsOverlay(
                         )
 
                         ratingLabel?.let { rating ->
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                SeriesGraphRatingSourceLabel(
-                                    textStyle = MaterialTheme.typography.titleMedium,
-                                    textColor = Color.White.copy(alpha = 0.72f),
-                                    compact = true,
-                                    logoHeightDp = 18
-                                )
-                                Text(
-                                    text = rating,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = ratingColor
-                                )
-                            }
+                            Text(
+                                text = rating,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = ratingColor
+                            )
                         }
                     }
 
