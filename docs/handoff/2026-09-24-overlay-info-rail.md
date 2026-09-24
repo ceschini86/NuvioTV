@@ -236,6 +236,6 @@ Valem **sempre que a tradução AI estiver ativa**, seja pela ladder (automátic
 
 | Fatia | Status | Commit | Observações |
 |-------|--------|--------|-------------|
-| A | aprovada (código) | (ver git: Simplify subtitle overlay…) | R4 parcial: flags/events de diagnostics/long-press sem UI. Device adiado. |
-| B | em andamento | — | Sem device |
-| C | pendente | — | Smoke/device no fechamento |
+| A | aprovada (código) | `f1385ce91` | R4 parcial: flags diagnostics sem UI. Device adiado. |
+| B | aprovada (código+testes) | (este commit Info-rail decision) | 14 testes ID-named PASS. C4 parcial: CTA sem handler (C). Gap: `userExplicitSelection` ainda não no uiState. |
+| C | em andamento | — | Logs + reset + F* + smoke só no fechamento |

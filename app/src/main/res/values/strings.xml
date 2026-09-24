@@ -3310,6 +3310,16 @@
     <string name="sub_ai_diagnostics_model">Model</string>
     <string name="sub_ai_diagnostics_locked">Manual selection</string>
     <string name="sub_ai_translate_this">Translate with AI</string>
+    <string name="sub_ai_reset_to_smart">Return to automatic selection</string>
+    <string name="sub_ai_method_label">Method</string>
+    <string name="sub_ai_method_automatic">Automatic</string>
+    <string name="sub_ai_method_user_selected">User selected</string>
+    <string name="sub_ai_locked_on">On</string>
+    <string name="sub_ai_locked_off">Off</string>
+    <string name="sub_ai_info_format">Format</string>
+    <string name="sub_ai_info_sdh">SDH</string>
+    <string name="sub_ai_info_addon">Addon</string>
+    <string name="sub_ai_info_file">File</string>
     <string name="sub_ai_menu_disable">Disable subtitles</string>
     <string name="sub_ai_menu_disable_ai">Stop AI translation</string>
     <string name="sub_ai_menu_details">Details</string>
