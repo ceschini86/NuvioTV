@@ -236,6 +236,6 @@ Valem **sempre que a tradução AI estiver ativa**, seja pela ladder (automátic
 
 | Fatia | Status | Commit | Observações |
 |-------|--------|--------|-------------|
-| A | aprovada (código) | `f1385ce91` | R4 parcial: flags diagnostics sem UI. Device adiado. |
-| B | aprovada (código+testes) | (este commit Info-rail decision) | 14 testes ID-named PASS. C4 parcial: CTA sem handler (C). Gap: `userExplicitSelection` ainda não no uiState. |
-| C | em andamento | — | Logs + reset + F* + smoke só no fechamento |
+| A | aprovada (código) | `f1385ce91` | R4 parcial: flags diagnostics sem UI. |
+| B | aprovada (código+testes) | `50dc371b8` | 14 testes ID-named. |
+| C | aprovada (código+testes+docs) | `c9611a57c` | Reset/F*/A*/T*/logs/docs/skill. Smoke device **pendente** (monitor). R4 residual TranslateMenu events. |
