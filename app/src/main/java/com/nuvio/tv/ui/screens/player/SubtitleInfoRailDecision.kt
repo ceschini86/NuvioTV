@@ -1,8 +1,11 @@
 package com.nuvio.tv.ui.screens.player
 
+import java.util.Locale
+
 /**
  * Pure decision for subtitle overlay Col3 (Info content + CTAs).
  * Fatia B of overlay-info-rail: no Compose, no side effects.
+ * B6d: system notices when Smart auto AI is unavailable.
  */
 
 internal enum class SubtitleInfoOptionKind {
@@ -40,7 +43,9 @@ internal enum class SubtitleInfoFieldKey {
 internal enum class SubtitleInfoCtaAction {
     NONE,
     TRANSLATE_WITH_AI,
-    RESET_TO_SMART_AUTO
+    RESET_TO_SMART_AUTO,
+    /** Same event as Reset Smart; label promises classic auto, not AI auto. */
+    RESET_TO_CLASSIC_AUTO
 }
 
 internal enum class SubtitleInfoMethodKind {
@@ -48,10 +53,28 @@ internal enum class SubtitleInfoMethodKind {
     USER_SELECTED
 }
 
+/**
+ * B6d system notices (priority in [resolveSubtitleInfoSystemNotice]).
+ * Translate is blocked only for [MPV], [NO_API_KEY], [RATE_LIMITED].
+ */
 internal enum class SubtitleInfoUnavailableReason {
+    MPV,
     NO_API_KEY,
     RATE_LIMITED,
-    MPV
+    LOADING,
+    SMART_OFF,
+    PREFERRED_NONE,
+    FORCED_APPLIES,
+    BITMAP_ONLY,
+    NO_TRANSLATABLE_EMBEDDED,
+    NO_EMBEDDED
+}
+
+internal enum class EmbeddedAiAvailability {
+    USABLE,
+    NONE,
+    BITMAP_ONLY,
+    NO_TRANSLATABLE
 }
 
 internal data class SubtitleInfoField(
@@ -122,6 +145,14 @@ internal data class SubtitleInfoRailDecision(
     val cta: SubtitleInfoCtaDecision
 )
 
+internal data class SubtitleInfoSmartContext(
+    val smartAiEnabled: Boolean = true,
+    val preferredLanguageNone: Boolean = false,
+    val forcedApplies: Boolean = false,
+    val embeddedAvailability: EmbeddedAiAvailability = EmbeddedAiAvailability.USABLE,
+    val textTracksReady: Boolean = true
+)
+
 /**
  * Preferido Col1 count includes the synthetic AI option when it is listed (K1).
  */
@@ -133,6 +164,87 @@ internal fun languageRailCountIncludingAi(
     return if (aiOptionListed) base + 1 else base
 }
 
+internal fun SubtitleInfoUnavailableReason.blocksAiTranslate(): Boolean =
+    this == SubtitleInfoUnavailableReason.MPV ||
+        this == SubtitleInfoUnavailableReason.NO_API_KEY ||
+        this == SubtitleInfoUnavailableReason.RATE_LIMITED
+
+/** Synthetic AI Col2 option may be selected only with a usable embedded pivot or active translation. */
+internal fun isSyntheticAiOptionSelectable(
+    embeddedAvailability: EmbeddedAiAvailability,
+    translationActive: Boolean
+): Boolean = embeddedAvailability == EmbeddedAiAvailability.USABLE || translationActive
+
+internal fun isPreferredSubtitleLanguageNone(preferredLanguage: String): Boolean {
+    val code = preferredLanguage.trim()
+    return code.isEmpty() || code.equals("none", ignoreCase = true)
+}
+
+/**
+ * Mirrors [findAiSourceSubtitleTrackIndex] usability (forced / songs-and-signs / bitmap skipped).
+ */
+internal fun classifyEmbeddedAiAvailability(tracks: List<TrackInfo>): EmbeddedAiAvailability {
+    if (tracks.isEmpty()) return EmbeddedAiAvailability.NONE
+    var sawBitmap = false
+    var sawUnusableText = false
+    for (track in tracks) {
+        when {
+            track.isBitmapSubtitleCodec() -> sawBitmap = true
+            track.isEffectivelyForcedOrSongsAndSigns() -> sawUnusableText = true
+            else -> return EmbeddedAiAvailability.USABLE
+        }
+    }
+    return when {
+        sawBitmap && !sawUnusableText -> EmbeddedAiAvailability.BITMAP_ONLY
+        sawBitmap -> EmbeddedAiAvailability.BITMAP_ONLY
+        else -> EmbeddedAiAvailability.NO_TRANSLATABLE
+    }
+}
+
+internal fun TrackInfo.isBitmapSubtitleCodec(): Boolean {
+    val c = codec?.uppercase(Locale.ROOT) ?: return false
+    return c == "PGS" || c == "DVB" || c.contains("VOB") || c.contains("PGS") || c.contains("HDMV")
+}
+
+internal fun TrackInfo.isEffectivelyForcedOrSongsAndSigns(): Boolean {
+    val n = name
+    return isForced ||
+        n.contains("forced", ignoreCase = true) ||
+        n.contains("songs and signs", ignoreCase = true) ||
+        n.contains("signs and songs", ignoreCase = true)
+}
+
+/**
+ * B6d priority: S6 → S5 → S7 → S10 → S4 → S8 → S9 → S2 → S3 → S1.
+ */
+internal fun resolveSubtitleInfoSystemNotice(
+    aiAvailable: Boolean,
+    aiQuotaExhausted: Boolean,
+    isUsingMpv: Boolean,
+    smart: SubtitleInfoSmartContext
+): SubtitleInfoUnavailableReason? {
+    if (isUsingMpv) return SubtitleInfoUnavailableReason.MPV
+    if (aiQuotaExhausted) return SubtitleInfoUnavailableReason.RATE_LIMITED
+    if (!aiAvailable) return SubtitleInfoUnavailableReason.NO_API_KEY
+    if (!smart.textTracksReady) return SubtitleInfoUnavailableReason.LOADING
+    if (!smart.smartAiEnabled) return SubtitleInfoUnavailableReason.SMART_OFF
+    if (smart.preferredLanguageNone) return SubtitleInfoUnavailableReason.PREFERRED_NONE
+    if (smart.forcedApplies) return SubtitleInfoUnavailableReason.FORCED_APPLIES
+    return when (smart.embeddedAvailability) {
+        EmbeddedAiAvailability.USABLE -> null
+        EmbeddedAiAvailability.BITMAP_ONLY -> SubtitleInfoUnavailableReason.BITMAP_ONLY
+        EmbeddedAiAvailability.NO_TRANSLATABLE -> SubtitleInfoUnavailableReason.NO_TRANSLATABLE_EMBEDDED
+        EmbeddedAiAvailability.NONE -> SubtitleInfoUnavailableReason.NO_EMBEDDED
+    }
+}
+
+internal fun canResetToSmartAiAuto(smart: SubtitleInfoSmartContext): Boolean =
+    smart.smartAiEnabled &&
+        !smart.preferredLanguageNone &&
+        !smart.forcedApplies &&
+        smart.textTracksReady &&
+        smart.embeddedAvailability == EmbeddedAiAvailability.USABLE
+
 internal fun decideSubtitleInfoRail(
     displayOption: SubtitleInfoOptionSnapshot?,
     isPlaybackSelected: Boolean,
@@ -142,36 +254,65 @@ internal fun decideSubtitleInfoRail(
     aiQuotaExhausted: Boolean,
     isUsingMpv: Boolean,
     userExplicitSelection: Boolean = false,
-    translationActive: Boolean = false
+    translationActive: Boolean = false,
+    smart: SubtitleInfoSmartContext = SubtitleInfoSmartContext()
 ): SubtitleInfoRailDecision {
+    val rawNotice = resolveSubtitleInfoSystemNotice(
+        aiAvailable = aiAvailable,
+        aiQuotaExhausted = aiQuotaExhausted,
+        isUsingMpv = isUsingMpv,
+        smart = smart
+    )
+    val showSmartContext = translationActive ||
+        displayOption?.kind == SubtitleInfoOptionKind.AI ||
+        diagnostics?.rung == AiSubtitleLadderRung.MANUAL ||
+        diagnostics?.rung == AiSubtitleLadderRung.CLASSIC_FALLBACK ||
+        diagnostics?.rung == AiSubtitleLadderRung.NONE
+    val systemNotice = filterSubtitleInfoSystemNoticeForDisplay(
+        notice = rawNotice,
+        smartAiEnabled = smart.smartAiEnabled,
+        showSmartContext = showSmartContext
+    )
     val content = buildInfoContent(
         displayOption = displayOption,
         diagnostics = diagnostics,
         statusLine = statusLine,
-        aiAvailable = aiAvailable,
-        aiQuotaExhausted = aiQuotaExhausted,
-        isUsingMpv = isUsingMpv,
+        systemNotice = systemNotice,
         translationActive = translationActive
     )
     val cta = decideInfoCta(
         displayOption = displayOption,
         isPlaybackSelected = isPlaybackSelected,
         diagnostics = diagnostics,
-        aiAvailable = aiAvailable,
-        aiQuotaExhausted = aiQuotaExhausted,
-        isUsingMpv = isUsingMpv,
-        userExplicitSelection = userExplicitSelection
+        systemNotice = rawNotice,
+        userExplicitSelection = userExplicitSelection,
+        smart = smart
     )
     return SubtitleInfoRailDecision(content = content, cta = cta)
+}
+
+/**
+ * Translate-blocking notices always show. Smart-auto explanations (S1–S4, S8–S9) only when
+ * Smart is on, or the Info is already in an AI/classic-auto context — avoids painting
+ * “Smart off” on every classic track when [aiAutoSelect] defaults to false.
+ */
+internal fun filterSubtitleInfoSystemNoticeForDisplay(
+    notice: SubtitleInfoUnavailableReason?,
+    smartAiEnabled: Boolean,
+    showSmartContext: Boolean
+): SubtitleInfoUnavailableReason? {
+    if (notice == null) return null
+    if (notice.blocksAiTranslate()) return notice
+    if (notice == SubtitleInfoUnavailableReason.LOADING) return notice
+    if (smartAiEnabled) return notice
+    return if (showSmartContext) notice else null
 }
 
 private fun buildInfoContent(
     displayOption: SubtitleInfoOptionSnapshot?,
     diagnostics: SubtitleInfoDiagnosticsSnapshot?,
     statusLine: String?,
-    aiAvailable: Boolean,
-    aiQuotaExhausted: Boolean,
-    isUsingMpv: Boolean,
+    systemNotice: SubtitleInfoUnavailableReason?,
     translationActive: Boolean
 ): SubtitleInfoContentDecision {
     if (displayOption == null && diagnostics == null && !translationActive) {
@@ -182,30 +323,24 @@ private fun buildInfoContent(
         )
     }
 
-    val unavailable = resolveUnavailableReason(
-        aiAvailable = aiAvailable,
-        aiQuotaExhausted = aiQuotaExhausted,
-        isUsingMpv = isUsingMpv
-    )
-
     return when (displayOption?.kind) {
         SubtitleInfoOptionKind.AI, null -> buildAiContent(
             displayOption = displayOption,
             diagnostics = diagnostics,
             statusLine = statusLine,
-            unavailable = unavailable
+            systemNotice = systemNotice
         )
         SubtitleInfoOptionKind.INTERNAL -> buildEmbeddedContent(
             option = displayOption,
             diagnostics = diagnostics,
             statusLine = statusLine,
-            unavailable = unavailable
+            systemNotice = systemNotice
         )
         SubtitleInfoOptionKind.ADDON -> buildAddonContent(
             option = displayOption,
             diagnostics = diagnostics,
             statusLine = statusLine,
-            unavailable = unavailable
+            systemNotice = systemNotice
         )
     }
 }
@@ -214,7 +349,7 @@ private fun buildAiContent(
     displayOption: SubtitleInfoOptionSnapshot?,
     diagnostics: SubtitleInfoDiagnosticsSnapshot?,
     statusLine: String?,
-    unavailable: SubtitleInfoUnavailableReason?
+    systemNotice: SubtitleInfoUnavailableReason?
 ): SubtitleInfoContentDecision {
     val methodKind = when {
         diagnostics?.userLocked == true || diagnostics?.rung == AiSubtitleLadderRung.MANUAL ->
@@ -268,7 +403,7 @@ private fun buildAiContent(
         fields = fields,
         matchScorePercent = diagnostics?.matchScore?.takeIf { it > 0 },
         methodKind = methodKind,
-        unavailableReason = unavailable
+        unavailableReason = systemNotice
     )
 }
 
@@ -276,7 +411,7 @@ private fun buildEmbeddedContent(
     option: SubtitleInfoOptionSnapshot,
     diagnostics: SubtitleInfoDiagnosticsSnapshot?,
     @Suppress("UNUSED_PARAMETER") statusLine: String?,
-    unavailable: SubtitleInfoUnavailableReason?
+    systemNotice: SubtitleInfoUnavailableReason?
 ): SubtitleInfoContentDecision {
     val format = when {
         option.isBitmap -> option.formatLabel?.let { "bitmap ($it)" } ?: "bitmap (PGS)"
@@ -299,7 +434,6 @@ private fun buildEmbeddedContent(
             add(SubtitleInfoField(SubtitleInfoFieldKey.SDH, "true"))
         }
         appendClassicDiagnosticsFields(diagnostics)
-        // STATUS for AI errors/translating belongs on the AI card only (Bug 3).
     }
     return SubtitleInfoContentDecision(
         kind = SubtitleInfoContentKind.EMBEDDED,
@@ -308,7 +442,7 @@ private fun buildEmbeddedContent(
         statusLine = null,
         fields = fields,
         matchScorePercent = option.matchScorePercent.takeIf { it > 0 },
-        unavailableReason = unavailable
+        unavailableReason = systemNotice
     )
 }
 
@@ -316,7 +450,7 @@ private fun buildAddonContent(
     option: SubtitleInfoOptionSnapshot,
     diagnostics: SubtitleInfoDiagnosticsSnapshot?,
     @Suppress("UNUSED_PARAMETER") statusLine: String?,
-    unavailable: SubtitleInfoUnavailableReason?
+    systemNotice: SubtitleInfoUnavailableReason?
 ): SubtitleInfoContentDecision {
     val fields = buildList {
         option.addonName?.takeIf { it.isNotBlank() }?.let {
@@ -338,7 +472,6 @@ private fun buildAddonContent(
             add(SubtitleInfoField(SubtitleInfoFieldKey.SCORE, "$it%"))
         }
         appendClassicDiagnosticsFields(diagnostics)
-        // STATUS for AI errors/translating belongs on the AI card only (Bug 3).
     }
     return SubtitleInfoContentDecision(
         kind = SubtitleInfoContentKind.ADDON,
@@ -347,7 +480,7 @@ private fun buildAddonContent(
         statusLine = null,
         fields = fields,
         matchScorePercent = option.matchScorePercent.takeIf { it > 0 },
-        unavailableReason = unavailable
+        unavailableReason = systemNotice
     )
 }
 
@@ -367,45 +500,30 @@ private fun decideInfoCta(
     displayOption: SubtitleInfoOptionSnapshot?,
     isPlaybackSelected: Boolean,
     diagnostics: SubtitleInfoDiagnosticsSnapshot?,
-    aiAvailable: Boolean,
-    aiQuotaExhausted: Boolean,
-    isUsingMpv: Boolean,
-    userExplicitSelection: Boolean
+    systemNotice: SubtitleInfoUnavailableReason?,
+    userExplicitSelection: Boolean,
+    smart: SubtitleInfoSmartContext
 ): SubtitleInfoCtaDecision {
     if (displayOption == null) {
         return SubtitleInfoCtaDecision.None
     }
 
-    val unavailable = resolveUnavailableReason(
-        aiAvailable = aiAvailable,
-        aiQuotaExhausted = aiQuotaExhausted,
-        isUsingMpv = isUsingMpv
-    )
+    val translateBlocked = systemNotice?.blocksAiTranslate() == true
     val rung = diagnostics?.rung
     val userLocked = diagnostics?.userLocked == true
     val isManualAi = userLocked || rung == AiSubtitleLadderRung.MANUAL
 
     when (displayOption.kind) {
         SubtitleInfoOptionKind.AI -> {
-            // AI focused but not selected → no CTA (click option = A2/A3).
             if (!isPlaybackSelected) {
                 return SubtitleInfoCtaDecision.None
             }
-            // C4: AI manual → reset to smart.
             if (isManualAi) {
-                return SubtitleInfoCtaDecision(
-                    action = SubtitleInfoCtaAction.RESET_TO_SMART_AUTO,
-                    enabled = true,
-                    focusable = true
-                )
+                return decideResetCta(smart = smart, systemNotice = systemNotice)
             }
-            // C1: AI automatic (AI_EMBEDDED) → no CTA.
             return SubtitleInfoCtaDecision.None
         }
         SubtitleInfoOptionKind.INTERNAL, SubtitleInfoOptionKind.ADDON -> {
-            // C2: classic automatic fallback → no CTA only for the auto-picked
-            // selected option (unless user later re-selected). Other focused
-            // tracks/addons still get Translate.
             if (isPlaybackSelected &&
                 rung == AiSubtitleLadderRung.CLASSIC_FALLBACK &&
                 !userLocked &&
@@ -413,9 +531,7 @@ private fun decideInfoCta(
             ) {
                 return SubtitleInfoCtaDecision.None
             }
-            // Bitmap / C6: Translate visible but disabled and not focusable.
-            // C3 / C5: Translate with AI when available.
-            val translateEnabled = unavailable == null && !displayOption.isBitmap
+            val translateEnabled = !translateBlocked && !displayOption.isBitmap
             return SubtitleInfoCtaDecision(
                 action = SubtitleInfoCtaAction.TRANSLATE_WITH_AI,
                 enabled = translateEnabled,
@@ -425,15 +541,29 @@ private fun decideInfoCta(
     }
 }
 
-private fun resolveUnavailableReason(
-    aiAvailable: Boolean,
-    aiQuotaExhausted: Boolean,
-    isUsingMpv: Boolean
-): SubtitleInfoUnavailableReason? = when {
-    isUsingMpv -> SubtitleInfoUnavailableReason.MPV
-    aiQuotaExhausted -> SubtitleInfoUnavailableReason.RATE_LIMITED
-    !aiAvailable -> SubtitleInfoUnavailableReason.NO_API_KEY
-    else -> null
+private fun decideResetCta(
+    smart: SubtitleInfoSmartContext,
+    systemNotice: SubtitleInfoUnavailableReason?
+): SubtitleInfoCtaDecision {
+    val canSmart = canResetToSmartAiAuto(smart) &&
+        systemNotice != SubtitleInfoUnavailableReason.MPV &&
+        systemNotice != SubtitleInfoUnavailableReason.NO_API_KEY
+    val enabled = when (systemNotice) {
+        SubtitleInfoUnavailableReason.SMART_OFF,
+        SubtitleInfoUnavailableReason.PREFERRED_NONE,
+        SubtitleInfoUnavailableReason.MPV,
+        SubtitleInfoUnavailableReason.NO_API_KEY -> false
+        else -> true
+    }
+    return SubtitleInfoCtaDecision(
+        action = if (canSmart) {
+            SubtitleInfoCtaAction.RESET_TO_SMART_AUTO
+        } else {
+            SubtitleInfoCtaAction.RESET_TO_CLASSIC_AUTO
+        },
+        enabled = enabled,
+        focusable = enabled
+    )
 }
 
 internal fun subtitleFormatLabelFromCodec(codec: String?): Pair<String, Boolean> {

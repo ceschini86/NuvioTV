@@ -595,4 +595,166 @@ class SubtitleInfoRailDecisionTest {
         )
         assertEquals(1, aiOnlyPreferred.first { it.key == "es" }.count)
     }
+
+    // --- B6d ---
+
+    @Test
+    fun b6d_noEmbedded_showsNotice_andManualResetUsesClassicLabel() {
+        val smart = SubtitleInfoSmartContext(
+            smartAiEnabled = true,
+            embeddedAvailability = EmbeddedAiAvailability.NONE
+        )
+        val classic = decideSubtitleInfoRail(
+            displayOption = addonOption(),
+            isPlaybackSelected = true,
+            diagnostics = diagnostics(
+                rung = AiSubtitleLadderRung.CLASSIC_FALLBACK,
+                reason = "classic preferred-language auto-select (primary only)",
+                userLocked = false,
+                sourceKind = AiSubtitleSourceKind.ADDON,
+                sourceLabel = "AIOStreams",
+                sourceLanguage = "en"
+            ),
+            statusLine = null,
+            aiAvailable = true,
+            aiQuotaExhausted = false,
+            isUsingMpv = false,
+            smart = smart
+        )
+        assertEquals(SubtitleInfoUnavailableReason.NO_EMBEDDED, classic.content.unavailableReason)
+        assertEquals(SubtitleInfoCtaAction.NONE, classic.cta.action)
+
+        val manual = decideSubtitleInfoRail(
+            displayOption = aiOption(),
+            isPlaybackSelected = true,
+            diagnostics = diagnostics(
+                rung = AiSubtitleLadderRung.MANUAL,
+                reason = "user chose translate with AI",
+                userLocked = true,
+                sourceKind = AiSubtitleSourceKind.ADDON
+            ),
+            statusLine = null,
+            aiAvailable = true,
+            aiQuotaExhausted = false,
+            isUsingMpv = false,
+            translationActive = true,
+            smart = smart
+        )
+        assertEquals(SubtitleInfoCtaAction.RESET_TO_CLASSIC_AUTO, manual.cta.action)
+        assertTrue(manual.cta.enabled)
+        assertEquals(SubtitleInfoUnavailableReason.NO_EMBEDDED, manual.content.unavailableReason)
+    }
+
+    @Test
+    fun b6d_bitmapOnly_andSmartOff_priorityAndResetDisabled() {
+        assertEquals(
+            EmbeddedAiAvailability.BITMAP_ONLY,
+            classifyEmbeddedAiAvailability(
+                listOf(TrackInfo(index = 0, name = "English", language = "en", codec = "PGS"))
+            )
+        )
+        assertEquals(
+            SubtitleInfoUnavailableReason.BITMAP_ONLY,
+            resolveSubtitleInfoSystemNotice(
+                aiAvailable = true,
+                aiQuotaExhausted = false,
+                isUsingMpv = false,
+                smart = SubtitleInfoSmartContext(
+                    smartAiEnabled = true,
+                    embeddedAvailability = EmbeddedAiAvailability.BITMAP_ONLY
+                )
+            )
+        )
+        assertEquals(
+            SubtitleInfoUnavailableReason.SMART_OFF,
+            resolveSubtitleInfoSystemNotice(
+                aiAvailable = true,
+                aiQuotaExhausted = false,
+                isUsingMpv = false,
+                smart = SubtitleInfoSmartContext(
+                    smartAiEnabled = false,
+                    embeddedAvailability = EmbeddedAiAvailability.NONE
+                )
+            )
+        )
+
+        val reset = decideSubtitleInfoRail(
+            displayOption = aiOption(),
+            isPlaybackSelected = true,
+            diagnostics = diagnostics(
+                rung = AiSubtitleLadderRung.MANUAL,
+                reason = "user selected AI option",
+                userLocked = true
+            ),
+            statusLine = null,
+            aiAvailable = true,
+            aiQuotaExhausted = false,
+            isUsingMpv = false,
+            translationActive = true,
+            smart = SubtitleInfoSmartContext(smartAiEnabled = false)
+        )
+        assertEquals(SubtitleInfoCtaAction.RESET_TO_CLASSIC_AUTO, reset.cta.action)
+        assertFalse(reset.cta.enabled)
+        assertFalse(isSyntheticAiOptionSelectable(EmbeddedAiAvailability.NONE, translationActive = false))
+        assertTrue(isSyntheticAiOptionSelectable(EmbeddedAiAvailability.NONE, translationActive = true))
+    }
+
+    @Test
+    fun b6d_usableEmbedded_manualKeepsSmartResetLabel() {
+        val decision = decideSubtitleInfoRail(
+            displayOption = aiOption(),
+            isPlaybackSelected = true,
+            diagnostics = diagnostics(
+                rung = AiSubtitleLadderRung.MANUAL,
+                reason = "user chose translate with AI",
+                userLocked = true
+            ),
+            statusLine = null,
+            aiAvailable = true,
+            aiQuotaExhausted = false,
+            isUsingMpv = false,
+            translationActive = true,
+            smart = SubtitleInfoSmartContext(
+                smartAiEnabled = true,
+                embeddedAvailability = EmbeddedAiAvailability.USABLE
+            )
+        )
+        assertEquals(SubtitleInfoCtaAction.RESET_TO_SMART_AUTO, decision.cta.action)
+        assertTrue(decision.cta.enabled)
+        assertNull(decision.content.unavailableReason)
+    }
+
+    @Test
+    fun b6d_smartOff_hidesNoticeOnClassicTrack_showsOnAiContext() {
+        val smartOff = SubtitleInfoSmartContext(smartAiEnabled = false)
+        val classicTrack = decideSubtitleInfoRail(
+            displayOption = embeddedOption(),
+            isPlaybackSelected = true,
+            diagnostics = null,
+            statusLine = null,
+            aiAvailable = true,
+            aiQuotaExhausted = false,
+            isUsingMpv = false,
+            userExplicitSelection = true,
+            smart = smartOff
+        )
+        assertNull(classicTrack.content.unavailableReason)
+
+        val aiContext = decideSubtitleInfoRail(
+            displayOption = aiOption(),
+            isPlaybackSelected = true,
+            diagnostics = diagnostics(
+                rung = AiSubtitleLadderRung.MANUAL,
+                reason = "user selected AI option",
+                userLocked = true
+            ),
+            statusLine = null,
+            aiAvailable = true,
+            aiQuotaExhausted = false,
+            isUsingMpv = false,
+            translationActive = true,
+            smart = smartOff
+        )
+        assertEquals(SubtitleInfoUnavailableReason.SMART_OFF, aiContext.content.unavailableReason)
+    }
 }

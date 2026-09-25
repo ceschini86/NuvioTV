@@ -3228,6 +3228,18 @@
     <string name="sub_ai_diagnostics_locked">Escolha manual</string>
     <string name="sub_ai_translate_this">Traduzir com IA</string>
     <string name="sub_ai_reset_to_smart">Voltar à seleção automática</string>
+    <string name="sub_ai_reset_to_classic">Voltar à seleção clássica</string>
+    <string name="sub_ai_notice_no_embedded">Não há legendas embutidas. Selecione um addon para traduzir.</string>
+    <string name="sub_ai_notice_bitmap_only">Não é possível traduzir automaticamente legendas embutidas em imagem (PGS).</string>
+    <string name="sub_ai_notice_no_translatable">Não há legendas embutidas traduzíveis. Selecione um addon para traduzir.</string>
+    <string name="sub_ai_notice_smart_off">A seleção automática com IA está desativada nas Definições.</string>
+    <string name="sub_ai_notice_preferred_none">Defina um idioma preferido de legendas para usar a seleção automática.</string>
+    <string name="sub_ai_notice_forced">O modo de legendas forçadas está ativo para este áudio.</string>
+    <string name="sub_ai_notice_loading">A carregar legendas…</string>
+    <string name="sub_ai_banner_translating_from">A traduzir a partir de %1$s.</string>
+    <string name="sub_ai_banner_automatic_selection">Seleção automática: %1$s.</string>
+    <string name="sub_ai_banner_classic_selection">Seleção clássica.</string>
+    <string name="sub_ai_banner_outcome_classic">Seleção clássica</string>
     <string name="sub_ai_source_chip">Fonte IA</string>
     <string name="sub_ai_method_label">Método</string>
     <string name="sub_ai_method_automatic">Automático</string>
@@ -3242,6 +3254,7 @@
     <string name="sub_ai_menu_disable_ai">Parar tradução com IA</string>
     <string name="sub_ai_error_rate_limited">Limite da IA — aguarde e tente de novo</string>
     <string name="sub_ai_error_rate_limited_all">Todas as keys da IA atingiram o limite. A aguardar antes de tentar de novo.</string>
+    <string name="sub_ai_unavailable_mpv">A tradução com IA está disponível apenas no ExoPlayer.</string>
     <string name="sub_ai_error_api_key_missing">Adiciona uma API key de IA em Definições de reprodução para traduzir legendas.</string>
     <string name="sub_ai_error_insufficient_credits">Créditos da API de tradução esgotados. Verifica o billing do fornecedor e tenta de novo.</string>
     <string name="sub_ai_error_generic">Falha na tradução por IA. Tenta de novo ou verifica as keys em Definições.</string>

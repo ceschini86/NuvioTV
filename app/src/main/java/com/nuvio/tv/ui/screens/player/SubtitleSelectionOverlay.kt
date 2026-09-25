@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -51,6 +53,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.tv.material3.Border
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
@@ -64,6 +67,7 @@ import com.nuvio.tv.data.local.SubtitleStyleSettings
 import com.nuvio.tv.domain.model.Subtitle
 import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.screens.detail.requestFocusAfterFrames
+import kotlinx.coroutines.delay
 
 private const val SubtitleOffLanguageKey = "__off__"
 private const val SubtitleUnknownLanguageKey = "__unknown__"
@@ -77,6 +81,9 @@ private val SelectedWithoutFocusAlpha = 0.5f
 private val LanguageBrowsedWithoutFocusAlpha = 0.18f
 /** F1/F2 yellow accent for the current AI translation source. */
 private val AiSourceIndicatorYellow = Color(0xFFFFD54F)
+/** Transient menu-change banner (PRD §B7) — keep below dialogs, above rails. */
+private const val MenuChangeBannerTimeoutMs = 2750L
+private val MenuChangeBannerZIndex = 2f
 
 @Composable
 internal fun SubtitleSelectionOverlay(
@@ -99,6 +106,7 @@ internal fun SubtitleSelectionOverlay(
     aiSubtitleDiagnostics: AiSubtitleDiagnostics? = null,
     aiSubtitleLastError: String? = null,
     userExplicitSubtitleSelection: Boolean = false,
+    selectedAudioTrack: TrackInfo? = null,
     onInternalTrackSelected: (Int) -> Unit,
     onAddonSubtitleSelected: (Subtitle) -> Unit,
     onDisableSubtitles: () -> Unit,
@@ -148,6 +156,45 @@ internal fun SubtitleSelectionOverlay(
     // K1: preferred Col1 count includes synthetic AI whenever that option is listed.
     val aiOptionListedOnPreferred =
         (aiSubtitleAvailable || aiSubtitleTranslationActive)
+    val embeddedAiAvailability = remember(visible, sessionInternalTracks) {
+        classifyEmbeddedAiAvailability(sessionInternalTracks)
+    }
+    val preferredLanguageNone = remember(visible, sessionPreferredLanguage) {
+        isPreferredSubtitleLanguageNone(sessionPreferredLanguage)
+    }
+    val forcedAppliesSmartBlock = remember(
+        visible,
+        subtitleStyle.useForcedSubtitles,
+        sessionPreferredLanguage,
+        selectedAudioTrack
+    ) {
+        if (!subtitleStyle.useForcedSubtitles || preferredLanguageNone) {
+            false
+        } else {
+            val audio = selectedAudioTrack ?: return@remember false
+            audioMatchesSubtitleTargetForForced(audio, sessionPreferredLanguage)
+        }
+    }
+    val smartInfoContext = remember(
+        subtitleStyle.aiAutoSelect,
+        preferredLanguageNone,
+        forcedAppliesSmartBlock,
+        embeddedAiAvailability
+    ) {
+        SubtitleInfoSmartContext(
+            smartAiEnabled = subtitleStyle.aiAutoSelect,
+            preferredLanguageNone = preferredLanguageNone,
+            forcedApplies = forcedAppliesSmartBlock,
+            embeddedAvailability = embeddedAiAvailability,
+            textTracksReady = true
+        )
+    }
+    val aiOptionSelectable = remember(embeddedAiAvailability, aiSubtitleTranslationActive) {
+        isSyntheticAiOptionSelectable(
+            embeddedAvailability = embeddedAiAvailability,
+            translationActive = aiSubtitleTranslationActive
+        )
+    }
     val languageItems = remember(
         visible,
         sessionAddonSubtitles,
@@ -225,7 +272,8 @@ internal fun SubtitleSelectionOverlay(
             aiOptionMeta = aiOptionMeta,
             aiOptionTranslatingMeta = aiOptionTranslatingMeta,
             aiOptionApiKeyMeta = aiOptionApiKeyMeta,
-            aiSourceOptionId = aiSourceOptionId
+            aiSourceOptionId = aiSourceOptionId,
+            aiOptionSelectable = aiOptionSelectable
         )
     }
     val aiSourceIndicators = remember(
@@ -422,7 +470,8 @@ internal fun SubtitleSelectionOverlay(
         isUsingMpv,
         aiSubtitleDiagnostics,
         infoStatusLine,
-        userExplicitSubtitleSelection
+        userExplicitSubtitleSelection,
+        smartInfoContext
     ) {
         val snapshot = infoDisplayOption?.toInfoSnapshot(unknownLabel = unknownLabel)
         val selectedId = playbackSelectedOption?.id
@@ -435,11 +484,44 @@ internal fun SubtitleSelectionOverlay(
             aiQuotaExhausted = aiSubtitleQuotaExhausted,
             isUsingMpv = isUsingMpv,
             userExplicitSelection = userExplicitSubtitleSelection,
-            translationActive = aiSubtitleTranslationActive
+            translationActive = aiSubtitleTranslationActive,
+            smart = smartInfoContext
         )
     }
     val infoCtaState = infoRailDecision.cta
     var pendingPostActionFocus by remember(visible) { mutableStateOf<String?>(null) }
+    /** When true, F2b already shown; when false, await post-reset rung for F2. Null = no reset banner pending. */
+    var pendingResetBannerClassicOnly by remember(visible) { mutableStateOf<Boolean?>(null) }
+    var menuChangeBannerText by remember(visible) { mutableStateOf<String?>(null) }
+    var menuChangeBannerGeneration by remember(visible) { mutableIntStateOf(0) }
+    var menuChangeBannerRailBaseline by remember(visible) { mutableStateOf<OverlayFocusRail?>(null) }
+    val bannerTranslatingFrom = stringResource(R.string.sub_ai_banner_translating_from)
+    val bannerAutomaticSelection = stringResource(R.string.sub_ai_banner_automatic_selection)
+    val bannerClassicSelection = stringResource(R.string.sub_ai_banner_classic_selection)
+    val bannerOutcomeAiEmbedded = stringResource(R.string.sub_ai_rung_ai_embedded)
+    val bannerOutcomePreferredEmbedded = stringResource(R.string.sub_ai_rung_preferred_embedded)
+    val bannerOutcomeClassic = stringResource(R.string.sub_ai_banner_outcome_classic)
+    fun resolveMenuChangeBannerText(spec: SubtitleMenuChangeBannerSpec): String =
+        when (spec.kind) {
+            SubtitleMenuChangeBannerKind.TRANSLATE_FROM ->
+                bannerTranslatingFrom.format(spec.sourceShortLabel.orEmpty())
+            SubtitleMenuChangeBannerKind.AUTOMATIC_SELECTION -> {
+                val outcome = when (spec.automaticOutcome) {
+                    SubtitleAutomaticSelectionOutcome.AI_FROM_EMBEDDED -> bannerOutcomeAiEmbedded
+                    SubtitleAutomaticSelectionOutcome.PREFERRED_EMBEDDED -> bannerOutcomePreferredEmbedded
+                    SubtitleAutomaticSelectionOutcome.CLASSIC, null -> bannerOutcomeClassic
+                }
+                bannerAutomaticSelection.format(outcome)
+            }
+            SubtitleMenuChangeBannerKind.CLASSIC_SELECTION -> bannerClassicSelection
+        }
+    fun showMenuChangeBanner(spec: SubtitleMenuChangeBannerSpec) {
+        val next = resolveMenuChangeBannerText(spec)
+        if (!shouldShowMenuChangeBanner(menuChangeBannerText, next)) return
+        menuChangeBannerText = next
+        menuChangeBannerGeneration += 1
+        menuChangeBannerRailBaseline = null
+    }
 
     fun requestLanguageFocus(targetKey: String?) {
         val resolvedKey = targetKey
@@ -546,7 +628,8 @@ internal fun SubtitleSelectionOverlay(
     fun requestInfoFocus(reason: String) {
         if (!infoCtaState.canMoveFocusToCta) return
         val focusKey = when (infoCtaState.action) {
-            SubtitleInfoCtaAction.RESET_TO_SMART_AUTO -> InfoFocusKey.ResetSmart
+            SubtitleInfoCtaAction.RESET_TO_SMART_AUTO,
+            SubtitleInfoCtaAction.RESET_TO_CLASSIC_AUTO -> InfoFocusKey.ResetSmart
             else -> InfoFocusKey.Translate
         }
         pendingInfoFocusKey = focusKey
@@ -629,7 +712,8 @@ internal fun SubtitleSelectionOverlay(
         onDismiss = onDismiss,
         modifier = modifier,
         captureKeys = false,
-        contentPadding = PaddingValues(start = 52.dp, end = 52.dp, top = 36.dp, bottom = 76.dp)
+        // Keep a small bottom inset only; rails must reach near the screen bottom edge.
+        contentPadding = PaddingValues(start = 52.dp, end = 52.dp, top = 36.dp, bottom = 24.dp)
     ) {
         LaunchedEffect(visible) {
             if (!visible) return@LaunchedEffect
@@ -649,6 +733,35 @@ internal fun SubtitleSelectionOverlay(
                     "overlay_open focus=language selectedLanguage=$sessionInitialLanguageKey showOption=${sessionInitialLanguageKey != SubtitleOffLanguageKey}"
                 )
                 requestLanguageFocus(sessionInitialLanguageKey)
+            }
+        }
+
+        // §B7: transient banner timeout (~2.5–3s).
+        LaunchedEffect(menuChangeBannerGeneration, menuChangeBannerText) {
+            if (menuChangeBannerText == null) return@LaunchedEffect
+            val gen = menuChangeBannerGeneration
+            delay(MenuChangeBannerTimeoutMs)
+            if (menuChangeBannerGeneration == gen) {
+                menuChangeBannerText = null
+                menuChangeBannerRailBaseline = null
+            }
+        }
+
+        // §B7: dismiss on user rail change after post-CTA settle (not during jump).
+        LaunchedEffect(pendingPostActionFocus, menuChangeBannerText, activeRail) {
+            if (menuChangeBannerText == null) return@LaunchedEffect
+            if (pendingPostActionFocus != null) {
+                menuChangeBannerRailBaseline = null
+                return@LaunchedEffect
+            }
+            val baseline = menuChangeBannerRailBaseline
+            if (baseline == null) {
+                menuChangeBannerRailBaseline = activeRail
+                return@LaunchedEffect
+            }
+            if (activeRail != baseline) {
+                menuChangeBannerText = null
+                menuChangeBannerRailBaseline = null
             }
         }
 
@@ -712,6 +825,17 @@ internal fun SubtitleSelectionOverlay(
                 "reset_smart" -> {
                     // Wait until policy published a new rung (reset clears diagnostics first).
                     if (aiSubtitleDiagnostics == null) return@LaunchedEffect
+                    when (pendingResetBannerClassicOnly) {
+                        false -> {
+                            decideResetMenuChangeBanner(
+                                resetToClassicOnly = false,
+                                postResetRung = aiSubtitleDiagnostics.rung
+                            )?.let(::showMenuChangeBanner)
+                            pendingResetBannerClassicOnly = null
+                        }
+                        true -> pendingResetBannerClassicOnly = null
+                        null -> Unit
+                    }
                     val genAtStart = optionFocusGeneration
                     applyResetSmartFocusFromPlayback(force = true)
                     // CTA may disappear (C1) or change; settle FocusRequester after recomposition.
@@ -794,9 +918,13 @@ internal fun SubtitleSelectionOverlay(
             pendingInfoFocusKey = null
         }
 
+        // Top → bottom fill: title (intrinsic) + rails Row (weight) so Col1–Col3
+        // reach the padded bottom edge. Avoid Arrangement.Bottom — it packs the
+        // block without stretching the navigation viewport.
         Column(
-            modifier = Modifier.fillMaxHeight().fillMaxWidth(),
-            verticalArrangement = Arrangement.Bottom
+            modifier = Modifier
+                .fillMaxSize()
+                .align(Alignment.TopStart)
         ) {
             Text(
                 text = stringResource(R.string.subtitle_dialog_title),
@@ -804,6 +932,17 @@ internal fun SubtitleSelectionOverlay(
                 color = Color.White,
                 modifier = Modifier.padding(bottom = NuvioTheme.spacing.md)
             )
+            menuChangeBannerText?.let { banner ->
+                Text(
+                    text = banner,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.85f),
+                    maxLines = 1,
+                    modifier = Modifier
+                        .zIndex(MenuChangeBannerZIndex)
+                        .padding(bottom = NuvioTheme.spacing.sm)
+                )
+            }
             if (isUsingMpv && subtitleStyle.aiEnabled) {
                 Text(
                     text = stringResource(R.string.sub_ai_unavailable_mpv),
@@ -815,9 +954,11 @@ internal fun SubtitleSelectionOverlay(
 
             Row(
                 modifier = Modifier
+                    .weight(1f)
                     .fillMaxWidth()
-                    .weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    .fillMaxHeight(),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.Top
             ) {
                 SubtitleLanguageRail(
                     items = languageItems,
@@ -915,6 +1056,13 @@ internal fun SubtitleSelectionOverlay(
                                 onAddonSubtitleSelected(subtitle)
                             },
                             onAiOptionSelected = { optionId ->
+                                if (!aiOptionSelectable) {
+                                    Log.d(
+                                        SubtitleFocusTag,
+                                        "Select AI option ignored: no usable embedded for smart auto"
+                                    )
+                                    return@SubtitleOptionsRail
+                                }
                                 val action = decideAiOptionClickAction(
                                     aiOptionAlreadySelected = selectedOptionId == optionId &&
                                         aiSubtitleTranslationActive,
@@ -987,6 +1135,25 @@ internal fun SubtitleSelectionOverlay(
                                         ?: focusedOption
                                         ?: playbackSelectedOption
                                         ?: subtitleOptions.firstOrNull { it.id == selectedOptionId }
+                                    val languageLabel = option?.languageCode
+                                        ?.takeIf { it.isNotBlank() }
+                                        ?.let {
+                                            subtitleLanguageLabel(
+                                                normalizeOverlayLanguageKey(it),
+                                                unknownLabel
+                                            )
+                                        }
+                                        ?: option?.title
+                                    val sourceShort = buildTranslateSourceShortLabel(
+                                        languageLabel = languageLabel,
+                                        addonName = option?.addonSubtitle?.addonName
+                                            ?: option?.sourceLabel?.takeIf {
+                                                option.kind == SubtitleOptionKind.ADDON
+                                            },
+                                        isAddon = option?.kind == SubtitleOptionKind.ADDON,
+                                        embeddedTitle = option?.title
+                                    )
+                                    showMenuChangeBanner(decideTranslateMenuChangeBanner(sourceShort))
                                     browsedLanguageKey = preferredLanguageKey
                                     selectedOptionId = SubtitleAiOptionId
                                     optionFocusMemory =
@@ -1019,6 +1186,19 @@ internal fun SubtitleSelectionOverlay(
                                 },
                                 onResetToSmartAuto = {
                                     activeInfoFocusKey = null
+                                    val classicOnly =
+                                        infoCtaState.action == SubtitleInfoCtaAction.RESET_TO_CLASSIC_AUTO
+                                    if (classicOnly) {
+                                        showMenuChangeBanner(
+                                            decideResetMenuChangeBanner(
+                                                resetToClassicOnly = true,
+                                                postResetRung = null
+                                            )!!
+                                        )
+                                        pendingResetBannerClassicOnly = true
+                                    } else {
+                                        pendingResetBannerClassicOnly = false
+                                    }
                                     pendingPostActionFocus = "reset_smart"
                                     Log.d(
                                         SubtitleFocusTag,
@@ -1113,7 +1293,7 @@ private fun SubtitleLanguageRail(
             state = listState,
             verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
             contentPadding = PaddingValues(top = NuvioTheme.spacing.sm, bottom = NuvioTheme.spacing.sm),
-            modifier = Modifier.fillMaxHeight()
+            modifier = Modifier.fillMaxSize()
         ) {
             items(items = items, key = { item -> item.key }) { item ->
                 val isBrowsed = item.key == browsedLanguageKey
@@ -1212,7 +1392,7 @@ private fun SubtitleOptionsRail(
                     state = listState,
                     verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
                     contentPadding = PaddingValues(top = NuvioTheme.spacing.sm, bottom = NuvioTheme.spacing.sm),
-                    modifier = Modifier.fillMaxHeight()
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     items(items = options, key = { option -> option.id }) { option ->
                         SubtitleOptionCard(
@@ -1265,7 +1445,7 @@ private fun SubtitleInfoRail(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .fillMaxHeight(),
+            .fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
     ) {
         SubtitleInfoPane(
@@ -1360,6 +1540,20 @@ private fun SubtitleInfoPane(
                                 stringResource(R.string.sub_ai_error_rate_limited_all)
                             SubtitleInfoUnavailableReason.NO_API_KEY ->
                                 stringResource(R.string.sub_ai_error_api_key_missing)
+                            SubtitleInfoUnavailableReason.LOADING ->
+                                stringResource(R.string.sub_ai_notice_loading)
+                            SubtitleInfoUnavailableReason.SMART_OFF ->
+                                stringResource(R.string.sub_ai_notice_smart_off)
+                            SubtitleInfoUnavailableReason.PREFERRED_NONE ->
+                                stringResource(R.string.sub_ai_notice_preferred_none)
+                            SubtitleInfoUnavailableReason.FORCED_APPLIES ->
+                                stringResource(R.string.sub_ai_notice_forced)
+                            SubtitleInfoUnavailableReason.BITMAP_ONLY ->
+                                stringResource(R.string.sub_ai_notice_bitmap_only)
+                            SubtitleInfoUnavailableReason.NO_TRANSLATABLE_EMBEDDED ->
+                                stringResource(R.string.sub_ai_notice_no_translatable)
+                            SubtitleInfoUnavailableReason.NO_EMBEDDED ->
+                                stringResource(R.string.sub_ai_notice_no_embedded)
                         }
                         if (reasonText != statusLine) {
                             Text(
@@ -1434,6 +1628,20 @@ private fun SubtitleInfoPane(
             SubtitleInfoCtaAction.RESET_TO_SMART_AUTO -> {
                 SubtitleInfoActionCard(
                     label = stringResource(R.string.sub_ai_reset_to_smart),
+                    focusKey = InfoFocusKey.ResetSmart,
+                    focusRequester = if (cta.focusable) ctaFocusRequester else null,
+                    enabled = cta.enabled,
+                    focusable = cta.focusable,
+                    onClick = { if (cta.enabled) onResetToSmartAuto() },
+                    onMoveLeft = onMoveLeft,
+                    onBack = onBack,
+                    onFocused = onInfoFocused,
+                    moveLeftKey = moveLeftKey
+                )
+            }
+            SubtitleInfoCtaAction.RESET_TO_CLASSIC_AUTO -> {
+                SubtitleInfoActionCard(
+                    label = stringResource(R.string.sub_ai_reset_to_classic),
                     focusKey = InfoFocusKey.ResetSmart,
                     focusRequester = if (cta.focusable) ctaFocusRequester else null,
                     enabled = cta.enabled,
@@ -1596,7 +1804,12 @@ private fun RailColumn(
             style = MaterialTheme.typography.labelLarge,
             color = NuvioTheme.colors.TextTertiary
         )
-        Box(modifier = Modifier.weight(1f)) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .fillMaxHeight()
+        ) {
             content()
         }
     }
@@ -1732,9 +1945,10 @@ private fun SubtitleOptionCard(
     val moveRightKey = if (isRtl) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT
 
     Card(
-        onClick = onClick,
+        onClick = { if (item.isSelectable) onClick() },
         modifier = Modifier
             .fillMaxWidth()
+            .alpha(if (item.isSelectable) 1f else 0.45f)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .onPreviewKeyEvent { event ->
                 when (event.nativeKeyEvent.keyCode) {
@@ -2082,7 +2296,9 @@ private data class SubtitleOptionRailItem(
     val isSdh: Boolean = false,
     val fileName: String? = null,
     /** F2: this option is the current AI translation source. */
-    val isAiSource: Boolean = false
+    val isAiSource: Boolean = false,
+    /** B6d: synthetic AI option may be non-interactive without usable embedded. */
+    val isSelectable: Boolean = true
 )
 
 private fun SubtitleOptionRailItem.toInfoSnapshot(unknownLabel: String): SubtitleInfoOptionSnapshot {
@@ -2221,7 +2437,8 @@ private fun buildSubtitleOptionRailItems(
     aiOptionMeta: String,
     aiOptionTranslatingMeta: String,
     aiOptionApiKeyMeta: String,
-    aiSourceOptionId: String? = null
+    aiSourceOptionId: String? = null,
+    aiOptionSelectable: Boolean = true
 ): List<SubtitleOptionRailItem> {
     if (selectedLanguageKey == SubtitleOffLanguageKey) return emptyList()
 
@@ -2310,10 +2527,12 @@ private fun buildSubtitleOptionRailItems(
                 meta = when {
                     isAiSubtitleTranslating -> aiOptionTranslatingMeta
                     !aiSubtitleAvailable -> aiOptionApiKeyMeta
+                    !aiOptionSelectable -> null
                     else -> aiOptionMeta
                 },
                 isSelected = aiOptionSelected,
-                matchScore = 0
+                matchScore = 0,
+                isSelectable = aiOptionSelectable
             )
         )
     } else {

@@ -316,6 +316,15 @@ internal fun PlayerRuntimeController.applyAiAutoSelectLadder() {
         if (forcedApplies) {
             Log.d(PlayerRuntimeController.TAG, "AI ladder: forced applies — classic forced path")
             tryAutoSelectPreferredSubtitleFromAvailableTracks()
+            publishAiSubtitleDiagnostics(
+                AiSubtitleDiagnostics(
+                    rung = AiSubtitleLadderRung.CLASSIC_FALLBACK,
+                    reason = "forced subtitles mode applies for this audio",
+                    targetLanguage = resolveSubtitleAiTargetLanguageName(),
+                    model = subtitleAiModel.name,
+                    userLocked = false
+                )
+            )
             return
         }
         Log.d(

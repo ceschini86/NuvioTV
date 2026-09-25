@@ -905,7 +905,7 @@
     <string name="sub_ai_model_preferred_desc">Tried first among enabled providers</string>
     <string name="sub_ai_translating">Translating…</string>
     <string name="sub_ai_translate_action">AI translate</string>
-    <string name="sub_ai_unavailable_mpv">AI translation requires ExoPlayer</string>
+    <string name="sub_ai_unavailable_mpv">AI translation is available only with ExoPlayer</string>
     <string name="sub_organization">Subtitle Organization</string>
     <string name="sub_size">Size</string>
     <string name="sub_vertical_offset">Vertical Offset</string>
@@ -3313,6 +3313,18 @@
     <string name="sub_ai_diagnostics_locked">Manual selection</string>
     <string name="sub_ai_translate_this">Translate with AI</string>
     <string name="sub_ai_reset_to_smart">Return to automatic selection</string>
+    <string name="sub_ai_reset_to_classic">Return to classic selection</string>
+    <string name="sub_ai_notice_no_embedded">No embedded subtitles. Select an addon to translate.</string>
+    <string name="sub_ai_notice_bitmap_only">Embedded image subtitles (PGS) cannot be translated automatically.</string>
+    <string name="sub_ai_notice_no_translatable">No translatable embedded subtitles. Select an addon to translate.</string>
+    <string name="sub_ai_notice_smart_off">Automatic AI selection is turned off in Settings.</string>
+    <string name="sub_ai_notice_preferred_none">Set a preferred subtitle language to use automatic selection.</string>
+    <string name="sub_ai_notice_forced">Forced subtitles mode is active for this audio.</string>
+    <string name="sub_ai_notice_loading">Loading subtitles…</string>
+    <string name="sub_ai_banner_translating_from">Translating from %1$s.</string>
+    <string name="sub_ai_banner_automatic_selection">Automatic selection: %1$s.</string>
+    <string name="sub_ai_banner_classic_selection">Classic selection.</string>
+    <string name="sub_ai_banner_outcome_classic">Classic selection</string>
     <string name="sub_ai_source_chip">AI source</string>
     <string name="sub_ai_method_label">Method</string>
     <string name="sub_ai_method_automatic">Automatic</string>

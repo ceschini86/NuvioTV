@@ -11,7 +11,7 @@
 | Escopo | **B+C** — overlay de legendas no player + estados/bloqueios. Settings (A) fora. |
 | Fonte de verdade | Working tree / `fix/ai-ladder-and-rate-limit` (`SubtitleSelectionOverlay`, `PlayerRuntimeControllerAiSubtitles`, events/UI state); base ship `release/1.0.2` |
 | Relacionados | [`prd-ai-subtitles.md`](./prd-ai-subtitles.md), [`architecture-ai-subtitles.md`](./architecture-ai-subtitles.md) |
-| Última revisão | 2026-09-24 (overlay Info-only rail + Reset Smart + indicadores Fonte IA) |
+| Última revisão | 2026-09-25 (B6d avisos Info + B7 banner F1/F2/F2b de mudança no menu) |
 
 Este documento descreve **o que o usuário vê e o que acontece em cada ramificação**, de forma reproduzível. Onde o código diverge do que o usuário “espera”, isso está marcado como **comportamento atual**.
 
@@ -314,10 +314,12 @@ Dismiss → volta ao overlay.
 | Contexto | CTA | Notas |
 |----------|-----|-------|
 | AI automática (`AI_EMBEDDED`, sem lock) | **Nenhum** | Só diagnostics |
-| Classic automático (`CLASSIC_FALLBACK`, sem explicit) | **Nenhum** | Info explica o fallback |
+| Classic automático (`CLASSIC_FALLBACK`, sem explicit) | **Nenhum** | Aviso de sistema se Smart não pôde usar IA (§B6d) |
 | Embedded no preferido (`PREFERRED_EMBEDDED`) ou embedded/addon qualquer (explícito) | **Traduzir com IA** | Embedded ou addon |
-| AI manual (`MANUAL` / `userLocked`) | **Voltar à seleção automática** | Reset Smart (não é Stop) |
-| AI indisponível (sem key / rate-limit / MPV) | Translate **disabled** e não focável | Col3 explica o motivo |
+| AI manual (`MANUAL` / `userLocked`) + Smart AI **pode** recolocar embutida | **Voltar à seleção automática** | Reset Smart (não é Stop) |
+| AI manual + Smart AI **não** tem degrau embutido (só classic) | **Voltar à seleção clássica** (enabled) | Limpa lock; não prometer IA automática. Aviso §B6d |
+| AI indisponível (sem key / rate-limit / MPV) | Translate **disabled** e não focável | Col3 com aviso de sistema (§B6d) |
+| Opção sintética `AI` focada, sem embutida usável | Opção **disabled** / não selecionável | Mesmo aviso que “sem embutidas” |
 
 **G1:** clicar numa opção já selecionada não faz nada. **G2:** trocar/desativar só via outra opção Col2 ou None/Off; Reset Smart muda o modo sem ser toggle.
 
@@ -337,13 +339,80 @@ Dismiss → volta ao overlay.
 
 Foco pós-reset: Col2 da opção que ficou selecionada.
 
+**Rótulo do CTA:** só «Voltar à seleção automática» quando existir embutida de texto usável (reset pode cair em `PREFERRED_EMBEDDED` / `AI_EMBEDDED`). Caso contrário → «Voltar à seleção clássica» + aviso §B6d (o reset continua a limpar o lock).
+
 #### B6c — Disable subtitles
 
 Somente via **None/Off** na Col1 (não há CTA Disable no Info).
 
+#### B6d — Smart auto indisponível (avisos de sistema)
+
+Mostrar **uma frase** no Info (tom de sistema, sem jargão de rung). EN = string base; PT-BR/PT-PT alinhados.
+
+| ID | Condição | CTA Reset (se MANUAL) | CTA Translate | Opção `AI` Col2 | Aviso (PT) | Aviso (EN) |
+|----|----------|----------------------|---------------|-----------------|------------|------------|
+| S1 | Sem tracks embutidas (scan feito) | **Voltar à seleção clássica** | Enabled em addon/texto | Disabled | Não há legendas embutidas. Selecione um addon para traduzir. | No embedded subtitles. Select an addon to translate. |
+| S2 | Só embutidas bitmap (PGS / DVB / VOBSUB) | **Voltar à seleção clássica** | Enabled em addon; disabled na bitmap | Disabled | Não é possível traduzir automaticamente legendas embutidas em imagem (PGS). | Embedded image subtitles (PGS) cannot be translated automatically. |
+| S3 | Só forced / songs-and-signs (sem texto usável) | **Voltar à seleção clássica** | Enabled noutro texto/addon | Disabled | Não há legendas embutidas traduzíveis. Selecione um addon para traduzir. | No translatable embedded subtitles. Select an addon to translate. |
+| S4 | Smart AI off nas Definições | Disabled + aviso | Enabled se key/Exo | Pode existir; toggle = MANUAL | A seleção automática com IA está desativada nas Definições. | Automatic AI selection is turned off in Settings. |
+| S5 | Sem key / feature AI off | — | Disabled | Oculta | Adicione uma chave de API de IA nas Definições de reprodução. | Add an AI API key in Playback settings. |
+| S6 | MPV | — | Disabled | Oculta / banner | A tradução com IA está disponível apenas no ExoPlayer. | AI translation is available only with ExoPlayer. |
+| S7 | Quota esgotada (todas as keys em cooldown) | Enabled (limpa lock; sem retomar IA até haver quota) | Disabled / oculto | Não selected | Limite da IA atingido. Aguarde e tente de novo. | AI rate limit reached. Wait and try again. |
+| S8 | Idioma preferido = none / vazio | Disabled + aviso | Enabled em fonte explícita | Disabled se Smart on | Defina um idioma preferido de legendas para usar a seleção automática. | Set a preferred subtitle language to use automatic selection. |
+| S9 | Forced aplica (áudio ≈ preferido) | **Voltar à seleção clássica** se MANUAL | Enabled | Conforme ladder classic | O modo de legendas forçadas está ativo para este áudio. | Forced subtitles mode is active for this audio. |
+| S10 | Tracks ainda não digitalizadas | Sem aviso “permanente” | — | — | A carregar legendas… | Loading subtitles… |
+
+**Regras:**
+
+1. Um aviso de cada vez (prioridade: S6 → S5 → S7 → S10 → S4 → S8 → S9 → S2 → S3 → S1).
+2. Em `CLASSIC_FALLBACK` automático (sem explicit), **sem** CTA Translate na opção auto-escolhida; o aviso S* explica porque a IA automática não correu.
+3. Traduzir com IA num **addon** continua o escape hatch sempre que Translate estiver enabled (S1–S3, S8, S9).
+4. Não usar “ladder”, “rung”, “CLASSIC_FALLBACK” nem “embedded-only” no texto visível.
+5. Avisos S1–S4 / S8–S9 **só** no Info quando Smart está on **ou** o painel já está em contexto AI/classic-auto/MANUAL (não pintar «Smart off» em toda a lista clássica quando `aiAutoSelect` está desligado por defeito). S5–S7 (e LOADING) mostram sempre.
+
 ---
 
-### B7 — Fechar overlay e reabrir (com AI ainda active)
+### B7 — Feedback de mudança (banner no menu)
+
+Avisar com **uma frase** (tom de sistema) quando uma ação **salta o foco/seleção** no overlay, ou quando o reset explicita seleção clássica. Não inventar toasts para cada click clássico.
+
+#### Canais
+
+| Canal | Uso |
+|-------|-----|
+| Banner transitório no menu (topo do overlay, ~2–3 s, 1 linha) | Ações com salto de foco com menu aberto |
+| Aviso estável no Info (Col3) | B6d / quota / sem embutida (estado que permanece) |
+| Chip «Traduzindo…» no player | Já existe — manter; **não** duplicar no banner |
+| Toast global | Só se a mudança automática relevante acontecer com menu **fechado** (P2 — fora deste corte) |
+
+**Nunca** banner + toast no mesmo evento.
+
+#### Matriz (menu aberto)
+
+| ID | Trigger | Banner (PT) | Banner (EN) | Notas |
+|----|---------|-------------|-------------|-------|
+| F1 | Info → Traduzir com IA (antes/durante o salto para preferido + opção IA) | A traduzir a partir de %1$s. | Translating from %1$s. | %1$s = label curto da fonte (ex. «Inglês · AIOStreams» ou nome/idioma da embutida). Avisa mesmo se já estiver no preferido. |
+| F2 | Voltar à seleção automática (reset Smart) | Seleção automática: %1$s. | Automatic selection: %1$s. | %1$s conforme rung pós-reset: «IA a partir de embutida» / «Embutida preferida» / «Seleção clássica». |
+| F2b | Voltar à seleção clássica (mesmo evento, label CTA B6d) | Seleção clássica. | Classic selection. | Quando reset não pode recolocar Smart AI. |
+
+#### Regras do banner
+
+1. Mostrar só se a ação mudar língua focada e/ou opção selecionada — **exceto** Translate/Reset, que avisam sempre (Translate mesmo já no preferido).
+2. Timeout ~2,5–3 s; dismiss ao mudar foco de rail (após settle pós-CTA) ou fechar overlay.
+3. Não bloquear DPAD; acima das rails, abaixo de diálogos.
+4. Debounce: não re-disparar o mesmo texto se o estado for idêntico.
+5. **Não** avisar (v1): click clássico noutra track/addon; Smart → preferred embedded sem AI; first-play Smart AI-on com menu fechado (P2).
+
+#### Fora deste corte
+
+- P2 toast com menu fechado (first AI-on / S6).
+- P3 upgrade AI→preferred com menu aberto (TODO).
+
+Âncora: `SubtitleSelectionOverlay` post-CTA Translate/Reset (`post_cta_focus`); helpers em `SubtitleMenuChangeFeedback.kt`.
+
+---
+
+### B8 — Fechar overlay e reabrir (com AI ainda active)
 
 **Pré:** Tradução active (ladder ou MANUAL).  
 **Ação:** Fechar overlay → abrir de novo.  
@@ -445,6 +514,7 @@ Use idioma preferido **pt** (ou outro ≠ EN), stream com embedded EN e addons.
 | G6 | Rate-limit total | §3.5 — AI off + **preserve selection** + ocultar Translate; sem saltar para French |
 | G7 | Policy + userLocked | **Mitigado:** com lock, policy não chama `selectAiTranslationSource` se já há fonte selecionada |
 | G8 | PGS sob MANUAL | `onUntranslatableSource` pode abandonar a fonte pedida (C5) |
+| G9 | P3 banner AI→preferred (menu aberto) | Upgrade automático Smart com overlay aberto ainda sem feedback F* (fora do corte B7 v1) |
 
 ---
 

@@ -1645,6 +1645,8 @@ fun PlayerScreen(
             aiSubtitleDiagnostics = uiState.aiSubtitleDiagnostics,
             aiSubtitleLastError = uiState.aiSubtitleLastError,
             userExplicitSubtitleSelection = uiState.userExplicitSubtitleSelection,
+            selectedAudioTrack = uiState.audioTracks.getOrNull(uiState.selectedAudioTrackIndex)
+                ?: uiState.audioTracks.firstOrNull { it.isSelected },
             streamReleaseName = listOfNotNull(uiState.currentStreamName, uiState.contentName, uiState.title)
                 .map { it.trim() }
                 .filter { it.isNotBlank() }
