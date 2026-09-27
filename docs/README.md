@@ -16,7 +16,7 @@
 | Ladder real, pipeline, keys, ADRs, mapa de arquivos | [`architecture-ai-subtitles.md`](./architecture-ai-subtitles.md) | Implementação / ordem da ladder |
 | Overlay, locks UX, matrizes de fluxo do menu | [`prd-ai-subtitles-ui-menu.md`](./prd-ai-subtitles-ui-menu.md) | Comportamento do menu (não settings) |
 
-**Estado (2026-09-25):** shipped **[1.1.1](https://github.com/ceschini86/NuvioTV/releases/tag/1.1.1)** (`versionCode` 1078) — overlay rails full-height, Info notices (Smart off / no embedded / …), transient menu banners after Translate/Reset. **Smart AI = só embutidas**; **Translate with AI** = qualquer fonte. README público com screenshots em `assets/screenshots/`.
+**Estado (2026-09-27):** shipped **[1.1.2](https://github.com/ceschini86/NuvioTV/releases/tag/1.1.2)** (`versionCode` 1079) — AI off / PGS preserve, Sync AI settings with profile, advanced AI tuning, Simkl device auth, Info Right→Translate sem seleção. **Smart AI = só embutidas**; **Translate with AI** = qualquer fonte.
 
 ### Âncoras de código (AI)
 
