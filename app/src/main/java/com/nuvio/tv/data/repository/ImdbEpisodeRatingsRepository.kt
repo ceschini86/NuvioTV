@@ -82,10 +82,21 @@ class ImdbEpisodeRatingsRepository @Inject constructor(
                 season.episodes.orEmpty().forEach { episode ->
                     val seasonNumber = episode.seasonNumber ?: return@forEach
                     val episodeNumber = episode.episodeNumber ?: return@forEach
-                    val communityAverage = episode.communityAverage ?: return@forEach
-                    put(seasonNumber to episodeNumber, communityAverage)
+                    val rating = seriesGraphEpisodeRatingValue(
+                        imdbRating = episode.imdbRating,
+                        communityAverage = episode.communityAverage
+                    ) ?: return@forEach
+                    put(seasonNumber to episodeNumber, rating)
                 }
             }
         }
     }
 }
+
+/**
+ * Prefer IMDb ratings from Series Graph; fall back to community average when IMDb is missing.
+ */
+internal fun seriesGraphEpisodeRatingValue(
+    imdbRating: Double?,
+    communityAverage: Double?
+): Double? = imdbRating?.takeIf { it > 0.0 } ?: communityAverage?.takeIf { it > 0.0 }

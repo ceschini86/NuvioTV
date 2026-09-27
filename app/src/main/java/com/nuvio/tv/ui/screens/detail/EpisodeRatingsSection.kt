@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -41,8 +43,8 @@ import androidx.tv.material3.Text
 import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.Video
+import com.nuvio.tv.ui.components.ImdbRatingSourceLabel
 import com.nuvio.tv.ui.components.SeriesGraphRatingColors
-import com.nuvio.tv.ui.components.SeriesGraphRatingSourceLabel
 
 @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
@@ -142,22 +144,31 @@ fun EpisodeRatingsSection(
                     style = MaterialTheme.typography.titleMedium,
                     color = NuvioTheme.colors.TextPrimary
                 )
-                SeriesGraphRatingSourceLabel(
+                ImdbRatingSourceLabel(
+                    logoModifier = Modifier
+                        .height(18.dp)
+                        .widthIn(max = 72.dp),
                     textStyle = MaterialTheme.typography.labelSmall,
-                    textColor = NuvioTheme.colors.TextSecondary,
-                    logoHeightDp = 18
+                    textColor = NuvioTheme.colors.TextSecondary
                 )
             }
         } else {
-            SeriesGraphRatingSourceLabel(
+            ImdbRatingSourceLabel(
+                logoModifier = Modifier
+                    .padding(
+                        start = NuvioTheme.spacing.xxxl,
+                        end = NuvioTheme.spacing.xxxl,
+                        bottom = 4.dp
+                    )
+                    .height(18.dp)
+                    .widthIn(max = 72.dp),
                 textStyle = MaterialTheme.typography.labelSmall,
                 textColor = NuvioTheme.colors.TextSecondary,
-                modifier = Modifier.padding(
+                textModifier = Modifier.padding(
                     start = NuvioTheme.spacing.xxxl,
                     end = NuvioTheme.spacing.xxxl,
                     bottom = 4.dp
-                ),
-                logoHeightDp = 18
+                )
             )
         }
 
