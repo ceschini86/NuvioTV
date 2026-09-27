@@ -23,7 +23,12 @@ data class SimklPinSession(
     val userCode: String,
     val verificationUri: String,
     val expiresAtEpochMs: Long,
-    val intervalSeconds: Int
+    val intervalSeconds: Int,
+    /**
+     * Present for OAuth 2.0 device-grant apps (`POST /oauth2/device`).
+     * Null means legacy PIN polling (`GET /oauth/pin/{user_code}`).
+     */
+    val deviceCode: String? = null
 )
 
 data class SimklAuthState(
@@ -87,9 +92,35 @@ internal data class SimklPinResponse(
     @SerialName("user_code") val userCode: String? = null,
     @SerialName("verification_uri") val verificationUri: String? = null,
     @SerialName("verification_url") val verificationUrl: String? = null,
+    @SerialName("verification_uri_complete") val verificationUriComplete: String? = null,
     @SerialName("expires_in") val expiresIn: Long? = null,
     val interval: Int? = null,
-    @SerialName("access_token") val accessToken: String? = null
+    @SerialName("access_token") val accessToken: String? = null,
+    val error: String? = null,
+    @SerialName("error_description") val errorDescription: String? = null
+)
+
+@Serializable
+internal data class SimklOAuthTokenResponse(
+    @SerialName("access_token") val accessToken: String? = null,
+    @SerialName("token_type") val tokenType: String? = null,
+    @SerialName("expires_in") val expiresIn: Long? = null,
+    val scope: String? = null,
+    val error: String? = null,
+    @SerialName("error_description") val errorDescription: String? = null
+)
+
+@Serializable
+internal data class SimklOAuthDeviceAuthorizationRequest(
+    val scope: String
+)
+
+@Serializable
+internal data class SimklOAuthDeviceTokenRequest(
+    @SerialName("grant_type") val grantType: String,
+    @SerialName("device_code") val deviceCode: String,
+    @SerialName("client_id") val clientId: String,
+    val scope: String
 )
 
 @Serializable

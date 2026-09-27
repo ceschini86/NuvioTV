@@ -124,6 +124,67 @@ class SimklAuthRepositoryTest {
     }
 
     @Test
+    fun `oauth2 client falls back to device authorization`() = runTest {
+        val harness = Harness(
+            response(400, """{"error":"unauthorized_client","code":400,"message":"use POST /oauth2/device"}"""),
+            response(
+                200,
+                """{"device_code":"dev-secret","user_code":"AB12-CD34","verification_uri":"https://simkl.com/pin","expires_in":900,"interval":5}"""
+            )
+        )
+
+        val session = harness.repository.startPinAuth()
+
+        assertEquals("AB12-CD34", session.userCode)
+        assertEquals("dev-secret", session.deviceCode)
+        assertEquals("https://simkl.com/pin", session.verificationUri)
+        assertEquals(2, harness.engine.requests.size)
+        assertTrue(harness.engine.requests[0].url.contains("/oauth/pin"))
+        assertTrue(harness.engine.requests[1].url.contains("/oauth2/device"))
+        assertEquals("POST", harness.engine.requests[1].method)
+        assertTrue(harness.engine.requests[1].body.contains("media:read media:write"))
+    }
+
+    @Test
+    fun `oauth2 pending poll keeps session`() = runTest {
+        val harness = Harness(
+            response(400, """{"error":"authorization_pending","error_description":"waiting"}""")
+        )
+        harness.storage.savePinSession(oauth2Session())
+
+        assertEquals(SimklPinPollResult.Pending, harness.repository.pollPin())
+        assertEquals("AB12-CD34", harness.storage.state.value.pinSession?.userCode)
+        assertFalse(harness.storage.state.value.isAuthenticated)
+        assertTrue(harness.engine.requests.single().url.contains("/oauth2/token"))
+        assertTrue(harness.engine.requests.single().body.contains("media:read media:write"))
+    }
+
+    @Test
+    fun `oauth2 approved poll stores token`() = runTest {
+        val harness = Harness(
+            response(200, """{"access_token":"oauth2-token","token_type":"bearer","expires_in":157680000}"""),
+            response(200, """{"user":{"name":"viewer"},"account":{"id":7}}""")
+        )
+        harness.storage.savePinSession(oauth2Session())
+
+        assertEquals(SimklPinPollResult.Authorized, harness.repository.pollPin())
+        assertEquals("oauth2-token", harness.storage.accessToken())
+        assertNull(harness.storage.state.value.pinSession)
+        assertEquals("viewer", harness.storage.state.value.username)
+    }
+
+    @Test
+    fun `oauth2 slow_down increases poll interval`() = runTest {
+        val harness = Harness(
+            response(400, """{"error":"slow_down","error_description":"wait"}""")
+        )
+        harness.storage.savePinSession(oauth2Session(interval = 5))
+
+        assertEquals(SimklPinPollResult.Pending, harness.repository.pollPin())
+        assertEquals(10, harness.storage.state.value.pinSession?.intervalSeconds)
+    }
+
+    @Test
     fun `disconnect removes identity pin and access token`() {
         val harness = Harness()
         harness.storage.completePinAuthorization("token", harness.storage.currentScope())
@@ -340,6 +401,17 @@ class SimklAuthRepositoryTest {
         verificationUri = "https://simkl.com/pin",
         expiresAtEpochMs = expiresAt,
         intervalSeconds = 5
+    )
+
+    private fun oauth2Session(
+        expiresAt: Long = 100_000L,
+        interval: Int = 5
+    ) = SimklPinSession(
+        userCode = "AB12-CD34",
+        verificationUri = "https://simkl.com/pin",
+        expiresAtEpochMs = expiresAt,
+        intervalSeconds = interval,
+        deviceCode = "dev-secret"
     )
 
     private fun response(status: Int, body: String = "") = SimklRawHttpResponse(status, body)
