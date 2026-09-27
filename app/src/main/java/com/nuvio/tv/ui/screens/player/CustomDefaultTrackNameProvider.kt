@@ -73,14 +73,16 @@ class CustomDefaultTrackNameProvider(resources: Resources) : DefaultTrackNamePro
                 MimeTypes.VIDEO_VP8 -> "VP8"
                 MimeTypes.VIDEO_VP9 -> "VP9"
                 MimeTypes.VIDEO_DOLBY_VISION -> "Dolby Vision"
-                // Subtitle codecs
-                "application/pgs" -> "PGS"
+                // Subtitle codecs (image + text). Keep MIME constants + string forms —
+                // some Media3 forks only expose one spelling.
+                MimeTypes.APPLICATION_PGS, "application/pgs" -> "PGS"
+                MimeTypes.APPLICATION_VOBSUB, "application/vobsub" -> "VOBSUB"
+                MimeTypes.APPLICATION_DVBSUBS, "application/dvbsubs" -> "DVB"
                 MimeTypes.APPLICATION_SUBRIP -> "SRT"
                 MimeTypes.TEXT_SSA -> "SSA"
                 MimeTypes.TEXT_VTT -> "VTT"
                 MimeTypes.APPLICATION_TTML -> "TTML"
                 MimeTypes.APPLICATION_TX3G -> "TX3G"
-                MimeTypes.APPLICATION_DVBSUBS -> "DVB"
                 else -> null
             }
         }

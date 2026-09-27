@@ -1387,14 +1387,9 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
                     )
                 }
             } else {
-                setAiSubtitleTranslationEnabled(false, allowPreferredUpgrade = false)
-                logAiSubtitleAction(
-                    action = "Select AI option",
-                    source = _uiState.value.aiSubtitleDiagnostics?.sourceLabel,
-                    reason = "toggle_off",
-                    locked = false,
-                    rung = _uiState.value.aiSubtitleDiagnostics?.rung
-                )
+                // G3: preferred-language embedded if available; else keep source AI off.
+                // S6 rate-limit uses maybeHandleAiRateLimitExhaustion (preserve only).
+                disableAiSubtitleTranslationFromUserToggle()
             }
         }
         is PlayerEvent.OnTranslateSubtitleWithAi -> {

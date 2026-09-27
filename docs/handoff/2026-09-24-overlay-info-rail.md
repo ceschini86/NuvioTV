@@ -77,7 +77,7 @@ Col1 (Idiomas + None/Off) → Col2 (embedded | addon | AI sintética) → Col3 (
 | N3 | Trocar de idioma na Col1 só navega (**não** altera seleção/playback). **OK/click** num idioma ≠ Off move o foco real para Col2 (como Right). Off continua a desligar legendas sem abrir Col2 |
 | N4 | Foco na Col2 com opção **não selecionada** → Col3 mostra Info da focada; se houver CTA Translate habilitado, Right foca o CTA (**superseded 2026-09-24**: CTA já não exige seleção) |
 | N5 | Foco na Col2 com opção **selecionada** e **pelo menos um CTA habilitado** → Right foca o **primeiro CTA habilitado** |
-| N6 | Opção **sem CTA habilitado** (ex.: AI automática, bitmap, C6) → Right **não faz nada** |
+| N6 | Opção **sem CTA habilitado** (ex.: AI automática, bitmap, C6) → Right **não faz nada**. Com CTA enabled (C5 Translate na focada, mesmo sem seleção), Right foca o CTA — **não** o card Info (sem PANEL) |
 | N7 | Com foco no CTA, a Col2 continua destacando a opção selecionada |
 | N8 | **Back** em Col1 ou Col2 **fecha** o overlay (não sobe Col2→Col1). Em Col3, Back/Left volta à Col2. Left em Col2 continua a ir à Col1. A seleção não muda |
 | L1 | Quando a Col3 não é renderizada (N1), o **espaço dela fica reservado**: a Col2 não muda de largura nem de posição |

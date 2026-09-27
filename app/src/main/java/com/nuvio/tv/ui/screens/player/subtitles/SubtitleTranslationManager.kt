@@ -24,17 +24,20 @@ class SubtitleTranslationManager(
     companion object {
         const val MOCK_MODE = false
         private const val TAG = "SubtitleTranslation"
-        private const val MAX_BATCH_SIZE = 40
-        /** Groq/Claude: short window — their RPM budgets tolerate near-per-cue POSTs. */
-        private const val DEFAULT_BATCH_WINDOW_MS = 150L
-        /**
-         * Gemini free tier is ~15 RPM. A ~2s gather window packs more cues per POST so live +
-         * prefetch share the minute budget instead of firing ~1 request per cue.
-         */
-        private const val GEMINI_BATCH_WINDOW_MS = 2_000L
         const val SOURCE_LIVE = "live"
         const val SOURCE_PREFETCH = "prefetch"
     }
+
+    @Volatile
+    private var maxBatchSize: Int = SubtitleAiAdvancedSettings.DEFAULT_MAX_BATCH_SIZE
+
+    @Volatile
+    private var defaultBatchWindowMs: Long =
+        SubtitleAiAdvancedSettings.DEFAULT_BATCH_WINDOW_MS.toLong()
+
+    @Volatile
+    private var geminiBatchWindowMs: Long =
+        SubtitleAiAdvancedSettings.DEFAULT_GEMINI_BATCH_WINDOW_MS.toLong()
 
     var isEnabled: Boolean = false
     var removeHearingImpaired: Boolean = true
@@ -78,12 +81,13 @@ class SubtitleTranslationManager(
     }
 
     fun updateService(apiKey: String, model: SubtitleAiModel) {
+        val priorInterval = service.geminiMinIntervalMs
         service = SubtitleTranslationService(
             apiKeyProvider = { apiKey },
             modelProvider = { model }
-        )
-        // Keep router.service in sync via new router instance credentials only —
-        // translate path prefers [updateCredentials].
+        ).also { it.geminiMinIntervalMs = priorInterval }
+        // Router keeps its original service reference; translate path uses
+        // [updateCredentials] + translateWith(key) and does not need this instance.
     }
 
     fun updateCredentials(credentials: SubtitleAiCredentials) {
@@ -92,6 +96,16 @@ class SubtitleTranslationManager(
 
     fun updatePreferredModel(model: SubtitleAiModel) {
         router.preferredModel = model
+    }
+
+    fun updateAdvancedSettings(settings: SubtitleAiAdvancedSettings) {
+        val clamped = SubtitleAiAdvancedSettings.clamp(settings)
+        maxBatchSize = clamped.maxBatchSize
+        defaultBatchWindowMs = clamped.batchWindowMs.toLong()
+        geminiBatchWindowMs = clamped.geminiBatchWindowMs.toLong()
+        router.defaultCooldownMs = clamped.rateLimitCooldownMs.toLong()
+        service.geminiMinIntervalMs = clamped.geminiMinIntervalMs.toLong()
+        router.setGeminiMinIntervalMs(clamped.geminiMinIntervalMs.toLong())
     }
 
     fun quotaSnapshots(): List<SubtitleAiQuotaSnapshot> = router.quotaSnapshots()
@@ -112,8 +126,8 @@ class SubtitleTranslationManager(
         val active = router.preferredModel
             ?: router.credentials.enabledProviders().firstOrNull()?.model
         return when (active) {
-            SubtitleAiModel.GEMINI_FLASH_25 -> GEMINI_BATCH_WINDOW_MS
-            else -> DEFAULT_BATCH_WINDOW_MS
+            SubtitleAiModel.GEMINI_FLASH_25 -> geminiBatchWindowMs
+            else -> defaultBatchWindowMs
         }
     }
 
@@ -133,7 +147,7 @@ class SubtitleTranslationManager(
             // Collect any additional items that arrive within the provider window.
             // This handles burst cache misses (e.g., right after a seek) efficiently.
             val deadline = System.currentTimeMillis() + windowMs
-            while (batch.size < MAX_BATCH_SIZE) {
+            while (batch.size < maxBatchSize) {
                 val remaining = deadline - System.currentTimeMillis()
                 if (remaining <= 0L) break
                 val next = withTimeoutOrNull(remaining) { queue.receive() } ?: break

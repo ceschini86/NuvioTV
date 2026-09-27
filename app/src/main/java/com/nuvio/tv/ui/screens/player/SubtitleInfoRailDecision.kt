@@ -145,6 +145,28 @@ internal data class SubtitleInfoRailDecision(
     val cta: SubtitleInfoCtaDecision
 )
 
+/**
+ * Where DPAD Right from Col2 should land in Col3.
+ * Only an **enabled** CTA — selection is not required (C5 Translate on focus).
+ * Without a focusable CTA, Right does nothing (no PANEL fallback).
+ */
+internal enum class SubtitleInfoEntryFocus {
+    TRANSLATE_CTA,
+    RESET_CTA
+}
+
+internal fun decideSubtitleInfoEntryFocus(
+    cta: SubtitleInfoCtaDecision
+): SubtitleInfoEntryFocus? {
+    if (!cta.canMoveFocusToCta) return null
+    return when (cta.action) {
+        SubtitleInfoCtaAction.RESET_TO_SMART_AUTO,
+        SubtitleInfoCtaAction.RESET_TO_CLASSIC_AUTO -> SubtitleInfoEntryFocus.RESET_CTA
+        SubtitleInfoCtaAction.TRANSLATE_WITH_AI -> SubtitleInfoEntryFocus.TRANSLATE_CTA
+        SubtitleInfoCtaAction.NONE -> null
+    }
+}
+
 internal data class SubtitleInfoSmartContext(
     val smartAiEnabled: Boolean = true,
     val preferredLanguageNone: Boolean = false,
@@ -201,9 +223,41 @@ internal fun classifyEmbeddedAiAvailability(tracks: List<TrackInfo>): EmbeddedAi
     }
 }
 
-internal fun TrackInfo.isBitmapSubtitleCodec(): Boolean {
-    val c = codec?.uppercase(Locale.ROOT) ?: return false
-    return c == "PGS" || c == "DVB" || c.contains("VOB") || c.contains("PGS") || c.contains("HDMV")
+internal fun TrackInfo.isBitmapSubtitleCodec(): Boolean =
+    isBitmapSubtitleFormat(codec) || trackNameLooksLikeBitmapSubtitle(name)
+
+/**
+ * True for image-based subtitle codecs/MIME (PGS / VOBSUB / DVB / HDMV), including raw
+ * container codec ids (`S_HDMV/PGS`) and Media3 MIME strings when the short label is missing.
+ */
+internal fun isBitmapSubtitleFormat(codecOrMime: String?): Boolean {
+    val raw = codecOrMime?.trim().orEmpty()
+    if (raw.isEmpty()) return false
+    val upper = raw.uppercase(Locale.ROOT)
+    if (upper == "PGS" || upper == "DVB" || upper == "VOBSUB" || upper == "SUP") return true
+    if (upper.contains("PGS") || upper.contains("HDMV")) return true
+    if (upper.contains("VOBSUB") || upper.contains("VOB SUB") || upper.contains("S_VOBSUB")) return true
+    if (upper.contains("DVBSUB") || upper.contains("DVB-SUB") || upper.contains("DVB_SUB")) return true
+    if (upper.contains("S_DVBSUB") || upper == "DVB") return true
+    // Media3 / Matroska MIME forms
+    if (upper.contains("APPLICATION/PGS") || upper.contains("APPLICATION/VOBSUB")) return true
+    if (upper.contains("APPLICATION/DVBSUBS")) return true
+    return false
+}
+
+/**
+ * Last-resort hint when containers omit MIME/codec (common cause of “text” mislabel + AI blink).
+ */
+internal fun trackNameLooksLikeBitmapSubtitle(name: String?): Boolean {
+    if (name.isNullOrBlank()) return false
+    val n = name.uppercase(Locale.ROOT)
+    if (n.contains("PGS") || n.contains("HDMV")) return true
+    if (n.contains("VOBSUB") || n.contains("VOB SUB") || n.contains("VOB-SUB")) return true
+    if (n.contains("DVBSUB") || n.contains("DVB-SUB") || n.contains("DVB SUB")) return true
+    // Standalone "SUP" token (Blu-ray presentation graphics), avoid matching "super"/"support".
+    if (Regex("""(^|[^A-Z0-9])SUP([^A-Z0-9]|$)""").containsMatchIn(n)) return true
+    if (n.contains("BITMAP") || n.contains("IMAGE SUB")) return true
+    return false
 }
 
 internal fun TrackInfo.isEffectivelyForcedOrSongsAndSigns(): Boolean {
@@ -569,28 +623,24 @@ private fun decideResetCta(
 internal fun subtitleFormatLabelFromCodec(codec: String?): Pair<String, Boolean> {
     val c = codec?.trim().orEmpty()
     if (c.isEmpty()) return "text" to false
-    val upper = c.uppercase()
-    val isBitmap = upper == "PGS" ||
-        upper == "DVB" ||
-        upper.contains("VOB") ||
-        upper.contains("PGS") ||
-        upper.contains("HDMV")
-    return if (isBitmap) {
+    val upper = c.uppercase(Locale.ROOT)
+    if (isBitmapSubtitleFormat(upper)) {
         val label = when {
-            upper.contains("PGS") -> "PGS"
+            upper.contains("PGS") || upper.contains("HDMV") || upper == "SUP" -> "PGS"
             upper.contains("DVB") -> "DVB"
             upper.contains("VOB") -> "VOBSUB"
-            else -> upper
+            else -> upper.substringAfterLast('/').substringAfterLast('.').ifBlank { upper }
         }
-        label to true
-    } else {
-        when {
-            upper.contains("ASS") || upper.contains("SSA") -> "ASS"
-            upper.contains("VTT") || upper.contains("WEBVTT") -> "VTT"
-            upper.contains("SRT") || upper.contains("SUBRIP") -> "SRT"
-            else -> c
-        } to false
+        return label to true
     }
+    return when {
+        upper.contains("ASS") || upper.contains("SSA") || upper.contains("TEXT/X-SSA") -> "ASS"
+        upper.contains("VTT") || upper.contains("WEBVTT") -> "VTT"
+        upper.contains("SRT") || upper.contains("SUBRIP") -> "SRT"
+        upper.contains("TTML") || upper.contains("DFXP") -> "TTML"
+        upper.contains("TX3G") -> "TX3G"
+        else -> c
+    } to false
 }
 
 internal fun subtitleFormatLabelFromUrl(url: String): String {

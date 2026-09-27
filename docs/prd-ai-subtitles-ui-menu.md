@@ -11,7 +11,7 @@
 | Escopo | **B+C** — overlay de legendas no player + estados/bloqueios. Settings (A) fora. |
 | Fonte de verdade | Working tree / `fix/ai-ladder-and-rate-limit` (`SubtitleSelectionOverlay`, `PlayerRuntimeControllerAiSubtitles`, events/UI state); base ship `release/1.0.2` |
 | Relacionados | [`prd-ai-subtitles.md`](./prd-ai-subtitles.md), [`architecture-ai-subtitles.md`](./architecture-ai-subtitles.md) |
-| Última revisão | 2026-09-25 (B6d avisos Info + B7 banner F1/F2/F2b de mudança no menu) |
+| Última revisão | 2026-09-27 (B7 banners F1/F2/F2b revertidas; G9 Won’t/deferred; Info notices B6d mantidos) |
 
 Este documento descreve **o que o usuário vê e o que acontece em cada ramificação**, de forma reproduzível. Onde o código diverge do que o usuário “espera”, isso está marcado como **comportamento atual**.
 
@@ -128,7 +128,7 @@ Ações que marcam **`explicit=true`** e **desligam AI** (`setAi(false)` → lim
 | Situação seguinte | Comportamento |
 |-------------------|---------------|
 | Smart on, addons chegam / tracks refresh | Policy **não** reaplica ladder (explicit) |
-| Usuário long-press → **Translate with AI** | Traduz **aquela** fonte; `userLocked=true`; AI on; diagnostics **MANUAL**. **Não** limpa `explicit` no código atual → futuros `applySubtitleAutoSelectPolicy` ainda saem cedo no check explicit (a tradução já ligada permanece; ladder não “recupera” se a fonte cair) |
+| Usuário long-press → **Translate with AI** | Traduz **aquela** fonte; `userLocked=true`; AI on; diagnostics **MANUAL**. **Não** limpa `explicit` (**G4 ACCEPTED_AS_IS**): policy continua a sair cedo no check explicit → fonte MANUAL estável em refreshes. Escape = **Reset Smart** (limpa `userLocked` + `explicit`); Stop AI só limpa o lock |
 | Usuário escolhe opção **`AI`** no preferido | Toggle AI on + `userLocked=true` (se estava off). Não chama `remember*` → **não** seta explicit por esse path |
 | Usuário escolhe outra track clássica | AI off, explicit true de novo |
 
@@ -223,7 +223,7 @@ Cada fluxo: **Pré** → **Ações** → **Resultado** → **Ramificações**.
 | Estado antes | Resultado |
 |--------------|-----------|
 | AI **off** | Liga tradução (`userLocked=true`); escolhe/ refresca fonte via `selectAiTranslationSourceIfAvailable` / manager; meta → Translating… → “AI translation…”. Diagnostics conforme fonte. |
-| AI **on** | **Toggle off** (Stop): tradução para; lock limpo; **a fonte por baixo permanece** (ex.: ainda é o addon EN). No menu, se a sessão ainda aponta para `AI`, o highlight pode ficar inconsistente até mudar de opção/idioma ou reabrir — **comportamento atual**. |
+| AI **on** | **Toggle off** (Stop): tradução para; lock limpo. **G3:** se existir embedded no idioma preferido, seleciona-o (`PREFERRED_EMBEDDED`); senão a fonte por baixo permanece (ex. addon EN) com AI off. No menu, o highlight pode ficar na opção `AI` até mudar de opção/idioma ou reabrir — **comportamento atual**. |
 
 **Nota:** Isto **não** é o mesmo que “rodar a ladder do zero” se `userLocked` já estava on; toggle on com lock evita upgrade para preferred embedded.
 
@@ -256,12 +256,12 @@ Cada fluxo: **Pré** → **Ações** → **Resultado** → **Ramificações**.
 |----------|--------|
 | AI feature off / sem key | Click Translate ignorado / botão disabled |
 | MPV | Evento no-op |
-| Fonte PGS / sem texto | Depois: `onUntranslatableSource` → tenta outra fonte ou desliga AI (+ ladder se smart e permitido **e** sem lock — ver C5) |
+| Fonte PGS / sem texto | Depois: `onUntranslatableSource` — **com MANUAL lock (G8):** mantém a fonte pedida + `aiSubtitleLastError=UNTRANSLATABLE_SOURCE` (não troca); **sem lock (Smart):** tenta outra embedded ou desliga AI (+ ladder se permitido) — ver C5 |
 | Rate limit (parcial) | M5: próxima key/provider; Info/`lastError` rate limit; cues originais até sucesso |
 | Rate limit **total** (`allUsableKeysInCooldown`) | **Não** aplica S6 (lock MANUAL): permanece na fonte escolhida + erro + retry/cooldown. Diferente do path Smart AI-on (§3.5) |
 | Keys **já** todas em cooldown no click | Translate **ainda liga** AI+MANUAL (keys “existem”); batches falham 429; mesmo comportamento “sem S6” |
 | `explicit` já true (escolheu track antes) | **Permanece** true (G4); policy inteira blocked no check explicit → fonte MANUAL estável em refreshes |
-| `explicit` false (ex.: só auto-classic / Smart, depois long-press Translate sem click clássico) | Policy com `userLocked` chama `selectAiTranslationSourceIfAvailable` em refreshes → **pode trocar** a fonte MANUAL por embedded preferido como pivot (**comportamento atual** / risco; ver §4.1) |
+| `explicit` false (ex.: só auto-classic / Smart, depois long-press Translate sem click clássico) | `userLocked` mantém a fonte; policy **só** re-escolhe se seleção ficou vazia (**G7** mitigado — não troca pivot mid-playback) |
 
 #### B4b — Disable subtitles (pelo translate menu)
 
@@ -372,43 +372,18 @@ Mostrar **uma frase** no Info (tom de sistema, sem jargão de rung). EN = string
 
 ---
 
-### B7 — Feedback de mudança (banner no menu)
+### B7 — Feedback de mudança (banner no menu) — **revertido**
 
-Avisar com **uma frase** (tom de sistema) quando uma ação **salta o foco/seleção** no overlay, ou quando o reset explicita seleção clássica. Não inventar toasts para cada click clássico.
-
-#### Canais
+Implementação das banners transitórias F1/F2/F2b no overlay foi **removida** (2026-09-25). Mantém-se:
 
 | Canal | Uso |
 |-------|-----|
-| Banner transitório no menu (topo do overlay, ~2–3 s, 1 linha) | Ações com salto de foco com menu aberto |
-| Aviso estável no Info (Col3) | B6d / quota / sem embutida (estado que permanece) |
-| Chip «Traduzindo…» no player | Já existe — manter; **não** duplicar no banner |
-| Toast global | Só se a mudança automática relevante acontecer com menu **fechado** (P2 — fora deste corte) |
+| Aviso estável no Info (Col3) | B6d / quota / sem embutida |
+| Chip «Traduzindo…» no player | Já existe |
 
-**Nunca** banner + toast no mesmo evento.
+Toast com menu fechado (P2) continua fora deste corte. Spec histórica F1/F2/F2b arquivada nesta nota; não reintroduzir sem pedido explícito.
 
-#### Matriz (menu aberto)
-
-| ID | Trigger | Banner (PT) | Banner (EN) | Notas |
-|----|---------|-------------|-------------|-------|
-| F1 | Info → Traduzir com IA (antes/durante o salto para preferido + opção IA) | A traduzir a partir de %1$s. | Translating from %1$s. | %1$s = label curto da fonte (ex. «Inglês · AIOStreams» ou nome/idioma da embutida). Avisa mesmo se já estiver no preferido. |
-| F2 | Voltar à seleção automática (reset Smart) | Seleção automática: %1$s. | Automatic selection: %1$s. | %1$s conforme rung pós-reset: «IA a partir de embutida» / «Embutida preferida» / «Seleção clássica». |
-| F2b | Voltar à seleção clássica (mesmo evento, label CTA B6d) | Seleção clássica. | Classic selection. | Quando reset não pode recolocar Smart AI. |
-
-#### Regras do banner
-
-1. Mostrar só se a ação mudar língua focada e/ou opção selecionada — **exceto** Translate/Reset, que avisam sempre (Translate mesmo já no preferido).
-2. Timeout ~2,5–3 s; dismiss ao mudar foco de rail (após settle pós-CTA) ou fechar overlay.
-3. Não bloquear DPAD; acima das rails, abaixo de diálogos.
-4. Debounce: não re-disparar o mesmo texto se o estado for idêntico.
-5. **Não** avisar (v1): click clássico noutra track/addon; Smart → preferred embedded sem AI; first-play Smart AI-on com menu fechado (P2).
-
-#### Fora deste corte
-
-- P2 toast com menu fechado (first AI-on / S6).
-- P3 upgrade AI→preferred com menu aberto (TODO).
-
-Âncora: `SubtitleSelectionOverlay` post-CTA Translate/Reset (`post_cta_focus`); helpers em `SubtitleMenuChangeFeedback.kt`.
+**P3 / G9** (upgrade automático Smart com overlay aberto): **Won’t / deferred** — sem banner F* e sem realinhamento Col mid-browse (risco de roubar foco; sessão do overlay continua snapshot em `remember(visible)`). Reabrir overlay alinha via §2 / B8.
 
 ---
 
@@ -449,9 +424,9 @@ Avisar com **uma frase** (tom de sistema) quando uma ação **salta o foco/sele�
 
 ### C5 — Fonte sem texto (PGS etc.) após AI on
 
-- Sem lock: tenta outra **embedded** traduzível; se falhar, desliga AI e, se smart permitido, re-roda ladder (→ classic). **Não** pivota para addon por score.
-- Com MANUAL lock: `onUntranslatableSource` pode `selectAiTranslationSourceIfAvailable(excludeCurrent)` — mantém addon atual se locked; senão só outra embedded (sem hunt scored addon).
-- Menu/diagnostics atualizam conforme nova escolha.
+- Sem lock (Smart): tenta outra **embedded** traduzível; se falhar, desliga AI e, se smart permitido, re-roda ladder (→ classic). **Não** pivota para addon por score.
+- Com MANUAL lock (**G8**): **não** chama `selectAiTranslationSourceIfAvailable`; preserva a fonte pedida, mantém AI/lock, publica `aiSubtitleLastError=UNTRANSLATABLE_SOURCE` e atualiza diagnostics (`source untranslatable…; selection preserved`).
+- Menu/diagnostics atualizam conforme erro ou nova escolha (Smart).
 
 ### C6 — Forced subtitles mode (settings clássico)
 
@@ -476,8 +451,8 @@ Avisar com **uma frase** (tom de sistema) quando uma ação **salta o foco/sele�
 | Playback real | AI active? | Overlay **reaberto** | Overlay **mesma sessão** após Translate |
 |---------------|------------|----------------------|----------------------------------------|
 | Embedded preferido | Não | Preferido + embedded | — |
-| Embedded EN + tradução (smart) | Sim | Preferido + **`AI`** | Continua no rail EN / opção EN até o usuário mover ou reabrir |
-| Addon/track via Translate MANUAL | Sim | Preferido + **`AI`** | Sticky na opção long-pressada |
+| Embedded EN + tradução (smart) | Sim | Preferido + **`AI`** | Preferido + **`AI`** (G1: `jumpFocusToPreferredAi`) |
+| Addon/track via Translate MANUAL | Sim | Preferido + **`AI`** | Preferido + **`AI`** (G1: mesma sessão) |
 | Addon preferido sem AI | Não | Preferido + esse addon | — |
 | Off | Não | Off | — |
 
@@ -506,15 +481,15 @@ Use idioma preferido **pt** (ou outro ≠ EN), stream com embedded EN e addons.
 
 | ID | Tema | Nota |
 |----|------|------|
-| G1 | Sticky session vs redirect | Translate não realinha o highlight até reabrir — pode confundir; candidato a fix (forçar preferido + `AI` na mesma sessão) |
-| G2 | Sem “Reset to smart” | Depois de explicit, usuário não tem botão claro para devolver o controle à ladder |
-| G3 | Toggle `AI` off deixa fonte estrangeira | Esperado tecnicamente; UX pode querer “voltar ao preferred embedded” |
-| G4 | `explicit` não limpo no Translate MANUAL | Policy futura fica bloqueada no check explicit mesmo com lock AI |
+| G1 | Sticky session vs redirect | **Mitigado:** Info → Translate realinha na mesma sessão para preferido + opção sintética `AI` (`jumpFocusToPreferredAi` / `pendingPostActionFocus=translate_with_ai`); ver §2 e §6 |
+| G2 | Sem “Reset to smart” | **Closed:** Info CTAs «Voltar à seleção automática» / «Voltar à seleção clássica» (B6b/B6d); `OnResetToSmartAuto` → `resetToSmartAutoSubtitleSelection` limpa lock+explicit e re-corre a ladder |
+| G3 | Toggle `AI` off → preferred embedded | **Mitigado:** Stop/toggle UI (`disableAiSubtitleTranslationFromUserToggle`) seleciona embedded no idioma preferido se existir; senão mantém a fonte atual com AI off. **S6** rate-limit continua a **preserve selection** (não usa este path). |
+| G4 | `explicit` não limpo no Translate MANUAL | **ACCEPTED_AS_IS (2026-09-27):** `translateSubtitleWithAi` **intencionalmente** não altera `explicit`. Com `explicit=true` prévio, policy sai no check explicit (fonte MANUAL estável); `userLocked` cobre o path AI. Escape: **Reset Smart** limpa lock + `explicit`; Stop AI só limpa o lock |
 | G5 | Forced + Translate manual | Forced não bloqueia Translate; ladder só short-circuit se forced aplica (áudio≈preferido) |
 | G6 | Rate-limit total | §3.5 — AI off + **preserve selection** + ocultar Translate; sem saltar para French |
 | G7 | Policy + userLocked | **Mitigado:** com lock, policy não chama `selectAiTranslationSource` se já há fonte selecionada |
-| G8 | PGS sob MANUAL | `onUntranslatableSource` pode abandonar a fonte pedida (C5) |
-| G9 | P3 banner AI→preferred (menu aberto) | Upgrade automático Smart com overlay aberto ainda sem feedback F* (fora do corte B7 v1) |
+| G8 | PGS sob MANUAL | **Mitigado:** `onUntranslatableSource` com lock preserva seleção + `UNTRANSLATABLE_SOURCE`; Smart unlocked ainda faz fallback (C5) |
+| G9 | P3 banner AI→preferred (menu aberto) | **Won’t / deferred:** B7 F* revertidas — não reintroduzir banners; upgrade Smart com menu aberto fica sem feedback F*. Reabrir overlay alinha (§2/B8). Realign Col mid-session sob Smart auto = risco de foco; fora desta onda. |
 
 ---
 

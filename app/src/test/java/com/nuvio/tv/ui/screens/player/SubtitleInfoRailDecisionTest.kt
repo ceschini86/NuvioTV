@@ -494,6 +494,59 @@ class SubtitleInfoRailDecisionTest {
     }
 
     @Test
+    fun c5_focusedNotSelected_embeddedOrAddon_allowsCol2RightToTranslateCta() {
+        // Col2 browse without confirming selection: Right must still enter Col3 on the CTA.
+        val embedded = decideSubtitleInfoRail(
+            displayOption = embeddedOption(),
+            isPlaybackSelected = false,
+            diagnostics = diagnostics(
+                rung = AiSubtitleLadderRung.AI_EMBEDDED,
+                reason = "embedded original-language source"
+            ),
+            statusLine = "AI translation to preferred language",
+            aiAvailable = true,
+            aiQuotaExhausted = false,
+            isUsingMpv = false,
+            translationActive = true
+        )
+        val addon = decideSubtitleInfoRail(
+            displayOption = addonOption(),
+            isPlaybackSelected = false,
+            diagnostics = diagnostics(
+                rung = AiSubtitleLadderRung.MANUAL,
+                reason = "user chose translate with AI",
+                userLocked = true
+            ),
+            statusLine = "AI translation to preferred language",
+            aiAvailable = true,
+            aiQuotaExhausted = false,
+            isUsingMpv = false,
+            translationActive = true
+        )
+        val aiFocusedNotSelected = decideSubtitleInfoRail(
+            displayOption = aiOption(),
+            isPlaybackSelected = false,
+            diagnostics = null,
+            statusLine = null,
+            aiAvailable = true,
+            aiQuotaExhausted = false,
+            isUsingMpv = false
+        )
+
+        assertEquals(SubtitleInfoCtaAction.TRANSLATE_WITH_AI, embedded.cta.action)
+        assertTrue(embedded.cta.canMoveFocusToCta)
+        assertEquals(SubtitleInfoEntryFocus.TRANSLATE_CTA, decideSubtitleInfoEntryFocus(embedded.cta))
+
+        assertEquals(SubtitleInfoCtaAction.TRANSLATE_WITH_AI, addon.cta.action)
+        assertTrue(addon.cta.canMoveFocusToCta)
+        assertEquals(SubtitleInfoEntryFocus.TRANSLATE_CTA, decideSubtitleInfoEntryFocus(addon.cta))
+
+        // AI option without selection: no CTA → Right must not enter Col3.
+        assertEquals(SubtitleInfoCtaAction.NONE, aiFocusedNotSelected.cta.action)
+        assertNull(decideSubtitleInfoEntryFocus(aiFocusedNotSelected.cta))
+    }
+
+    @Test
     fun c6_aiUnavailable_showsDisabledNonFocusableTranslateAndReason() {
         val noKey = decideSubtitleInfoRail(
             displayOption = embeddedOption(),
@@ -756,5 +809,83 @@ class SubtitleInfoRailDecisionTest {
             smart = smartOff
         )
         assertEquals(SubtitleInfoUnavailableReason.SMART_OFF, aiContext.content.unavailableReason)
+    }
+
+    @Test
+    fun entryFocus_prefersEnabledTranslateCta() {
+        val cta = SubtitleInfoCtaDecision(
+            action = SubtitleInfoCtaAction.TRANSLATE_WITH_AI,
+            enabled = true,
+            focusable = true
+        )
+        assertEquals(
+            SubtitleInfoEntryFocus.TRANSLATE_CTA,
+            decideSubtitleInfoEntryFocus(cta)
+        )
+    }
+
+    @Test
+    fun entryFocus_prefersEnabledResetCta() {
+        val cta = SubtitleInfoCtaDecision(
+            action = SubtitleInfoCtaAction.RESET_TO_SMART_AUTO,
+            enabled = true,
+            focusable = true
+        )
+        assertEquals(
+            SubtitleInfoEntryFocus.RESET_CTA,
+            decideSubtitleInfoEntryFocus(cta)
+        )
+    }
+
+    @Test
+    fun entryFocus_nullWhenNoCtaEvenWithContent() {
+        assertNull(decideSubtitleInfoEntryFocus(SubtitleInfoCtaDecision.None))
+    }
+
+    @Test
+    fun entryFocus_nullWhenTranslateDisabled() {
+        val cta = SubtitleInfoCtaDecision(
+            action = SubtitleInfoCtaAction.TRANSLATE_WITH_AI,
+            enabled = false,
+            focusable = false
+        )
+        assertNull(decideSubtitleInfoEntryFocus(cta))
+    }
+
+    @Test
+    fun bitmapFormat_detectsMimeAndContainerIds() {
+        assertTrue(isBitmapSubtitleFormat("PGS"))
+        assertTrue(isBitmapSubtitleFormat("application/pgs"))
+        assertTrue(isBitmapSubtitleFormat("application/vobsub"))
+        assertTrue(isBitmapSubtitleFormat("S_HDMV/PGS"))
+        assertTrue(isBitmapSubtitleFormat("S_VOBSUB"))
+        assertTrue(isBitmapSubtitleFormat("application/dvbsubs"))
+        assertFalse(isBitmapSubtitleFormat("SRT"))
+        assertFalse(isBitmapSubtitleFormat("application/x-subrip"))
+        assertEquals("VOBSUB" to true, subtitleFormatLabelFromCodec("application/vobsub"))
+        assertEquals("PGS" to true, subtitleFormatLabelFromCodec("S_HDMV/PGS"))
+    }
+
+    @Test
+    fun bitmapFormat_nameHintWithoutCodec() {
+        assertTrue(trackNameLooksLikeBitmapSubtitle("English PGS"))
+        assertTrue(trackNameLooksLikeBitmapSubtitle("eng_vobsub"))
+        assertTrue(trackNameLooksLikeBitmapSubtitle("Forced SUP"))
+        assertFalse(trackNameLooksLikeBitmapSubtitle("English"))
+        assertFalse(trackNameLooksLikeBitmapSubtitle("Support commentary"))
+        assertTrue(
+            TrackInfo(index = 0, name = "English PGS", language = "en", codec = null)
+                .isBitmapSubtitleCodec()
+        )
+    }
+
+    @Test
+    fun classifyEmbedded_nameOnlyBitmap_isBitmapOnly() {
+        assertEquals(
+            EmbeddedAiAvailability.BITMAP_ONLY,
+            classifyEmbeddedAiAvailability(
+                listOf(TrackInfo(index = 0, name = "eng PGS", language = "en", codec = null))
+            )
+        )
     }
 }

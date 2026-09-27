@@ -67,13 +67,16 @@ private const val GEMINI_MAX_TRANSIENT_RETRIES = 2        // 3 attempts total
 private const val GEMINI_RETRY_BASE_DELAY_MS = 400L       // 400ms, then 800ms (×2 each retry)
 // Free tier for flash-lite is ~15 RPM. Pace requests so preTranslate + live batches do not
 // instantly exhaust the minute budget and leave translation stuck on RATE_LIMITED.
-private const val GEMINI_MIN_INTERVAL_MS = 4_200L
 private val GEMINI_RETRYABLE_HTTP = setOf(500, 502, 503)
 
 class SubtitleTranslationService(
     private val apiKeyProvider: () -> String = { "" },
     private val modelProvider: () -> SubtitleAiModel = { SubtitleAiModel.GROQ_LLAMA_70B }
 ) {
+    /** Min gap between Gemini HTTP calls; overridable from advanced settings. */
+    @Volatile
+    var geminiMinIntervalMs: Long =
+        SubtitleAiAdvancedSettings.DEFAULT_GEMINI_MIN_INTERVAL_MS.toLong()
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -86,7 +89,7 @@ class SubtitleTranslationService(
     private suspend fun throttleGeminiRequests(): Long {
         return geminiRequestLock.withLock {
             val now = System.currentTimeMillis()
-            val waitMs = (GEMINI_MIN_INTERVAL_MS - (now - lastGeminiRequestAtMs.get())).coerceAtLeast(0L)
+            val waitMs = (geminiMinIntervalMs - (now - lastGeminiRequestAtMs.get())).coerceAtLeast(0L)
             if (waitMs > 0L) delay(waitMs)
             lastGeminiRequestAtMs.set(System.currentTimeMillis())
             waitMs

@@ -22,7 +22,6 @@ class SubtitleAiRouter(
 ) {
     companion object {
         private const val TAG = "SubtitleAiRouter"
-        private const val DEFAULT_COOLDOWN_MS = 60_000L
         private const val GEMINI_PROJECT_HINT =
             "projectHint=gemini_quota_is_per_ai_studio_project_not_per_key"
     }
@@ -33,6 +32,15 @@ class SubtitleAiRouter(
     /** Tried first among enabled providers when set. */
     @Volatile
     var preferredModel: SubtitleAiModel? = null
+
+    /** 429 cooldown when provider omits Retry-After. Default matches historical 60s. */
+    @Volatile
+    var defaultCooldownMs: Long =
+        SubtitleAiAdvancedSettings.DEFAULT_RATE_LIMIT_COOLDOWN_MS.toLong()
+
+    fun setGeminiMinIntervalMs(ms: Long) {
+        service.geminiMinIntervalMs = ms.coerceAtLeast(0L)
+    }
 
     private val cooldownUntilMs = ConcurrentHashMap<String, Long>()
     private val lastQuota = ConcurrentHashMap<String, SubtitleAiQuotaSnapshot>()
@@ -100,7 +108,7 @@ class SubtitleAiRouter(
                 if (err == TRANSLATION_ERROR_RATE_LIMITED || result.httpCode == 429) {
                     sawRateLimit = true
                     val until = result.quota?.cooldownUntilMs
-                        ?: (now + DEFAULT_COOLDOWN_MS)
+                        ?: (now + defaultCooldownMs)
                     cooldownUntilMs[slot] = until
                     val cooldownMs = (until - now).coerceAtLeast(0L)
                     Log.w(
@@ -190,7 +198,8 @@ class SubtitleAiRouter(
             normalizeProviderError(result.message, result.httpCode) == TRANSLATION_ERROR_RATE_LIMITED
         ) {
             cooldownUntilMs[slotId(model, trimmed)] =
-                result.quota?.cooldownUntilMs ?: (System.currentTimeMillis() + DEFAULT_COOLDOWN_MS)
+                result.quota?.cooldownUntilMs
+                    ?: (System.currentTimeMillis() + defaultCooldownMs)
         }
         return SubtitleAiPingResult(
             model = model,
@@ -253,8 +262,11 @@ internal fun normalizeProviderError(message: String?, httpCode: Int?): String? {
 
 const val TRANSLATION_ERROR_RATE_LIMITED = "RATE_LIMITED"
 const val TRANSLATION_ERROR_API_KEY_MISSING = "API key missing"
+const val TRANSLATION_ERROR_FEATURE_DISABLED = "AI feature disabled"
 const val TRANSLATION_ERROR_INSUFFICIENT_CREDITS = "INSUFFICIENT_CREDITS"
 const val TRANSLATION_ERROR_PROVIDER = "PROVIDER_ERROR"
+/** PGS / blank cues — no extractable text for translation (G8 surface). */
+const val TRANSLATION_ERROR_UNTRANSLATABLE_SOURCE = "UNTRANSLATABLE_SOURCE"
 
 data class ProviderAttemptResult(
     val translation: TranslationResult,

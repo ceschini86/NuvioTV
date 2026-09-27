@@ -173,7 +173,7 @@ Enums `AI_SCORED_ADDON` / `PREFERRED_SCORED_ADDON` permanecem no código para la
 ### Interação com seleção manual
 
 - Escolher track interna ou addon no overlay → `setAiSubtitleTranslationEnabled(false)` + `isUserExplicitSubtitleSelection = true` (`PlayerRuntimeControllerPlaybackEvents` / `TrackSelection`).
-- **Translate with AI** (`translateSubtitleWithAi`) → seleciona fonte (embedded **ou** addon), `aiSubtitleUserLocked = true`, AI on, diagnostics `MANUAL`.
+- **Translate with AI** (`translateSubtitleWithAi`) → seleciona fonte (embedded **ou** addon), `aiSubtitleUserLocked = true`, AI on, diagnostics `MANUAL`. **Não** limpa `isUserExplicitSubtitleSelection` (G4 aceite): se o utilizador já tinha pick clássico, `explicit` permanece e a policy continua blocked — fonte MANUAL estável. Só **Reset Smart** limpa lock + explicit.
 - Toggle AI no UI (`OnToggleAiSubtitleTranslation`) → ao **ligar**, também seta `aiSubtitleUserLocked = true`.
 - Lock impede: ladder automática e `tryUpgradeAiToPreferredEmbeddedSubtitle` (upgrade de AI → embedded preferido sem tradução).
 
@@ -183,7 +183,10 @@ Se AI está ativa e **não** locked, `refreshAiSubtitleSourceAndMaybeUpgrade` / 
 
 ### Fonte intranscritível em runtime
 
-`TranslatingTextOutput` / sidecar: se cues sem texto extraível → `onUntranslatableSource` → `selectAiTranslationSourceIfAvailable(excludeCurrent=true)` (só outra embedded, ou mantém addon se locked); se falhar, desliga AI e, se possível, re-roda a ladder.
+`TranslatingTextOutput` / sidecar: se cues sem texto extraível → `onUntranslatableSource`.
+
+- **MANUAL lock (G8):** não troca de fonte; preserva seleção + lock; `aiSubtitleLastError=UNTRANSLATABLE_SOURCE`.
+- **Smart unlocked:** `selectAiTranslationSourceIfAvailable(excludeCurrent=true)` (só outra embedded); se falhar, desliga AI e, se possível, re-roda a ladder.
 
 ---
 
@@ -375,7 +378,7 @@ Enums: `AiSubtitleLadderRung`, `AiSubtitleSourceKind`, data class `AiSubtitleDia
 | Transient 5xx Gemini | Retry curto (até 2) |
 | `CONTENT_BLOCKED` | Sem toast de erro genérico; bisect no service |
 | Batch fail genérico | Mostra original sem cache; retry depois; `aiSubtitleLastError` |
-| PGS / sem texto | `onUntranslatableSource` → outra fonte ou desliga AI + ladder |
+| PGS / sem texto | **MANUAL lock:** preserva fonte + erro. **Smart:** outra embedded ou desliga AI + ladder |
 | Score &lt; 50 | Addon não entra como pivot AI (rung 3); score = matching local de release-name |
 | Forced subs mode | Só desvia para classic se forced **aplica** (áudio ≈ preferido); senão continua ladder |
 
@@ -467,8 +470,8 @@ Não há unit test dedicado só da ladder no tree analisado; a lógica está con
 ### ADR-AI-8 — Runtime backstop para bitmap
 
 - **Contexto:** Metadata de codec mente; PGS selecionado como “AI source”.  
-- **Decisão:** `onUntranslatableSource` quando `extractRawText` blank; próxima fonte = outra **embedded** (ou mantém addon se MANUAL locked); sem hunt scored addon.  
-- **Consequência:** Se nenhuma embedded, desliga AI (+ classic se smart).
+- **Decisão:** `onUntranslatableSource` quando `extractRawText` blank. Com **MANUAL lock**, não abandonar a fonte pedida — só erro + diagnostics. Sem lock, próxima fonte = outra **embedded**; sem hunt scored addon.  
+- **Consequência:** Smart sem embedded útil desliga AI (+ classic se smart). MANUAL fica na escolha do usuário até Stop/Reset.
 
 ---
 

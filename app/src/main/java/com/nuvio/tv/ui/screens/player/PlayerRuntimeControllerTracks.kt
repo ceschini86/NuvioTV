@@ -146,13 +146,16 @@ internal fun PlayerRuntimeController.updateAvailableTracks(tracks: Tracks) {
                         it.contains("songs", ignoreCase = true) && it.contains("sign", ignoreCase = true)
                     }
 
+                    val codecName = CustomDefaultTrackNameProvider.formatNameFromMime(format.sampleMimeType)
+                        ?: CustomDefaultTrackNameProvider.formatNameFromMime(format.codecs)
+                        ?: format.sampleMimeType?.takeIf { isBitmapSubtitleFormat(it) }
                     subtitleTracks.add(
                         TrackInfo(
                             index = subtitleTracks.size,
                             name = format.label ?: format.language ?: context.getString(com.nuvio.tv.R.string.player_track_subtitle_fallback, subtitleTracks.size + 1),
                             language = format.language,
                             trackId = format.id,
-                            codec = CustomDefaultTrackNameProvider.formatNameFromMime(format.sampleMimeType),
+                            codec = codecName,
                             isForced = hasForcedFlag || nameHintForced || isSongsAndSigns,
                             isSelected = isSelected
                         )

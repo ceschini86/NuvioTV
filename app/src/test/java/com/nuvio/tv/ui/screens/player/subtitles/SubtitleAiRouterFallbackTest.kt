@@ -128,6 +128,18 @@ class SubtitleAiRouterFallbackTest {
     }
 
     @Test
+    fun findAiSource_skipsVobsubMimeAndNameOnlyPgs() {
+        val tracks = listOf(
+            track(name = "English", language = "en", codec = "application/vobsub"),
+            track(name = "English PGS", language = "en", codec = null),
+            track(name = "Francais", language = "fr", codec = "SRT")
+        )
+        val index = findAiSourceSubtitleTrackIndex(tracks, originalLanguage = "en")
+        assertEquals(2, index)
+        assertEquals("fr", tracks[index].language)
+    }
+
+    @Test
     fun findAiSource_prefersOriginalLanguageWhenPresent() {
         val tracks = listOf(
             track(name = "English", language = "en"),

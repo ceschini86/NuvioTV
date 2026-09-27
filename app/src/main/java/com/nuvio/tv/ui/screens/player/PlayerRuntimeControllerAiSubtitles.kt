@@ -5,12 +5,16 @@ import com.nuvio.tv.data.local.AVAILABLE_SUBTITLE_LANGUAGES
 import com.nuvio.tv.data.local.SubtitleLanguageOption
 import com.nuvio.tv.data.local.displayName
 import com.nuvio.tv.domain.model.Subtitle
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiAdvancedSettings
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiCredentials
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiModel
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleTranslationManager
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleTranslationService
+import com.nuvio.tv.ui.screens.player.subtitles.TRANSLATION_ERROR_API_KEY_MISSING
 import com.nuvio.tv.ui.screens.player.subtitles.TRANSLATION_ERROR_CONTENT_BLOCKED
+import com.nuvio.tv.ui.screens.player.subtitles.TRANSLATION_ERROR_FEATURE_DISABLED
 import com.nuvio.tv.ui.screens.player.subtitles.TRANSLATION_ERROR_RATE_LIMITED
+import com.nuvio.tv.ui.screens.player.subtitles.TRANSLATION_ERROR_UNTRANSLATABLE_SOURCE
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
@@ -56,19 +60,155 @@ internal fun PlayerRuntimeController.ensureSubtitleTranslationManager(): Subtitl
     }
     manager.onUntranslatableSource = {
         if (manager.isEnabled) {
-            Log.w(PlayerRuntimeController.TAG, "AI subtitle source has no extractable text; trying next source")
-            val switched = selectAiTranslationSourceIfAvailable(excludeCurrent = true)
-            if (!switched) {
-                Log.w(PlayerRuntimeController.TAG, "No usable AI source left; disabling translation")
-                setAiSubtitleTranslationEnabled(false)
-                if (canRunAiAutoSelectLadder()) {
-                    applyAiAutoSelectLadder()
+            if (!shouldSwitchSourceOnUntranslatable(userLocked = aiSubtitleUserLocked)) {
+                Log.w(
+                    PlayerRuntimeController.TAG,
+                    "AI subtitle source has no extractable text; MANUAL lock — preserving selection"
+                )
+                _uiState.update { it.copy(aiSubtitleLastError = TRANSLATION_ERROR_UNTRANSLATABLE_SOURCE) }
+                val prev = _uiState.value.aiSubtitleDiagnostics
+                if (prev != null) {
+                    publishAiSubtitleDiagnostics(
+                        prev.copy(reason = "source untranslatable (PGS/blank); selection preserved")
+                    )
+                }
+            } else {
+                Log.w(PlayerRuntimeController.TAG, "AI subtitle source has no extractable text; trying next source")
+                val switched = selectAiTranslationSourceIfAvailable(excludeCurrent = true)
+                if (!switched) {
+                    Log.w(PlayerRuntimeController.TAG, "No usable AI source left; disabling translation")
+                    setAiSubtitleTranslationEnabled(false)
+                    if (canRunAiAutoSelectLadder()) {
+                        applyAiAutoSelectLadder()
+                    }
                 }
             }
         }
     }
     subtitleTranslationManager = manager
     return manager
+}
+
+/** G8 pure decision: Smart may switch; MANUAL lock must keep the requested source. */
+internal fun shouldSwitchSourceOnUntranslatable(userLocked: Boolean): Boolean = !userLocked
+
+/**
+ * Pure G3 decision for **user** AI Stop/toggle-off (not S6 rate-limit).
+ * Prefer preferred-language embedded when available; otherwise keep the current source AI off.
+ */
+internal enum class UserAiOffTrackDecision {
+    SELECT_PREFERRED_EMBEDDED,
+    PRESERVE_CURRENT_SOURCE_AI_OFF
+}
+
+internal fun decideUserAiOffTrackSelection(
+    preferredEmbeddedIndex: Int
+): UserAiOffTrackDecision =
+    if (preferredEmbeddedIndex >= 0) {
+        UserAiOffTrackDecision.SELECT_PREFERRED_EMBEDDED
+    } else {
+        UserAiOffTrackDecision.PRESERVE_CURRENT_SOURCE_AI_OFF
+    }
+
+/**
+ * Index of a preferred-language embedded text track, or -1 if none.
+ * Shared by the Smart ladder and G3 user AI-off.
+ */
+internal fun PlayerRuntimeController.findPreferredLanguageEmbeddedTrackIndex(): Int {
+    val state = _uiState.value
+    val primaryTarget = subtitleLanguageTargets().firstOrNull() ?: return -1
+    if (!hasScannedTextTracksOnce) return -1
+    val selectedAudioTrack = selectedAudioTrackForSubtitleMatching(state)
+    val preferredInternalIndex = findBestInternalSubtitleTrackIndex(
+        subtitleTracks = state.subtitleTracks,
+        targets = listOf(primaryTarget),
+        forcedOnly = false,
+        normalOnly = true,
+        selectedAudioTrack = selectedAudioTrack
+    )
+    if (preferredInternalIndex < 0) return -1
+    val track = state.subtitleTracks[preferredInternalIndex]
+    if (!trackMatchesPreferredLanguage(track, primaryTarget)) return -1
+    return preferredInternalIndex
+}
+
+/**
+ * G3: UI Stop / toggle AI off (Info CTA on AI option, Col2 toggle).
+ * Turns translation off; if a preferred-language embedded track exists, selects it;
+ * otherwise keeps the current track/addon with AI off.
+ *
+ * **Not** for S6 rate-limit — that path must [maybeHandleAiRateLimitExhaustion] preserve selection.
+ */
+internal fun PlayerRuntimeController.disableAiSubtitleTranslationFromUserToggle() {
+    val stateBefore = _uiState.value
+    val preferredIndex = findPreferredLanguageEmbeddedTrackIndex()
+    val decision = decideUserAiOffTrackSelection(preferredIndex)
+
+    setAiSubtitleTranslationEnabled(false, allowPreferredUpgrade = false)
+
+    when (decision) {
+        UserAiOffTrackDecision.SELECT_PREFERRED_EMBEDDED -> {
+            val track = stateBefore.subtitleTracks[preferredIndex]
+            Log.i(
+                PlayerRuntimeController.TAG,
+                "AI toggle off: preferred embedded index=$preferredIndex lang=${track.language}"
+            )
+            selectSubtitleTrack(preferredIndex)
+            _uiState.update {
+                it.copy(
+                    selectedSubtitleTrackIndex = preferredIndex,
+                    selectedAddonSubtitle = null
+                )
+            }
+            autoSubtitleSelected = true
+            publishAiSubtitleDiagnostics(
+                AiSubtitleDiagnostics(
+                    rung = AiSubtitleLadderRung.PREFERRED_EMBEDDED,
+                    reason = "user toggled AI off; preferred-language embedded selected",
+                    sourceKind = AiSubtitleSourceKind.EMBEDDED,
+                    sourceLabel = track.name,
+                    sourceLanguage = track.language,
+                    sourceInternalIndex = track.index,
+                    targetLanguage = resolveSubtitleAiTargetLanguageName(),
+                    model = subtitleAiModel.name,
+                    userLocked = false
+                )
+            )
+            logAiSubtitleAction(
+                action = "Select AI option",
+                source = track.name ?: track.language,
+                reason = "toggle_off_preferred_embedded",
+                locked = false,
+                rung = AiSubtitleLadderRung.PREFERRED_EMBEDDED
+            )
+        }
+        UserAiOffTrackDecision.PRESERVE_CURRENT_SOURCE_AI_OFF -> {
+            val prev = stateBefore.aiSubtitleDiagnostics
+            Log.i(
+                PlayerRuntimeController.TAG,
+                "AI toggle off: no preferred embedded — preserve source " +
+                    "(rung=${prev?.rung}, label=${prev?.sourceLabel})"
+            )
+            val preserved = prev?.copy(
+                reason = "user toggled AI off; preferred embedded unavailable — source preserved",
+                userLocked = false
+            ) ?: AiSubtitleDiagnostics(
+                rung = AiSubtitleLadderRung.CLASSIC_FALLBACK,
+                reason = "user toggled AI off; preferred embedded unavailable — source preserved",
+                targetLanguage = resolveSubtitleAiTargetLanguageName(),
+                model = subtitleAiModel.name,
+                userLocked = false
+            )
+            publishAiSubtitleDiagnostics(preserved)
+            logAiSubtitleAction(
+                action = "Select AI option",
+                source = preserved.sourceLabel ?: preserved.sourceLanguage,
+                reason = "toggle_off_preserve_source",
+                locked = false,
+                rung = preserved.rung
+            )
+        }
+    }
 }
 
 /**
@@ -171,32 +311,40 @@ internal fun PlayerRuntimeController.observeSubtitleAiSettings() {
         combine(
             playerSettingsDataStore.playerSettings,
             deviceLocalPlayerPreferences.subtitleAiCredentials,
-            deviceLocalPlayerPreferences.subtitleAiApiKey
-        ) { settings, credentials, legacyKey ->
-            Triple(settings.subtitleStyle, credentials, legacyKey)
-        }.distinctUntilChanged().collect { (style, credentials, legacyKey) ->
-            subtitleAiCredentials = credentials
-            subtitleAiApiKey = credentials.enabledProviders().firstOrNull()?.usableKeys?.firstOrNull()
-                ?: legacyKey
+            deviceLocalPlayerPreferences.subtitleAiApiKey,
+            deviceLocalPlayerPreferences.subtitleAiAdvancedSettings
+        ) { settings, credentials, legacyKey, advanced ->
+            AiSettingsSnapshot(settings.subtitleStyle, credentials, legacyKey, advanced)
+        }.distinctUntilChanged().collect { snap ->
+            val style = snap.style
             subtitleAiModel = runCatching {
                 SubtitleAiModel.valueOf(style.aiModel)
             }.getOrDefault(
-                credentials.enabledProviders().firstOrNull()?.model
+                snap.credentials.enabledProviders().firstOrNull()?.model
                     ?: SubtitleAiModel.GROQ_LLAMA_70B
             )
+            // One-shot legacy→JSON using preferred model so Settings and runtime agree.
+            val credentials = deviceLocalPlayerPreferences.ensureSubtitleAiCredentialsMigrated(
+                subtitleAiModel
+            )
+            val legacyKey = snap.legacyKey
+            subtitleAiCredentials = credentials
+            subtitleAiApiKey = credentials.enabledProviders().firstOrNull()?.usableKeys?.firstOrNull()
+                ?: legacyKey
             subtitleAiFeatureEnabled = style.aiEnabled
             subtitleAiAutoSelect = style.aiAutoSelect
 
             val manager = ensureSubtitleTranslationManager()
             manager.updateCredentials(credentials)
             manager.updatePreferredModel(subtitleAiModel)
-            // Legacy single-key path still seeds router if credentials empty but legacy key set.
+            // Fallback if migrate somehow left empty but legacy still present.
             if (!credentials.anyUsable() && legacyKey.isNotBlank()) {
                 manager.updateCredentials(
                     SubtitleAiCredentials.migrateFromLegacy(legacyKey, subtitleAiModel)
                 )
             }
             manager.updateService(subtitleAiApiKey, subtitleAiModel)
+            manager.updateAdvancedSettings(snap.advanced)
             manager.targetLanguage = resolveSubtitleAiTargetLanguageName()
             manager.removeHearingImpaired = style.stripSdh
 
@@ -221,6 +369,13 @@ internal fun PlayerRuntimeController.observeSubtitleAiSettings() {
         }
     }
 }
+
+private data class AiSettingsSnapshot(
+    val style: com.nuvio.tv.data.local.SubtitleStyleSettings,
+    val credentials: SubtitleAiCredentials,
+    val legacyKey: String,
+    val advanced: SubtitleAiAdvancedSettings
+)
 
 /**
  * Single entry for automatic subtitle selection. When smart AI subtitles are enabled, uses
@@ -339,45 +494,36 @@ internal fun PlayerRuntimeController.applyAiAutoSelectLadder() {
         return
     }
 
-    val selectedAudioTrack = selectedAudioTrackForSubtitleMatching(state)
-    val preferredInternalIndex = findBestInternalSubtitleTrackIndex(
-        subtitleTracks = state.subtitleTracks,
-        targets = listOf(primaryTarget),
-        forcedOnly = false,
-        normalOnly = true,
-        selectedAudioTrack = selectedAudioTrack
-    )
+    val preferredInternalIndex = findPreferredLanguageEmbeddedTrackIndex()
     if (preferredInternalIndex >= 0) {
         val track = state.subtitleTracks[preferredInternalIndex]
-        if (trackMatchesPreferredLanguage(track, primaryTarget)) {
-            Log.i(
-                PlayerRuntimeController.TAG,
-                "AI ladder: preferred embedded index=$preferredInternalIndex lang=${track.language}"
+        Log.i(
+            PlayerRuntimeController.TAG,
+            "AI ladder: preferred embedded index=$preferredInternalIndex lang=${track.language}"
+        )
+        selectSubtitleTrack(preferredInternalIndex)
+        _uiState.update {
+            it.copy(
+                selectedSubtitleTrackIndex = preferredInternalIndex,
+                selectedAddonSubtitle = null
             )
-            selectSubtitleTrack(preferredInternalIndex)
-            _uiState.update {
-                it.copy(
-                    selectedSubtitleTrackIndex = preferredInternalIndex,
-                    selectedAddonSubtitle = null
-                )
-            }
-            autoSubtitleSelected = true
-            setAiSubtitleTranslationEnabled(false)
-            publishAiSubtitleDiagnostics(
-                AiSubtitleDiagnostics(
-                    rung = AiSubtitleLadderRung.PREFERRED_EMBEDDED,
-                    reason = "preferred-language embedded available",
-                    sourceKind = AiSubtitleSourceKind.EMBEDDED,
-                    sourceLabel = track.name,
-                    sourceLanguage = track.language,
-                    sourceInternalIndex = track.index,
-                    targetLanguage = resolveSubtitleAiTargetLanguageName(),
-                    model = subtitleAiModel.name,
-                    userLocked = false
-                )
-            )
-            return
         }
+        autoSubtitleSelected = true
+        setAiSubtitleTranslationEnabled(false)
+        publishAiSubtitleDiagnostics(
+            AiSubtitleDiagnostics(
+                rung = AiSubtitleLadderRung.PREFERRED_EMBEDDED,
+                reason = "preferred-language embedded available",
+                sourceKind = AiSubtitleSourceKind.EMBEDDED,
+                sourceLabel = track.name,
+                sourceLanguage = track.language,
+                sourceInternalIndex = track.index,
+                targetLanguage = resolveSubtitleAiTargetLanguageName(),
+                model = subtitleAiModel.name,
+                userLocked = false
+            )
+        )
+        return
     }
 
     val translationCapacityExhausted =
@@ -567,8 +713,14 @@ internal fun PlayerRuntimeController.translateSubtitleWithAi(
     addonSubtitle: Subtitle?
 ) {
     if (isUsingMpvEngine()) return
-    if (!subtitleAiFeatureEnabled || !(subtitleAiCredentials.anyUsable() || subtitleAiApiKey.isNotBlank())) {
-        Log.w(PlayerRuntimeController.TAG, "Translate with AI ignored: feature/key unavailable")
+    if (!subtitleAiFeatureEnabled) {
+        Log.w(PlayerRuntimeController.TAG, "Translate with AI ignored: feature disabled")
+        _uiState.update { it.copy(aiSubtitleLastError = TRANSLATION_ERROR_FEATURE_DISABLED) }
+        return
+    }
+    if (!(subtitleAiCredentials.anyUsable() || subtitleAiApiKey.isNotBlank())) {
+        Log.w(PlayerRuntimeController.TAG, "Translate with AI ignored: API key missing")
+        _uiState.update { it.copy(aiSubtitleLastError = TRANSLATION_ERROR_API_KEY_MISSING) }
         return
     }
     refreshAiSubtitleQuotaExhaustedState()
@@ -675,21 +827,10 @@ internal fun PlayerRuntimeController.tryUpgradeAiToPreferredEmbeddedSubtitle(): 
     if (isUsingMpvEngine()) return false
 
     val state = _uiState.value
-    val primaryTarget = subtitleLanguageTargets().firstOrNull() ?: return false
     if (state.subtitleStyle.useForcedSubtitles) return false
-    if (!hasScannedTextTracksOnce) return false
-
-    val selectedAudioTrack = selectedAudioTrackForSubtitleMatching(state)
-    val internalIndex = findBestInternalSubtitleTrackIndex(
-        subtitleTracks = state.subtitleTracks,
-        targets = listOf(primaryTarget),
-        forcedOnly = false,
-        normalOnly = true,
-        selectedAudioTrack = selectedAudioTrack
-    )
+    val internalIndex = findPreferredLanguageEmbeddedTrackIndex()
     if (internalIndex < 0) return false
     val track = state.subtitleTracks[internalIndex]
-    if (!trackMatchesPreferredLanguage(track, primaryTarget)) return false
 
     Log.i(
         PlayerRuntimeController.TAG,
@@ -806,12 +947,8 @@ internal fun findAiSourceSubtitleTrackIndex(
     fun TrackInfo.isEffectivelyForced(): Boolean =
         isForced || name.contains("forced", ignoreCase = true)
 
-    fun TrackInfo.isBitmapCodec(): Boolean {
-        val c = codec?.uppercase(Locale.ROOT) ?: return false
-        return c == "PGS" || c == "DVB" || c.contains("VOB") || c.contains("PGS")
-    }
-
-    fun TrackInfo.isUsableSource(): Boolean = !isEffectivelyForced() && !isBitmapCodec()
+    fun TrackInfo.isUsableSource(): Boolean =
+        !isEffectivelyForced() && !isBitmapSubtitleCodec()
 
     fun bestAmong(predicate: (TrackInfo) -> Boolean): Int {
         val matches = subtitleTracks.withIndex().filter { (index, track) ->

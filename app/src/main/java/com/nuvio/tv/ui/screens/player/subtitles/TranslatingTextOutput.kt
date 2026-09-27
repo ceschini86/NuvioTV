@@ -33,12 +33,19 @@ private class SubtitleCueDisplayProbe {
     private var translatedCues: Int = 0
     private var originalCues: Int = 0
 
-    fun onDisplayed(cues: List<Cue>, kind: String, presentationTimeUs: Long) {
+        fun onDisplayed(cues: List<Cue>, kind: String, presentationTimeUs: Long) {
         val text = cues.mapNotNull { it.text?.toString()?.trim() }
             .filter { it.isNotBlank() }
             .joinToString(" | ")
         val now = SystemClock.elapsedRealtime()
+        val hasBitmap = cues.any { it.bitmap != null }
         if (text.isBlank()) {
+            // Bitmap image tracks have no extractable text; don't count them as blank gaps
+            // (that path used to make display probes / AI fallback thrash).
+            if (hasBitmap || kind == "bitmap_source") {
+                endBlank(now)
+                return
+            }
             endShown(now)
             if (blankSinceElapsedMs == null) {
                 blankSinceElapsedMs = now
@@ -124,10 +131,13 @@ internal class TranslatingTextOutput(
     private var hasFiredFirstCue = false
     private val displayProbe = SubtitleCueDisplayProbe()
     private var wasAiEnabled: Boolean = manager.isEnabled
+    /** Avoid calling [SubtitleTranslationManager.onUntranslatableSource] every cue frame (bitmap blink). */
+    private var reportedUntranslatableSource: Boolean = false
 
     init {
         manager.onReset = {
             displayProbe.summary("player_reset")
+            reportedUntranslatableSource = false
         }
     }
 
@@ -136,6 +146,7 @@ internal class TranslatingTextOutput(
         val aiEnabled = manager.isEnabled
         if (wasAiEnabled && !aiEnabled) {
             displayProbe.summary("ai_disabled")
+            reportedUntranslatableSource = false
         }
         wasAiEnabled = aiEnabled
 
@@ -156,13 +167,20 @@ internal class TranslatingTextOutput(
             return
         }
 
+        val hasBitmapCue = cues.any { it.bitmap != null }
         val rawText = extractRawText(cues)
         if (rawText.isBlank()) {
-            manager.onUntranslatableSource?.invoke()
+            // Image-based tracks (PGS/VOBSUB) produce bitmap cues with no text. Report once so
+            // the ladder can switch source — repeating every frame caused on-screen blinking.
+            if (!reportedUntranslatableSource) {
+                reportedUntranslatableSource = true
+                manager.onUntranslatableSource?.invoke()
+            }
             lastCueGroup = cueGroup
-            emit(cueGroup, cues, "untranslatable")
+            emit(cueGroup, cues, if (hasBitmapCue) "bitmap_source" else "untranslatable")
             return
         }
+        reportedUntranslatableSource = false
         val text = if (manager.removeHearingImpaired) stripHearingImpaired(rawText) else rawText
         if (text.isBlank()) {
             emit(CueGroup(emptyList(), cueGroup.presentationTimeUs), emptyList(), "hi_stripped")
@@ -201,9 +219,14 @@ internal class TranslatingTextOutput(
         }
         val rawText = extractRawText(cues)
         if (rawText.isBlank()) {
-            emitDeprecated(cues, "untranslatable")
+            if (!reportedUntranslatableSource) {
+                reportedUntranslatableSource = true
+                manager.onUntranslatableSource?.invoke()
+            }
+            emitDeprecated(cues, if (cues.any { it.bitmap != null }) "bitmap_source" else "untranslatable")
             return
         }
+        reportedUntranslatableSource = false
         val text = if (manager.removeHearingImpaired) stripHearingImpaired(rawText) else rawText
         if (text.isBlank()) {
             emitDeprecated(emptyList(), "hi_stripped")
