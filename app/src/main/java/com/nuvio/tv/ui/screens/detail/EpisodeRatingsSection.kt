@@ -2,14 +2,15 @@ package com.nuvio.tv.ui.screens.detail
 
 import com.nuvio.tv.ui.theme.NuvioTheme
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,8 +30,7 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.Card
@@ -38,9 +38,10 @@ import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
+import com.nuvio.tv.domain.model.EpisodeRatingSource
 import com.nuvio.tv.domain.model.Video
+import com.nuvio.tv.ui.components.ImdbRatingSourceLabel
 import com.nuvio.tv.ui.components.SeriesGraphRatingColors
 import com.nuvio.tv.ui.components.SeriesGraphRatingSourceLabel
 
@@ -51,6 +52,8 @@ fun EpisodeRatingsSection(
     ratings: Map<Pair<Int, Int>, Double>,
     isLoading: Boolean,
     error: String?,
+    ratingSource: EpisodeRatingSource,
+    onRatingSourceSelected: (EpisodeRatingSource) -> Unit,
     modifier: Modifier = Modifier,
     title: String = "Ratings",
     upFocusRequester: FocusRequester? = null,
@@ -69,6 +72,8 @@ fun EpisodeRatingsSection(
     val seasonFocusRequesters = remember(seasonNumbers) {
         seasonNumbers.associateWith { FocusRequester() }
     }
+    val imdbSourceFocusRequester = remember { FocusRequester() }
+    val seriesGraphSourceFocusRequester = remember { FocusRequester() }
     val internalRatingsGridFocusRequester = remember { FocusRequester() }
     val effectiveRatingsGridFocusRequester = ratingsGridFocusRequester ?: internalRatingsGridFocusRequester
     val firstEpisodeRatingFocusRequester = remember { FocusRequester() }
@@ -126,6 +131,8 @@ fun EpisodeRatingsSection(
     } else {
         Modifier
     }
+    val selectedSeasonFocusRequester = seasonFocusRequesters[selectedSeason]
+    val sourceDownFocus = selectedSeasonFocusRequester ?: effectiveRatingsGridFocusRequester
 
     Column(
         modifier = modifier
@@ -133,31 +140,85 @@ fun EpisodeRatingsSection(
             .padding(top = if (hasTitle) 14.dp else 10.dp, bottom = NuvioTheme.spacing.sm)
     ) {
         if (hasTitle) {
-            Column(
-                modifier = Modifier.padding(horizontal = NuvioTheme.spacing.xxxl),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = NuvioTheme.colors.TextPrimary
-                )
-                SeriesGraphRatingSourceLabel(
-                    textStyle = MaterialTheme.typography.labelSmall,
-                    textColor = NuvioTheme.colors.TextSecondary,
-                    logoHeightDp = 18
-                )
-            }
-        } else {
-            SeriesGraphRatingSourceLabel(
-                textStyle = MaterialTheme.typography.labelSmall,
-                textColor = NuvioTheme.colors.TextSecondary,
-                modifier = Modifier.padding(
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = NuvioTheme.colors.TextPrimary,
+                modifier = Modifier.padding(horizontal = NuvioTheme.spacing.xxxl)
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
                     start = NuvioTheme.spacing.xxxl,
                     end = NuvioTheme.spacing.xxxl,
+                    top = if (hasTitle) 8.dp else 0.dp,
                     bottom = 4.dp
                 ),
-                logoHeightDp = 18
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            when (ratingSource) {
+                EpisodeRatingSource.IMDB -> {
+                    ImdbRatingSourceLabel(
+                        logoModifier = Modifier
+                            .height(18.dp)
+                            .widthIn(max = 72.dp),
+                        textStyle = MaterialTheme.typography.labelSmall,
+                        textColor = NuvioTheme.colors.TextSecondary
+                    )
+                }
+                EpisodeRatingSource.SERIES_GRAPH -> {
+                    SeriesGraphRatingSourceLabel(
+                        textStyle = MaterialTheme.typography.labelSmall,
+                        textColor = NuvioTheme.colors.TextSecondary,
+                        compact = true,
+                        logoHeightDp = 18
+                    )
+                }
+            }
+
+            EpisodeRatingSourceChip(
+                label = stringResource(R.string.episode_rating_source_imdb),
+                isSelected = ratingSource == EpisodeRatingSource.IMDB,
+                onClick = { onRatingSourceSelected(EpisodeRatingSource.IMDB) },
+                modifier = Modifier
+                    .focusRequester(
+                        if (firstItemFocusRequester != null && ratingSource == EpisodeRatingSource.IMDB) {
+                            firstItemFocusRequester
+                        } else {
+                            imdbSourceFocusRequester
+                        }
+                    )
+                    .then(upFocusModifier)
+                    .focusProperties { down = sourceDownFocus }
+                    .onFocusChanged { state ->
+                        if (state.isFocused && ratingSource != EpisodeRatingSource.IMDB) {
+                            onRatingSourceSelected(EpisodeRatingSource.IMDB)
+                        }
+                    }
+            )
+            EpisodeRatingSourceChip(
+                label = stringResource(R.string.episode_rating_source_series_graph),
+                isSelected = ratingSource == EpisodeRatingSource.SERIES_GRAPH,
+                onClick = { onRatingSourceSelected(EpisodeRatingSource.SERIES_GRAPH) },
+                modifier = Modifier
+                    .focusRequester(
+                        if (firstItemFocusRequester != null && ratingSource == EpisodeRatingSource.SERIES_GRAPH) {
+                            firstItemFocusRequester
+                        } else {
+                            seriesGraphSourceFocusRequester
+                        }
+                    )
+                    .then(upFocusModifier)
+                    .focusProperties { down = sourceDownFocus }
+                    .onFocusChanged { state ->
+                        if (state.isFocused && ratingSource != EpisodeRatingSource.SERIES_GRAPH) {
+                            onRatingSourceSelected(EpisodeRatingSource.SERIES_GRAPH)
+                        }
+                    }
             )
         }
 
@@ -198,17 +259,19 @@ fun EpisodeRatingsSection(
                 ) {
                     items(seasonNumbers, key = { it }) { season ->
                         val isSelected = season == selectedSeason
-                        val modifierWithRequester = if (firstItemFocusRequester != null && season == selectedSeason) {
-                            Modifier.focusRequester(firstItemFocusRequester)
-                        } else {
-                            Modifier.focusRequester(seasonFocusRequesters.getValue(season))
+                        val sourceUpRequester = firstItemFocusRequester ?: when (ratingSource) {
+                            EpisodeRatingSource.IMDB -> imdbSourceFocusRequester
+                            EpisodeRatingSource.SERIES_GRAPH -> seriesGraphSourceFocusRequester
                         }
 
                         Card(
                             onClick = { selectedSeason = season },
-                            modifier = modifierWithRequester
-                                .then(upFocusModifier)
-                                .focusProperties { down = effectiveRatingsGridFocusRequester }
+                            modifier = Modifier
+                                .focusRequester(seasonFocusRequesters.getValue(season))
+                                .focusProperties {
+                                    up = sourceUpRequester
+                                    down = effectiveRatingsGridFocusRequester
+                                }
                                 .onFocusChanged { state ->
                                     if (state.isFocused && selectedSeason != season) {
                                         selectedSeason = season
@@ -257,7 +320,7 @@ fun EpisodeRatingsSection(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     items(seasonRatings, key = { "${it.seasonNumber}:${it.episodeNumber}" }) { episodeRating ->
-                        val selectedSeasonUpRequester = firstItemFocusRequester ?: seasonFocusRequesters[selectedSeason]
+                        val selectedSeasonUpRequester = seasonFocusRequesters[selectedSeason]
                         val isFirstEpisode = episodeRating == seasonRatings.firstOrNull()
 
                         Card(
@@ -309,6 +372,43 @@ fun EpisodeRatingsSection(
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun EpisodeRatingSourceChip(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier,
+        shape = CardDefaults.shape(shape = RoundedCornerShape(14.dp)),
+        colors = CardDefaults.colors(
+            containerColor = if (isSelected) {
+                NuvioTheme.colors.FocusBackground
+            } else {
+                NuvioTheme.colors.BackgroundCard
+            },
+            focusedContainerColor = NuvioTheme.colors.FocusBackground
+        ),
+        border = CardDefaults.border(
+            focusedBorder = Border(
+                border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs),
+                shape = RoundedCornerShape(14.dp)
+            )
+        ),
+        scale = CardDefaults.scale(focusedScale = 1f)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = NuvioTheme.colors.TextPrimary,
+            modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
+        )
     }
 }
 
