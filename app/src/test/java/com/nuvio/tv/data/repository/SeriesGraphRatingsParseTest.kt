@@ -32,7 +32,7 @@ class SeriesGraphRatingsParseTest {
     }
 
     @Test
-    fun repositoryMapperPrefersImdbRating() {
+    fun repositoryMapperKeepsSeparateImdbAndCommunityMaps() {
         val json = """
             [{"season_number":1,"episodes":[
               {"season_number":1,"episode_number":1,"imdb_rating":9.1,"community_avg":9},
@@ -41,24 +41,15 @@ class SeriesGraphRatingsParseTest {
             ]}]
         """.trimIndent()
         val parsed = adapter.fromJson(json)!!
-        val map = buildMap {
-            parsed.forEach { season ->
-                season.episodes.orEmpty().forEach { episode ->
-                    val s = episode.seasonNumber ?: return@forEach
-                    val e = episode.episodeNumber ?: return@forEach
-                    val rating = seriesGraphEpisodeRatingValue(
-                        imdbRating = episode.imdbRating,
-                        communityAverage = episode.communityAverage
-                    ) ?: return@forEach
-                    put(s to e, rating)
-                }
-            }
-        }
-        assertEquals(3, map.size)
-        assertEquals(9.1, map.getValue(1 to 1), 0.0)
-        assertEquals(8.6, map.getValue(1 to 2), 0.0)
-        assertEquals(7.5, map.getValue(1 to 3), 0.0)
-        assertTrue(map.containsKey(1 to 1))
+        val bundle = toRatingsBundle(parsed)
+        assertEquals(2, bundle.imdb.size)
+        assertEquals(3, bundle.community.size)
+        assertEquals(9.1, bundle.imdb.getValue(1 to 1), 0.0)
+        assertEquals(8.6, bundle.imdb.getValue(1 to 2), 0.0)
+        assertEquals(9.0, bundle.community.getValue(1 to 1), 0.0)
+        assertEquals(8.7, bundle.community.getValue(1 to 2), 0.0)
+        assertEquals(7.5, bundle.community.getValue(1 to 3), 0.0)
+        assertTrue(!bundle.imdb.containsKey(1 to 3))
     }
 
     @Test

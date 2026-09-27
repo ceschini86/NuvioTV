@@ -2496,6 +2496,7 @@
     <string name="cd_trakt_logo">Trakt Logo</string>
     <string name="cd_trakt_qr">Trakt activation QR</string>
     <string name="cd_imdb">IMDb</string>
+    <string name="episode_rating_source_imdb">IMDb</string>
     <string name="episode_rating_source_series_graph">Series Graph</string>
     <string name="episode_rating_source_series_graph_short">SG</string>
     <string name="episode_rating_attribution_series_graph">Ratings from Series Graph</string>

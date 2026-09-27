@@ -23,6 +23,7 @@ import com.nuvio.tv.data.repository.TraktCommentsService
 import com.nuvio.tv.data.repository.TraktRelatedService
 import com.nuvio.tv.data.repository.parseContentIds
 import com.nuvio.tv.domain.model.ContentType
+import com.nuvio.tv.domain.model.EpisodeRatingSource
 import com.nuvio.tv.domain.model.LibraryEntryInput
 import com.nuvio.tv.domain.model.LibrarySourceMode
 import com.nuvio.tv.domain.model.ListMembershipChanges
@@ -162,6 +163,7 @@ class MetaDetailsViewModel @Inject constructor(
         observeEpisodeOptionsOverlayStyle()
         observeOverallRatingsVisibility()
         observeDetailImdbRatingsVisibility()
+        observeEpisodeRatingSource()
         viewModelScope.launch {
             layoutPreferenceDataStore.posterCardCornerRadiusDp
                 .collect { _posterCardCornerRadiusDp.value = it }
@@ -320,6 +322,7 @@ class MetaDetailsViewModel @Inject constructor(
     fun onEvent(event: MetaDetailsEvent) {
         when (event) {
             is MetaDetailsEvent.OnSeasonSelected -> selectSeason(event.season)
+            is MetaDetailsEvent.OnEpisodeRatingSourceSelected -> setEpisodeRatingSource(event.source)
             is MetaDetailsEvent.OnEpisodeClick -> { /* Navigate to stream */ }
             is MetaDetailsEvent.OnCommentsModeSelected -> selectCommentsMode(event.mode)
             is MetaDetailsEvent.OnCommentsEpisodeSelected -> selectCommentsEpisode(event.video)
@@ -631,6 +634,30 @@ class MetaDetailsViewModel @Inject constructor(
         }
     }
 
+    private fun observeEpisodeRatingSource() {
+        viewModelScope.launch {
+            layoutPreferenceDataStore.episodeRatingSource
+                .distinctUntilChanged()
+                .collectLatest { source ->
+                    _uiState.update { state ->
+                        if (state.episodeRatingSource == source) {
+                            state
+                        } else {
+                            state.copy(episodeRatingSource = source)
+                        }
+                    }
+                }
+        }
+    }
+
+    private fun setEpisodeRatingSource(source: EpisodeRatingSource) {
+        if (_uiState.value.episodeRatingSource == source) return
+        _uiState.update { it.copy(episodeRatingSource = source) }
+        viewModelScope.launch {
+            layoutPreferenceDataStore.setEpisodeRatingSource(source)
+        }
+    }
+
     private fun observeOverallRatingsVisibility() {
         viewModelScope.launch {
             layoutPreferenceDataStore.homeImdbRatingsVisibility
@@ -687,6 +714,7 @@ class MetaDetailsViewModel @Inject constructor(
                     isLoading = true,
                     error = null,
                     episodeImdbRatings = emptyMap(),
+                    episodeSeriesGraphRatings = emptyMap(),
                     isEpisodeRatingsLoading = false,
                     episodeRatingsError = null,
                     mdbListRatings = null,
@@ -1353,6 +1381,7 @@ class MetaDetailsViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     episodeImdbRatings = emptyMap(),
+                    episodeSeriesGraphRatings = emptyMap(),
                     isEpisodeRatingsLoading = false,
                     episodeRatingsError = null
                 )
@@ -1364,6 +1393,7 @@ class MetaDetailsViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     episodeImdbRatings = emptyMap(),
+                    episodeSeriesGraphRatings = emptyMap(),
                     isEpisodeRatingsLoading = true,
                     episodeRatingsError = null
                 )
@@ -1384,6 +1414,7 @@ class MetaDetailsViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             episodeImdbRatings = addonRatings,
+                            episodeSeriesGraphRatings = addonRatings,
                             isEpisodeRatingsLoading = false,
                             episodeRatingsError = null
                         )
@@ -1403,6 +1434,7 @@ class MetaDetailsViewModel @Inject constructor(
                         } else {
                             state.copy(
                                 episodeImdbRatings = addonRatings,
+                                episodeSeriesGraphRatings = addonRatings,
                                 isEpisodeRatingsLoading = false,
                                 episodeRatingsError = if (addonRatings.isEmpty()) {
                                     localizedContext.getString(R.string.ratings_unavailable)
@@ -1422,7 +1454,8 @@ class MetaDetailsViewModel @Inject constructor(
                         state
                     } else {
                         state.copy(
-                            episodeImdbRatings = addonRatings + ratings,
+                            episodeImdbRatings = addonRatings + ratings.imdb,
+                            episodeSeriesGraphRatings = addonRatings + ratings.community,
                             isEpisodeRatingsLoading = false,
                             episodeRatingsError = null
                         )
@@ -1438,6 +1471,7 @@ class MetaDetailsViewModel @Inject constructor(
                     } else {
                         state.copy(
                             episodeImdbRatings = addonRatings,
+                            episodeSeriesGraphRatings = addonRatings,
                             isEpisodeRatingsLoading = false,
                             episodeRatingsError = if (addonRatings.isEmpty()) {
                                 localizedContext.getString(R.string.ratings_load_error)

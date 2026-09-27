@@ -28,6 +28,7 @@ import com.nuvio.tv.domain.model.DiscoverLocation
 import com.nuvio.tv.domain.model.EpisodeOptionsOverlayStyle
 import com.nuvio.tv.domain.model.FocusedPosterTrailerPlaybackTarget
 import com.nuvio.tv.domain.model.DetailImdbRatingsVisibility
+import com.nuvio.tv.domain.model.EpisodeRatingSource
 import com.nuvio.tv.domain.model.HomeLayout
 import com.nuvio.tv.domain.model.HomeImdbRatingsVisibility
 import kotlinx.coroutines.CoroutineScope
@@ -106,6 +107,7 @@ class LayoutPreferenceDataStore @Inject constructor(
     private val episodeOptionsOverlayStyleKey = stringPreferencesKey("episode_options_overlay_style")
     private val homeImdbRatingsVisibilityKey = stringPreferencesKey("home_imdb_ratings_visibility")
     private val detailImdbRatingsVisibilityKey = stringPreferencesKey("detail_imdb_ratings_visibility")
+    private val episodeRatingSourceKey = stringPreferencesKey("episode_rating_source")
     private val useEpisodeThumbnailsInCwKey = booleanPreferencesKey("use_episode_thumbnails_in_cw")
     private val continueWatchingEnabledKey = booleanPreferencesKey("continue_watching_enabled")
     private val continueWatchingCardStyleKey = stringPreferencesKey("continue_watching_card_style")
@@ -356,6 +358,12 @@ class LayoutPreferenceDataStore @Inject constructor(
         runCatching { DetailImdbRatingsVisibility.valueOf(stored) }
             .getOrDefault(DetailImdbRatingsVisibility.SHOW_ALL)
             .asEpisodeVisibility()
+    }
+
+    val episodeRatingSource: Flow<EpisodeRatingSource> = profileFlow { prefs ->
+        val stored = prefs[episodeRatingSourceKey] ?: EpisodeRatingSource.DEFAULT.name
+        runCatching { EpisodeRatingSource.valueOf(stored) }
+            .getOrDefault(EpisodeRatingSource.DEFAULT)
     }
 
     val useEpisodeThumbnailsInCw: Flow<Boolean> = profileFlow { prefs ->
@@ -729,6 +737,12 @@ class LayoutPreferenceDataStore @Inject constructor(
     suspend fun setDetailImdbRatingsVisibility(visibility: DetailImdbRatingsVisibility) {
         store().edit { prefs ->
             prefs[detailImdbRatingsVisibilityKey] = visibility.asEpisodeVisibility().name
+        }
+    }
+
+    suspend fun setEpisodeRatingSource(source: EpisodeRatingSource) {
+        store().edit { prefs ->
+            prefs[episodeRatingSourceKey] = source.name
         }
     }
 

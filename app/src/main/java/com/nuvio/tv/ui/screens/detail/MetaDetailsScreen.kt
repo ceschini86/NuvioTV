@@ -107,6 +107,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.DetailImdbRatingsVisibility
 import com.nuvio.tv.domain.model.EpisodeOptionsOverlayStyle
+import com.nuvio.tv.domain.model.EpisodeRatingSource
 import com.nuvio.tv.domain.model.HomeImdbRatingsVisibility
 import com.nuvio.tv.domain.model.LibraryListTab
 import com.nuvio.tv.domain.model.localizedMembershipTitle
@@ -826,6 +827,8 @@ fun MetaDetailsScreen(
                     collectionName = uiState.collectionName,
                     relatedWatchedStatus = uiState.relatedWatchedStatus,
                     episodeImdbRatings = uiState.episodeImdbRatings,
+                    episodeSeriesGraphRatings = uiState.episodeSeriesGraphRatings,
+                    episodeRatingSource = uiState.episodeRatingSource,
                     isEpisodeRatingsLoading = uiState.isEpisodeRatingsLoading,
                     episodeRatingsError = uiState.episodeRatingsError,
                     mdbListRatings = uiState.mdbListRatings,
@@ -842,6 +845,9 @@ fun MetaDetailsScreen(
                     commentsEpisodeTarget = uiState.commentsEpisodeTarget,
                     selectedComment = uiState.selectedComment,
                     onSeasonSelected = { viewModel.onEvent(MetaDetailsEvent.OnSeasonSelected(it)) },
+                    onEpisodeRatingSourceSelected = {
+                        viewModel.onEvent(MetaDetailsEvent.OnEpisodeRatingSourceSelected(it))
+                    },
                     onEpisodeClick = playEpisode,
                     onEpisodeManualPlayClick = playEpisodeManually,
                     onPlayClick = playTitle,
@@ -1145,6 +1151,8 @@ private fun MetaDetailsContent(
     collectionName: String?,
     relatedWatchedStatus: Map<String, Boolean> = emptyMap(),
     episodeImdbRatings: Map<Pair<Int, Int>, Double>,
+    episodeSeriesGraphRatings: Map<Pair<Int, Int>, Double>,
+    episodeRatingSource: EpisodeRatingSource,
     isEpisodeRatingsLoading: Boolean,
     episodeRatingsError: String?,
     mdbListRatings: MDBListRatings?,
@@ -1161,6 +1169,7 @@ private fun MetaDetailsContent(
     commentsEpisodeTarget: Video?,
     selectedComment: TraktCommentReview?,
     onSeasonSelected: (Int) -> Unit,
+    onEpisodeRatingSourceSelected: (EpisodeRatingSource) -> Unit,
     onEpisodeClick: (Video) -> Unit,
     onEpisodeManualPlayClick: (Video) -> Unit,
     onEpisodeStartFromBeginningClick: (Video) -> Unit = {},
@@ -1692,13 +1701,19 @@ private fun MetaDetailsContent(
     val hasMoreLikeThisSection = moreLikeThis.isNotEmpty()
     val hasTrailerSection = remember(meta.trailers) { meta.trailers.any { !it.ytId.isNullOrBlank() } }
     val showEpisodeImdbRatings = detailImdbRatingsVisibility.showEpisodeRatings
+    val selectedEpisodeRatings = remember(episodeRatingSource, episodeImdbRatings, episodeSeriesGraphRatings) {
+        when (episodeRatingSource) {
+            EpisodeRatingSource.IMDB -> episodeImdbRatings
+            EpisodeRatingSource.SERIES_GRAPH -> episodeSeriesGraphRatings
+        }
+    }
     val visibleEpisodeImdbRatings = remember(
-        episodeImdbRatings,
+        selectedEpisodeRatings,
         detailImdbRatingsVisibility,
         episodeProgressMap,
         watchedEpisodes
     ) {
-        episodeImdbRatings.filterKeys { episodeKey ->
+        selectedEpisodeRatings.filterKeys { episodeKey ->
             val isWatched = episodeProgressMap[episodeKey]?.isCompleted() == true ||
                 watchedEpisodes.contains(episodeKey)
             detailImdbRatingsVisibility.showEpisodeRating(isWatched)
@@ -2468,6 +2483,8 @@ private fun MetaDetailsContent(
                                     ratings = visibleEpisodeImdbRatings,
                                     isLoading = isEpisodeRatingsLoading,
                                     error = episodeRatingsError,
+                                    ratingSource = episodeRatingSource,
+                                    onRatingSourceSelected = onEpisodeRatingSourceSelected,
                                     title = if (hasVisiblePeopleTabs) "" else strTabRatings,
                                     upFocusRequester = if (hasVisiblePeopleTabs) {
                                         ratingsTabFocusRequester
