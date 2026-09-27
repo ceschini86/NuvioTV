@@ -17,6 +17,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
@@ -154,7 +155,9 @@ data class SubtitleStyleSettings(
     val outlineWidth: Int = 2, // 1-5
     val aiEnabled: Boolean = false,
     val aiAutoSelect: Boolean = false,
-    val aiModel: String = "GROQ_LLAMA_70B"
+    val aiModel: String = "GROQ_LLAMA_70B",
+    /** When true, AI subtitle prefs/keys are included in profile settings sync. Default off (device-local). */
+    val aiSyncWithProfile: Boolean = false
 )
 
 /**
@@ -582,6 +585,8 @@ class PlayerSettingsDataStore @Inject constructor(
     private val subtitleAiEnabledKey = booleanPreferencesKey("subtitle_ai_enabled")
     private val subtitleAiAutoSelectKey = booleanPreferencesKey("subtitle_ai_auto_select")
     private val subtitleAiModelKey = stringPreferencesKey("subtitle_ai_model")
+    private val subtitleAiSyncWithProfileKey = booleanPreferencesKey("subtitle_ai_sync_with_profile")
+    private val subtitleAiCredentialsJsonKey = stringPreferencesKey("subtitle_ai_credentials_json")
     private val subtitleSizeKey = intPreferencesKey("subtitle_size")
     private val subtitleVerticalOffsetKey = intPreferencesKey("subtitle_vertical_offset")
     private val subtitleBoldKey = booleanPreferencesKey("subtitle_bold")
@@ -1020,6 +1025,7 @@ class PlayerSettingsDataStore @Inject constructor(
                         aiEnabled = prefs[subtitleAiEnabledKey] ?: false,
                         aiAutoSelect = prefs[subtitleAiAutoSelectKey] ?: false,
                         aiModel = prefs[subtitleAiModelKey] ?: "GROQ_LLAMA_70B",
+                        aiSyncWithProfile = prefs[subtitleAiSyncWithProfileKey] ?: false,
                         size = prefs[subtitleSizeKey] ?: 100,
                         verticalOffset = prefs[subtitleVerticalOffsetKey] ?: 5,
                         bold = prefs[subtitleBoldKey] ?: false,
@@ -1602,6 +1608,21 @@ class PlayerSettingsDataStore @Inject constructor(
             prefs[subtitleAiModelKey] = model
         }
     }
+
+    suspend fun setSubtitleAiSyncWithProfile(enabled: Boolean) {
+        store().edit { prefs ->
+            prefs[subtitleAiSyncWithProfileKey] = enabled
+        }
+    }
+
+    suspend fun setSubtitleAiCredentialsJson(json: String) {
+        store().edit { prefs ->
+            prefs[subtitleAiCredentialsJsonKey] = json
+        }
+    }
+
+    suspend fun getSubtitleAiCredentialsJson(): String =
+        store().data.first()[subtitleAiCredentialsJsonKey].orEmpty()
 
     // Buffer settings functions
 

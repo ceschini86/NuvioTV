@@ -1,14 +1,19 @@
 package com.nuvio.tv.ui.screens.settings
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import androidx.media3.common.util.UnstableApi
+import com.nuvio.tv.R
 import com.nuvio.tv.core.plugin.PluginManager
 import com.nuvio.tv.data.local.DeviceLocalPlayerPreferences
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiAdvancedSettings
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiCredentials
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiKeyFormatError
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiModel
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiPingResult
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiRouter
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleTranslationService
+import com.nuvio.tv.ui.screens.player.subtitles.validateSubtitleAiApiKeyFormat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,8 +43,8 @@ import com.nuvio.tv.domain.repository.AddonRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
@@ -56,6 +61,8 @@ class PlaybackSettingsViewModel @Inject constructor(
     val subtitleAiApiKey: Flow<String> = deviceLocalPlayerPreferences.subtitleAiApiKey
     val subtitleAiCredentials: Flow<SubtitleAiCredentials> =
         deviceLocalPlayerPreferences.subtitleAiCredentials
+    val subtitleAiAdvancedSettings: Flow<SubtitleAiAdvancedSettings> =
+        deviceLocalPlayerPreferences.subtitleAiAdvancedSettings
     private val _subtitleAiPingResults =
         MutableStateFlow<Map<String, SubtitleAiPingResult>>(emptyMap())
     val subtitleAiPingResults: StateFlow<Map<String, SubtitleAiPingResult>> =
@@ -63,6 +70,12 @@ class PlaybackSettingsViewModel @Inject constructor(
     private val subtitleAiRouter = SubtitleAiRouter(SubtitleTranslationService())
     val trailerSettings: Flow<TrailerSettings> = trailerSettingsDataStore.settings
     val torrentSettingsFlow: Flow<TorrentSettingsData> = torrentSettings.settings
+
+    init {
+        viewModelScope.launch {
+            ensureSubtitleAiCredentialsMigrated()
+        }
+    }
 
     fun setP2pEnabled(enabled: Boolean) = torrentSettings.setP2pEnabled(enabled)
     fun setHideTorrentStats(enabled: Boolean) = torrentSettings.setHideTorrentStats(enabled)
@@ -275,36 +288,79 @@ class PlaybackSettingsViewModel @Inject constructor(
 
     suspend fun setSubtitleAiModel(model: String) {
         playerSettingsDataStore.setSubtitleAiModel(model)
+        // If legacy key still awaits JSON, migrate onto the newly preferred provider.
+        ensureSubtitleAiCredentialsMigrated()
     }
 
-    suspend fun setSubtitleAiApiKey(apiKey: String) {
-        deviceLocalPlayerPreferences.setSubtitleAiApiKey(apiKey)
+    suspend fun setSubtitleAiSyncWithProfile(enabled: Boolean) {
+        if (enabled) {
+            ensureSubtitleAiCredentialsMigrated()
+            val credentials = deviceLocalPlayerPreferences.subtitleAiCredentials.first()
+            playerSettingsDataStore.setSubtitleAiCredentialsJson(credentials.toJson())
+        }
+        playerSettingsDataStore.setSubtitleAiSyncWithProfile(enabled)
     }
 
     suspend fun setSubtitleAiProviderEnabled(model: SubtitleAiModel, enabled: Boolean) {
+        ensureSubtitleAiCredentialsMigrated()
         val current = deviceLocalPlayerPreferences.subtitleAiCredentials.first()
         val provider = current.provider(model)
         deviceLocalPlayerPreferences.updateSubtitleAiProvider(provider.copy(enabled = enabled))
+        mirrorSubtitleAiCredentialsIfSyncing()
     }
 
-    suspend fun addSubtitleAiKey(model: SubtitleAiModel, apiKey: String) {
+    /**
+     * Adds a key after light format validation.
+     * @return string resource id for a format error, or null if the key was persisted.
+     */
+    suspend fun addSubtitleAiKey(model: SubtitleAiModel, apiKey: String): Int? {
         val key = apiKey.trim()
-        if (key.isBlank()) return
+        validateSubtitleAiApiKeyFormat(model, key)?.let { return it.toMessageRes() }
+        ensureSubtitleAiCredentialsMigrated()
         val current = deviceLocalPlayerPreferences.subtitleAiCredentials.first()
         val provider = current.provider(model)
         val keys = (provider.keys + key).map { it.trim() }.filter { it.isNotBlank() }.distinct()
         deviceLocalPlayerPreferences.updateSubtitleAiProvider(
             provider.copy(enabled = true, keys = keys)
         )
+        mirrorSubtitleAiCredentialsIfSyncing()
+        return null
     }
 
     suspend fun removeSubtitleAiKey(model: SubtitleAiModel, apiKey: String) {
+        ensureSubtitleAiCredentialsMigrated()
         val current = deviceLocalPlayerPreferences.subtitleAiCredentials.first()
         val provider = current.provider(model)
         val keys = provider.keys.filterNot { it == apiKey }
         deviceLocalPlayerPreferences.updateSubtitleAiProvider(
             provider.copy(enabled = provider.enabled && keys.isNotEmpty(), keys = keys)
         )
+        mirrorSubtitleAiCredentialsIfSyncing()
+    }
+
+    suspend fun setSubtitleAiAdvancedSettings(settings: SubtitleAiAdvancedSettings) {
+        deviceLocalPlayerPreferences.setSubtitleAiAdvancedSettings(settings)
+    }
+
+    suspend fun resetSubtitleAiAdvancedSettings() {
+        deviceLocalPlayerPreferences.resetSubtitleAiAdvancedSettings()
+    }
+
+    private suspend fun ensureSubtitleAiCredentialsMigrated() {
+        val preferred = runCatching {
+            SubtitleAiModel.valueOf(
+                playerSettingsDataStore.playerSettings.first().subtitleStyle.aiModel
+            )
+        }.getOrDefault(SubtitleAiModel.GROQ_LLAMA_70B)
+        deviceLocalPlayerPreferences.ensureSubtitleAiCredentialsMigrated(preferred)
+    }
+
+    private suspend fun mirrorSubtitleAiCredentialsIfSyncing() {
+        val syncEnabled = playerSettingsDataStore.playerSettings.first()
+            .subtitleStyle.aiSyncWithProfile
+        if (!syncEnabled) return
+        val credentials = deviceLocalPlayerPreferences.subtitleAiCredentials.first()
+        playerSettingsDataStore.setSubtitleAiCredentialsJson(credentials.toJson())
     }
 
     suspend fun pingSubtitleAiKey(model: SubtitleAiModel, apiKey: String): SubtitleAiPingResult {
@@ -312,6 +368,13 @@ class PlaybackSettingsViewModel @Inject constructor(
         val slot = model.name + ":" + apiKey.trim().takeLast(4)
         _subtitleAiPingResults.value = _subtitleAiPingResults.value + (slot to result)
         return result
+    }
+
+    private fun SubtitleAiKeyFormatError.toMessageRes(): Int = when (this) {
+        SubtitleAiKeyFormatError.EMPTY -> R.string.sub_ai_key_format_empty
+        SubtitleAiKeyFormatError.WHITESPACE -> R.string.sub_ai_key_format_whitespace
+        SubtitleAiKeyFormatError.TOO_SHORT -> R.string.sub_ai_key_format_too_short
+        SubtitleAiKeyFormatError.WRONG_PREFIX -> R.string.sub_ai_key_format_wrong_prefix
     }
 
     suspend fun setSubtitleSize(size: Int) {

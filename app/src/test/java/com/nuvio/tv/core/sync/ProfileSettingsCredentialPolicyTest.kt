@@ -21,4 +21,43 @@ class ProfileSettingsCredentialPolicyTest {
         assertFalse(shouldExcludePreferenceFromProfileSettingsSync("mdblist_settings", "mdblist_enabled"))
         assertFalse(shouldExcludePreferenceFromProfileSettingsSync("animeskip_settings", "animeskip_enabled"))
     }
+
+    @Test
+    fun `subtitle AI keys stay local unless profile sync is enabled`() {
+        assertTrue(
+            shouldExcludePreferenceFromProfileSettingsSync(
+                "player_settings",
+                "subtitle_ai_enabled",
+                subtitleAiSyncWithProfile = false
+            )
+        )
+        assertTrue(
+            shouldExcludePreferenceFromProfileSettingsSync(
+                "player_settings",
+                "subtitle_ai_credentials_json",
+                subtitleAiSyncWithProfile = false
+            )
+        )
+        assertFalse(
+            shouldExcludePreferenceFromProfileSettingsSync(
+                "player_settings",
+                "subtitle_ai_enabled",
+                subtitleAiSyncWithProfile = true
+            )
+        )
+        assertFalse(
+            shouldExcludePreferenceFromProfileSettingsSync(
+                "player_settings",
+                "subtitle_ai_credentials_json",
+                subtitleAiSyncWithProfile = true
+            )
+        )
+        assertFalse(
+            shouldExcludePreferenceFromProfileSettingsSync(
+                "player_settings",
+                "subtitle_ai_sync_with_profile",
+                subtitleAiSyncWithProfile = false
+            )
+        )
+    }
 }

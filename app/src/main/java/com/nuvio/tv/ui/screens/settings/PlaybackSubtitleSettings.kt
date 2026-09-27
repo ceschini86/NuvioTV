@@ -4,6 +4,7 @@ package com.nuvio.tv.ui.screens.settings
 
 import com.nuvio.tv.ui.theme.NuvioTheme
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.VerticalAlignBottom
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -39,6 +41,12 @@ import com.nuvio.tv.data.local.LibassRenderType
 import com.nuvio.tv.data.local.PlayerSettings
 import com.nuvio.tv.data.local.SubtitleLanguageOption
 import com.nuvio.tv.ui.components.NuvioDialog
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.Tune
+import androidx.tv.material3.Border
+import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiAdvancedSettings
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiCredentials
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiModel
 import com.nuvio.tv.ui.screens.player.subtitles.maskApiKey
@@ -73,6 +81,7 @@ private val subtitleOutlineColors = listOf(
 internal fun LazyListScope.subtitleSettingsItems(
     playerSettings: PlayerSettings,
     subtitleAiCredentials: SubtitleAiCredentials,
+    subtitleAiAdvancedSettings: SubtitleAiAdvancedSettings = SubtitleAiAdvancedSettings.DEFAULT,
     aiSubtitlesExpanded: Boolean = false,
     onToggleAiSubtitlesExpanded: () -> Unit = {},
     aiSubtitlesHeaderFocus: FocusRequester? = null,
@@ -91,7 +100,10 @@ internal fun LazyListScope.subtitleSettingsItems(
     onSetSubtitleStripSdh: (Boolean) -> Unit,
     onSetSubtitleAiEnabled: (Boolean) -> Unit,
     onSetSubtitleAiAutoSelect: (Boolean) -> Unit,
+    onSetSubtitleAiSyncWithProfile: (Boolean) -> Unit,
     onSetSubtitleAiModel: (String) -> Unit,
+    onSetSubtitleAiAdvancedSettings: (SubtitleAiAdvancedSettings) -> Unit = {},
+    onResetSubtitleAiAdvancedSettings: () -> Unit = {},
     onSetSubtitleOutlineEnabled: (Boolean) -> Unit,
     onSetUseLibass: (Boolean) -> Unit,
     onSetLibassRenderType: (LibassRenderType) -> Unit,
@@ -208,6 +220,18 @@ internal fun LazyListScope.subtitleSettingsItems(
             )
         }
 
+        item(key = "subtitle_ai_sync_with_profile") {
+            ToggleSettingsItem(
+                icon = Icons.Default.Subtitles,
+                title = stringResource(R.string.sub_ai_sync_with_profile),
+                subtitle = stringResource(R.string.sub_ai_sync_with_profile_desc),
+                isChecked = playerSettings.subtitleStyle.aiSyncWithProfile,
+                onCheckedChange = onSetSubtitleAiSyncWithProfile,
+                onFocused = onItemFocused,
+                enabled = enabled
+            )
+        }
+
         item(key = "subtitle_ai_model") {
             val modelLabel = when (playerSettings.subtitleStyle.aiModel) {
                 "GEMINI_FLASH_25" -> stringResource(R.string.sub_ai_model_gemini)
@@ -276,6 +300,137 @@ internal fun LazyListScope.subtitleSettingsItems(
                     onClick = { onShowAiProviderKeysDialog(model) },
                     onFocused = onItemFocused,
                     enabled = enabled
+                )
+            }
+        }
+
+        item(key = "subtitle_ai_advanced_header") {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = NuvioTheme.spacing.md, bottom = NuvioTheme.spacing.xs)
+            ) {
+                Text(
+                    text = stringResource(R.string.sub_ai_advanced_section),
+                    color = NuvioTheme.colors.TextPrimary,
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Spacer(modifier = Modifier.height(NuvioTheme.spacing.xs))
+                Text(
+                    text = stringResource(R.string.sub_ai_advanced_section_desc),
+                    color = NuvioTheme.colors.TextSecondary,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+
+        item(key = "subtitle_ai_max_batch_size") {
+            SliderSettingsItem(
+                icon = Icons.Default.Tune,
+                title = stringResource(R.string.sub_ai_max_batch_size),
+                value = subtitleAiAdvancedSettings.maxBatchSize,
+                valueText = subtitleAiAdvancedSettings.maxBatchSize.toString(),
+                minValue = 5,
+                maxValue = 80,
+                step = 5,
+                onValueChange = {
+                    onSetSubtitleAiAdvancedSettings(subtitleAiAdvancedSettings.copy(maxBatchSize = it))
+                },
+                onFocused = onItemFocused,
+                enabled = enabled && playerSettings.subtitleStyle.aiEnabled
+            )
+        }
+        item(key = "subtitle_ai_batch_window") {
+            SliderSettingsItem(
+                icon = Icons.Default.Tune,
+                title = stringResource(R.string.sub_ai_batch_window),
+                value = subtitleAiAdvancedSettings.batchWindowMs,
+                valueText = "${subtitleAiAdvancedSettings.batchWindowMs} ms",
+                minValue = 50,
+                maxValue = 2000,
+                step = 50,
+                onValueChange = {
+                    onSetSubtitleAiAdvancedSettings(subtitleAiAdvancedSettings.copy(batchWindowMs = it))
+                },
+                onFocused = onItemFocused,
+                enabled = enabled && playerSettings.subtitleStyle.aiEnabled
+            )
+        }
+        item(key = "subtitle_ai_gemini_batch_window") {
+            SliderSettingsItem(
+                icon = Icons.Default.Tune,
+                title = stringResource(R.string.sub_ai_gemini_batch_window),
+                value = subtitleAiAdvancedSettings.geminiBatchWindowMs,
+                valueText = "${subtitleAiAdvancedSettings.geminiBatchWindowMs} ms",
+                minValue = 500,
+                maxValue = 10000,
+                step = 100,
+                onValueChange = {
+                    onSetSubtitleAiAdvancedSettings(
+                        subtitleAiAdvancedSettings.copy(geminiBatchWindowMs = it)
+                    )
+                },
+                onFocused = onItemFocused,
+                enabled = enabled && playerSettings.subtitleStyle.aiEnabled
+            )
+        }
+        item(key = "subtitle_ai_rate_limit_cooldown") {
+            val seconds = subtitleAiAdvancedSettings.rateLimitCooldownMs / 1000
+            SliderSettingsItem(
+                icon = Icons.Default.Tune,
+                title = stringResource(R.string.sub_ai_rate_limit_cooldown),
+                value = seconds,
+                valueText = "${seconds}s",
+                minValue = 5,
+                maxValue = 300,
+                step = 5,
+                onValueChange = {
+                    onSetSubtitleAiAdvancedSettings(
+                        subtitleAiAdvancedSettings.copy(rateLimitCooldownMs = it * 1000)
+                    )
+                },
+                onFocused = onItemFocused,
+                enabled = enabled && playerSettings.subtitleStyle.aiEnabled
+            )
+        }
+        item(key = "subtitle_ai_gemini_min_interval") {
+            SliderSettingsItem(
+                icon = Icons.Default.Tune,
+                title = stringResource(R.string.sub_ai_gemini_min_interval),
+                value = subtitleAiAdvancedSettings.geminiMinIntervalMs,
+                valueText = "${subtitleAiAdvancedSettings.geminiMinIntervalMs} ms",
+                minValue = 1000,
+                maxValue = 15000,
+                step = 200,
+                onValueChange = {
+                    onSetSubtitleAiAdvancedSettings(
+                        subtitleAiAdvancedSettings.copy(geminiMinIntervalMs = it)
+                    )
+                },
+                onFocused = onItemFocused,
+                enabled = enabled && playerSettings.subtitleStyle.aiEnabled
+            )
+        }
+        item(key = "subtitle_ai_advanced_reset") {
+            Button(
+                onClick = onResetSubtitleAiAdvancedSettings,
+                enabled = enabled && playerSettings.subtitleStyle.aiEnabled,
+                shape = ButtonDefaults.shape(shape = RoundedCornerShape(10.dp)),
+                colors = ButtonDefaults.colors(
+                    containerColor = NuvioTheme.colors.Background,
+                    focusedContainerColor = NuvioTheme.colors.Background
+                ),
+                border = ButtonDefaults.border(
+                    focusedBorder = Border(
+                        border = NuvioTheme.focusRing.border(NuvioTheme.spacing.hairline),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                )
+            ) {
+                Text(
+                    text = stringResource(R.string.sub_ai_advanced_reset),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = NuvioTheme.colors.TextPrimary
                 )
             }
         }

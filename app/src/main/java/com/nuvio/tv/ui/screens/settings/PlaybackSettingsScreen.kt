@@ -23,6 +23,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -44,15 +47,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import com.nuvio.tv.ui.screens.player.NuvioExoPlayerPerformanceHelper
 import com.nuvio.tv.R
 import android.view.KeyEvent
@@ -84,6 +92,7 @@ import com.nuvio.tv.data.local.PlayerSettings
 import com.nuvio.tv.data.local.displayName
 import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiCredentials
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiAdvancedSettings
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiModel
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiPingResult
 import com.nuvio.tv.ui.screens.player.subtitles.maskApiKey
@@ -121,6 +130,9 @@ fun PlaybackSettingsContent(
     val playerSettings by viewModel.playerSettings.collectAsStateWithLifecycle(initialValue = PlayerSettings())
     val subtitleAiCredentials by viewModel.subtitleAiCredentials.collectAsStateWithLifecycle(
         initialValue = SubtitleAiCredentials()
+    )
+    val subtitleAiAdvancedSettings by viewModel.subtitleAiAdvancedSettings.collectAsStateWithLifecycle(
+        initialValue = SubtitleAiAdvancedSettings.DEFAULT
     )
     val subtitleAiPingResults by viewModel.subtitleAiPingResults.collectAsStateWithLifecycle()
     val torrentSettings by viewModel.torrentSettingsFlow.collectAsStateWithLifecycle(
@@ -229,6 +241,13 @@ fun PlaybackSettingsContent(
                     coroutineScope.launch { viewModel.setSubtitleAiProviderEnabled(model, enabled) }
                 },
                 subtitleAiCredentials = subtitleAiCredentials,
+                subtitleAiAdvancedSettings = subtitleAiAdvancedSettings,
+                onSetSubtitleAiAdvancedSettings = { settings ->
+                    coroutineScope.launch { viewModel.setSubtitleAiAdvancedSettings(settings) }
+                },
+                onResetSubtitleAiAdvancedSettings = {
+                    coroutineScope.launch { viewModel.resetSubtitleAiAdvancedSettings() }
+                },
                 onShowStreamAutoPlayModeDialog = { openDialog { showStreamAutoPlayModeDialog = true } },
                 onShowStreamAutoPlaySourceDialog = { openDialog { showStreamAutoPlaySourceDialog = true } },
                 onShowStreamAutoPlayAddonSelectionDialog = { openDialog { showStreamAutoPlayAddonSelectionDialog = true } },
@@ -360,6 +379,9 @@ fun PlaybackSettingsContent(
                 },
                 onSetSubtitleAiAutoSelect = { enabled ->
                     coroutineScope.launch { viewModel.setSubtitleAiAutoSelect(enabled) }
+                },
+                onSetSubtitleAiSyncWithProfile = { enabled ->
+                    coroutineScope.launch { viewModel.setSubtitleAiSyncWithProfile(enabled) }
                 },
                 onSetSubtitleAiModel = { model ->
                     coroutineScope.launch { viewModel.setSubtitleAiModel(model) }
@@ -653,9 +675,7 @@ fun PlaybackSettingsContent(
             onToggleEnabled = { enabled ->
                 coroutineScope.launch { viewModel.setSubtitleAiProviderEnabled(model, enabled) }
             },
-            onAddKey = { key ->
-                coroutineScope.launch { viewModel.addSubtitleAiKey(model, key) }
-            },
+            onAddKey = { key -> viewModel.addSubtitleAiKey(model, key) },
             onRemoveKey = { key ->
                 coroutineScope.launch { viewModel.removeSubtitleAiKey(model, key) }
             },
@@ -671,43 +691,108 @@ private fun SubtitleAiProviderKeysDialog(
     provider: com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiProviderCredentials,
     pingResults: Map<String, SubtitleAiPingResult>,
     onToggleEnabled: (Boolean) -> Unit,
-    onAddKey: (String) -> Unit,
+    /** Returns string resource id on format error, or null if persisted. */
+    onAddKey: suspend (String) -> Int?,
     onRemoveKey: (String) -> Unit,
     onPingKey: suspend (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     var newKey by remember { mutableStateOf("") }
     var pingingKey by remember { mutableStateOf<String?>(null) }
+    var formatErrorRes by remember { mutableStateOf<Int?>(null) }
+    var isInputFocused by remember { mutableStateOf(false) }
+    var textFieldEditable by remember { mutableStateOf(false) }
+    var pendingFocusAfterAdd by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val inputFocusRequester = remember { FocusRequester() }
+    val inputCardFocusRequester = remember { FocusRequester() }
+    val firstTestKeyFocusRequester = remember { FocusRequester() }
+    val hasKeys = provider.usableKeys.isNotEmpty()
     val modelLabel = when (model) {
         SubtitleAiModel.GEMINI_FLASH_25 -> stringResource(R.string.sub_ai_model_gemini)
         SubtitleAiModel.CLAUDE_HAIKU -> stringResource(R.string.sub_ai_model_claude)
         SubtitleAiModel.GROQ_LLAMA_70B -> stringResource(R.string.sub_ai_model_groq)
     }
+
+    fun exitKeyEditing() {
+        textFieldEditable = false
+        isInputFocused = false
+        focusManager.clearFocus()
+        keyboardController?.hide()
+    }
+
+    LaunchedEffect(hasKeys, provider.usableKeys.firstOrNull()) {
+        if (pendingFocusAfterAdd != null) return@LaunchedEffect
+        if (hasKeys) {
+            firstTestKeyFocusRequester.requestFocusAfterFrames()
+        } else {
+            inputCardFocusRequester.requestFocusAfterFrames()
+        }
+    }
+
+    LaunchedEffect(pendingFocusAfterAdd, provider.usableKeys) {
+        val target = pendingFocusAfterAdd ?: return@LaunchedEffect
+        if (provider.usableKeys.any { it == target }) {
+            firstTestKeyFocusRequester.requestFocusAfterFrames()
+            pendingFocusAfterAdd = null
+        }
+    }
+
+    BackHandler(enabled = isInputFocused || textFieldEditable) {
+        exitKeyEditing()
+    }
+
     NuvioDialog(
-        onDismiss = onDismiss,
+        onDismiss = {
+            if (isInputFocused || textFieldEditable) {
+                exitKeyEditing()
+            } else {
+                onDismiss()
+            }
+        },
         title = stringResource(R.string.sub_ai_provider_keys) + " — " + modelLabel,
         subtitle = stringResource(R.string.sub_ai_api_key_desc),
         width = 760.dp
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-        ) {
+        if (model == SubtitleAiModel.GEMINI_FLASH_25) {
             Text(
-                text = stringResource(R.string.sub_ai_provider_enabled),
-                color = NuvioTheme.colors.TextPrimary,
-                style = MaterialTheme.typography.bodyMedium
-            )
-            androidx.tv.material3.Switch(
-                checked = provider.enabled && provider.usableKeys.isNotEmpty(),
-                onCheckedChange = onToggleEnabled,
-                enabled = provider.usableKeys.isNotEmpty()
+                text = stringResource(R.string.sub_ai_gemini_multi_key_warning),
+                color = Color(0xFFFFB74D),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
             )
         }
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.sub_ai_provider_enabled),
+                    color = NuvioTheme.colors.TextPrimary,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                androidx.tv.material3.Switch(
+                    checked = provider.enabled && hasKeys,
+                    onCheckedChange = onToggleEnabled,
+                    enabled = hasKeys
+                )
+            }
+            if (!hasKeys) {
+                Text(
+                    text = stringResource(R.string.sub_ai_provider_add_key_first),
+                    color = NuvioTheme.colors.TextSecondary,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(12.dp))
-        provider.usableKeys.forEach { key ->
+        provider.usableKeys.forEachIndexed { index, key ->
             val slot = model.name + ":" + key.trim().takeLast(4)
             val ping = pingResults[slot]
             val status = when {
@@ -725,7 +810,7 @@ private fun SubtitleAiProviderKeysDialog(
                     .fillMaxWidth()
                     .padding(vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -754,6 +839,11 @@ private fun SubtitleAiProviderKeysDialog(
                         }
                     },
                     enabled = pingingKey == null,
+                    modifier = if (index == 0) {
+                        Modifier.focusRequester(firstTestKeyFocusRequester)
+                    } else {
+                        Modifier
+                    },
                     colors = androidx.tv.material3.ButtonDefaults.colors(
                         containerColor = NuvioTheme.colors.BackgroundElevated,
                         contentColor = NuvioTheme.colors.TextPrimary
@@ -778,31 +868,93 @@ private fun SubtitleAiProviderKeysDialog(
             color = NuvioTheme.colors.TextSecondary,
             style = MaterialTheme.typography.bodySmall
         )
-        androidx.compose.foundation.text.BasicTextField(
-            value = newKey,
-            onValueChange = { newKey = it },
+        Card(
+            onClick = {
+                textFieldEditable = true
+                inputFocusRequester.requestFocus()
+            },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            singleLine = true,
-            textStyle = MaterialTheme.typography.bodyMedium.copy(color = NuvioTheme.colors.TextPrimary),
-            decorationBox = { inner ->
-                Box(
-                    Modifier
+                .focusRequester(inputCardFocusRequester)
+                .onFocusChanged { isInputFocused = it.isFocused || it.hasFocus },
+            colors = CardDefaults.colors(
+                containerColor = NuvioTheme.colors.BackgroundElevated,
+                focusedContainerColor = NuvioTheme.colors.BackgroundElevated
+            ),
+            border = CardDefaults.border(
+                border = Border(
+                    border = BorderStroke(NuvioTheme.spacing.hairline, NuvioTheme.colors.Border),
+                    shape = RoundedCornerShape(10.dp)
+                ),
+                focusedBorder = Border(
+                    border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs),
+                    shape = RoundedCornerShape(10.dp)
+                )
+            ),
+            shape = CardDefaults.shape(RoundedCornerShape(10.dp)),
+            scale = CardDefaults.scale(focusedScale = 1f)
+        ) {
+            Box(modifier = Modifier.padding(horizontal = 14.dp, vertical = NuvioTheme.spacing.md)) {
+                BasicTextField(
+                    value = newKey,
+                    onValueChange = {
+                        newKey = it
+                        formatErrorRes = null
+                    },
+                    modifier = Modifier
                         .fillMaxWidth()
-                        .background(NuvioTheme.colors.BackgroundElevated, RoundedCornerShape(10.dp))
-                        .padding(14.dp)
-                ) {
-                    if (newKey.isBlank()) {
-                        Text(
-                            text = stringResource(R.string.sub_ai_api_key_hint),
-                            color = NuvioTheme.colors.TextSecondary
-                        )
+                        .focusRequester(inputFocusRequester)
+                        .focusProperties { canFocus = textFieldEditable }
+                        .onFocusChanged { state ->
+                            if (state.isFocused) {
+                                isInputFocused = true
+                                textFieldEditable = true
+                            } else if (!state.hasFocus) {
+                                textFieldEditable = false
+                            }
+                        }
+                        .onKeyEvent { event ->
+                            val native = event.nativeKeyEvent
+                            when {
+                                native.keyCode == KeyEvent.KEYCODE_DPAD_CENTER &&
+                                    native.action == KeyEvent.ACTION_DOWN -> true
+                                (native.keyCode == KeyEvent.KEYCODE_ENTER ||
+                                    native.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER) &&
+                                    native.action == KeyEvent.ACTION_DOWN -> {
+                                    keyboardController?.hide()
+                                    true
+                                }
+                                else -> false
+                            }
+                        },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(
+                        onDone = { keyboardController?.hide() }
+                    ),
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                        color = NuvioTheme.colors.TextPrimary
+                    ),
+                    cursorBrush = SolidColor(
+                        if (isInputFocused && textFieldEditable) {
+                            NuvioTheme.colors.Primary
+                        } else {
+                            Color.Transparent
+                        }
+                    ),
+                    decorationBox = { inner ->
+                        if (newKey.isBlank()) {
+                            Text(
+                                text = stringResource(R.string.sub_ai_api_key_hint),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = NuvioTheme.colors.TextTertiary
+                            )
+                        }
+                        inner()
                     }
-                    inner()
-                }
+                )
             }
-        )
+        }
         Spacer(modifier = Modifier.height(16.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -822,12 +974,19 @@ private fun SubtitleAiProviderKeysDialog(
                 onClick = {
                     val key = newKey.trim()
                     if (key.isBlank()) return@Button
-                    onAddKey(key)
-                    pingingKey = key
+                    exitKeyEditing()
                     coroutineScope.launch {
+                        val errorRes = onAddKey(key)
+                        if (errorRes != null) {
+                            formatErrorRes = errorRes
+                            return@launch
+                        }
+                        formatErrorRes = null
+                        pendingFocusAfterAdd = key
+                        pingingKey = key
+                        newKey = ""
                         onPingKey(key)
                         pingingKey = null
-                        newKey = ""
                     }
                 },
                 enabled = newKey.isNotBlank(),
@@ -838,6 +997,15 @@ private fun SubtitleAiProviderKeysDialog(
             ) {
                 Text(text = stringResource(R.string.sub_ai_add_key))
             }
+        }
+        formatErrorRes?.let { resId ->
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = stringResource(resId),
+                color = Color(0xFFFF8A80),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }

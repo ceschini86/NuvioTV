@@ -15,10 +15,12 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.nuvio.tv.core.auth.AuthManager
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.data.local.ContinueWatchingEnrichmentCache
+import com.nuvio.tv.data.local.DeviceLocalPlayerPreferences
 import com.nuvio.tv.data.local.ExperienceModeDataStore
 import com.nuvio.tv.data.local.ProfileDataStoreFactory
 import com.nuvio.tv.data.local.StreamBadgeSettingsDataStore
 import com.nuvio.tv.data.local.TmdbSettingsDataStore
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiCredentials
 import com.nuvio.tv.data.remote.supabase.SupabaseProfileSetupCopyResult
 import com.nuvio.tv.data.remote.supabase.SupabaseProfileSettingsBlob
 import com.nuvio.tv.domain.model.DiscoverLocation
@@ -122,10 +124,6 @@ private val localOnlyPlayerProfileSettingsKeys = setOf(
     "resize_mode",
     "min_buffer_ms",
     "max_buffer_ms",
-    "subtitle_ai_api_key",
-    "subtitle_ai_enabled",
-    "subtitle_ai_auto_select",
-    "subtitle_ai_model",
     "buffer_for_playback_ms",
     "buffer_for_playback_after_rebuffer_ms",
     "target_buffer_size_mb",
@@ -147,6 +145,15 @@ private val localOnlyPlayerProfileSettingsKeys = setOf(
     "nuvio_performance_mode_enabled"
 )
 
+/** AI subtitle keys that stay local-only unless the user enables profile sync. */
+private val subtitleAiProfileSyncControlledKeys = setOf(
+    "subtitle_ai_api_key",
+    "subtitle_ai_enabled",
+    "subtitle_ai_auto_select",
+    "subtitle_ai_model",
+    "subtitle_ai_credentials_json"
+)
+
 private val credentialProfileSettingsKeys = mapOf(
     "debrid_settings" to setOf(
         "torbox_api_key",
@@ -157,11 +164,17 @@ private val credentialProfileSettingsKeys = mapOf(
     "animeskip_settings" to setOf("animeskip_client_id")
 )
 
-internal fun shouldExcludePreferenceFromProfileSettingsSync(feature: String, keyName: String): Boolean {
+internal fun shouldExcludePreferenceFromProfileSettingsSync(
+    feature: String,
+    keyName: String,
+    subtitleAiSyncWithProfile: Boolean = false
+): Boolean {
     return when {
         feature == "layout_settings" && keyName in catalogKeysExcludedFromProfileSettingsBlob -> true
         feature == "layout_settings" && keyName in localOnlyLayoutProfileSettingsKeys -> true
         feature == "layout_settings" && keyName == "search_discover_enabled" -> true
+        feature == PLAYER_SETTINGS_FEATURE && keyName in subtitleAiProfileSyncControlledKeys ->
+            !subtitleAiSyncWithProfile
         feature == PLAYER_SETTINGS_FEATURE && keyName in localOnlyPlayerProfileSettingsKeys -> true
         keyName in credentialProfileSettingsKeys[feature].orEmpty() -> true
         else -> false
@@ -178,6 +191,7 @@ class ProfileSettingsSyncService @Inject constructor(
     private val providerCredentialSyncService: ProviderCredentialSyncService,
     private val tmdbSettingsDataStore: TmdbSettingsDataStore,
     private val metaRepository: MetaRepository,
+    private val deviceLocalPlayerPreferences: DeviceLocalPlayerPreferences,
     private val cwEnrichmentCache: ContinueWatchingEnrichmentCache
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -444,9 +458,18 @@ class ProfileSettingsSyncService @Inject constructor(
         val features = buildJsonObject {
             syncedFeatures.forEach { feature ->
                 val prefs = profileDataStoreFactory.get(profileId, feature).data.first()
+                val subtitleAiSync = feature == PLAYER_SETTINGS_FEATURE &&
+                    (prefs[booleanPreferencesKey("subtitle_ai_sync_with_profile")] ?: false)
                 val serialized = buildJsonObject {
                     prefs.asMap().forEach { (key, rawValue) ->
-                        if (shouldExcludePreferenceFromProfileSettingsSync(feature, key.name)) return@forEach
+                        if (shouldExcludePreferenceFromProfileSettingsSync(
+                                feature,
+                                key.name,
+                                subtitleAiSyncWithProfile = subtitleAiSync
+                            )
+                        ) {
+                            return@forEach
+                        }
                         val encoded = encodePreferenceValue(rawValue) ?: return@forEach
                         put(key.name, encoded)
                     }
@@ -466,8 +489,17 @@ class ProfileSettingsSyncService @Inject constructor(
         try {
             syncedFeatures.forEach { feature ->
                 val featureJson = featuresJson[feature]?.jsonObject ?: return@forEach
+                val remoteSubtitleAiSync = if (feature == PLAYER_SETTINGS_FEATURE) {
+                    decodeBooleanPreference(featureJson["subtitle_ai_sync_with_profile"]) == true
+                } else {
+                    false
+                }
                 profileDataStoreFactory.get(profileId, feature).edit { mutablePrefs ->
-                    val preservedEntries = captureLocalOnlyPreferenceEntries(feature, mutablePrefs)
+                    val preservedEntries = captureLocalOnlyPreferenceEntries(
+                        feature,
+                        mutablePrefs,
+                        subtitleAiSyncWithProfile = remoteSubtitleAiSync
+                    )
                     val priorDiscoverLocation = if (feature == "layout_settings") {
                         mutablePrefs[stringPreferencesKey("discover_location")]
                     } else null
@@ -481,7 +513,12 @@ class ProfileSettingsSyncService @Inject constructor(
                     val hasWellFormedNewDiscoverKey = feature == "layout_settings" &&
                         extractDiscoverLocationString(featureJson) != null
                     featureJson.forEach { (keyName, encodedValue) ->
-                        if (shouldExcludePreferenceFromProfileSettingsSync(feature, keyName)) {
+                        if (shouldExcludePreferenceFromProfileSettingsSync(
+                                feature,
+                                keyName,
+                                subtitleAiSyncWithProfile = remoteSubtitleAiSync
+                            )
+                        ) {
                             if (feature != "layout_settings" || keyName != "search_discover_enabled") return@forEach
                             if (!hasWellFormedNewDiscoverKey) {
                                 val legacy = (encodedValue as? JsonObject)
@@ -527,10 +564,26 @@ class ProfileSettingsSyncService @Inject constructor(
                         }
                     }
                 }
+                if (feature == PLAYER_SETTINGS_FEATURE && remoteSubtitleAiSync) {
+                    applySyncedSubtitleAiCredentials(profileId)
+                }
             }
         } finally {
             applyingRemoteBlob = false
         }
+    }
+
+    private suspend fun applySyncedSubtitleAiCredentials(profileId: Int) {
+        val prefs = profileDataStoreFactory.get(profileId, PLAYER_SETTINGS_FEATURE).data.first()
+        val json = prefs[stringPreferencesKey("subtitle_ai_credentials_json")].orEmpty()
+        if (json.isBlank()) return
+        deviceLocalPlayerPreferences.setSubtitleAiCredentials(SubtitleAiCredentials.fromJson(json))
+    }
+
+    private fun decodeBooleanPreference(encoded: JsonElement?): Boolean? {
+        val obj = encoded as? JsonObject ?: return null
+        if (obj["type"]?.jsonPrimitive?.contentOrNull != "boolean") return null
+        return obj["value"]?.jsonPrimitive?.contentOrNull?.toBooleanStrictOrNull()
     }
 
     private fun observeLocalSettingsChangesAndSync() {
@@ -633,10 +686,19 @@ class ProfileSettingsSyncService @Inject constructor(
     }
 
     private fun buildFeatureSignature(prefs: Preferences, feature: String = ""): String {
+        val subtitleAiSync = feature == PLAYER_SETTINGS_FEATURE &&
+            (prefs[booleanPreferencesKey("subtitle_ai_sync_with_profile")] ?: false)
         return prefs.asMap()
             .entries
             .mapNotNull { (key, rawValue) ->
-                if (shouldExcludePreferenceFromProfileSettingsSync(feature, key.name)) return@mapNotNull null
+                if (shouldExcludePreferenceFromProfileSettingsSync(
+                        feature,
+                        key.name,
+                        subtitleAiSyncWithProfile = subtitleAiSync
+                    )
+                ) {
+                    return@mapNotNull null
+                }
                 encodePreferenceValue(rawValue)?.let { encoded ->
                     key.name to encoded.toString()
                 }
@@ -646,19 +708,34 @@ class ProfileSettingsSyncService @Inject constructor(
     }
 
     private fun buildFeatureSignature(featureJson: JsonObject, feature: String = ""): String {
+        val subtitleAiSync = feature == PLAYER_SETTINGS_FEATURE &&
+            decodeBooleanPreference(featureJson["subtitle_ai_sync_with_profile"]) == true
         return featureJson.entries
-            .filterNot { (key, _) -> shouldExcludePreferenceFromProfileSettingsSync(feature, key) }
+            .filterNot { (key, _) ->
+                shouldExcludePreferenceFromProfileSettingsSync(
+                    feature,
+                    key,
+                    subtitleAiSyncWithProfile = subtitleAiSync
+                )
+            }
             .sortedBy { it.key }
             .joinToString(separator = "|") { (key, value) -> "$key=$value" }
     }
 
     private fun captureLocalOnlyPreferenceEntries(
         feature: String,
-        mutablePrefs: MutablePreferences
+        mutablePrefs: MutablePreferences,
+        subtitleAiSyncWithProfile: Boolean = false
     ): Map<Preferences.Key<*>, Any> {
         val keyNames = when (feature) {
             "layout_settings" -> catalogKeysExcludedFromProfileSettingsBlob + localOnlyLayoutProfileSettingsKeys
-            PLAYER_SETTINGS_FEATURE -> localOnlyPlayerProfileSettingsKeys
+            PLAYER_SETTINGS_FEATURE -> {
+                val keys = localOnlyPlayerProfileSettingsKeys.toMutableSet()
+                if (!subtitleAiSyncWithProfile) {
+                    keys += subtitleAiProfileSyncControlledKeys
+                }
+                keys
+            }
             else -> credentialProfileSettingsKeys[feature].orEmpty()
         }
         if (keyNames.isEmpty()) return emptyMap()

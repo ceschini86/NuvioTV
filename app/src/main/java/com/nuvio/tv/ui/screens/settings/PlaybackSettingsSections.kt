@@ -176,10 +176,17 @@ internal fun PlaybackSettingsSections(
     onSetSubtitleStripSdh: (Boolean) -> Unit,
     onSetSubtitleAiEnabled: (Boolean) -> Unit,
     onSetSubtitleAiAutoSelect: (Boolean) -> Unit,
+    onSetSubtitleAiSyncWithProfile: (Boolean) -> Unit,
     onSetSubtitleAiModel: (String) -> Unit,
     onShowAiProviderKeysDialog: (SubtitleAiModel) -> Unit,
     onSetSubtitleAiProviderEnabled: (SubtitleAiModel, Boolean) -> Unit,
     subtitleAiCredentials: SubtitleAiCredentials,
+    subtitleAiAdvancedSettings: com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiAdvancedSettings =
+        com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiAdvancedSettings.DEFAULT,
+    onSetSubtitleAiAdvancedSettings: (
+        com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiAdvancedSettings
+    ) -> Unit = {},
+    onResetSubtitleAiAdvancedSettings: () -> Unit = {},
     onSetSubtitleOutlineEnabled: (Boolean) -> Unit,
     onSetUseLibass: (Boolean) -> Unit,
     onSetLibassRenderType: (LibassRenderType) -> Unit,
@@ -673,6 +680,7 @@ internal fun PlaybackSettingsSections(
             subtitleSettingsItems(
                 playerSettings = playerSettings,
                 subtitleAiCredentials = subtitleAiCredentials,
+                subtitleAiAdvancedSettings = subtitleAiAdvancedSettings,
                 aiSubtitlesExpanded = aiSubtitlesExpanded,
                 onToggleAiSubtitlesExpanded = { aiSubtitlesExpanded = !aiSubtitlesExpanded },
                 aiSubtitlesHeaderFocus = aiSubtitlesHeaderFocus,
@@ -691,7 +699,10 @@ internal fun PlaybackSettingsSections(
                 onSetSubtitleStripSdh = onSetSubtitleStripSdh,
                 onSetSubtitleAiEnabled = onSetSubtitleAiEnabled,
                 onSetSubtitleAiAutoSelect = onSetSubtitleAiAutoSelect,
+                onSetSubtitleAiSyncWithProfile = onSetSubtitleAiSyncWithProfile,
                 onSetSubtitleAiModel = onSetSubtitleAiModel,
+                onSetSubtitleAiAdvancedSettings = onSetSubtitleAiAdvancedSettings,
+                onResetSubtitleAiAdvancedSettings = onResetSubtitleAiAdvancedSettings,
                 onSetSubtitleOutlineEnabled = onSetSubtitleOutlineEnabled,
                 onSetUseLibass = onSetUseLibass,
                 onSetLibassRenderType = onSetLibassRenderType,

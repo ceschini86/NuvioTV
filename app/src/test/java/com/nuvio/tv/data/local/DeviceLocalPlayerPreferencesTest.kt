@@ -1,6 +1,8 @@
 package com.nuvio.tv.data.local
 
 import android.content.Context
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiAdvancedSettings
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiModel
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.first
@@ -88,5 +90,50 @@ class DeviceLocalPlayerPreferencesTest {
 
         assertTrue(preferences.playerStatsHudButtonEnabled.first())
         assertFalse(preferences.playerStatsHudActive.first())
+    }
+
+    @Test
+    fun ensureMigratesLegacyKeyOntoPreferredModelWithoutDroppingKey() = runTest {
+        val legacyKey = "gsk_legacy_key_value_123456"
+        preferences.seedLegacySubtitleAiApiKeyOnlyForTests(legacyKey)
+
+        val migrated = preferences.ensureSubtitleAiCredentialsMigrated(
+            SubtitleAiModel.GEMINI_FLASH_25
+        )
+
+        assertTrue(migrated.anyUsable())
+        val gemini = migrated.provider(SubtitleAiModel.GEMINI_FLASH_25)
+        assertTrue(gemini.enabled)
+        assertEquals(listOf(legacyKey), gemini.usableKeys)
+        assertFalse(migrated.provider(SubtitleAiModel.GROQ_LLAMA_70B).hasUsableKey)
+
+        // Second call is idempotent and still preserves the key (does not re-home to Claude).
+        val again = preferences.ensureSubtitleAiCredentialsMigrated(SubtitleAiModel.CLAUDE_HAIKU)
+        assertEquals(listOf(legacyKey), again.provider(SubtitleAiModel.GEMINI_FLASH_25).usableKeys)
+        assertEquals(legacyKey, preferences.subtitleAiApiKey.first())
+    }
+
+    @Test
+    fun advancedSettingsDefaultThenPersistAndReset() = runTest {
+        assertEquals(
+            SubtitleAiAdvancedSettings.DEFAULT,
+            preferences.subtitleAiAdvancedSettings.first()
+        )
+
+        val custom = SubtitleAiAdvancedSettings(
+            maxBatchSize = 20,
+            batchWindowMs = 300,
+            geminiBatchWindowMs = 3_000,
+            rateLimitCooldownMs = 90_000,
+            geminiMinIntervalMs = 5_000
+        )
+        preferences.setSubtitleAiAdvancedSettings(custom)
+        assertEquals(custom, preferences.subtitleAiAdvancedSettings.first())
+
+        preferences.resetSubtitleAiAdvancedSettings()
+        assertEquals(
+            SubtitleAiAdvancedSettings.DEFAULT,
+            preferences.subtitleAiAdvancedSettings.first()
+        )
     }
 }
