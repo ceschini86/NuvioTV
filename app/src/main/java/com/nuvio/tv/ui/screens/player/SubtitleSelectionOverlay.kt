@@ -418,13 +418,20 @@ internal fun SubtitleSelectionOverlay(
     val infoAnchorOption = remember(infoEntryOptionId, subtitleOptions) {
         infoEntryOptionId?.let { id -> subtitleOptions.firstOrNull { it.id == id } }
     }
-    // Col3 shows the focused Col2 option; when on INFO, keep the option that
-    // was focused at Right (infoEntryOptionId) so CTA/Info do not jump to playback.
-    val infoDisplayOption = when (activeRail) {
-        OverlayFocusRail.OPTION -> focusedOption
-        OverlayFocusRail.INFO -> infoAnchorOption ?: focusedOption ?: playbackSelectedOption
-        else -> playbackSelectedOption
+    // N4/B6: Col3 = focused Col2 option (selected or not). On INFO, freeze to the
+    // option anchored at Right so a transient focus flicker on playback-selected
+    // cannot swap the Info card mid-transition.
+    val infoDisplayRail = when (activeRail) {
+        OverlayFocusRail.OPTION -> SubtitleInfoDisplayRail.OPTION
+        OverlayFocusRail.INFO -> SubtitleInfoDisplayRail.INFO
+        else -> SubtitleInfoDisplayRail.LANGUAGE_OR_HIDDEN
     }
+    val infoDisplayOption = resolveSubtitleInfoDisplayOption(
+        rail = infoDisplayRail,
+        focused = focusedOption,
+        infoAnchor = infoAnchorOption,
+        playbackSelected = playbackSelectedOption
+    )
     val rateLimitedAll = stringResource(R.string.sub_ai_error_rate_limited_all)
     val rateLimited = stringResource(R.string.sub_ai_error_rate_limited)
     val apiKeyMissing = stringResource(R.string.sub_ai_error_api_key_missing)
@@ -618,6 +625,10 @@ internal fun SubtitleSelectionOverlay(
     }
 
     fun moveFocusBackToOptionRail() {
+        // Clear INFO ownership before Col2 FocusRequester fires so onOptionFocused
+        // is not suppressed (see pendingInfo / activeInfoFocusKey guard below).
+        activeInfoFocusKey = null
+        pendingInfoFocusKey = null
         val targetId = infoEntryOptionId?.takeIf { id -> subtitleOptions.any { it.id == id } }
             ?: optionTargetId
         requestOptionFocus(
@@ -631,7 +642,11 @@ internal fun SubtitleSelectionOverlay(
         val option = focusedOption ?: return
         // Col2 → Col3 only when an enabled CTA exists (selection not required).
         if (decideSubtitleInfoEntryFocus(infoCtaState) == null) return
+        // Freeze Col3 to the focused option *before* requesting CTA focus.
+        // TV focus search may briefly hit the playback-selected row on the way;
+        // without this, Info flips to the selected track (N4/B6 regression).
         infoEntryOptionId = option.id
+        activeRail = OverlayFocusRail.INFO
         requestInfoFocus(reason = "option_to_info")
     }
 
@@ -944,6 +959,17 @@ internal fun SubtitleSelectionOverlay(
                                 pendingOptionFocusLanguageKey = null
                             },
                             onOptionFocused = {
+                                // Suppress transient Col2 focus while entering/holding Col3.
+                                // Otherwise Right can land Info on the playback-selected row.
+                                if (pendingInfoFocusKey != null || activeInfoFocusKey != null) {
+                                    Log.d(
+                                        SubtitleFocusTag,
+                                        "option_focused_suppressed id=$it " +
+                                            "pendingInfo=$pendingInfoFocusKey " +
+                                            "activeInfo=$activeInfoFocusKey"
+                                    )
+                                    return@SubtitleOptionsRail
+                                }
                                 optionFocusMemory = optionFocusMemory + (browsedLanguageKey to it)
                                 infoEntryOptionId = it
                                 activeOptionFocusId = it

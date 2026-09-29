@@ -155,6 +155,17 @@ internal enum class SubtitleInfoEntryFocus {
     RESET_CTA
 }
 
+/**
+ * Which overlay rail owns DPAD focus for Col3 Info binding (N4 / B6 / I4).
+ * LANGUAGE_OR_HIDDEN → Col3 content is not shown (N1); resolver still returns playback
+ * only as a safe fallback when callers read it.
+ */
+internal enum class SubtitleInfoDisplayRail {
+    LANGUAGE_OR_HIDDEN,
+    OPTION,
+    INFO
+}
+
 internal fun decideSubtitleInfoEntryFocus(
     cta: SubtitleInfoCtaDecision
 ): SubtitleInfoEntryFocus? {
@@ -165,6 +176,22 @@ internal fun decideSubtitleInfoEntryFocus(
         SubtitleInfoCtaAction.TRANSLATE_WITH_AI -> SubtitleInfoEntryFocus.TRANSLATE_CTA
         SubtitleInfoCtaAction.NONE -> null
     }
+}
+
+/**
+ * N4 / B6 / I4: Col3 always describes the Col2 option under focus (selected or not).
+ * On INFO, prefer the option anchored at Right ([infoAnchor]) so a transient focus
+ * flicker on the playback-selected row cannot swap the Info card.
+ */
+internal fun <T> resolveSubtitleInfoDisplayOption(
+    rail: SubtitleInfoDisplayRail,
+    focused: T?,
+    infoAnchor: T?,
+    playbackSelected: T?
+): T? = when (rail) {
+    SubtitleInfoDisplayRail.OPTION -> focused ?: playbackSelected
+    SubtitleInfoDisplayRail.INFO -> infoAnchor ?: focused ?: playbackSelected
+    SubtitleInfoDisplayRail.LANGUAGE_OR_HIDDEN -> playbackSelected
 }
 
 internal data class SubtitleInfoSmartContext(

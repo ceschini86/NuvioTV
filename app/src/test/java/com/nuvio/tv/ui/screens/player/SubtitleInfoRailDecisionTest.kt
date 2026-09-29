@@ -546,6 +546,92 @@ class SubtitleInfoRailDecisionTest {
         assertNull(decideSubtitleInfoEntryFocus(aiFocusedNotSelected.cta))
     }
 
+    // --- N4 / B6 Col3 display binding (focused ≠ selected) ---
+
+    @Test
+    fun n4_optionRail_focusedNotSelected_bindsInfoToFocused() {
+        val focused = embeddedOption(id = "internal:1", title = "English", languageCode = "en")
+        val selected = aiOption()
+        val display = resolveSubtitleInfoDisplayOption(
+            rail = SubtitleInfoDisplayRail.OPTION,
+            focused = focused,
+            infoAnchor = selected, // stale anchor must not win on OPTION
+            playbackSelected = selected
+        )
+        assertEquals(focused, display)
+        assertEquals(SubtitleInfoContentKind.EMBEDDED, decideSubtitleInfoRail(
+            displayOption = display,
+            isPlaybackSelected = false,
+            diagnostics = diagnostics(
+                rung = AiSubtitleLadderRung.AI_EMBEDDED,
+                reason = "embedded original-language source"
+            ),
+            statusLine = null,
+            aiAvailable = true,
+            aiQuotaExhausted = false,
+            isUsingMpv = false,
+            translationActive = true
+        ).content.kind)
+    }
+
+    @Test
+    fun n4_infoRail_rightFromFocusedNotSelected_keepsAnchoredFocused() {
+        val focused = addonOption(id = "addon:other:x:https://x/b.srt", title = "Other EN")
+        val selected = aiOption()
+        // After Right: rail=INFO, anchor frozen to focused at moveFocusToInfoRail.
+        // Even if focused briefly flickers to playback-selected, Info stays on anchor.
+        val display = resolveSubtitleInfoDisplayOption(
+            rail = SubtitleInfoDisplayRail.INFO,
+            focused = selected, // transient flicker toward selected
+            infoAnchor = focused,
+            playbackSelected = selected
+        )
+        assertEquals(focused, display)
+        val decision = decideSubtitleInfoRail(
+            displayOption = display,
+            isPlaybackSelected = false,
+            diagnostics = diagnostics(
+                rung = AiSubtitleLadderRung.AI_EMBEDDED,
+                reason = "embedded original-language source"
+            ),
+            statusLine = null,
+            aiAvailable = true,
+            aiQuotaExhausted = false,
+            isUsingMpv = false,
+            translationActive = true
+        )
+        assertEquals(SubtitleInfoContentKind.ADDON, decision.content.kind)
+        assertEquals(SubtitleInfoCtaAction.TRANSLATE_WITH_AI, decision.cta.action)
+        assertTrue(decision.cta.canMoveFocusToCta)
+        assertEquals(SubtitleInfoEntryFocus.TRANSLATE_CTA, decideSubtitleInfoEntryFocus(decision.cta))
+    }
+
+    @Test
+    fun n4_infoRail_fallsBackToFocusedWhenAnchorMissing() {
+        val focused = embeddedOption(id = "internal:2", title = "German", languageCode = "de")
+        val selected = embeddedOption(id = "internal:0", title = "French", languageCode = "fr")
+        val display = resolveSubtitleInfoDisplayOption(
+            rail = SubtitleInfoDisplayRail.INFO,
+            focused = focused,
+            infoAnchor = null,
+            playbackSelected = selected
+        )
+        assertEquals(focused, display)
+    }
+
+    @Test
+    fun n4_languageRail_doesNotPreferFocusedOverPlaybackSelected() {
+        val focused = embeddedOption(id = "internal:1", title = "English", languageCode = "en")
+        val selected = aiOption()
+        val display = resolveSubtitleInfoDisplayOption(
+            rail = SubtitleInfoDisplayRail.LANGUAGE_OR_HIDDEN,
+            focused = focused,
+            infoAnchor = focused,
+            playbackSelected = selected
+        )
+        assertEquals(selected, display)
+    }
+
     @Test
     fun c6_aiUnavailable_showsDisabledNonFocusableTranslateAndReason() {
         val noKey = decideSubtitleInfoRail(
