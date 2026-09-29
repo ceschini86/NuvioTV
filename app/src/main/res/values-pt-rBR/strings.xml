@@ -439,7 +439,9 @@
     <string name="licenses_attributions_series_graph_body">O Nuvio utiliza o Series Graph para médias comunitárias de avaliação de episódios nas páginas de detalhes de séries. O Nuvio não é afiliado nem endossado pelo Series Graph.</string>
     <string name="episode_rating_source_series_graph">Series Graph</string>
     <string name="episode_rating_source_series_graph_short">SG</string>
+    <string name="episode_rating_source_imdb">IMDb</string>
     <string name="episode_rating_attribution_series_graph">Avaliações do Series Graph</string>
+    <string name="episode_rating_attribution_imdb">Notas IMDb via Series Graph</string>
     <string name="licenses_attributions_exoplayer_title">AndroidX Media3 ExoPlayer 1.8.0</string>
     <string name="licenses_attributions_exoplayer_body">Usado como motor de reprodução Android. Licenciado sob a Apache License, Versão 2.0.</string>
     <string name="licenses_attributions_libmpv_title">libmpv / libmpv-android</string>
@@ -1010,6 +1012,8 @@
     <string name="layout_overall_ratings_sub_off">Oculta as avaliações padrão e do TMDB. As configurações do provedor MDBList têm prioridade nas páginas de detalhes.</string>
     <string name="layout_episode_ratings">Avaliações de episódios</string>
     <string name="layout_episode_ratings_sub">Escolha quais avaliações de episódios ficam visíveis.</string>
+    <string name="layout_episode_rating_source">Fonte das avaliações de episódio</string>
+    <string name="layout_episode_rating_source_sub">Escolha notas da comunidade Series Graph ou notas IMDb na aba Avaliações.</string>
     <string name="layout_ratings_show">Mostrar</string>
     <string name="layout_ratings_hide">Ocultar</string>
     <string name="layout_ratings_hide_unwatched">Ocultar não assistidos</string>

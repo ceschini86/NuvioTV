@@ -1066,6 +1066,8 @@
     <string name="layout_overall_ratings_sub_off">Standard and TMDB ratings are Hidden. MDBList provider settings take priority on detail pages.</string>
     <string name="layout_episode_ratings">Episode Ratings</string>
     <string name="layout_episode_ratings_sub">Choose which episode ratings are visible.</string>
+    <string name="layout_episode_rating_source">Episode rating source</string>
+    <string name="layout_episode_rating_source_sub">Choose Series Graph community scores or IMDb ratings on the Ratings tab.</string>
     <string name="layout_ratings_show">Show</string>
     <string name="layout_ratings_hide">Hide</string>
     <string name="layout_ratings_hide_unwatched">Hide Unwatched</string>
@@ -2515,7 +2517,9 @@
     <string name="cd_imdb">IMDb</string>
     <string name="episode_rating_source_series_graph">Series Graph</string>
     <string name="episode_rating_source_series_graph_short">SG</string>
+    <string name="episode_rating_source_imdb">IMDb</string>
     <string name="episode_rating_attribution_series_graph">Ratings from Series Graph</string>
+    <string name="episode_rating_attribution_imdb">IMDb ratings via Series Graph</string>
     <string name="cd_open_discover">Open discover</string>
     <string name="cd_clear_search">Clear search</string>
     <string name="cd_voice_search">Voice search</string>

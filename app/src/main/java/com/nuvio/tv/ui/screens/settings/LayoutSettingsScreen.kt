@@ -78,6 +78,7 @@ import com.nuvio.tv.domain.model.DEFAULT_CARD_DEPTH_EDGE_COVERAGE
 import com.nuvio.tv.domain.model.DEFAULT_CARD_DEPTH_EDGE_STRENGTH
 import com.nuvio.tv.domain.model.DEFAULT_CARD_DEPTH_SHEEN_STRENGTH
 import com.nuvio.tv.domain.model.DetailImdbRatingsVisibility
+import com.nuvio.tv.domain.model.EpisodeRatingSource
 import com.nuvio.tv.domain.model.DiscoverLocation
 import com.nuvio.tv.domain.model.EpisodeOptionsOverlayStyle
 import com.nuvio.tv.domain.model.FocusedPosterTrailerPlaybackTarget
@@ -140,6 +141,7 @@ fun LayoutSettingsContent(
     var showCwSortModeDialog by rememberSaveable { mutableStateOf(false) }
     var showStreamBadgePositionDialog by rememberSaveable { mutableStateOf(false) }
     var showEpisodeRatingsDialog by rememberSaveable { mutableStateOf(false) }
+    var showEpisodeRatingSourceDialog by rememberSaveable { mutableStateOf(false) }
     var showEpisodeOptionsOverlayStyleDialog by rememberSaveable { mutableStateOf(false) }
 
     val defaultHomeLayoutHeaderFocus = remember { FocusRequester() }
@@ -542,6 +544,14 @@ fun LayoutSettingsContent(
                         subtitle = stringResource(R.string.layout_episode_ratings_sub),
                         value = episodeRatingsVisibilityLabel(uiState.detailImdbRatingsVisibility),
                         onClick = { showEpisodeRatingsDialog = true },
+                        onFocused = { focusedSection = LayoutSettingsSection.DETAIL_PAGE }
+                    )
+
+                    SettingsActionRow(
+                        title = stringResource(R.string.layout_episode_rating_source),
+                        subtitle = stringResource(R.string.layout_episode_rating_source_sub),
+                        value = episodeRatingSourceLabel(uiState.episodeRatingSource),
+                        onClick = { showEpisodeRatingSourceDialog = true },
                         onFocused = { focusedSection = LayoutSettingsSection.DETAIL_PAGE }
                     )
 
@@ -1022,6 +1032,17 @@ fun LayoutSettingsContent(
             )
         }
 
+        if (showEpisodeRatingSourceDialog) {
+            EpisodeRatingSourceDialog(
+                currentSource = uiState.episodeRatingSource,
+                onSourceSelected = { source ->
+                    viewModel.onEvent(LayoutSettingsEvent.SetEpisodeRatingSource(source))
+                    showEpisodeRatingSourceDialog = false
+                },
+                onDismiss = { showEpisodeRatingSourceDialog = false }
+            )
+        }
+
         if (showEpisodeOptionsOverlayStyleDialog) {
             EpisodeOptionsOverlayStyleDialog(
                 currentStyle = uiState.episodeOptionsOverlayStyle,
@@ -1089,6 +1110,13 @@ private fun episodeRatingsVisibilityLabel(visibility: DetailImdbRatingsVisibilit
         DetailImdbRatingsVisibility.HIDE_UNWATCHED_EPISODES -> stringResource(R.string.layout_ratings_hide_unwatched)
         DetailImdbRatingsVisibility.HIDE_EPISODES,
         DetailImdbRatingsVisibility.HIDE_ALL -> stringResource(R.string.layout_ratings_hide)
+    }
+
+@Composable
+private fun episodeRatingSourceLabel(source: EpisodeRatingSource): String =
+    when (source) {
+        EpisodeRatingSource.SERIES_GRAPH -> stringResource(R.string.episode_rating_source_series_graph)
+        EpisodeRatingSource.IMDB -> stringResource(R.string.episode_rating_source_imdb)
     }
 
 @Composable
@@ -1180,6 +1208,35 @@ private fun EpisodeRatingsDialog(
         onDismiss = onDismiss,
         width = 420.dp,
         maxHeight = 340.dp
+    )
+}
+
+@Composable
+private fun EpisodeRatingSourceDialog(
+    currentSource: EpisodeRatingSource,
+    onSourceSelected: (EpisodeRatingSource) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val options = listOf(
+        SettingsPickerOption(
+            EpisodeRatingSource.SERIES_GRAPH,
+            stringResource(R.string.episode_rating_source_series_graph)
+        ),
+        SettingsPickerOption(
+            EpisodeRatingSource.IMDB,
+            stringResource(R.string.episode_rating_source_imdb)
+        )
+    )
+
+    SettingsSingleChoiceDialog(
+        title = stringResource(R.string.layout_episode_rating_source),
+        subtitle = stringResource(R.string.layout_episode_rating_source_sub),
+        options = options,
+        selectedValue = currentSource,
+        onOptionSelected = onSourceSelected,
+        onDismiss = onDismiss,
+        width = 420.dp,
+        maxHeight = 280.dp
     )
 }
 
