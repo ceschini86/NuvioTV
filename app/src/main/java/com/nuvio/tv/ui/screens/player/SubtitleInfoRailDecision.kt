@@ -184,6 +184,25 @@ internal fun decideSubtitleInfoEntryFocus(
 }
 
 /**
+ * Resolve which Col2 option id owns Info / Col2→Right for the *browsed* language.
+ *
+ * Never keep a playback-selected id from another Col1 language: that made Right work
+ * only under the language that had ✓ (stale [activeOptionFocusId] + empty CTA).
+ */
+internal fun resolveCol2OptionIdForBrowsedLanguage(
+    activeOptionFocusId: String?,
+    optionFocusMemoryId: String?,
+    optionTargetId: String?,
+    currentOptionIds: Collection<String>
+): String? {
+    if (currentOptionIds.isEmpty()) return null
+    val ids = currentOptionIds as? Set<String> ?: currentOptionIds.toHashSet()
+    return activeOptionFocusId?.takeIf { it in ids }
+        ?: optionFocusMemoryId?.takeIf { it in ids }
+        ?: optionTargetId?.takeIf { it in ids }
+}
+
+/**
  * N4 / B6 / I4: Col3 always describes the Col2 option under focus (selected or not).
  * On INFO, prefer the option anchored at Right ([infoAnchor]) so a transient focus
  * flicker on the playback-selected row cannot swap the Info card.

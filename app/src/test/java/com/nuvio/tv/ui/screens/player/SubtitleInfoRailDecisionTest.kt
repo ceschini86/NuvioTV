@@ -929,6 +929,58 @@ class SubtitleInfoRailDecisionTest {
     }
 
     @Test
+    fun resolveCol2OptionId_prefersActiveWhenInBrowsedLanguage() {
+        assertEquals(
+            "en_1",
+            resolveCol2OptionIdForBrowsedLanguage(
+                activeOptionFocusId = "en_1",
+                optionFocusMemoryId = "en_0",
+                optionTargetId = "en_0",
+                currentOptionIds = listOf("en_0", "en_1")
+            )
+        )
+    }
+
+    @Test
+    fun resolveCol2OptionId_dropsCrossLanguageActiveAndUsesMemory() {
+        // Playback ✓ was Portuguese; Col2 is browsing English — stale active must not win.
+        assertEquals(
+            "en_0",
+            resolveCol2OptionIdForBrowsedLanguage(
+                activeOptionFocusId = "pt_selected",
+                optionFocusMemoryId = "en_0",
+                optionTargetId = "en_1",
+                currentOptionIds = listOf("en_0", "en_1")
+            )
+        )
+    }
+
+    @Test
+    fun resolveCol2OptionId_fallsBackToTargetWhenMemoryAlsoMissing() {
+        assertEquals(
+            "en_1",
+            resolveCol2OptionIdForBrowsedLanguage(
+                activeOptionFocusId = "pt_selected",
+                optionFocusMemoryId = "pt_selected",
+                optionTargetId = "en_1",
+                currentOptionIds = listOf("en_0", "en_1")
+            )
+        )
+    }
+
+    @Test
+    fun resolveCol2OptionId_nullWhenNothingInBrowsedLanguage() {
+        assertNull(
+            resolveCol2OptionIdForBrowsedLanguage(
+                activeOptionFocusId = "pt_selected",
+                optionFocusMemoryId = "pt_selected",
+                optionTargetId = "pt_selected",
+                currentOptionIds = listOf("en_0", "en_1")
+            )
+        )
+    }
+
+    @Test
     fun entryFocus_fallsBackToCycleProviderWhenPrimaryAbsent() {
         assertEquals(
             SubtitleInfoEntryFocus.CYCLE_PROVIDER_CTA,
