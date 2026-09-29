@@ -22,6 +22,7 @@ import com.nuvio.tv.domain.model.ContinueWatchingSortMode
 import com.nuvio.tv.domain.model.DiscoverLocation
 import com.nuvio.tv.domain.model.DetailImdbRatingsVisibility
 import com.nuvio.tv.domain.model.EpisodeOptionsOverlayStyle
+import com.nuvio.tv.domain.model.EpisodeRatingSource
 import com.nuvio.tv.domain.model.FocusedPosterTrailerPlaybackTarget
 import com.nuvio.tv.domain.model.HomeLayout
 import com.nuvio.tv.domain.model.HomeImdbRatingsVisibility
@@ -69,6 +70,7 @@ data class LayoutSettingsUiState(
     val episodeOptionsOverlayStyle: EpisodeOptionsOverlayStyle = EpisodeOptionsOverlayStyle.BLUR,
     val homeImdbRatingsVisibility: HomeImdbRatingsVisibility = HomeImdbRatingsVisibility.SHOW_ALL,
     val detailImdbRatingsVisibility: DetailImdbRatingsVisibility = DetailImdbRatingsVisibility.SHOW_ALL,
+    val episodeRatingSource: EpisodeRatingSource = EpisodeRatingSource.DEFAULT,
     val blurContinueWatchingNextUp: Boolean = false,
     val useEpisodeThumbnailsInCw: Boolean = true,
     val detailPageTrailerButtonEnabled: Boolean = true,
@@ -126,6 +128,7 @@ sealed class LayoutSettingsEvent {
     data class SetEpisodeOptionsOverlayStyle(val style: EpisodeOptionsOverlayStyle) : LayoutSettingsEvent()
     data class SetHomeImdbRatingsVisibility(val visibility: HomeImdbRatingsVisibility) : LayoutSettingsEvent()
     data class SetDetailImdbRatingsVisibility(val visibility: DetailImdbRatingsVisibility) : LayoutSettingsEvent()
+    data class SetEpisodeRatingSource(val source: EpisodeRatingSource) : LayoutSettingsEvent()
     data class SetBlurContinueWatchingNextUp(val enabled: Boolean) : LayoutSettingsEvent()
     data class SetUseEpisodeThumbnailsInCw(val enabled: Boolean) : LayoutSettingsEvent()
     data class SetDetailPageTrailerButtonEnabled(val enabled: Boolean) : LayoutSettingsEvent()
@@ -321,6 +324,11 @@ class LayoutSettingsViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
+            layoutPreferenceDataStore.episodeRatingSource.distinctUntilChanged().collectLatest { source ->
+                updateUiStateIfChanged { it.copy(episodeRatingSource = source) }
+            }
+        }
+        viewModelScope.launch {
             layoutPreferenceDataStore.blurContinueWatchingNextUp.distinctUntilChanged().collectLatest { enabled ->
                 updateUiStateIfChanged { it.copy(blurContinueWatchingNextUp = enabled) }
             }
@@ -434,6 +442,7 @@ class LayoutSettingsViewModel @Inject constructor(
             is LayoutSettingsEvent.SetEpisodeOptionsOverlayStyle -> setEpisodeOptionsOverlayStyle(event.style)
             is LayoutSettingsEvent.SetHomeImdbRatingsVisibility -> setHomeImdbRatingsVisibility(event.visibility)
             is LayoutSettingsEvent.SetDetailImdbRatingsVisibility -> setDetailImdbRatingsVisibility(event.visibility)
+            is LayoutSettingsEvent.SetEpisodeRatingSource -> setEpisodeRatingSource(event.source)
             is LayoutSettingsEvent.SetBlurContinueWatchingNextUp -> setBlurContinueWatchingNextUp(event.enabled)
             is LayoutSettingsEvent.SetUseEpisodeThumbnailsInCw -> setUseEpisodeThumbnailsInCw(event.enabled)
             is LayoutSettingsEvent.SetDetailPageTrailerButtonEnabled -> setDetailPageTrailerButtonEnabled(event.enabled)
@@ -749,6 +758,13 @@ class LayoutSettingsViewModel @Inject constructor(
         if (_uiState.value.detailImdbRatingsVisibility == visibility) return
         viewModelScope.launch {
             layoutPreferenceDataStore.setDetailImdbRatingsVisibility(visibility)
+        }
+    }
+
+    private fun setEpisodeRatingSource(source: EpisodeRatingSource) {
+        if (_uiState.value.episodeRatingSource == source) return
+        viewModelScope.launch {
+            layoutPreferenceDataStore.setEpisodeRatingSource(source)
         }
     }
 

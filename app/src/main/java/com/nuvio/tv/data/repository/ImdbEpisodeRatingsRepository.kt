@@ -2,6 +2,7 @@ package com.nuvio.tv.data.repository
 
 import android.util.Log
 import com.nuvio.tv.data.remote.api.SeriesGraphApi
+import com.nuvio.tv.data.remote.api.SeriesGraphSeasonRatingsDto
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -12,26 +13,34 @@ import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Episode ratings for the detail Ratings tab.
+ *
+ * Historically named for IMDb; the network path is Series Graph only
+ * (`/api/shows/{tmdbId}/season-ratings`), which returns both
+ * `community_avg` and `imdb_rating` in one response.
+ * [BuildConfig.IMDB_RATINGS_API_BASE_URL] is unused legacy.
+ */
 @Singleton
 class ImdbEpisodeRatingsRepository @Inject constructor(
     private val seriesGraphApi: SeriesGraphApi
 ) {
     private data class CacheEntry(
-        val ratings: Map<Pair<Int, Int>, Double>,
+        val ratings: EpisodeRatingsPayload,
         val expiresAtMs: Long
     )
 
     private val tag = "ImdbEpisodeRatingsRepo"
     private val cacheTtlMs = 30L * 60L * 1000L
     private val cache = ConcurrentHashMap<String, CacheEntry>()
-    private val inFlight = mutableMapOf<String, kotlinx.coroutines.Deferred<Map<Pair<Int, Int>, Double>>>()
+    private val inFlight = mutableMapOf<String, kotlinx.coroutines.Deferred<EpisodeRatingsPayload>>()
     private val inFlightMutex = Mutex()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     suspend fun getEpisodeRatings(
         tmdbId: Int?
-    ): Map<Pair<Int, Int>, Double> {
-        val normalizedTmdbId = tmdbId?.takeIf { it > 0 } ?: return emptyMap()
+    ): EpisodeRatingsPayload {
+        val normalizedTmdbId = tmdbId?.takeIf { it > 0 } ?: return EpisodeRatingsPayload()
         val cacheKey = "tmdb:$normalizedTmdbId"
 
         val now = System.currentTimeMillis()
@@ -62,30 +71,37 @@ class ImdbEpisodeRatingsRepository @Inject constructor(
         return deferred.await()
     }
 
-    private suspend fun fetchFromSeriesGraph(tmdbId: Int): Map<Pair<Int, Int>, Double> {
+    private suspend fun fetchFromSeriesGraph(tmdbId: Int): EpisodeRatingsPayload {
         return try {
             val response = seriesGraphApi.getSeasonRatings(tmdbId)
             if (!response.isSuccessful) {
                 Log.w(tag, "Failed Series Graph season ratings for tmdbId=$tmdbId (${response.code()})")
-                return emptyMap()
+                return EpisodeRatingsPayload()
             }
-            toRatingsMap(response.body().orEmpty())
+            toRatingsPayload(response.body().orEmpty())
         } catch (e: Exception) {
             Log.w(tag, "Error fetching Series Graph season ratings for tmdbId=$tmdbId", e)
-            emptyMap()
+            EpisodeRatingsPayload()
         }
     }
 
-    private fun toRatingsMap(payload: List<com.nuvio.tv.data.remote.api.SeriesGraphSeasonRatingsDto>): Map<Pair<Int, Int>, Double> {
-        return buildMap {
+    companion object {
+        internal fun toRatingsPayload(payload: List<SeriesGraphSeasonRatingsDto>): EpisodeRatingsPayload {
+            val community = linkedMapOf<Pair<Int, Int>, Double>()
+            val imdb = linkedMapOf<Pair<Int, Int>, Double>()
             payload.forEach { season ->
                 season.episodes.orEmpty().forEach { episode ->
                     val seasonNumber = episode.seasonNumber ?: return@forEach
                     val episodeNumber = episode.episodeNumber ?: return@forEach
-                    val communityAverage = episode.communityAverage ?: return@forEach
-                    put(seasonNumber to episodeNumber, communityAverage)
+                    val key = seasonNumber to episodeNumber
+                    episode.communityAverage?.let { community[key] = it }
+                    episode.imdbRating?.let { imdb[key] = it }
                 }
             }
+            return EpisodeRatingsPayload(
+                communityByEpisode = community,
+                imdbByEpisode = imdb
+            )
         }
     }
 }

@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.detail
 import com.nuvio.tv.core.tracking.TrackingMembershipRemovalConfirmation
 import com.nuvio.tv.domain.model.DetailImdbRatingsVisibility
 import com.nuvio.tv.domain.model.EpisodeOptionsOverlayStyle
+import com.nuvio.tv.domain.model.EpisodeRatingSource
 import com.nuvio.tv.domain.model.Meta
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.MetaTrailer
@@ -71,7 +72,11 @@ data class MetaDetailsUiState(
     val collection: List<MetaPreview> = emptyList(),
     val collectionName: String? = null,
     val relatedWatchedStatus: Map<String, Boolean> = emptyMap(),
+    /** Series Graph `community_avg` (+ addon fallbacks). */
+    val episodeSeriesGraphRatings: Map<Pair<Int, Int>, Double> = emptyMap(),
+    /** Series Graph `imdb_rating` (+ addon fallbacks). */
     val episodeImdbRatings: Map<Pair<Int, Int>, Double> = emptyMap(),
+    val episodeRatingSource: EpisodeRatingSource = EpisodeRatingSource.DEFAULT,
     val isEpisodeRatingsLoading: Boolean = false,
     val episodeRatingsError: String? = null,
     val mdbListRatings: MDBListRatings? = null,
@@ -126,4 +131,5 @@ sealed class MetaDetailsEvent {
     data object OnRemovalCancelled : MetaDetailsEvent()
     data object OnClearMessage : MetaDetailsEvent()
     data object OnLifecyclePause : MetaDetailsEvent()
+    data class OnEpisodeRatingSourceSelected(val source: EpisodeRatingSource) : MetaDetailsEvent()
 }

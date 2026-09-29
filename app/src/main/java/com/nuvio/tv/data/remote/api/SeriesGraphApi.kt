@@ -11,6 +11,8 @@ data class SeriesGraphEpisodeRatingDto(
     @field:Json(name = "season_number") val seasonNumber: Int? = null,
     @field:Json(name = "episode_number") val episodeNumber: Int? = null,
     @field:Json(name = "community_avg") val communityAverage: Double? = null,
+    @field:Json(name = "imdb_rating") val imdbRating: Double? = null,
+    @field:Json(name = "imdb_votes") val imdbVotes: Int? = null,
     @field:Json(name = "name") val name: String? = null,
     @field:Json(name = "tconst") val tconst: String? = null
 )

@@ -107,6 +107,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.DetailImdbRatingsVisibility
 import com.nuvio.tv.domain.model.EpisodeOptionsOverlayStyle
+import com.nuvio.tv.domain.model.EpisodeRatingSource
 import com.nuvio.tv.domain.model.HomeImdbRatingsVisibility
 import com.nuvio.tv.domain.model.LibraryListTab
 import com.nuvio.tv.domain.model.localizedMembershipTitle
@@ -825,7 +826,9 @@ fun MetaDetailsScreen(
                     collection = uiState.collection,
                     collectionName = uiState.collectionName,
                     relatedWatchedStatus = uiState.relatedWatchedStatus,
+                    episodeSeriesGraphRatings = uiState.episodeSeriesGraphRatings,
                     episodeImdbRatings = uiState.episodeImdbRatings,
+                    episodeRatingSource = uiState.episodeRatingSource,
                     isEpisodeRatingsLoading = uiState.isEpisodeRatingsLoading,
                     episodeRatingsError = uiState.episodeRatingsError,
                     mdbListRatings = uiState.mdbListRatings,
@@ -912,6 +915,9 @@ fun MetaDetailsScreen(
                     },
                     isSeasonFullyWatched = { season ->
                         viewModel.isSeasonFullyWatched(season)
+                    },
+                    onEpisodeRatingSourceSelected = { source ->
+                        viewModel.onEvent(MetaDetailsEvent.OnEpisodeRatingSourceSelected(source))
                     },
                     trailerUrl = uiState.trailerUrl,
                     trailerAudioUrl = uiState.trailerAudioUrl,
@@ -1144,7 +1150,9 @@ private fun MetaDetailsContent(
     collection: List<MetaPreview>,
     collectionName: String?,
     relatedWatchedStatus: Map<String, Boolean> = emptyMap(),
+    episodeSeriesGraphRatings: Map<Pair<Int, Int>, Double>,
     episodeImdbRatings: Map<Pair<Int, Int>, Double>,
+    episodeRatingSource: EpisodeRatingSource,
     isEpisodeRatingsLoading: Boolean,
     episodeRatingsError: String?,
     mdbListRatings: MDBListRatings?,
@@ -1178,6 +1186,7 @@ private fun MetaDetailsContent(
     onMarkPreviousEpisodesWatched: (Video) -> Unit,
     onMarkPreviousSeasonsWatched: (Int) -> Unit,
     isSeasonFullyWatched: (Int) -> Boolean,
+    onEpisodeRatingSourceSelected: (EpisodeRatingSource) -> Unit,
     trailerUrl: String?,
     trailerAudioUrl: String?,
     isTrailerPlaying: Boolean,
@@ -1692,13 +1701,19 @@ private fun MetaDetailsContent(
     val hasMoreLikeThisSection = moreLikeThis.isNotEmpty()
     val hasTrailerSection = remember(meta.trailers) { meta.trailers.any { !it.ytId.isNullOrBlank() } }
     val showEpisodeImdbRatings = detailImdbRatingsVisibility.showEpisodeRatings
+    val selectedEpisodeRatings = remember(episodeRatingSource, episodeSeriesGraphRatings, episodeImdbRatings) {
+        when (episodeRatingSource) {
+            EpisodeRatingSource.SERIES_GRAPH -> episodeSeriesGraphRatings
+            EpisodeRatingSource.IMDB -> episodeImdbRatings
+        }
+    }
     val visibleEpisodeImdbRatings = remember(
-        episodeImdbRatings,
+        selectedEpisodeRatings,
         detailImdbRatingsVisibility,
         episodeProgressMap,
         watchedEpisodes
     ) {
-        episodeImdbRatings.filterKeys { episodeKey ->
+        selectedEpisodeRatings.filterKeys { episodeKey ->
             val isWatched = episodeProgressMap[episodeKey]?.isCompleted() == true ||
                 watchedEpisodes.contains(episodeKey)
             detailImdbRatingsVisibility.showEpisodeRating(isWatched)
@@ -2468,6 +2483,8 @@ private fun MetaDetailsContent(
                                     ratings = visibleEpisodeImdbRatings,
                                     isLoading = isEpisodeRatingsLoading,
                                     error = episodeRatingsError,
+                                    ratingSource = episodeRatingSource,
+                                    onRatingSourceSelected = onEpisodeRatingSourceSelected,
                                     title = if (hasVisiblePeopleTabs) "" else strTabRatings,
                                     upFocusRequester = if (hasVisiblePeopleTabs) {
                                         ratingsTabFocusRequester
@@ -2850,6 +2867,7 @@ private fun PeopleSectionTabs(
 ) {
     val defaultRequester = tabs.first().focusRequester
     val restorerRequester = tabs.firstOrNull { it.tab == activeTab }?.focusRequester ?: defaultRequester
+    val chipShape = RoundedCornerShape(20.dp)
 
     Column(
         modifier = Modifier
@@ -2857,18 +2875,11 @@ private fun PeopleSectionTabs(
             .padding(top = 20.dp, start = NuvioTheme.spacing.xxxl, end = NuvioTheme.spacing.xxxl),
         verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
     ) {
-        @Composable
-        fun androidx.compose.foundation.layout.RowScope.renderTabs(items: List<PeopleTabItem>) {
-            items.forEachIndexed { index, item ->
-                if (index > 0) {
-                    Text(
-                        text = "|",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = NuvioTheme.colors.TextPrimary.copy(alpha = 0.45f),
-                        modifier = Modifier.padding(horizontal = 10.dp)
-                    )
-                }
-
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
+        ) {
+            tabs.forEach { item ->
                 PeopleSectionTabButton(
                     label = item.label,
                     selected = activeTab == item.tab,
@@ -2876,15 +2887,10 @@ private fun PeopleSectionTabs(
                     activeFocusRequester = if (activeTab != item.tab) restorerRequester else null,
                     upFocusRequester = upFocusRequester,
                     downFocusRequester = if (item.tab == PeopleSectionTab.RATINGS) ratingsDownFocusRequester else null,
+                    chipShape = chipShape,
                     onFocused = { onTabFocused(item.tab) }
                 )
             }
-        }
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            renderTabs(tabs)
         }
     }
 }
@@ -2898,6 +2904,7 @@ private fun PeopleSectionTabButton(
     activeFocusRequester: FocusRequester? = null,
     upFocusRequester: FocusRequester? = null,
     downFocusRequester: FocusRequester? = null,
+    chipShape: RoundedCornerShape = RoundedCornerShape(20.dp),
     onFocused: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
@@ -2906,6 +2913,23 @@ private fun PeopleSectionTabButton(
         if (isFocused && !selected && activeFocusRequester != null) {
             runCatching { activeFocusRequester.requestFocus() }
         }
+    }
+
+    // Chip-style tabs (same vocabulary as stream FilterChips): selected stays filled when
+    // focus moves into the section content so the active tab remains obvious on TV.
+    val containerColor = when {
+        isFocused -> NuvioTheme.colors.Secondary
+        selected -> NuvioTheme.colors.Secondary.copy(alpha = 0.72f)
+        else -> NuvioTheme.colors.BackgroundCard
+    }
+    val contentColor = when {
+        isFocused || selected -> NuvioTheme.colors.OnSecondary
+        else -> NuvioTheme.colors.TextSecondary
+    }
+    val borderStroke = when {
+        isFocused -> NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs)
+        selected -> BorderStroke(NuvioTheme.spacing.hairline, NuvioTheme.colors.Primary)
+        else -> BorderStroke(NuvioTheme.spacing.hairline, NuvioTheme.colors.Border)
     }
 
     Card(
@@ -2928,26 +2952,28 @@ private fun PeopleSectionTabButton(
                 }
             },
         colors = CardDefaults.colors(
-            containerColor = Color.Transparent,
-            focusedContainerColor = Color.Transparent
+            containerColor = containerColor,
+            focusedContainerColor = NuvioTheme.colors.Secondary
         ),
         border = CardDefaults.border(
+            border = Border(border = borderStroke, shape = chipShape),
             focusedBorder = Border(
-                border = BorderStroke(NuvioTheme.spacing.none, Color.Transparent),
-                shape = RoundedCornerShape(NuvioTheme.radii.xl)
+                border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs),
+                shape = chipShape
             )
         ),
-        scale = CardDefaults.scale(focusedScale = 1.03f)
+        scale = CardDefaults.scale(focusedScale = 1.04f),
+        shape = CardDefaults.shape(shape = chipShape)
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.titleLarge,
-            color = when {
-                isFocused -> NuvioTheme.colors.TextPrimary
-                selected -> NuvioTheme.colors.TextPrimary.copy(alpha = 0.92f)
-                else -> NuvioTheme.colors.TextPrimary.copy(alpha = 0.55f)
-            },
-            modifier = Modifier.padding(horizontal = NuvioTheme.spacing.xxs, vertical = NuvioTheme.spacing.xxs)
+            style = MaterialTheme.typography.titleMedium,
+            color = contentColor,
+            maxLines = 1,
+            modifier = Modifier.padding(
+                horizontal = NuvioTheme.spacing.lg,
+                vertical = NuvioTheme.spacing.sm
+            )
         )
     }
 }
