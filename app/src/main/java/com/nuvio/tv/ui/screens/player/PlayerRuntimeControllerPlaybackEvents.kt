@@ -1415,6 +1415,9 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
                 )
             }
         }
+        PlayerEvent.OnCycleSubtitleAiProvider -> {
+            cycleSubtitleAiPreferredProvider()
+        }
         is PlayerEvent.OnShowSubtitleTranslateMenu -> {
             _uiState.update {
                 it.copy(

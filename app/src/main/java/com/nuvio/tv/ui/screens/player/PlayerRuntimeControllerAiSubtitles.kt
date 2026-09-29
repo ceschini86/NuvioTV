@@ -8,6 +8,8 @@ import com.nuvio.tv.domain.model.Subtitle
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiAdvancedSettings
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiCredentials
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiModel
+import com.nuvio.tv.ui.screens.player.subtitles.nextEligibleSubtitleAiModel
+import com.nuvio.tv.ui.screens.player.subtitles.shouldShowSubtitleAiProviderCycleCta
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleTranslationManager
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleTranslationService
 import com.nuvio.tv.ui.screens.player.subtitles.TRANSLATION_ERROR_API_KEY_MISSING
@@ -358,15 +360,50 @@ internal fun PlayerRuntimeController.observeSubtitleAiSettings() {
                 applySubtitleAutoSelectPolicy()
             }
 
-            _uiState.update {
-                it.copy(
+            _uiState.update { state ->
+                val diag = state.aiSubtitleDiagnostics
+                val refreshedDiag = if (diag != null && diag.model != subtitleAiModel.name) {
+                    diag.copy(model = subtitleAiModel.name)
+                } else {
+                    diag
+                }
+                state.copy(
                     aiSubtitleAvailable = canUseAi,
                     aiSubtitleTranslationActive = manager.isEnabled && canUseAi,
-                    subtitleAiFeatureEnabled = style.aiEnabled
+                    subtitleAiFeatureEnabled = style.aiEnabled,
+                    subtitleAiCredentials = credentials,
+                    aiSubtitleDiagnostics = refreshedDiag
                 )
             }
             refreshAiSubtitleQuotaExhaustedState()
         }
+    }
+}
+
+/**
+ * Overlay CTA: persist the next eligible preferred provider (same store as Settings).
+ *
+ * In-flight batch (if any) finishes on the previous provider; the next queued batch uses the
+ * updated preferred model via [SubtitleTranslationManager.updatePreferredModel].
+ */
+internal fun PlayerRuntimeController.cycleSubtitleAiPreferredProvider() {
+    if (!shouldShowSubtitleAiProviderCycleCta(subtitleAiCredentials)) return
+    val next = nextEligibleSubtitleAiModel(subtitleAiModel, subtitleAiCredentials) ?: return
+    Log.i(
+        PlayerRuntimeController.TAG,
+        "AI provider cycle preferred=${subtitleAiModel.name} → ${next.name}"
+    )
+    // Optimistic so Info diagnostics update before DataStore re-emits.
+    subtitleAiModel = next
+    subtitleTranslationManager?.updatePreferredModel(next)
+    _uiState.update { state ->
+        val diag = state.aiSubtitleDiagnostics
+        state.copy(
+            aiSubtitleDiagnostics = diag?.copy(model = next.name) ?: diag
+        )
+    }
+    scope.launch {
+        playerSettingsDataStore.setSubtitleAiModel(next.name)
     }
 }
 
