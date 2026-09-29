@@ -152,19 +152,24 @@ internal data class SubtitleInfoRailDecision(
  */
 internal enum class SubtitleInfoEntryFocus {
     TRANSLATE_CTA,
-    RESET_CTA
+    RESET_CTA,
+    CYCLE_PROVIDER_CTA
 }
 
 internal fun decideSubtitleInfoEntryFocus(
-    cta: SubtitleInfoCtaDecision
+    cta: SubtitleInfoCtaDecision,
+    showProviderCycleCta: Boolean = false
 ): SubtitleInfoEntryFocus? {
-    if (!cta.canMoveFocusToCta) return null
-    return when (cta.action) {
-        SubtitleInfoCtaAction.RESET_TO_SMART_AUTO,
-        SubtitleInfoCtaAction.RESET_TO_CLASSIC_AUTO -> SubtitleInfoEntryFocus.RESET_CTA
-        SubtitleInfoCtaAction.TRANSLATE_WITH_AI -> SubtitleInfoEntryFocus.TRANSLATE_CTA
-        SubtitleInfoCtaAction.NONE -> null
+    if (cta.canMoveFocusToCta) {
+        return when (cta.action) {
+            SubtitleInfoCtaAction.RESET_TO_SMART_AUTO,
+            SubtitleInfoCtaAction.RESET_TO_CLASSIC_AUTO -> SubtitleInfoEntryFocus.RESET_CTA
+            SubtitleInfoCtaAction.TRANSLATE_WITH_AI -> SubtitleInfoEntryFocus.TRANSLATE_CTA
+            SubtitleInfoCtaAction.NONE -> null
+        }
     }
+    // When Translate/Reset is absent or disabled, allow Right into the provider-cycle CTA.
+    return if (showProviderCycleCta) SubtitleInfoEntryFocus.CYCLE_PROVIDER_CTA else null
 }
 
 internal data class SubtitleInfoSmartContext(

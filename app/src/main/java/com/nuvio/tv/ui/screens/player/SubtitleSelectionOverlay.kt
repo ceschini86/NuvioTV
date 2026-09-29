@@ -65,6 +65,9 @@ import com.nuvio.tv.data.local.SubtitleStyleSettings
 import com.nuvio.tv.domain.model.Subtitle
 import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.screens.detail.requestFocusAfterFrames
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiCredentials
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiModel
+import com.nuvio.tv.ui.screens.player.subtitles.shouldShowSubtitleAiProviderCycleCta
 
 private const val SubtitleOffLanguageKey = "__off__"
 private const val SubtitleUnknownLanguageKey = "__unknown__"
@@ -99,6 +102,7 @@ internal fun SubtitleSelectionOverlay(
     isAiSubtitleTranslating: Boolean = false,
     aiSubtitleDiagnostics: AiSubtitleDiagnostics? = null,
     aiSubtitleLastError: String? = null,
+    subtitleAiCredentials: SubtitleAiCredentials = SubtitleAiCredentials(),
     userExplicitSubtitleSelection: Boolean = false,
     selectedAudioTrack: TrackInfo? = null,
     onInternalTrackSelected: (Int) -> Unit,
@@ -488,6 +492,7 @@ internal fun SubtitleSelectionOverlay(
         )
     }
     val infoCtaState = infoRailDecision.cta
+    val showProviderCycleCta = shouldShowSubtitleAiProviderCycleCta(subtitleAiCredentials)
     var pendingPostActionFocus by remember(visible) { mutableStateOf<String?>(null) }
 
     fun requestLanguageFocus(targetKey: String?) {
@@ -593,10 +598,14 @@ internal fun SubtitleSelectionOverlay(
     }
 
     fun requestInfoFocus(reason: String) {
-        val entry = decideSubtitleInfoEntryFocus(cta = infoCtaState) ?: return
+        val entry = decideSubtitleInfoEntryFocus(
+            cta = infoCtaState,
+            showProviderCycleCta = showProviderCycleCta
+        ) ?: return
         val focusKey = when (entry) {
             SubtitleInfoEntryFocus.TRANSLATE_CTA -> InfoFocusKey.Translate
             SubtitleInfoEntryFocus.RESET_CTA -> InfoFocusKey.ResetSmart
+            SubtitleInfoEntryFocus.CYCLE_PROVIDER_CTA -> InfoFocusKey.CycleProvider
         }
         pendingInfoFocusKey = focusKey
         Log.d(SubtitleFocusTag, "info_focus_schedule source=$reason key=$focusKey")
@@ -630,7 +639,7 @@ internal fun SubtitleSelectionOverlay(
     fun moveFocusToInfoRail() {
         val option = focusedOption ?: return
         // Col2 → Col3 only when an enabled CTA exists (selection not required).
-        if (decideSubtitleInfoEntryFocus(infoCtaState) == null) return
+        if (decideSubtitleInfoEntryFocus(infoCtaState, showProviderCycleCta) == null) return
         infoEntryOptionId = option.id
         requestInfoFocus(reason = "option_to_info")
     }
@@ -820,12 +829,12 @@ internal fun SubtitleSelectionOverlay(
             }
         }
 
-        LaunchedEffect(visible, infoContentVisible, infoFocusToken, pendingInfoFocusKey, infoCtaState) {
+        LaunchedEffect(visible, infoContentVisible, infoFocusToken, pendingInfoFocusKey, infoCtaState, showProviderCycleCta) {
             if (!visible || !infoContentVisible || infoFocusToken <= 0) {
                 return@LaunchedEffect
             }
             val targetKey = pendingInfoFocusKey ?: return@LaunchedEffect
-            if (decideSubtitleInfoEntryFocus(infoCtaState) == null) {
+            if (decideSubtitleInfoEntryFocus(infoCtaState, showProviderCycleCta) == null) {
                 return@LaunchedEffect
             }
             repeat(8) { attempt ->
@@ -1037,6 +1046,7 @@ internal fun SubtitleSelectionOverlay(
                                 aiSubtitleDiagnostics = aiSubtitleDiagnostics,
                                 aiSubtitleLastError = aiSubtitleLastError,
                                 aiSubtitleTranslationActive = aiSubtitleTranslationActive,
+                                subtitleAiCredentials = subtitleAiCredentials,
                                 onMoveLeft = ::moveFocusBackToOptionRail,
                                 onBack = ::handleOverlayBack,
                                 ctaFocusRequester = infoTranslateRequester,
@@ -1091,6 +1101,9 @@ internal fun SubtitleSelectionOverlay(
                                             "option=${selectedOptionId ?: SubtitleAiOptionId}"
                                     )
                                     onEvent(PlayerEvent.OnResetToSmartAuto)
+                                },
+                                onCycleAiProvider = {
+                                    onEvent(PlayerEvent.OnCycleSubtitleAiProvider)
                                 }
                             )
                         }
@@ -1104,6 +1117,7 @@ internal fun SubtitleSelectionOverlay(
 private object InfoFocusKey {
     const val Translate = "info_translate"
     const val ResetSmart = "info_reset_smart"
+    const val CycleProvider = "info_cycle_provider"
 }
 
 @Composable
@@ -1319,12 +1333,14 @@ private fun SubtitleInfoRail(
     aiSubtitleDiagnostics: AiSubtitleDiagnostics?,
     aiSubtitleLastError: String?,
     aiSubtitleTranslationActive: Boolean,
+    subtitleAiCredentials: SubtitleAiCredentials,
     onMoveLeft: () -> Unit,
     onBack: () -> Unit,
     ctaFocusRequester: FocusRequester,
     onInfoFocused: (String) -> Unit,
     onTranslateWithAi: () -> Unit,
-    onResetToSmartAuto: () -> Unit
+    onResetToSmartAuto: () -> Unit,
+    onCycleAiProvider: () -> Unit
 ) {
     // L2: no "Info" header — content only. Fill remaining overlay height; no hard 720dp clip.
     Column(
@@ -1339,12 +1355,14 @@ private fun SubtitleInfoRail(
             aiSubtitleDiagnostics = aiSubtitleDiagnostics,
             aiSubtitleLastError = aiSubtitleLastError,
             aiSubtitleTranslationActive = aiSubtitleTranslationActive,
+            subtitleAiCredentials = subtitleAiCredentials,
             onMoveLeft = onMoveLeft,
             onBack = onBack,
             ctaFocusRequester = ctaFocusRequester,
             onInfoFocused = onInfoFocused,
             onTranslateWithAi = onTranslateWithAi,
-            onResetToSmartAuto = onResetToSmartAuto
+            onResetToSmartAuto = onResetToSmartAuto,
+            onCycleAiProvider = onCycleAiProvider
         )
     }
 }
@@ -1356,12 +1374,14 @@ private fun SubtitleInfoPane(
     aiSubtitleDiagnostics: AiSubtitleDiagnostics?,
     aiSubtitleLastError: String?,
     aiSubtitleTranslationActive: Boolean,
+    subtitleAiCredentials: SubtitleAiCredentials,
     onMoveLeft: () -> Unit,
     onBack: () -> Unit,
     ctaFocusRequester: FocusRequester,
     onInfoFocused: (String) -> Unit,
     onTranslateWithAi: () -> Unit,
-    onResetToSmartAuto: () -> Unit
+    onResetToSmartAuto: () -> Unit,
+    onCycleAiProvider: () -> Unit
 ) {
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val moveLeftKey = if (isRtl) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT
@@ -1378,6 +1398,17 @@ private fun SubtitleInfoPane(
         aiSubtitleTranslationActive ||
         aiSubtitleDiagnostics != null ||
         content.kind != SubtitleInfoContentKind.EMPTY
+    val showProviderCycle = shouldShowSubtitleAiProviderCycleCta(subtitleAiCredentials)
+    val preferredModel = runCatching {
+        SubtitleAiModel.valueOf(aiSubtitleDiagnostics?.model.orEmpty())
+    }.getOrNull()
+        ?: subtitleAiCredentials.enabledProviders().firstOrNull()?.model
+        ?: SubtitleAiModel.GROQ_LLAMA_70B
+    val providerLabel = when (preferredModel) {
+        SubtitleAiModel.GEMINI_FLASH_25 -> stringResource(R.string.sub_ai_model_gemini_short)
+        SubtitleAiModel.CLAUDE_HAIKU -> stringResource(R.string.sub_ai_model_claude_short)
+        SubtitleAiModel.GROQ_LLAMA_70B -> stringResource(R.string.sub_ai_model_groq_short)
+    }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -1550,6 +1581,22 @@ private fun SubtitleInfoPane(
                 )
             }
             SubtitleInfoCtaAction.NONE -> Unit
+        }
+
+        if (showProviderCycle) {
+            // Secondary CTA: D-pad Down from Translate/Reset; does not steal Col2→Col3 entry focus.
+            SubtitleInfoActionCard(
+                label = stringResource(R.string.sub_ai_cycle_provider, providerLabel),
+                focusKey = InfoFocusKey.CycleProvider,
+                focusRequester = if (!cta.canMoveFocusToCta) ctaFocusRequester else null,
+                enabled = true,
+                focusable = true,
+                onClick = onCycleAiProvider,
+                onMoveLeft = onMoveLeft,
+                onBack = onBack,
+                onFocused = onInfoFocused,
+                moveLeftKey = moveLeftKey
+            )
         }
     }
 }

@@ -843,6 +843,17 @@ class SubtitleInfoRailDecisionTest {
     }
 
     @Test
+    fun entryFocus_fallsBackToCycleProviderWhenPrimaryAbsent() {
+        assertEquals(
+            SubtitleInfoEntryFocus.CYCLE_PROVIDER_CTA,
+            decideSubtitleInfoEntryFocus(
+                cta = SubtitleInfoCtaDecision.None,
+                showProviderCycleCta = true
+            )
+        )
+    }
+
+    @Test
     fun entryFocus_nullWhenTranslateDisabled() {
         val cta = SubtitleInfoCtaDecision(
             action = SubtitleInfoCtaAction.TRANSLATE_WITH_AI,
@@ -850,6 +861,19 @@ class SubtitleInfoRailDecisionTest {
             focusable = false
         )
         assertNull(decideSubtitleInfoEntryFocus(cta))
+    }
+
+    @Test
+    fun entryFocus_cycleWhenTranslateDisabledButProvidersAvailable() {
+        val cta = SubtitleInfoCtaDecision(
+            action = SubtitleInfoCtaAction.TRANSLATE_WITH_AI,
+            enabled = false,
+            focusable = false
+        )
+        assertEquals(
+            SubtitleInfoEntryFocus.CYCLE_PROVIDER_CTA,
+            decideSubtitleInfoEntryFocus(cta, showProviderCycleCta = true)
+        )
     }
 
     @Test

@@ -16,6 +16,7 @@ import com.nuvio.tv.domain.model.Subtitle
 import com.nuvio.tv.domain.model.Video
 import com.nuvio.tv.domain.model.WatchProgress
 import com.nuvio.tv.ui.components.SourceChipItem
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiCredentials
 
 enum class PlayerExitReason {
     StillWatchingPrompt
@@ -123,6 +124,8 @@ data class PlayerUiState(
     val aiSubtitleQuotaExhausted: Boolean = false,
     val aiSubtitleTranslationActive: Boolean = false,
     val subtitleAiFeatureEnabled: Boolean = false,
+    /** Device-local AI credentials (enabled + keys) for overlay provider-cycle CTA. */
+    val subtitleAiCredentials: SubtitleAiCredentials = SubtitleAiCredentials(),
     val aiSubtitleDiagnostics: AiSubtitleDiagnostics? = null,
     /** Mirrors runtime [isUserExplicitSubtitleSelection] for Info CTA C2 vs C5. */
     val userExplicitSubtitleSelection: Boolean = false,
@@ -303,6 +306,8 @@ sealed class PlayerEvent {
     ) : PlayerEvent()
     /** Clear userLocked + explicit and re-run Smart ladder (Info CTA "Voltar à seleção automática"). */
     data object OnResetToSmartAuto : PlayerEvent()
+    /** Cycle preferred AI provider among enabled+keyed providers (Info Col3 CTA). */
+    data object OnCycleSubtitleAiProvider : PlayerEvent()
     data class OnShowSubtitleTranslateMenu(val optionId: String) : PlayerEvent()
     data object OnDismissSubtitleTranslateMenu : PlayerEvent()
     data class OnSelectAddonSubtitle(val subtitle: Subtitle) : PlayerEvent()

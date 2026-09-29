@@ -3234,6 +3234,7 @@
     <string name="sub_ai_diagnostics_model">Modelo</string>
     <string name="sub_ai_diagnostics_locked">Escolha manual</string>
     <string name="sub_ai_translate_this">Traduzir com IA</string>
+    <string name="sub_ai_cycle_provider">Provedor de IA · %1$s</string>
     <string name="sub_ai_reset_to_smart">Voltar à seleção automática</string>
     <string name="sub_ai_reset_to_classic">Voltar à seleção clássica</string>
     <string name="sub_ai_notice_no_embedded">Não há legendas embutidas. Selecione um addon para traduzir.</string>

@@ -1644,6 +1644,7 @@ fun PlayerScreen(
             isAiSubtitleTranslating = uiState.isAiSubtitleTranslating,
             aiSubtitleDiagnostics = uiState.aiSubtitleDiagnostics,
             aiSubtitleLastError = uiState.aiSubtitleLastError,
+            subtitleAiCredentials = uiState.subtitleAiCredentials,
             userExplicitSubtitleSelection = uiState.userExplicitSubtitleSelection,
             selectedAudioTrack = uiState.audioTracks.getOrNull(uiState.selectedAudioTrackIndex)
                 ?: uiState.audioTracks.firstOrNull { it.isSelected },

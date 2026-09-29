@@ -882,6 +882,9 @@
     <string name="sub_ai_model_groq">Groq (gpt-oss-120b)</string>
     <string name="sub_ai_model_gemini">Gemini (3.5 Flash Lite)</string>
     <string name="sub_ai_model_claude">Claude (Haiku 4.5)</string>
+    <string name="sub_ai_model_groq_short">Groq</string>
+    <string name="sub_ai_model_gemini_short">Gemini</string>
+    <string name="sub_ai_model_claude_short">Claude</string>
     <string name="sub_ai_api_key">AI API key</string>
     <string name="sub_ai_api_key_desc">Multiple keys per provider are tried in order. Use «Sync AI settings with profile» if you want them on other devices</string>
     <string name="sub_ai_api_key_hint">Paste API key</string>
@@ -3333,6 +3336,7 @@
     <string name="sub_ai_diagnostics_model">Model</string>
     <string name="sub_ai_diagnostics_locked">Manual selection</string>
     <string name="sub_ai_translate_this">Translate with AI</string>
+    <string name="sub_ai_cycle_provider">AI provider · %1$s</string>
     <string name="sub_ai_reset_to_smart">Return to automatic selection</string>
     <string name="sub_ai_reset_to_classic">Return to classic selection</string>
     <string name="sub_ai_notice_no_embedded">No embedded subtitles. Select an addon to translate.</string>
