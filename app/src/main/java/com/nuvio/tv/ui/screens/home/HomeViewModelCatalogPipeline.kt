@@ -35,6 +35,12 @@ import com.nuvio.tv.core.util.filterReleasedItems
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 
+/** Max slides in the hero carousel (artwork Crossfade; keep modest for TV). */
+private const val HERO_CAROUSEL_MAX_ITEMS = 15
+
+/** When no hero catalogs are selected in settings, use the first N home catalogs. */
+private const val HERO_CAROUSEL_DEFAULT_CATALOG_COUNT = 2
+
 private data class CatalogUpdateResult(
     val displayRows: List<CatalogRow>,
     val heroItems: List<com.nuvio.tv.domain.model.MetaPreview>,
@@ -618,10 +624,15 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
                     .thenBy { it.id }
             )
         }
-        fun slotShuffled(rows: List<CatalogRow>, filter: (MetaPreview) -> Boolean, currentOrder: List<String>): List<MetaPreview> {
+        fun slotShuffled(
+            rows: List<CatalogRow>,
+            filter: (MetaPreview) -> Boolean,
+            currentOrder: List<String>,
+            maxItems: Int = HERO_CAROUSEL_MAX_ITEMS
+        ): List<MetaPreview> {
             val totalCatalogs = rows.size.coerceAtLeast(1)
-            val baseSlot = 7 / totalCatalogs
-            val remainder = 7 % totalCatalogs
+            val baseSlot = maxItems / totalCatalogs
+            val remainder = maxItems % totalCatalogs
             val seen = mutableSetOf<String>()
             val result = mutableListOf<MetaPreview>()
             rows.forEachIndexed { index, row ->
@@ -637,7 +648,7 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
                 val unique = (ordered + new).filter { seen.add(it.id) }
                 result += unique.take(slot)
             }
-            return result
+            return result.take(maxItems)
         }
 
         val currentHeroOrder = heroItemOrder
@@ -663,8 +674,11 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
                 nonOrderedRows
             }
         }
+        // Default hero sources when no catalogs are explicitly selected: the first
+        // two home rows (typically the top catalogs), not the entire home feed.
+        val defaultHeroFallbackRows = allHeroFallbackRows.take(HERO_CAROUSEL_DEFAULT_CATALOG_COUNT)
         val fallbackHeroItemsWithArtwork = slotShuffled(
-            allHeroFallbackRows, { it.hasHeroArtwork() }, currentHeroOrder
+            defaultHeroFallbackRows, { it.hasHeroArtwork() }, currentHeroOrder
         )
 
         val computedHeroItems = when {

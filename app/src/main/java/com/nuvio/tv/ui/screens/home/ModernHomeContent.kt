@@ -9,7 +9,9 @@ package com.nuvio.tv.ui.screens.home
 import com.nuvio.tv.ui.theme.NuvioTheme
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -36,8 +38,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -77,6 +81,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.nuvio.tv.domain.model.ContinueWatchingCardStyle
 import com.nuvio.tv.domain.model.FocusedPosterTrailerPlaybackTarget
 import com.nuvio.tv.domain.model.MetaPreview
+import com.nuvio.tv.ui.components.HeroCarousel
 import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.components.ContinueWatchingOptionsDialog
 import com.nuvio.tv.LocalSidebarExpanded
@@ -202,6 +207,20 @@ fun ModernHomeContent(
     val activeRowKeys = carouselLookups.activeRowKeys
     val activeCatalogItemIds = carouselLookups.activeCatalogItemIds
 
+    val heroCarouselAvailable = uiState.heroSectionEnabled && uiState.heroItems.isNotEmpty()
+    val heroFocusRequester = remember { FocusRequester() }
+    val savedHeroCarouselIndex = rememberSaveable { mutableIntStateOf(0) }
+    var showCarouselHero by remember {
+        mutableStateOf(
+            heroCarouselAvailable &&
+                (!focusState.hasSavedFocus || focusState.focusedRowKey == "hero_carousel")
+        )
+    }
+    LaunchedEffect(heroCarouselAvailable) {
+        if (!heroCarouselAvailable) showCarouselHero = false
+    }
+    val focusScope = rememberCoroutineScope()
+
     val verticalRowListState = rememberLazyListState(
         initialFirstVisibleItemIndex = focusState.verticalScrollIndex,
         initialFirstVisibleItemScrollOffset = focusState.verticalScrollOffset
@@ -247,6 +266,23 @@ fun ModernHomeContent(
     val pendingRowFocusIndex = remember { mutableStateOf<Int?>(null) }
     val pendingRowFocusNonce = remember { mutableIntStateOf(0) }
     val restoredFromSavedState = remember { mutableStateOf(false) }
+    val requestHeroCarouselFocus: () -> Unit = remember(heroFocusRequester, verticalRowListState) {
+        {
+            showCarouselHero = true
+            activeRowKey.value = null
+            focusHolder.activeRowKey = null
+            onFocusedRowKeyChanged("hero_carousel")
+            focusScope.launch {
+                verticalRowListState.scrollToItem(0, 0)
+                repeat(8) {
+                    withFrameNanos { }
+                    if (runCatching { heroFocusRequester.requestFocus(); true }.getOrDefault(false)) {
+                        return@launch
+                    }
+                }
+            }
+        }
+    }
     val heroItem = remember {
         val initialHero = carouselRows.list.firstOrNull()?.items?.list?.firstOrNull()?.heroPreview
         mutableStateOf<HeroPreview?>(initialHero)
@@ -433,6 +469,12 @@ fun ModernHomeContent(
         }
 
         if (!restoredFromSavedState.value && focusState.hasSavedFocus) {
+            if (focusState.focusedRowKey == "hero_carousel" && heroCarouselAvailable) {
+                showCarouselHero = true
+                restoredFromSavedState.value = true
+                return@LaunchedEffect
+            }
+
             val savedRowKey = focusState.focusedRowKey ?: when {
                 focusState.focusedRowIndex == -1 && uiState.continueWatchingEnabled && uiState.continueWatchingItems.isNotEmpty() -> "continue_watching"
                 focusState.focusedRowIndex >= 0 -> rowKeyByGlobalRowIndex.map[focusState.focusedRowIndex]
@@ -450,6 +492,7 @@ fun ModernHomeContent(
                         .coerceAtMost((resolvedRow.items.list.size - 1).coerceAtLeast(0))
                 }
 
+                showCarouselHero = false
                 focusHolder.activeRowKey = resolvedRow.key
                 focusHolder.activeItemIndex = resolvedIndex
                 activeRowKey.value = resolvedRow.key
@@ -488,15 +531,40 @@ fun ModernHomeContent(
                 ?: resolvedActive.items.firstOrNull()?.heroPreview
 
             if (!focusState.hasSavedFocus && !hadActiveRow) {
-                initialAutoSelectedKey = resolvedActive.key
-                pendingRowFocusKey.value = resolvedActive.key
-                pendingRowFocusIndex.value = resolvedIndex
-                pendingRowFocusNonce.intValue++
+                if (heroCarouselAvailable) {
+                    showCarouselHero = true
+                } else {
+                    initialAutoSelectedKey = resolvedActive.key
+                    pendingRowFocusKey.value = resolvedActive.key
+                    pendingRowFocusIndex.value = resolvedIndex
+                    pendingRowFocusNonce.intValue++
+                }
             }
         }
 
         if (!restoredFromSavedState.value && carouselRows.list.isNotEmpty()) {
             restoredFromSavedState.value = true
+        }
+    }
+
+    LaunchedEffect(showCarouselHero, heroCarouselAvailable, restoredFromSavedState.value) {
+        if (!showCarouselHero || !heroCarouselAvailable) return@LaunchedEffect
+        // Initial / restored carousel focus — skip if rows already own focus.
+        if (activeRowKey.value != null && focusState.hasSavedFocus &&
+            focusState.focusedRowKey != null && focusState.focusedRowKey != "hero_carousel"
+        ) {
+            return@LaunchedEffect
+        }
+        if (!focusState.hasSavedFocus || focusState.focusedRowKey == "hero_carousel" ||
+            activeRowKey.value == null
+        ) {
+            repeat(8) {
+                withFrameNanos { }
+                if (runCatching { heroFocusRequester.requestFocus(); true }.getOrDefault(false)) {
+                    onFocusedRowKeyChanged("hero_carousel")
+                    return@LaunchedEffect
+                }
+            }
         }
     }
 
@@ -585,10 +653,14 @@ fun ModernHomeContent(
     val latestCarouselRows by rememberUpdatedState(carouselRows)
     val latestVerticalRowListState by rememberUpdatedState(verticalRowListState)
     val latestRowIndexByKey = rememberUpdatedState(rowIndexByKey)
+    val latestShowCarouselHero by rememberUpdatedState(showCarouselHero)
     DisposableEffect(Unit) {
         onDispose {
             val row = latestActiveRow
-            val focusedRowKey = row?.key
+            val focusedRowKey = when {
+                latestShowCarouselHero -> "hero_carousel"
+                else -> row?.key
+            }
             // Only save focus state if home screen actually had focus (focusedRowKey is not null)
             // This prevents saving invalid state like row -1 when sidebar was open
             if (focusedRowKey == null) {
@@ -596,8 +668,16 @@ fun ModernHomeContent(
                 return@onDispose
             }
             
-            val focusedRowIndex = focusedRowKey?.let { latestRowIndexByKey.value.map[it] } ?: -1
-            val focusedItemIndex = activeItemIndex.intValue
+            val focusedRowIndex = if (focusedRowKey == "hero_carousel") {
+                -2
+            } else {
+                focusedRowKey.let { latestRowIndexByKey.value.map[it] } ?: -1
+            }
+            val focusedItemIndex = if (focusedRowKey == "hero_carousel") {
+                savedHeroCarouselIndex.intValue
+            } else {
+                activeItemIndex.intValue
+            }
             
             val focusedItemKeyByRow = latestCarouselRows
                 .associate { rowState ->
@@ -964,8 +1044,7 @@ fun ModernHomeContent(
             }
 
             val localDensity = LocalDensity.current
-            val rowsViewportHeightFraction = if (useLandscapePosters) 0.49f else 0.52f
-            val rowsViewportHeight = remember(screenHeight, rowsViewportHeightFraction) { screenHeight * rowsViewportHeightFraction }
+            val showCarouselHeroVisible = showCarouselHero && heroCarouselAvailable
             val rowTitleLineHeight = MaterialTheme.typography.titleMedium.lineHeight
             val rowTitleHeight = remember(rowTitleLineHeight, localDensity) {
                 with(localDensity) {
@@ -973,7 +1052,39 @@ fun ModernHomeContent(
                         .getOrDefault(NuvioTheme.spacing.xl)
                 }
             }
-            val heroBackdropHeight = remember(screenHeight, rowsViewportHeight, rowTitleHeight) { (screenHeight - rowsViewportHeight + rowTitleHeight + 14.dp).coerceAtMost(screenHeight) }
+            // When the hero carousel is focused: taller hero + Netflix-like gap, and clip the
+            // rows viewport so only the first row (Continue Watching) fits fully — no peek of
+            // the catalog rows underneath.
+            val firstRowKey = carouselRows.list.firstOrNull()?.key
+            val firstRowCardHeight = when (firstRowKey) {
+                MODERN_CONTINUE_WATCHING_ROW_KEY, MODERN_UPCOMING_ROW_KEY -> continueWatchingCardHeight
+                else -> if (useLandscapePosters) landscapeCatalogCardHeight else portraitCatalogCardHeight
+            }
+            val rowTitleBottom = 14.dp
+            val carouselToRowsGap = NuvioTheme.spacing.xxl
+            val carouselFocusedRowsViewportHeight =
+                rowTitleHeight + rowTitleBottom + firstRowCardHeight + NuvioTheme.spacing.md
+            val browsingRowsViewportHeightFraction = if (useLandscapePosters) 0.49f else 0.52f
+            val targetRowsViewportHeight = if (showCarouselHeroVisible) {
+                carouselFocusedRowsViewportHeight
+            } else {
+                screenHeight * browsingRowsViewportHeightFraction
+            }
+            val rowsViewportHeight by animateDpAsState(
+                targetValue = targetRowsViewportHeight,
+                animationSpec = tween(durationMillis = 220),
+                label = "modernRowsViewport"
+            )
+            val targetHeroBackdropHeight = if (showCarouselHeroVisible) {
+                (screenHeight - targetRowsViewportHeight - carouselToRowsGap).coerceAtLeast(300.dp)
+            } else {
+                (screenHeight - targetRowsViewportHeight + rowTitleHeight + rowTitleBottom).coerceAtMost(screenHeight)
+            }
+            val heroBackdropHeight by animateDpAsState(
+                targetValue = targetHeroBackdropHeight,
+                animationSpec = tween(durationMillis = 220),
+                label = "modernHeroBackdrop"
+            )
             val verticalRowBringIntoViewSpec = remember(localDensity, defaultBringIntoViewSpec) {
                 val topInsetPx = with(localDensity) { MODERN_ROW_HEADER_FOCUS_INSET.toPx() }
                 @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
@@ -1002,14 +1113,6 @@ fun ModernHomeContent(
                 }.coerceAtLeast(1)
             }
 
-            val heroMediaModifier = remember(heroBackdropHeight, screenHeight, fullScreenBackdrop) {
-                if (fullScreenBackdrop) {
-                    Modifier.align(Alignment.TopStart).fillMaxWidth().height(screenHeight)
-                } else {
-                    Modifier.align(Alignment.TopEnd).offset(x = NuvioTheme.spacing.huge).fillMaxWidth(MODERN_HERO_MEDIA_WIDTH_FRACTION).height(heroBackdropHeight)
-                }
-            }
-
             val fullScreenBackdropUpdated by rememberUpdatedState(fullScreenBackdrop)
             val shouldPlayCatalogHeroTrailerUpdated by rememberUpdatedState(shouldPlayCatalogHeroTrailerState.value)
             val shouldPlayCollectionHeroVideoUpdated by rememberUpdatedState(shouldPlayCollectionHeroVideoState.value)
@@ -1026,15 +1129,96 @@ fun ModernHomeContent(
             }
             val onFirstFrameRenderedLambda = remember { { heroTrailerFirstFrameRendered = true } }
 
-            ModernHeroSection(
-                heroSceneState = heroSceneStateLambda,
-                isFullScreen = isFullScreenLambda,
-                heroMediaWidthPx = heroMediaWidthPx,
-                heroMediaHeightPx = heroMediaHeightPx,
-                modifier = heroMediaModifier,
-                onTrailerEnded = onTrailerEndedLambda,
-                onFirstFrameRendered = onFirstFrameRenderedLambda
-            )
+            val moveFocusToFirstRowFromCarousel = remember(
+                carouselRows,
+                focusedItemByRow,
+                verticalRowListState
+            ) {
+                {
+                    showCarouselHero = false
+                    val firstRow = carouselRows.list.firstOrNull()
+                    if (firstRow != null) {
+                        val targetIndex = (focusedItemByRow[firstRow.key] ?: 0)
+                            .coerceIn(0, (firstRow.items.list.size - 1).coerceAtLeast(0))
+                        focusHolder.activeRowKey = firstRow.key
+                        focusHolder.activeItemIndex = targetIndex
+                        activeRowKey.value = firstRow.key
+                        activeItemIndex.intValue = targetIndex
+                        focusedItemByRow[firstRow.key] = targetIndex
+                        pendingRowFocusKey.value = firstRow.key
+                        pendingRowFocusIndex.value = targetIndex
+                        pendingRowFocusNonce.intValue++
+                        focusScope.launch {
+                            verticalRowListState.scrollToItem(0, 0)
+                        }
+                        onFocusedRowKeyChanged(firstRow.key)
+                    }
+                }
+            }
+
+            Crossfade(
+                targetState = showCarouselHeroVisible,
+                animationSpec = tween(durationMillis = 220),
+                label = "modernHeroMode",
+                modifier = Modifier.fillMaxSize()
+            ) { showCarousel ->
+                Box(modifier = Modifier.fillMaxSize()) {
+                    if (showCarousel) {
+                        HeroCarousel(
+                            items = uiState.heroItems.asStable(),
+                            focusRequester = heroFocusRequester,
+                            showImdbRatings = uiState.homeImdbRatingsVisibility.showRatings,
+                            carouselHeight = heroBackdropHeight,
+                            indicatorBottomPadding = NuvioTheme.spacing.xl,
+                            initialActiveIndex = savedHeroCarouselIndex.intValue
+                                .coerceIn(0, (uiState.heroItems.size - 1).coerceAtLeast(0)),
+                            onActiveItemChanged = { item ->
+                                val idx = uiState.heroItems.indexOfFirst { it.id == item.id }
+                                if (idx >= 0) savedHeroCarouselIndex.intValue = idx
+                            },
+                            onItemFocus = { item ->
+                                onFocusedRowKeyChanged("hero_carousel")
+                                onItemFocus(item)
+                            },
+                            onItemClick = { item ->
+                                onNavigateToDetail(item.id, item.apiType, "")
+                            },
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .fillMaxWidth()
+                                .onPreviewKeyEvent { event ->
+                                    if (event.type == KeyEventType.KeyDown &&
+                                        event.key == Key.DirectionDown
+                                    ) {
+                                        moveFocusToFirstRowFromCarousel()
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                        )
+                    } else {
+                        val modernHeroModifier = if (fullScreenBackdrop) {
+                            Modifier.align(Alignment.TopStart).fillMaxWidth().height(screenHeight)
+                        } else {
+                            Modifier
+                                .align(Alignment.TopEnd)
+                                .offset(x = NuvioTheme.spacing.huge)
+                                .fillMaxWidth(MODERN_HERO_MEDIA_WIDTH_FRACTION)
+                                .height(heroBackdropHeight)
+                        }
+                        ModernHeroSection(
+                            heroSceneState = heroSceneStateLambda,
+                            isFullScreen = isFullScreenLambda,
+                            heroMediaWidthPx = heroMediaWidthPx,
+                            heroMediaHeightPx = heroMediaHeightPx,
+                            modifier = modernHeroModifier,
+                            onTrailerEnded = onTrailerEndedLambda,
+                            onFirstFrameRendered = onFirstFrameRenderedLambda
+                        )
+                    }
+                }
+            }
 
             // Fade content rows when ANY hero media (catalog trailer or collection
             // hero video) is playing in fullscreen — not just catalog trailers.
@@ -1054,31 +1238,34 @@ fun ModernHomeContent(
                     .fillMaxWidth(MODERN_HERO_TEXT_WIDTH_FRACTION)
             }
 
-            HeroTitleBlock(
-                previewProvider = {
-                    val state = heroSceneStateLambda()
-                    if (isRapidHorizontalNav.value || state.enrichmentActive) null
-                    else state.preview
-                },
-                enrichmentActive = {
-                    if (isRapidHorizontalNav.value) false
-                    else heroSceneStateLambda().enrichmentActive
-                },
-                portraitMode = !useLandscapePosters,
-                showImdbRatings = uiState.homeImdbRatingsVisibility.showRatings,
-                trailerPlaying = {
-                    if (isRapidHorizontalNav.value) false
-                    else {
+            if (!showCarouselHeroVisible) {
+                HeroTitleBlock(
+                    previewProvider = {
                         val state = heroSceneStateLambda()
-                        state.fullScreenBackdrop && shouldPlayTrailerLambda() && heroTrailerRenderedLambda()
-                    }
-                },
-                modifier = heroMetadataModifier
-            )
+                        if (isRapidHorizontalNav.value || state.enrichmentActive) null
+                        else state.preview
+                    },
+                    enrichmentActive = {
+                        if (isRapidHorizontalNav.value) false
+                        else heroSceneStateLambda().enrichmentActive
+                    },
+                    portraitMode = !useLandscapePosters,
+                    showImdbRatings = uiState.homeImdbRatingsVisibility.showRatings,
+                    trailerPlaying = {
+                        if (isRapidHorizontalNav.value) false
+                        else {
+                            val state = heroSceneStateLambda()
+                            state.fullScreenBackdrop && shouldPlayTrailerLambda() && heroTrailerRenderedLambda()
+                        }
+                    },
+                    modifier = heroMetadataModifier
+                )
+            }
 
             val latestOnFocusedRowKeyChanged by rememberUpdatedState(onFocusedRowKeyChanged)
             val onActiveRowKeyChangeLambda = remember {
                 { key: String? ->
+                    if (key != null) showCarouselHero = false
                     focusHolder.activeRowKey = key
                     activeRowKey.value = key
                     // saveFocusState only runs on dispose, which a system Home press never
@@ -1192,6 +1379,11 @@ fun ModernHomeContent(
                 onExpansionInteractionNonceChange = onExpansionInteractionNonceChangeLambda,
                 blockLeftOnFirstExpandedItem = blockLeftOnFirstExpandedItem,
                 isVerticalRowsScrollingState = isVerticalRowsScrollingState,
+                onNavigateToHeroCarousel = if (heroCarouselAvailable) {
+                    requestHeroCarouselFocus
+                } else {
+                    null
+                },
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .onFocusChanged { contentHasFocus.value = it.hasFocus }

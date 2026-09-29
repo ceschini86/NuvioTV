@@ -144,6 +144,7 @@ internal fun ModernHomeRowsList(
     onFocusedHeroMediaNonceChange: (Int) -> Unit,
     onExpansionInteractionNonceChange: (Int) -> Unit,
     blockLeftOnFirstExpandedItem: Boolean = false,
+    onNavigateToHeroCarousel: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     // Unwrap StableRef wrappers for internal use (not passed to child composables)
@@ -294,6 +295,14 @@ internal fun ModernHomeRowsList(
                         expandedCatalogFocusKey.value != null &&
                         activeRowKey.value == firstRowKey
                     ) return@onPreviewKeyEvent true
+                    if (event.type == KeyEventType.KeyDown &&
+                        event.key == Key.DirectionUp &&
+                        activeRowKey.value == firstRowKey &&
+                        onNavigateToHeroCarousel != null
+                    ) {
+                        onNavigateToHeroCarousel.invoke()
+                        return@onPreviewKeyEvent true
+                    }
                     if (event.type == KeyEventType.KeyDown &&
                         event.key == Key.DirectionDown &&
                         effectiveExpandEnabled &&

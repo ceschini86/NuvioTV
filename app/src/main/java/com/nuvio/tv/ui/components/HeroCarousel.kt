@@ -88,6 +88,8 @@ fun HeroCarousel(
     showImdbRatings: Boolean = true,
     showBackdrop: Boolean = true,
     fullWidth: Dp = Dp.Unspecified,
+    carouselHeight: Dp = 400.dp,
+    indicatorBottomPadding: Dp = Dp.Unspecified,
     initialActiveIndex: Int = 0,
     modifier: Modifier = Modifier
 ) {
@@ -129,7 +131,7 @@ fun HeroCarousel(
                 else
                     Modifier.fillMaxWidth()
             )
-            .height(400.dp)
+            .height(carouselHeight)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .onFocusChanged {
                 isFocused = it.hasFocus || it.isFocused
@@ -178,36 +180,38 @@ fun HeroCarousel(
             )
         }
 
-        // Indicator dots — optimized to minimize recompositions and layout passes
+        // Indicator chips — fixed sizes so inactive pills stay visually identical
         val focusRingBrush = NuvioTheme.focusRing.brush()
         val dotColorInactive = remember { Color.White.copy(alpha = 0.3f) }
-        val dotShape = remember { RoundedCornerShape(3.dp) }
+        val inactiveChipWidth = 12.dp
+        val activeChipWidth = 28.dp
+        val chipHeight = 6.dp
+        val chipShape = remember { RoundedCornerShape(percent = 50) }
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = NuvioTheme.spacing.lg),
-            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
+                .padding(
+                    bottom = if (indicatorBottomPadding != Dp.Unspecified) {
+                        indicatorBottomPadding
+                    } else {
+                        NuvioTheme.spacing.lg
+                    }
+                ),
+            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             repeat(items.size) { index ->
                 val isActive = index == activeIndex
-                val useGradient = isActive
-                val dotColor = when {
-                    isActive -> null // use gradient brush
-                    else -> dotColorInactive
-                }
-                val dotWidth = when {
-                    isActive -> NuvioTheme.spacing.xxl
-                    else -> NuvioTheme.spacing.md
-                }
-                val dotHeight = if (isActive) 6.dp else NuvioTheme.spacing.xs
-                
                 Box(
                     modifier = Modifier
-                        .size(width = dotWidth, height = dotHeight)
-                        .clip(dotShape)
+                        .size(
+                            width = if (isActive) activeChipWidth else inactiveChipWidth,
+                            height = chipHeight
+                        )
+                        .clip(chipShape)
                         .then(
-                            if (useGradient) Modifier.background(focusRingBrush)
-                            else Modifier.background(dotColor!!)
+                            if (isActive) Modifier.background(focusRingBrush)
+                            else Modifier.background(dotColorInactive)
                         )
                 )
             }
