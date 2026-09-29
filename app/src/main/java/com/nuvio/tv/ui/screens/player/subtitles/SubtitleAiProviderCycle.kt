@@ -13,6 +13,15 @@ fun shouldShowSubtitleAiProviderCycleCta(credentials: SubtitleAiCredentials): Bo
     eligibleSubtitleAiModels(credentials).size >= 2
 
 /**
+ * Overlay CTA only on the synthetic **AI** option of the preferred language — never on
+ * embedded / addon rows (any language).
+ */
+fun shouldShowSubtitleAiProviderCycleCta(
+    credentials: SubtitleAiCredentials,
+    isAiOption: Boolean
+): Boolean = isAiOption && shouldShowSubtitleAiProviderCycleCta(credentials)
+
+/**
  * Next preferred model among eligible providers. Returns null when cycling is not available
  * (fewer than two eligible providers).
  *

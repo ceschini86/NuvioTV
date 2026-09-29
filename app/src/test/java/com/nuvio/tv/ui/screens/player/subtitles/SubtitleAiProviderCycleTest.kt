@@ -55,6 +55,16 @@ class SubtitleAiProviderCycleTest {
     }
 
     @Test
+    fun `visibility gated to AI option only even with multiple providers`() {
+        val two = creds(
+            SubtitleAiModel.GROQ_LLAMA_70B to (true to listOf("gsk_a")),
+            SubtitleAiModel.GEMINI_FLASH_25 to (true to listOf("AIza_b"))
+        )
+        assertTrue(shouldShowSubtitleAiProviderCycleCta(two, isAiOption = true))
+        assertFalse(shouldShowSubtitleAiProviderCycleCta(two, isAiOption = false))
+    }
+
+    @Test
     fun `cycle is deterministic Groq then Gemini then Claude among eligible`() {
         val all = creds(
             SubtitleAiModel.GROQ_LLAMA_70B to (true to listOf("gsk_a")),
