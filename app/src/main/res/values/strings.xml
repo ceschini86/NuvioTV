@@ -2516,10 +2516,7 @@
     <string name="cd_trakt_qr">Trakt activation QR</string>
     <string name="cd_imdb">IMDb</string>
     <string name="episode_rating_source_series_graph">Series Graph</string>
-    <string name="episode_rating_source_series_graph_short">SG</string>
     <string name="episode_rating_source_imdb">IMDb</string>
-    <string name="episode_rating_attribution_series_graph">Ratings from Series Graph</string>
-    <string name="episode_rating_attribution_imdb">IMDb ratings via Series Graph</string>
     <string name="cd_open_discover">Open discover</string>
     <string name="cd_clear_search">Clear search</string>
     <string name="cd_voice_search">Voice search</string>

@@ -7,10 +7,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -41,9 +39,7 @@ import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.EpisodeRatingSource
 import com.nuvio.tv.domain.model.Video
-import com.nuvio.tv.ui.components.ImdbRatingSourceLabel
 import com.nuvio.tv.ui.components.SeriesGraphRatingColors
-import com.nuvio.tv.ui.components.SeriesGraphRatingSourceLabel
 
 @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
@@ -332,57 +328,28 @@ private fun EpisodeRatingSourceHeader(
         Modifier
     }
 
-    Column(
+    Row(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        when (ratingSource) {
-            EpisodeRatingSource.SERIES_GRAPH -> {
-                SeriesGraphRatingSourceLabel(
-                    textStyle = MaterialTheme.typography.labelSmall,
-                    textColor = NuvioTheme.colors.TextSecondary,
-                    logoHeightDp = 18
-                )
-            }
-            EpisodeRatingSource.IMDB -> {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ImdbRatingSourceLabel(
-                        logoModifier = Modifier
-                            .height(18.dp)
-                            .widthIn(max = 72.dp),
-                        textStyle = MaterialTheme.typography.labelSmall,
-                        textColor = NuvioTheme.colors.TextSecondary
-                    )
-                    Text(
-                        text = stringResource(R.string.episode_rating_attribution_imdb),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = NuvioTheme.colors.TextSecondary,
-                        maxLines = 1
-                    )
-                }
-            }
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            EpisodeRatingSourceChip(
-                label = stringResource(R.string.episode_rating_source_series_graph),
-                selected = ratingSource == EpisodeRatingSource.SERIES_GRAPH,
-                onClick = { onRatingSourceSelected(EpisodeRatingSource.SERIES_GRAPH) },
-                modifier = Modifier
-                    .focusRequester(seriesGraphFocusRequester)
-                    .then(upModifier)
-                    .focusProperties { down = downFocusRequester }
-            )
-            EpisodeRatingSourceChip(
-                label = stringResource(R.string.episode_rating_source_imdb),
-                selected = ratingSource == EpisodeRatingSource.IMDB,
-                onClick = { onRatingSourceSelected(EpisodeRatingSource.IMDB) },
-                modifier = Modifier
-                    .focusRequester(imdbFocusRequester)
-                    .then(upModifier)
-                    .focusProperties { down = downFocusRequester }
-            )
-        }
+        EpisodeRatingSourceChip(
+            label = stringResource(R.string.episode_rating_source_series_graph),
+            selected = ratingSource == EpisodeRatingSource.SERIES_GRAPH,
+            onClick = { onRatingSourceSelected(EpisodeRatingSource.SERIES_GRAPH) },
+            modifier = Modifier
+                .focusRequester(seriesGraphFocusRequester)
+                .then(upModifier)
+                .focusProperties { down = downFocusRequester }
+        )
+        EpisodeRatingSourceChip(
+            label = stringResource(R.string.episode_rating_source_imdb),
+            selected = ratingSource == EpisodeRatingSource.IMDB,
+            onClick = { onRatingSourceSelected(EpisodeRatingSource.IMDB) },
+            modifier = Modifier
+                .focusRequester(imdbFocusRequester)
+                .then(upModifier)
+                .focusProperties { down = downFocusRequester }
+        )
     }
 }
 
