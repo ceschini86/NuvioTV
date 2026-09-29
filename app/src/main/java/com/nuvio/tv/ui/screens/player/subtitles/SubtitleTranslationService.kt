@@ -18,8 +18,6 @@ import java.util.concurrent.TimeUnit
 private const val TAG = "SubtitleTranslation"
 private const val HTTP_TAG = "SubtitleAiHttp"
 
-private val RTL_LANGUAGES = setOf("hebrew", "arabic", "urdu", "persian", "farsi", "yiddish")
-
 data class TranslationResult(
     val lines: List<String>,
     val success: Boolean,
@@ -96,54 +94,8 @@ class SubtitleTranslationService(
         }
     }
 
-    private fun extractJsonArray(text: String): JSONArray? {
-        val codeBlocks = Regex("```(?:json)?\\s*([\\s\\S]*?)```").findAll(text)
-            .map { it.groupValues[1].trim() }.toList().reversed()
-        val stripped = text.replace(Regex("```[^`]*```"), "").trim()
-        val candidates = codeBlocks + listOf(stripped, text)
-
-        for (candidate in candidates) {
-            try { return JSONArray(candidate) } catch (_: Exception) {}
-            // With responseMimeType=application/json the model sometimes wraps the array in an
-            // object (e.g. {"translations": [...]}) — unwrap a lone array-valued field.
-            try {
-                val obj = JSONObject(candidate)
-                val arrays = obj.keys().asSequence()
-                    .mapNotNull { key -> obj.optJSONArray(key) }
-                    .toList()
-                if (arrays.size == 1) return arrays[0]
-            } catch (_: Exception) {}
-            val start = candidate.indexOf('[')
-            val end = candidate.lastIndexOf(']')
-            if (start < 0 || end <= start) {
-                repairTruncatedArray(candidate)?.let { return it }
-                continue
-            }
-            try {
-                return JSONArray(candidate.substring(start, end + 1))
-            } catch (_: Exception) {}
-        }
-        return null
-    }
-
-    /**
-     * Gemini's JSON mode intermittently truncates output at the very tail (finishReason STOP but
-     * the closing bracket — sometimes a trailing element — is missing). The translations
-     * themselves are intact, so re-terminate the array instead of failing the whole batch.
-     */
-    private fun repairTruncatedArray(text: String): JSONArray? {
-        val t = text.trim()
-        if (!t.startsWith("[") || t.endsWith("]")) return null
-        val lastQuote = t.lastIndexOf('"')
-        if (lastQuote <= 0) return null
-        // Try closing as-is, then after dropping a trailing partial element.
-        for (cut in listOf(t, t.substring(0, lastQuote + 1))) {
-            val trimmed = cut.trimEnd().trimEnd(',')
-            try { return JSONArray("$trimmed]") } catch (_: Exception) {}
-            try { return JSONArray("$trimmed\"]") } catch (_: Exception) {}
-        }
-        return null
-    }
+    private fun extractJsonArray(text: String): JSONArray? =
+        SubtitleAiResponseJsonParser.extractJsonArray(text)
 
     private fun buildSystemPrompt(targetLanguage: String, NL: String) =
         "You are a professional subtitle translator. Translate the following JSON array into natural $targetLanguage.\n" +
@@ -153,12 +105,6 @@ class SubtitleTranslationService(
         "3. Keep the exact same order and element count.\n" +
         "4. Preserve the '$NL' symbol exactly where it appears as a line break.\n" +
         "5. Use informal, spoken $targetLanguage suitable for cinema."
-
-    // The numeric prefix each translated element must carry back ("7: text" / tolerant of
-    // "7. text", "7 - text"). Alignment by index instead of array position: the model merging or
-    // splitting one subtitle line then costs only that line, not the whole window (line-count
-    // mismatches — 40→39, 19→20 — were the dominant translation failure on gemini-3.5-flash).
-    private val indexPrefixRegex = Regex("""^\s*(\d+)\s*[:.\-]\s*""")
 
     private fun encodeIndexed(lines: List<String>, NL: String): JSONArray =
         JSONArray(lines.mapIndexed { i, line -> "$i: ${line.replace("\n", NL)}" })
@@ -927,56 +873,28 @@ class SubtitleTranslationService(
         }
     }
 
-    private fun parseTranslationResult(lines: List<String>, targetLanguage: String, rawText: String, NL: String): TranslationResult {
-        var resultArray = extractJsonArray(rawText)
-        if (resultArray == null && lines.size == 1) {
-            // Single-line batches: the model often returns a bare JSON string (or plain text)
-            // instead of a one-element array — treat the whole payload as that one translation.
-            val single = runCatching { JSONArray("[$rawText]").getString(0) }.getOrNull()
-                ?: rawText.trim().trim('"')
-            if (single.isNotBlank()) resultArray = JSONArray(listOf(single))
-        }
-        if (resultArray == null) {
+    private fun parseTranslationResult(
+        lines: List<String>,
+        targetLanguage: String,
+        rawText: String,
+        NL: String
+    ): TranslationResult {
+        val parsed = SubtitleAiResponseJsonParser.parseTranslationResult(
+            lines = lines,
+            targetLanguage = targetLanguage,
+            rawText = rawText,
+            NL = NL
+        )
+        if (!parsed.success) {
             // The only failure path that carries no HTTP/finishReason context — always log the
             // offending text or the toast is undiagnosable.
             Log.e(TAG, "No JSON array in model output (sent ${lines.size} lines): ${rawText.take(300)}")
-            return TranslationResult(lines, false, "No valid JSON array in response")
-        }
-
-        // Align by the numeric prefix, not array position — merges/splits then cost only the
-        // affected line (it stays in the original language) instead of failing the window.
-        val byIndex = HashMap<Int, String>()
-        for (i in 0 until resultArray.length()) {
-            val element = resultArray.optString(i) ?: continue
-            val match = indexPrefixRegex.find(element)
-            val key: Int
-            val value: String
-            if (match != null) {
-                key = match.groupValues[1].toIntOrNull() ?: continue
-                value = element.substring(match.range.last + 1)
-            } else if (resultArray.length() == lines.size) {
-                // Model dropped the prefixes but the count matches — positional fallback.
-                key = i
-                value = element
-            } else {
-                continue
+        } else {
+            val translatedCount = parsed.lines.indices.count { parsed.lines[it] != lines[it] }
+            if (translatedCount < lines.size) {
+                Log.w(TAG, "Partial alignment: $translatedCount/${lines.size} lines translated")
             }
-            if (!byIndex.containsKey(key)) byIndex[key] = value
         }
-        if (byIndex.isEmpty()) {
-            Log.e(TAG, "No alignable lines (sent ${lines.size}, got ${resultArray.length()}): ${rawText.take(300)}")
-            return TranslationResult(lines, false, "No valid JSON array in response")
-        }
-        if (byIndex.size < lines.size) {
-            Log.w(TAG, "Partial alignment: ${byIndex.size}/${lines.size} lines translated")
-        }
-
-        val isRtl = RTL_LANGUAGES.contains(targetLanguage.lowercase())
-        val translated = lines.indices.map { i ->
-            val line = byIndex[i]?.replace(NL, "\n") ?: return@map lines[i]
-            if (isRtl) "‏$line‏" else line
-        }
-
-        return TranslationResult(translated, true)
+        return parsed
     }
 }
