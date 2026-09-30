@@ -811,6 +811,7 @@ private fun HomeViewModel.updateCatalogItemWithTmdb(itemId: String, enrichment: 
             merged = merged.copy(
                 name = if (isModernLayout) enrichment.localizedTitle ?: merged.name else merged.name,
                 description = enrichment.description ?: merged.description,
+                tagline = enrichment.tagline ?: merged.tagline,
                 genres = if (enrichment.genres.isNotEmpty()) enrichment.genres else merged.genres
             )
         }
@@ -998,6 +999,7 @@ internal suspend fun HomeViewModel.enrichHeroItemsPipeline(
                             enriched = enriched.copy(
                                 name = enrichment.localizedTitle ?: enriched.name,
                                 description = enrichment.description ?: enriched.description,
+                                tagline = enrichment.tagline ?: enriched.tagline,
                                 genres = if (enrichment.genres.isNotEmpty()) enrichment.genres else enriched.genres,
                                 imdbRating = mdbImdbRating?.toFloat() ?: enriched.imdbRating
                             )

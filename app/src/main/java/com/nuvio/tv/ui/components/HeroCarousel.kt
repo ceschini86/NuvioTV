@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.requiredWidth
@@ -32,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -39,6 +41,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -57,6 +60,7 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
@@ -87,9 +91,21 @@ fun HeroCarousel(
     focusRequester: FocusRequester? = null,
     showImdbRatings: Boolean = true,
     showBackdrop: Boolean = true,
+    /** Tall Modern hero: full-bleed artwork + Modern scrims so the banner matches row hero. */
+    immersiveBackdrop: Boolean = false,
     fullWidth: Dp = Dp.Unspecified,
     carouselHeight: Dp = 400.dp,
     indicatorBottomPadding: Dp = Dp.Unspecified,
+    /**
+     * Extra bottom inset for logo/meta when the carousel fills the screen behind the rows
+     * (typically rows viewport height + gap), mirroring Modern [HeroTitleBlock] placement.
+     */
+    contentBottomInset: Dp = Dp.Unspecified,
+    /**
+     * Modern peek→rest (0–1), animated upstream. Drives logo, column width, and description height.
+     * No-op unless [immersiveBackdrop] is true.
+     */
+    contentExpandProgress: Float = 0f,
     initialActiveIndex: Int = 0,
     modifier: Modifier = Modifier
 ) {
@@ -111,16 +127,12 @@ fun HeroCarousel(
         items.getOrNull(activeIndex)?.let { currentOnActiveItemChanged(it) }
     }
 
-    // Auto-advance when not focused — delay first advance to 20s so initial GPU load settles
-    LaunchedEffect(isFocused, items.size) {
+    // Auto-advance every 10s, including while focused (Modern keeps the carousel focused when visible).
+    // Restarting on activeIndex resets the dwell timer after manual L/R.
+    LaunchedEffect(activeIndex, items.size) {
         if (items.size <= 1) return@LaunchedEffect
-        delay(AUTO_ADVANCE_INTERVAL_MS * 2) // 20s before first advance
-        while (true) {
-            delay(AUTO_ADVANCE_INTERVAL_MS)
-            if (!isFocused) {
-                activeIndex = (activeIndex + 1) % items.size
-            }
-        }
+        delay(AUTO_ADVANCE_INTERVAL_MS)
+        activeIndex = (activeIndex + 1) % items.size
     }
 
     Box(
@@ -141,18 +153,20 @@ fun HeroCarousel(
                 if (event.type == KeyEventType.KeyDown) {
                     when (event.key) {
                         Key.DirectionLeft -> {
-                            if (isRtl) {
-                                if (activeIndex < items.size - 1) { activeIndex++; true } else false
+                            activeIndex = if (isRtl) {
+                                (activeIndex + 1) % items.size
                             } else {
-                                if (activeIndex > 0) { activeIndex--; true } else false
+                                (activeIndex - 1 + items.size) % items.size
                             }
+                            true
                         }
                         Key.DirectionRight -> {
-                            if (isRtl) {
-                                if (activeIndex > 0) { activeIndex--; true } else false
+                            activeIndex = if (isRtl) {
+                                (activeIndex - 1 + items.size) % items.size
                             } else {
-                                if (activeIndex < items.size - 1) { activeIndex++; true } else false
+                                (activeIndex + 1) % items.size
                             }
+                            true
                         }
                         else -> false
                     }
@@ -176,7 +190,10 @@ fun HeroCarousel(
             HeroCarouselSlide(
                 item = item,
                 showImdbRatings = showImdbRatings,
-                showBackdrop = showBackdrop
+                showBackdrop = showBackdrop,
+                immersiveBackdrop = immersiveBackdrop,
+                contentBottomInset = contentBottomInset,
+                contentExpandProgress = contentExpandProgress
             )
         }
 
@@ -187,16 +204,15 @@ fun HeroCarousel(
         val activeChipWidth = 28.dp
         val chipHeight = 6.dp
         val chipShape = remember { RoundedCornerShape(percent = 50) }
+        val resolvedIndicatorBottomPadding = when {
+            indicatorBottomPadding != Dp.Unspecified -> indicatorBottomPadding
+            immersiveBackdrop -> NuvioTheme.spacing.md
+            else -> NuvioTheme.spacing.lg
+        }
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(
-                    bottom = if (indicatorBottomPadding != Dp.Unspecified) {
-                        indicatorBottomPadding
-                    } else {
-                        NuvioTheme.spacing.lg
-                    }
-                ),
+                .padding(bottom = resolvedIndicatorBottomPadding),
             horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -224,15 +240,24 @@ fun HeroCarousel(
 private fun HeroCarouselSlide(
     item: MetaPreview,
     showImdbRatings: Boolean,
-    showBackdrop: Boolean
+    showBackdrop: Boolean,
+    immersiveBackdrop: Boolean = false,
+    contentBottomInset: Dp = Dp.Unspecified,
+    contentExpandProgress: Float = 0f
 ) {
     val highlighterEnabled = LocalRecompositionHighlighterEnabled.current
     val context = LocalContext.current
     val density = LocalDensity.current
-    val logoRequestWidthPx = remember(density) {
-        with(density) { 220.dp.roundToPx() }.coerceAtLeast(1)
+    val progress = if (immersiveBackdrop) contentExpandProgress.coerceIn(0f, 1f) else 0f
+    // Immersive keeps a fixed logo box so peek→rest only moves vertically (no horizontal reflow).
+    val logoMaxWidth = if (immersiveBackdrop) 300.dp else 220.dp
+    val logoHeight = if (immersiveBackdrop) 140.dp else 100.dp
+    val logoRequestWidthPx = remember(density, logoMaxWidth) {
+        with(density) { logoMaxWidth.roundToPx() }.coerceAtLeast(1)
     }
-    val logoRequestHeightPx = remember(density) { with(density) { 100.dp.roundToPx() }.coerceAtLeast(1) }
+    val logoRequestHeightPx = remember(density, logoHeight) {
+        with(density) { logoHeight.roundToPx() }.coerceAtLeast(1)
+    }
 
     val logoModel = remember(context, item.logo, logoRequestWidthPx, logoRequestHeightPx) {
         item.logo?.let {
@@ -270,6 +295,15 @@ private fun HeroCarouselSlide(
             ?.takeIf { showImdbRatings }
             ?.let { String.format("%.1f", it) }
     }
+    val contentWidthFraction = 0.42f
+    val descriptionStyle = MaterialTheme.typography.bodyMedium
+    val descriptionLineHeight = with(density) { descriptionStyle.lineHeight.toDp() }
+    val descriptionMaxHeight = if (immersiveBackdrop) {
+        lerp(descriptionLineHeight * 4, descriptionLineHeight * 6, progress)
+    } else {
+        descriptionLineHeight * 4
+    }
+    val logoAlignment = if (immersiveBackdrop) Alignment.BottomStart else Alignment.CenterStart
 
     Box(
         modifier = Modifier
@@ -277,18 +311,44 @@ private fun HeroCarouselSlide(
             .then(if (highlighterEnabled) Modifier.recompositionHighlighter() else Modifier)
     ) {
         if (showBackdrop) {
-            HeroCarouselBackdrop(
-                item = item,
-                fullPage = false,
-                modifier = Modifier.fillMaxSize()
-            )
+            if (immersiveBackdrop) {
+                HeroCarouselModernBackdrop(
+                    item = item,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                HeroCarouselBackdrop(
+                    item = item,
+                    fullPage = false,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
 
+        val contentBottomPadding = when {
+            contentBottomInset != Dp.Unspecified -> contentBottomInset
+            immersiveBackdrop -> NuvioTheme.spacing.xxl
+            else -> NuvioTheme.spacing.xxxl
+        }
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(start = NuvioTheme.spacing.xxxl, bottom = NuvioTheme.spacing.xxxl, end = NuvioTheme.spacing.xxxl)
-                .fillMaxWidth(0.42f),
+                .padding(
+                    start = NuvioTheme.spacing.xxxl,
+                    bottom = contentBottomPadding,
+                    end = NuvioTheme.spacing.xxxl
+                )
+                .fillMaxWidth(contentWidthFraction)
+                .then(
+                    if (immersiveBackdrop) {
+                        Modifier.graphicsLayer {
+                            alpha = 0.94f + 0.06f * progress
+                            transformOrigin = TransformOrigin(0f, 1f)
+                        }
+                    } else {
+                        Modifier
+                    }
+                ),
             verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
         ) {
             if (showLogo) {
@@ -297,11 +357,11 @@ private fun HeroCarouselSlide(
                     contentDescription = item.name,
                     onError = { logoLoadFailed = true },
                     modifier = Modifier
-                        .height(100.dp)
-                        .widthIn(min = 100.dp, max = 220.dp)
+                        .height(logoHeight)
+                        .widthIn(min = logoHeight, max = logoMaxWidth)
                         .fillMaxWidth(),
                     contentScale = ContentScale.Fit,
-                    alignment = Alignment.CenterStart
+                    alignment = logoAlignment
                 )
             } else {
                 Text(
@@ -373,15 +433,21 @@ private fun HeroCarouselSlide(
                 }
             }
 
-            item.description?.takeIf { it.isNotBlank() }?.let { description ->
+            val heroBlurb = item.tagline?.takeIf { it.isNotBlank() }
+                ?: item.description?.takeIf { it.isNotBlank() }
+            heroBlurb?.let { description ->
                 Text(
                     text = description,
-                    style = MaterialTheme.typography.bodyMedium.copy(
+                    style = descriptionStyle.copy(
                         textDirection = description.contentTextDirection()
                     ),
                     color = NuvioTheme.colors.TextPrimary,
-                    maxLines = 4,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = if (immersiveBackdrop) 6 else 4,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = descriptionMaxHeight)
+                        .clipToBounds()
                 )
             }
         }
@@ -499,6 +565,96 @@ internal fun HeroCarouselBackdrop(
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop,
             alignment = Alignment.TopCenter
+        )
+    }
+}
+
+/** Carousel backdrop matching Modern hero media + full-screen gradient scrims. */
+@Composable
+internal fun HeroCarouselModernBackdrop(
+    item: MetaPreview,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val configuration = LocalConfiguration.current
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val requestWidthPx = remember(configuration.screenWidthDp, density) {
+        with(density) { configuration.screenWidthDp.dp.roundToPx() }.coerceAtLeast(1)
+    }
+    val requestHeightPx = remember(configuration.screenHeightDp, density) {
+        with(density) { configuration.screenHeightDp.dp.roundToPx() }.coerceAtLeast(1)
+    }
+    val backdropUrl = item.backdropUrl
+    val backgroundModel = remember(context, backdropUrl, requestWidthPx, requestHeightPx) {
+        ImageRequest.Builder(context)
+            .data(backdropUrl)
+            .size(width = requestWidthPx, height = requestHeightPx)
+            .build()
+    }
+    val bgColor = NuvioTheme.colors.Background
+
+    Box(modifier = modifier) {
+        AsyncImage(
+            model = backgroundModel,
+            contentDescription = null,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
+            contentScale = ContentScale.Crop,
+            alignment = Alignment.TopEnd
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithCache {
+                    val horizontalFadeEndX = size.width * 0.65f
+                    val colorStops = arrayOf(
+                        0.0f to bgColor,
+                        0.22f to bgColor.copy(alpha = 0.90f),
+                        0.46f to bgColor.copy(alpha = 0.80f),
+                        0.76f to bgColor.copy(alpha = 0.42f),
+                        1.0f to Color.Transparent
+                    )
+                    val horizontalGradient = if (isRtl) {
+                        Brush.horizontalGradient(
+                            colorStops = colorStops,
+                            startX = size.width,
+                            endX = size.width - horizontalFadeEndX
+                        )
+                    } else {
+                        Brush.horizontalGradient(
+                            colorStops = colorStops,
+                            startX = 0f,
+                            endX = horizontalFadeEndX
+                        )
+                    }
+                    val bottomStripStartY = size.height * 0.64f
+                    val verticalGradient = Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0.0f to Color.Transparent,
+                            0.30f to bgColor.copy(alpha = 0.35f),
+                            0.60f to bgColor.copy(alpha = 0.75f),
+                            1.0f to bgColor
+                        ),
+                        startY = bottomStripStartY,
+                        endY = size.height
+                    )
+                    onDrawBehind {
+                        val rectLeft = if (isRtl) size.width - horizontalFadeEndX else 0f
+                        drawRect(
+                            brush = horizontalGradient,
+                            topLeft = Offset(rectLeft, 0f),
+                            size = Size(horizontalFadeEndX, size.height)
+                        )
+                        drawRect(
+                            brush = verticalGradient,
+                            topLeft = Offset(0f, bottomStripStartY),
+                            size = Size(size.width, size.height - bottomStripStartY)
+                        )
+                    }
+                }
         )
     }
 }

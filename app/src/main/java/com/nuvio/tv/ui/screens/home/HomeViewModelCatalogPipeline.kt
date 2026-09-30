@@ -624,39 +624,49 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
                     .thenBy { it.id }
             )
         }
-        fun slotShuffled(
+        // Merge catalogs then shuffle across sources (not per-catalog sequential slots).
+        // heroItemOrder keeps a stable order across recompositions / enrichment.
+        fun mergeShuffled(
             rows: List<CatalogRow>,
             filter: (MetaPreview) -> Boolean,
             currentOrder: List<String>,
             maxItems: Int = HERO_CAROUSEL_MAX_ITEMS
         ): List<MetaPreview> {
-            val totalCatalogs = rows.size.coerceAtLeast(1)
-            val baseSlot = maxItems / totalCatalogs
-            val remainder = maxItems % totalCatalogs
-            val seen = mutableSetOf<String>()
-            val result = mutableListOf<MetaPreview>()
-            rows.forEachIndexed { index, row ->
-                val slot = baseSlot + if (index < remainder) 1 else 0
-                val existing = currentOrder.filter { id -> row.items.any { it.id == id } }
-                val byId = row.items.filter(filter).associateBy { it.id }
-                val ordered = existing.mapNotNull { byId[it] }
-                val new = stableHeroCandidates(
-                    row = row,
-                    candidates = byId.values.filter { it.id !in existing }
-                )
-                // Filter out duplicates but keep taking until slot is filled
-                val unique = (ordered + new).filter { seen.add(it.id) }
-                result += unique.take(slot)
+            if (rows.isEmpty()) return emptyList()
+            val byId = LinkedHashMap<String, MetaPreview>()
+            rows.forEach { row ->
+                row.items.filter(filter).forEach { item ->
+                    byId.putIfAbsent(item.id, item)
+                }
             }
-            return result.take(maxItems)
+            if (byId.isEmpty()) return emptyList()
+
+            fun deterministicShuffle(items: List<MetaPreview>): List<MetaPreview> {
+                if (items.size <= 1) return items
+                val seed = items.map { it.id }.sorted().joinToString("|").hashCode().toLong()
+                return items.shuffled(kotlin.random.Random(seed))
+            }
+
+            if (currentOrder.isEmpty()) {
+                // Prefer artwork-stable ordering within each row as a base, then shuffle the merge.
+                val pooled = rows.flatMap { row ->
+                    stableHeroCandidates(row, row.items.filter(filter).filter { it.id in byId })
+                }.distinctBy { it.id }
+                return deterministicShuffle(pooled).take(maxItems)
+            }
+
+            val retained = currentOrder.mapNotNull { byId[it] }
+            val retainedIds = retained.mapTo(mutableSetOf()) { it.id }
+            val newcomers = byId.values.filter { it.id !in retainedIds }
+            return (retained + deterministicShuffle(newcomers)).take(maxItems)
         }
 
         val currentHeroOrder = heroItemOrder
 
-        val heroItemsFromSelectedCatalogs = slotShuffled(
+        val heroItemsFromSelectedCatalogs = mergeShuffled(
             selectedHeroRows, { it.hasHeroArtwork() }, currentHeroOrder
         )
-        val fallbackHeroItemsFromSelectedCatalogs = slotShuffled(
+        val fallbackHeroItemsFromSelectedCatalogs = mergeShuffled(
             selectedHeroRows, { true }, currentHeroOrder
         )
         // When orderedRows is empty (all catalogs disabled), include any
@@ -677,7 +687,7 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
         // Default hero sources when no catalogs are explicitly selected: the first
         // two home rows (typically the top catalogs), not the entire home feed.
         val defaultHeroFallbackRows = allHeroFallbackRows.take(HERO_CAROUSEL_DEFAULT_CATALOG_COUNT)
-        val fallbackHeroItemsWithArtwork = slotShuffled(
+        val fallbackHeroItemsWithArtwork = mergeShuffled(
             defaultHeroFallbackRows, { it.hasHeroArtwork() }, currentHeroOrder
         )
 

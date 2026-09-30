@@ -145,6 +145,8 @@ internal fun ModernHomeRowsList(
     onExpansionInteractionNonceChange: (Int) -> Unit,
     blockLeftOnFirstExpandedItem: Boolean = false,
     onNavigateToHeroCarousel: (() -> Unit)? = null,
+    /** When true, row focusRestorer must not reclaim focus from the hero carousel. */
+    carouselOwnsFocus: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     // Unwrap StableRef wrappers for internal use (not passed to child composables)
@@ -285,7 +287,10 @@ internal fun ModernHomeRowsList(
                 .clipToBounds()
                 .graphicsLayer { alpha = trailerContentAlpha() }
                 .focusRequester(contentFocusRequester)
-                .focusRestorer { focusRestorerRequester() }
+                .then(
+                    if (carouselOwnsFocus) Modifier
+                    else Modifier.focusRestorer { focusRestorerRequester() }
+                )
                 .onPreviewKeyEvent { event ->
                     val firstRowKey = carouselRows.list.firstOrNull()?.key
                     val lastRowKey = carouselRows.list.lastOrNull()?.key

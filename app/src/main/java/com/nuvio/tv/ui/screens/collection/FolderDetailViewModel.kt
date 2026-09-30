@@ -1457,6 +1457,7 @@ class FolderDetailViewModel @Inject constructor(
                                     result = result.copy(
                                         name = if (isModern) enrichment.localizedTitle ?: result.name else result.name,
                                         description = enrichment.description ?: result.description,
+                                        tagline = enrichment.tagline ?: result.tagline,
                                         genres = if (enrichment.genres.isNotEmpty()) enrichment.genres else result.genres
                                     )
                                 }

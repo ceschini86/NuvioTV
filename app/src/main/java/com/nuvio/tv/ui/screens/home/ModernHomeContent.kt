@@ -6,6 +6,7 @@
 
 package com.nuvio.tv.ui.screens.home
 
+import com.nuvio.tv.ui.theme.NuvioMotion
 import com.nuvio.tv.ui.theme.NuvioTheme
 
 import androidx.activity.compose.BackHandler
@@ -63,6 +64,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.zIndex
 import com.nuvio.tv.R
 import androidx.tv.material3.Border
@@ -216,8 +218,25 @@ fun ModernHomeContent(
                 (!focusState.hasSavedFocus || focusState.focusedRowKey == "hero_carousel")
         )
     }
+    // While true, row focus callbacks must not flip the hero back to Modern info / CW.
+    // Up→carousel used to win briefly, then CW onFocus stole via onActiveRowKeyChange.
+    var holdingCarouselFocus by remember {
+        mutableStateOf(
+            heroCarouselAvailable &&
+                (!focusState.hasSavedFocus || focusState.focusedRowKey == "hero_carousel")
+        )
+    }
+    // Second Up on the carousel: hide the CW peek so the hero owns the full screen.
+    var carouselHidesRows by remember { mutableStateOf(false) }
     LaunchedEffect(heroCarouselAvailable) {
-        if (!heroCarouselAvailable) showCarouselHero = false
+        if (!heroCarouselAvailable) {
+            showCarouselHero = false
+            holdingCarouselFocus = false
+            carouselHidesRows = false
+        }
+    }
+    LaunchedEffect(showCarouselHero) {
+        if (!showCarouselHero) carouselHidesRows = false
     }
     val focusScope = rememberCoroutineScope()
 
@@ -268,13 +287,22 @@ fun ModernHomeContent(
     val restoredFromSavedState = remember { mutableStateOf(false) }
     val requestHeroCarouselFocus: () -> Unit = remember(heroFocusRequester, verticalRowListState) {
         {
+            holdingCarouselFocus = true
             showCarouselHero = true
+            carouselHidesRows = false
             activeRowKey.value = null
             focusHolder.activeRowKey = null
+            pendingRowFocusKey.value = null
+            pendingRowFocusIndex.value = null
             onFocusedRowKeyChanged("hero_carousel")
             focusScope.launch {
-                verticalRowListState.scrollToItem(0, 0)
-                repeat(8) {
+                val atTop = verticalRowListState.firstVisibleItemIndex == 0 &&
+                    verticalRowListState.firstVisibleItemScrollOffset == 0
+                if (!atTop) {
+                    verticalRowListState.animateScrollToItem(0, 0)
+                }
+                // Crossfade / focusRequester attach may lag — retry past the transition.
+                repeat(24) {
                     withFrameNanos { }
                     if (runCatching { heroFocusRequester.requestFocus(); true }.getOrDefault(false)) {
                         return@launch
@@ -470,6 +498,7 @@ fun ModernHomeContent(
 
         if (!restoredFromSavedState.value && focusState.hasSavedFocus) {
             if (focusState.focusedRowKey == "hero_carousel" && heroCarouselAvailable) {
+                holdingCarouselFocus = true
                 showCarouselHero = true
                 restoredFromSavedState.value = true
                 return@LaunchedEffect
@@ -493,6 +522,7 @@ fun ModernHomeContent(
                 }
 
                 showCarouselHero = false
+                holdingCarouselFocus = false
                 focusHolder.activeRowKey = resolvedRow.key
                 focusHolder.activeItemIndex = resolvedIndex
                 activeRowKey.value = resolvedRow.key
@@ -506,6 +536,14 @@ fun ModernHomeContent(
                 restoredFromSavedState.value = true
                 return@LaunchedEffect
             }
+        }
+
+        // Don't invent an active row while the hero carousel owns focus.
+        if (holdingCarouselFocus || showCarouselHero) {
+            if (!restoredFromSavedState.value && carouselRows.list.isNotEmpty()) {
+                restoredFromSavedState.value = true
+            }
+            return@LaunchedEffect
         }
 
         val hadActiveRow = focusHolder.activeRowKey != null
@@ -532,6 +570,7 @@ fun ModernHomeContent(
 
             if (!focusState.hasSavedFocus && !hadActiveRow) {
                 if (heroCarouselAvailable) {
+                    holdingCarouselFocus = true
                     showCarouselHero = true
                 } else {
                     initialAutoSelectedKey = resolvedActive.key
@@ -1061,18 +1100,32 @@ fun ModernHomeContent(
                 else -> if (useLandscapePosters) landscapeCatalogCardHeight else portraitCatalogCardHeight
             }
             val rowTitleBottom = 14.dp
-            val carouselToRowsGap = NuvioTheme.spacing.xxl
+            val carouselToRowsGap = NuvioTheme.spacing.sm
             val carouselFocusedRowsViewportHeight =
-                rowTitleHeight + rowTitleBottom + firstRowCardHeight + NuvioTheme.spacing.md
+                rowTitleHeight + rowTitleBottom + firstRowCardHeight + NuvioTheme.spacing.sm
             val browsingRowsViewportHeightFraction = if (useLandscapePosters) 0.49f else 0.52f
-            val targetRowsViewportHeight = if (showCarouselHeroVisible) {
-                carouselFocusedRowsViewportHeight
-            } else {
-                screenHeight * browsingRowsViewportHeightFraction
+            val rowsViewportAnimSpec = tween<Dp>(
+                durationMillis = NuvioMotion.tokens.durations.fast,
+                easing = NuvioMotion.tokens.easings.standard
+            )
+            val carouselExpandProgress by animateFloatAsState(
+                targetValue = if (showCarouselHeroVisible && carouselHidesRows) 1f else 0f,
+                animationSpec = tween(
+                    durationMillis = NuvioMotion.tokens.durations.fast,
+                    easing = NuvioMotion.tokens.easings.standard
+                ),
+                label = "carouselExpandProgress"
+            )
+            val peekRowsViewportHeight = carouselFocusedRowsViewportHeight
+            // One animated height for full-bleed ↔ peek ↔ browsing so CW Up/Down does not snap.
+            val targetRowsViewportHeight = when {
+                showCarouselHeroVisible && carouselHidesRows -> 0.dp
+                showCarouselHeroVisible -> peekRowsViewportHeight
+                else -> screenHeight * browsingRowsViewportHeightFraction
             }
             val rowsViewportHeight by animateDpAsState(
                 targetValue = targetRowsViewportHeight,
-                animationSpec = tween(durationMillis = 220),
+                animationSpec = rowsViewportAnimSpec,
                 label = "modernRowsViewport"
             )
             val targetHeroBackdropHeight = if (showCarouselHeroVisible) {
@@ -1082,7 +1135,7 @@ fun ModernHomeContent(
             }
             val heroBackdropHeight by animateDpAsState(
                 targetValue = targetHeroBackdropHeight,
-                animationSpec = tween(durationMillis = 220),
+                animationSpec = rowsViewportAnimSpec,
                 label = "modernHeroBackdrop"
             )
             val verticalRowBringIntoViewSpec = remember(localDensity, defaultBringIntoViewSpec) {
@@ -1135,7 +1188,10 @@ fun ModernHomeContent(
                 verticalRowListState
             ) {
                 {
-                    showCarouselHero = false
+                    // State 3: collapsed carousel stays mounted; only CW / first row takes focus.
+                    // Clearing showCarouselHero here jumped to browsing (state 4) and Crossfade-flickered.
+                    holdingCarouselFocus = false
+                    carouselHidesRows = false
                     val firstRow = carouselRows.list.firstOrNull()
                     if (firstRow != null) {
                         val targetIndex = (focusedItemByRow[firstRow.key] ?: 0)
@@ -1158,18 +1214,36 @@ fun ModernHomeContent(
 
             Crossfade(
                 targetState = showCarouselHeroVisible,
-                animationSpec = tween(durationMillis = 220),
+                animationSpec = tween(
+                    durationMillis = NuvioMotion.tokens.durations.fast,
+                    easing = NuvioMotion.tokens.easings.standard
+                ),
                 label = "modernHeroMode",
                 modifier = Modifier.fillMaxSize()
             ) { showCarousel ->
                 Box(modifier = Modifier.fillMaxSize()) {
                     if (showCarousel) {
+                        val peekContentBottom =
+                            peekRowsViewportHeight + carouselToRowsGap + NuvioTheme.spacing.sm + NuvioTheme.spacing.lg
+                        val carouselContentBottomInset = lerp(
+                            peekContentBottom,
+                            MODERN_CAROUSEL_REST_CONTENT_BOTTOM,
+                            carouselExpandProgress
+                        )
+                        val carouselIndicatorBottom = lerp(
+                            peekContentBottom - NuvioTheme.spacing.lg,
+                            NuvioTheme.spacing.xxl,
+                            carouselExpandProgress
+                        )
                         HeroCarousel(
                             items = uiState.heroItems.asStable(),
                             focusRequester = heroFocusRequester,
                             showImdbRatings = uiState.homeImdbRatingsVisibility.showRatings,
-                            carouselHeight = heroBackdropHeight,
-                            indicatorBottomPadding = NuvioTheme.spacing.xl,
+                            carouselHeight = screenHeight,
+                            immersiveBackdrop = true,
+                            contentExpandProgress = carouselExpandProgress,
+                            indicatorBottomPadding = carouselIndicatorBottom,
+                            contentBottomInset = carouselContentBottomInset,
                             initialActiveIndex = savedHeroCarouselIndex.intValue
                                 .coerceIn(0, (uiState.heroItems.size - 1).coerceAtLeast(0)),
                             onActiveItemChanged = { item ->
@@ -1187,13 +1261,33 @@ fun ModernHomeContent(
                                 .align(Alignment.TopStart)
                                 .fillMaxWidth()
                                 .onPreviewKeyEvent { event ->
-                                    if (event.type == KeyEventType.KeyDown &&
-                                        event.key == Key.DirectionDown
-                                    ) {
-                                        moveFocusToFirstRowFromCarousel()
-                                        true
-                                    } else {
-                                        false
+                                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                    when (event.key) {
+                                        Key.DirectionUp -> {
+                                            if (!carouselHidesRows) {
+                                                carouselHidesRows = true
+                                                true
+                                            } else {
+                                                true // consume; already full-bleed
+                                            }
+                                        }
+                                        Key.DirectionDown -> {
+                                            if (carouselHidesRows) {
+                                                // 1→3: collapse rest with animation, then focus CW (carousel stays).
+                                                carouselHidesRows = false
+                                                focusScope.launch {
+                                                    delay(NuvioMotion.tokens.durations.fast.toLong())
+                                                    if (!carouselHidesRows && showCarouselHero) {
+                                                        moveFocusToFirstRowFromCarousel()
+                                                    }
+                                                }
+                                            } else {
+                                                // 2→3: already collapsed; hand focus to CW without browsing Crossfade.
+                                                moveFocusToFirstRowFromCarousel()
+                                            }
+                                            true
+                                        }
+                                        else -> false
                                     }
                                 }
                         )
@@ -1263,14 +1357,31 @@ fun ModernHomeContent(
             }
 
             val latestOnFocusedRowKeyChanged by rememberUpdatedState(onFocusedRowKeyChanged)
+            val latestHoldingCarouselFocus by rememberUpdatedState(holdingCarouselFocus)
             val onActiveRowKeyChangeLambda = remember {
                 { key: String? ->
-                    if (key != null) showCarouselHero = false
-                    focusHolder.activeRowKey = key
-                    activeRowKey.value = key
-                    // saveFocusState only runs on dispose, which a system Home press never
-                    // triggers, so report the focused row as it changes instead.
-                    latestOnFocusedRowKeyChanged(key)
+                    if (latestHoldingCarouselFocus) {
+                        // Row cards can reclaim focus during Crossfade; bounce back to carousel.
+                        if (key != null) {
+                            focusScope.launch {
+                                runCatching { heroFocusRequester.requestFocus() }
+                            }
+                        }
+                    } else {
+                        // Keep carousel mounted while CW/upcoming owns focus (state 3). Leave for
+                        // catalog rows → browsing posters + ModernHeroSection (state 4).
+                        if (key != null &&
+                            key != MODERN_CONTINUE_WATCHING_ROW_KEY &&
+                            key != MODERN_UPCOMING_ROW_KEY
+                        ) {
+                            showCarouselHero = false
+                        }
+                        focusHolder.activeRowKey = key
+                        activeRowKey.value = key
+                        // saveFocusState only runs on dispose, which a system Home press never
+                        // triggers, so report the focused row as it changes instead.
+                        latestOnFocusedRowKeyChanged(key)
+                    }
                 }
             }
             val onActiveItemIndexChangeLambda = remember { { index: Int -> focusHolder.activeItemIndex = index; activeItemIndex.intValue = index } }
@@ -1384,6 +1495,7 @@ fun ModernHomeContent(
                 } else {
                     null
                 },
+                carouselOwnsFocus = holdingCarouselFocus,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .onFocusChanged { contentHasFocus.value = it.hasFocus }

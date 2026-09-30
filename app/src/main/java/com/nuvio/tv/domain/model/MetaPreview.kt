@@ -13,6 +13,7 @@ data class MetaPreview(
     val background: String?,
     val logo: String?,
     val description: String?,
+    val tagline: String? = null,
     val releaseInfo: String?,
     val imdbRating: Float?,
     val genres: List<String>,

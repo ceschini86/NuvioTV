@@ -216,6 +216,7 @@ class TmdbMetadataService(
                     genre.name.trim().takeIf { name -> name.isNotBlank() }
                 } ?: emptyList()
                 val description = details?.overview?.takeIf { it.isNotBlank() }
+                val tagline = details?.tagline?.trim()?.takeIf { it.isNotBlank() }
                 val status = details?.status?.trim()?.takeIf { it.isNotBlank() }
                 val releaseInfo = if (tmdbType == "tv") {
                     details?.firstAirDate.yearPart()?.let { startYear ->
@@ -451,7 +452,7 @@ class TmdbMetadataService(
                 }
 
                 if (
-                    genres.isEmpty() && description == null && backdrop == null && logo == null &&
+                    genres.isEmpty() && description == null && tagline == null && backdrop == null && logo == null &&
                     poster == null && castMembers.isEmpty() && director.isEmpty() && writer.isEmpty() &&
                     releaseInfo == null && rating == null && runtime == null && countries.isNullOrEmpty() && language == null &&
                     productionCompanies.isEmpty() && networks.isEmpty() && ageRating == null && status == null &&
@@ -463,6 +464,7 @@ class TmdbMetadataService(
                 val enrichment = TmdbEnrichment(
                     localizedTitle = localizedTitle,
                     description = description,
+                    tagline = tagline,
                     genres = genres,
                     backdrop = backdrop,
                     logo = logo,
@@ -1643,6 +1645,7 @@ data class TmdbMovieCollection(
 data class TmdbEnrichment(
     val localizedTitle: String?,
     val description: String?,
+    val tagline: String? = null,
     val genres: List<String>,
     val backdrop: String?,
     val logo: String?,
