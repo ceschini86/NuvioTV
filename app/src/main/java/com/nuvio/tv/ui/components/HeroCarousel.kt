@@ -295,8 +295,15 @@ private fun HeroCarouselSlide(
             ?.takeIf { showImdbRatings }
             ?.let { String.format("%.1f", it) }
     }
-    val contentWidthFraction = 0.42f
+    // Fixed dp width (not animated fraction) so wrap points stay stable during peek↔rest.
+    val configuration = LocalConfiguration.current
+    val contentColumnWidth = remember(configuration.screenWidthDp) {
+        (configuration.screenWidthDp * 0.42f).dp
+    }
     val descriptionStyle = MaterialTheme.typography.bodyMedium
+    // Always wrap as 6 lines at the fixed column width; only the clip height animates with
+    // expand progress so peek↔rest reveals more text without reflow / “widening”.
+    val descriptionMaxLines = if (immersiveBackdrop) 6 else 4
     val descriptionLineHeight = with(density) { descriptionStyle.lineHeight.toDp() }
     val descriptionMaxHeight = if (immersiveBackdrop) {
         lerp(descriptionLineHeight * 4, descriptionLineHeight * 6, progress)
@@ -335,10 +342,9 @@ private fun HeroCarouselSlide(
                 .align(Alignment.BottomStart)
                 .padding(
                     start = NuvioTheme.spacing.xxxl,
-                    bottom = contentBottomPadding,
-                    end = NuvioTheme.spacing.xxxl
+                    bottom = contentBottomPadding
                 )
-                .fillMaxWidth(contentWidthFraction)
+                .width(contentColumnWidth)
                 .then(
                     if (immersiveBackdrop) {
                         Modifier.graphicsLayer {
@@ -442,12 +448,19 @@ private fun HeroCarouselSlide(
                         textDirection = description.contentTextDirection()
                     ),
                     color = NuvioTheme.colors.TextPrimary,
-                    maxLines = if (immersiveBackdrop) 6 else 4,
+                    maxLines = descriptionMaxLines,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = descriptionMaxHeight)
-                        .clipToBounds()
+                        .then(
+                            if (immersiveBackdrop) {
+                                Modifier
+                                    .heightIn(max = descriptionMaxHeight)
+                                    .clipToBounds()
+                            } else {
+                                Modifier
+                            }
+                        )
                 )
             }
         }
