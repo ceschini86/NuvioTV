@@ -181,4 +181,132 @@ class SubtitleAiResponseJsonParserTest {
         assertEquals("0: Bonjour", array.getString(0))
         assertEquals("1: Merci", array.getString(1))
     }
+
+    @Test
+    fun missingIndicesAreRejectedAndKeepSourceText() {
+        val result = SubtitleAiResponseJsonParser.parseTranslationResult(
+            lines = listOf("One", "Two", "Three", "Four"),
+            targetLanguage = "portuguese",
+            rawText = """["0: Um", "2: Tres"]""",
+            NL = NL
+        )
+        assertTrue(result.success)
+        assertEquals(listOf("Um", "Two", "Tres", "Four"), result.lines)
+        assertEquals(setOf(1, 3), result.rejected)
+    }
+
+    @Test
+    fun fullyAlignedResponseHasNoRejections() {
+        val result = SubtitleAiResponseJsonParser.parseTranslationResult(
+            lines = listOf("One", "Two"),
+            targetLanguage = "portuguese",
+            rawText = """["0: Um", "1: Dois"]""",
+            NL = NL
+        )
+        assertTrue(result.rejected.isEmpty())
+    }
+
+    @Test
+    fun unprefixedArrayOfDifferentLengthIsNotMappedPositionally() {
+        val result = SubtitleAiResponseJsonParser.parseTranslationResult(
+            lines = listOf("One", "Two", "Three"),
+            targetLanguage = "portuguese",
+            rawText = """["Um", "Dois"]""",
+            NL = NL
+        )
+        assertFalse(result.success)
+    }
+
+    @Test
+    fun tailCutMidElementDropsThatElementInsteadOfClosingIt() {
+        val result = SubtitleAiResponseJsonParser.parseTranslationResult(
+            lines = listOf("One", "Two", "Where were you"),
+            targetLanguage = "portuguese",
+            rawText = """["0: Um", "1: Dois", "2: Onde voc""",
+            NL = NL
+        )
+        assertTrue(result.success)
+        assertEquals(listOf("Um", "Dois", "Where were you"), result.lines)
+        assertEquals(setOf(2), result.rejected)
+    }
+
+    @Test
+    fun tailMissingOnlyClosingBracketKeepsEveryElement() {
+        val result = SubtitleAiResponseJsonParser.parseTranslationResult(
+            lines = listOf("One", "Two"),
+            targetLanguage = "portuguese",
+            rawText = """["0: Um", "1: Dois",""",
+            NL = NL
+        )
+        assertEquals(listOf("Um", "Dois"), result.lines)
+        assertTrue(result.rejected.isEmpty())
+    }
+
+    @Test
+    fun tailCutRespectsEscapedQuotes() {
+        val result = SubtitleAiResponseJsonParser.parseTranslationResult(
+            lines = listOf("He said \"hi\"", "Bye"),
+            targetLanguage = "portuguese",
+            rawText = """["0: Ele disse \"oi\"", "1: Tch""",
+            NL = NL
+        )
+        assertEquals("Ele disse \"oi\"", result.lines[0])
+        assertEquals(setOf(1), result.rejected)
+    }
+
+    @Test
+    fun singleLineCutMidStringIsAFailure() {
+        val result = SubtitleAiResponseJsonParser.parseTranslationResult(
+            lines = listOf("Where were you"),
+            targetLanguage = "portuguese",
+            rawText = """["0: (PT) Where were""",
+            NL = NL
+        )
+        assertFalse(result.success)
+    }
+
+    private fun parseObjects(raw: String, lines: List<String> = listOf("a", "b", "c")) =
+        SubtitleAiResponseJsonParser.parseTranslationResult(lines, "portuguese", raw, NL)
+
+    @Test
+    fun objectArrayInOrder() {
+        val r = parseObjects("""[{"i":0,"t":"A"},{"i":1,"t":"B"},{"i":2,"t":"C$NL""" + """D"}]""")
+        assertTrue(r.success)
+        assertEquals(listOf("A", "B", "C\nD"), r.lines)
+        assertTrue(r.rejected.isEmpty())
+    }
+
+    @Test
+    fun objectArrayOutOfOrderIsMappedById() {
+        val r = parseObjects("""[{"i":2,"t":"C"},{"i":0,"t":"A"},{"i":1,"t":"B"}]""")
+        assertEquals(listOf("A", "B", "C"), r.lines)
+    }
+
+    @Test
+    fun objectArrayMissingIdIsRejected() {
+        val r = parseObjects("""[{"i":0,"t":"A"},{"i":2,"t":"C"}]""")
+        assertTrue(r.success)
+        assertEquals(setOf(1), r.rejected)
+        assertEquals("A", r.lines[0])
+        assertEquals("C", r.lines[2])
+    }
+
+    @Test
+    fun objectArrayExtraAndDuplicateIdsAreIgnored() {
+        val r = parseObjects("""[{"i":0,"t":"A"},{"i":0,"t":"X"},{"i":9,"t":"Z"},{"i":1,"t":"B"},{"i":2,"t":"C"}]""")
+        assertEquals(listOf("A", "B", "C"), r.lines)
+        assertTrue(r.rejected.isEmpty())
+    }
+
+    @Test
+    fun objectArrayKeepsBracketedDialogue() {
+        val r = parseObjects("""[{"i":0,"t":"[Música]"},{"i":1,"t":"B"},{"i":2,"t":"C"}]""")
+        assertEquals("[Música]", r.lines[0])
+    }
+
+    @Test
+    fun objectArrayToleratesFence() {
+        val fenced = parseObjects("```json\n[{\"i\":0,\"t\":\"A\"},{\"i\":1,\"t\":\"B\"},{\"i\":2,\"t\":\"C\"}]\n```")
+        assertEquals(listOf("A", "B", "C"), fenced.lines)
+    }
 }

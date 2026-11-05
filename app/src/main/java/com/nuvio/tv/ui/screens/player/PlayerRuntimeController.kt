@@ -423,6 +423,17 @@ class PlayerRuntimeController(
     internal var activeSidecarSubtitleKey: String? = null
     internal var sidecarTimedCues: List<androidx.media3.extractor.text.CuesWithTiming> = emptyList()
     internal var lastSidecarCueSignature: Long? = null
+    /** Subtitle key whose whole file was already queued for bulk AI translation (null = not yet). */
+    internal var sidecarBulkQueuedKey: String? = null
+    internal var sidecarBulkJob: Job? = null
+    internal var sidecarLastRenderPositionUs: Long = Long.MIN_VALUE
+    internal var sidecarLastRenderWallMs: Long = 0L
+    internal var sidecarBulkDwellKey: String? = null
+    internal var sidecarBulkDwellMs: Long = 0L
+    /** Same `SubtitleCueDisplay` log as the embedded path, so `ai_sub_logcat.py` can measure addons. */
+    internal val sidecarDisplayProbe = com.nuvio.tv.ui.screens.player.subtitles.SubtitleCueDisplayProbe()
+    /** Line whose translation landed while it was on screen (logged as `translated_async`). */
+    internal var sidecarAsyncText: String? = null
     internal var exoSubtitleViewRef: WeakReference<androidx.media3.ui.SubtitleView>? = null
     /** Cancels previous TEXT-track bounce jobs when subtitle delay is adjusted repeatedly. */
     internal var subtitleTimingRefreshJob: Job? = null

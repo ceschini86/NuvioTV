@@ -18,12 +18,32 @@ class SubtitleAiRouter(
         apiKey: String,
         lines: List<String>,
         targetLanguage: String
-    ) -> ProviderAttemptResult)? = null
+    ) -> ProviderAttemptResult)? = null,
+    private val clock: () -> Long = { System.currentTimeMillis() }
 ) {
     companion object {
         private const val TAG = "SubtitleAiRouter"
         private const val GEMINI_PROJECT_HINT =
             "projectHint=gemini_quota_is_per_ai_studio_project_not_per_key"
+        private const val MAX_REQUESTS_PER_SLOT = 3
+        private const val URGENT_REQUESTS_PER_SLOT = 2
+        /** On-screen cues: give up on a slow provider quickly and move on. */
+        const val URGENT_CALL_TIMEOUT_MS = 9_000L
+        /** Whole-document chunks (hundreds of lines) legitimately take 20-60 s. */
+        const val BULK_CALL_TIMEOUT_MS = 90_000L
+        /** Longer cooldowns are spent quotas (Gemini daily cap says "retry in 12 h"), not a pause. */
+        const val SHORT_COOLDOWN_MAX_MS = 5L * 60L * 1_000L
+        /** Rejected groups at or below this size are retried line by line instead of halved. */
+        private const val SINGLES_MAX = 4
+        private const val ERROR_BACKOFF_BASE_MS = 2_000L
+        private const val ERROR_BACKOFF_MAX_MS = 30_000L
+        /** Calls in a row at or above [URGENT_CALL_TIMEOUT_MS] that mark a model slow. */
+        private const val SLOW_STREAK = 2
+        /**
+         * Urgent batches skip a slow model this long (each slow call extends it). Prefetch keeps
+         * using it, so a fast answer there clears the mark sooner.
+         */
+        const val SLOW_HOLD_MS = 60_000L
     }
 
     @Volatile
@@ -52,7 +72,39 @@ class SubtitleAiRouter(
 
     fun hasUsableCredentials(): Boolean = credentials.anyUsable()
 
-    suspend fun translateBatch(lines: List<String>, targetLanguage: String): TranslationResult {
+    /**
+     * Max batches the manager should keep in flight (excluding its reserved on-screen lane).
+     * Gemini stays serialized: its free tier enforces a hard RPM per project.
+     */
+    /**
+     * How long until every briefly rate-limited key is usable again (0 when none is cooling down).
+     * A key out for longer than [SHORT_COOLDOWN_MAX_MS] (spent daily quota) is gone, not coming back:
+     * waiting on it would stall bulk for hours.
+     */
+    fun longestCooldownLeftMs(now: Long = System.currentTimeMillis()): Long =
+        cooldownUntilMs.values.map { it - now }.filter { it in 1..SHORT_COOLDOWN_MAX_MS }.maxOrNull() ?: 0L
+
+    fun maxConcurrentBatches(): Int {
+        val first = orderedProviders().firstOrNull()?.model ?: return 1
+        return if (first == SubtitleAiModel.GEMINI_FLASH_25) 1 else 2
+    }
+
+    /**
+     * Translates [lines], validating every response with [SubtitleBatchValidator]. Lines a slot
+     * answers badly are re-sent on the same slot (retry, then halves, then singles, within
+     * [MAX_REQUESTS_PER_SLOT]) before moving to the next key/provider. Lines nobody translated
+     * come back in [TranslationResult.rejected]; `success` is true when any attempt parsed.
+     *
+     * [urgent] batches hold the cue on screen: short call timeout, smaller retry budget, and
+     * slots are ordered by readiness so a key that is free right now goes first.
+     */
+    suspend fun translateBatch(
+        lines: List<String>,
+        targetLanguage: String,
+        context: List<String> = emptyList(),
+        urgent: Boolean = false,
+        bulk: Boolean = false
+    ): TranslationResult {
         if (lines.isEmpty()) return TranslationResult(lines, true)
         val providers = orderedProviders()
         if (providers.isEmpty()) {
@@ -60,84 +112,276 @@ class SubtitleAiRouter(
         }
         maybeLogGeminiMultiKeyNote(providers)
 
+        val out = lines.toMutableList()
+        var unresolved: List<Int> = lines.indices.toList()
         var lastError: String? = "No provider available"
         var sawRateLimit = false
+        var anyParsed = false
         var triedSlots = 0
-        val now = System.currentTimeMillis()
-        for (provider in providers) {
-            for (key in provider.usableKeys) {
-                val slot = slotId(provider.model, key)
-                val coolUntil = cooldownUntilMs[slot] ?: 0L
-                if (coolUntil > now) {
-                    sawRateLimit = true
-                    val cooldownMs = coolUntil - now
-                    Log.i(
-                        TAG,
-                        "skip ${provider.model} …${key.takeLast(4)} cooldownMs=$cooldownMs" +
-                            geminiHintSuffix(provider.model)
-                    )
-                    continue
-                }
-                triedSlots++
+        var skippedSlow = false
+        for ((model, key) in orderedSlots(providers, urgent)) {
+            if (unresolved.isEmpty()) break
+            val slot = slotId(model, key)
+            // An urgent call cut at the timeout is quota spent for nothing: the provider still
+            // answers (and bills) it after the cue left the screen.
+            if (urgent && isTooSlowForUrgent(model)) {
+                skippedSlow = true
+                Log.i(TAG, "skip $model …${key.takeLast(4)} too slow for urgent")
+                continue
+            }
+            val now = System.currentTimeMillis()
+            val coolUntil = cooldownUntilMs[slot] ?: 0L
+            if (coolUntil > now) {
+                sawRateLimit = true
                 Log.i(
                     TAG,
-                    "attempt ${provider.model} …${key.takeLast(4)} lines=${lines.size}" +
-                        geminiHintSuffix(provider.model)
+                    "skip $model …${key.takeLast(4)} cooldownMs=${coolUntil - now}" +
+                        geminiHintSuffix(model)
                 )
-                val result = translateAttempt?.invoke(provider.model, key, lines, targetLanguage)
-                    ?: service.translateWith(
-                        model = provider.model,
-                        apiKey = key,
-                        lines = lines,
-                        targetLanguage = targetLanguage
-                    )
-                result.quota?.let { lastQuota[slot] = it }
-                if (result.translation.success) {
-                    cooldownUntilMs.remove(slot)
-                    if (sawRateLimit || triedSlots > 1) {
-                        Log.i(
-                            TAG,
-                            "fallback ok via ${provider.model} …${key.takeLast(4)} " +
-                                "(after rate-limit/skip on earlier key)"
-                        )
-                    }
-                    return result.translation
-                }
-                val err = normalizeProviderError(result.translation.errorMessage, result.httpCode)
-                lastError = err
-                if (err == TRANSLATION_ERROR_RATE_LIMITED || result.httpCode == 429) {
-                    sawRateLimit = true
-                    val until = result.quota?.cooldownUntilMs
-                        ?: (now + defaultCooldownMs)
-                    cooldownUntilMs[slot] = until
-                    val cooldownMs = (until - now).coerceAtLeast(0L)
-                    Log.w(
+                continue
+            }
+            triedSlots++
+            val outcome = runSlot(model, key, lines, unresolved, out, targetLanguage, context, urgent, bulk)
+            if (outcome.parsed) {
+                anyParsed = true
+                errorBackoff.remove(slot)
+                if (sawRateLimit || triedSlots > 1) {
+                    Log.i(
                         TAG,
-                        "${provider.model} …${key.takeLast(4)} rate-limited " +
-                            "httpCode=${result.httpCode ?: 429} cooldownMs=$cooldownMs" +
-                            geminiHintSuffix(provider.model)
+                        "fallback ok via $model …${key.takeLast(4)} (after rate-limit/skip on earlier key)"
                     )
-                    continue
-                }
-                if (result.httpCode == 401 || result.httpCode == 403 || err == "API key missing") {
-                    Log.w(
-                        TAG,
-                        "${provider.model} …${key.takeLast(4)} auth failed httpCode=${result.httpCode} — trying next key"
-                    )
-                    continue
-                }
-                // Other failures: still try next key/provider (content blocks handled upstream).
-                if (err == TRANSLATION_ERROR_CONTENT_BLOCKED) {
-                    return result.translation.copy(errorMessage = err)
                 }
             }
+            unresolved = outcome.unresolved
+            val err = outcome.error ?: continue
+            lastError = err
+            when {
+                err == TRANSLATION_ERROR_RATE_LIMITED -> sawRateLimit = true
+                err == TRANSLATION_ERROR_CONTENT_BLOCKED ->
+                    return TranslationResult(out, anyParsed, err, unresolved.toSet())
+                outcome.authFailed -> Unit
+                else -> noteErrorBackoff(slot, model, key, err)
+            }
         }
-        val exhausted = when {
-            sawRateLimit && triedSlots == 0 -> TRANSLATION_ERROR_RATE_LIMITED
-            sawRateLimit -> TRANSLATION_ERROR_RATE_LIMITED
-            else -> lastError
+        if (anyParsed) {
+            if (unresolved.isNotEmpty()) {
+                Log.w(TAG, "unresolved ${unresolved.size}/${lines.size} lines after all slots")
+            }
+            return TranslationResult(out, true, null, unresolved.toSet())
         }
-        return TranslationResult(lines, false, exhausted)
+        if (triedSlots == 0 && skippedSlow && !sawRateLimit) {
+            return TranslationResult(lines, false, TRANSLATION_ERROR_TIMEOUT, lines.indices.toSet())
+        }
+        val exhausted = if (sawRateLimit) TRANSLATION_ERROR_RATE_LIMITED else lastError
+        return TranslationResult(lines, false, exhausted, lines.indices.toSet())
+    }
+
+    private class SlotOutcome(
+        val unresolved: List<Int>,
+        val parsed: Boolean,
+        val error: String?,
+        val authFailed: Boolean = false
+    )
+
+    /** One key's share of the recovery ladder. Fills accepted lines into [out]. */
+    private suspend fun runSlot(
+        model: SubtitleAiModel,
+        key: String,
+        lines: List<String>,
+        pending: List<Int>,
+        out: MutableList<String>,
+        targetLanguage: String,
+        context: List<String>,
+        urgent: Boolean,
+        bulk: Boolean
+    ): SlotOutcome {
+        val slot = slotId(model, key)
+        val budget = if (urgent) URGENT_REQUESTS_PER_SLOT else MAX_REQUESTS_PER_SLOT
+        // (indices, ladder level): 0 = first try, 1 = retry, 2 = halves, 3 = singles.
+        val groups = ArrayDeque(listOf(pending to 0))
+        val unresolved = mutableListOf<Int>()
+        var requests = 0
+        var parsed = false
+        var translatedAny = false
+        while (groups.isNotEmpty()) {
+            if (requests >= budget) {
+                groups.forEach { unresolved += it.first }
+                break
+            }
+            val (indices, level) = groups.removeFirst()
+            val sourceLines = indices.map { lines[it] }
+            // The Gemini min-interval wait would happen inside the service, after this key was
+            // picked; a sibling batch can put the key into a 429 cooldown meanwhile (seen on the
+            // TV). Wait here instead and look at the cooldown again before sending.
+            if (translateAttempt == null && model == SubtitleAiModel.GEMINI_FLASH_25) {
+                val readyInMs = service.geminiReadyInMs(key, System.currentTimeMillis())
+                if (readyInMs > 0L) kotlinx.coroutines.delay(readyInMs)
+            }
+            val coolLeftMs = (cooldownUntilMs[slot] ?: 0L) - System.currentTimeMillis()
+            if (coolLeftMs > 0L) {
+                groups.forEach { unresolved += it.first }
+                unresolved += indices
+                Log.i(TAG, "skip $model …${key.takeLast(4)} cooled down while waiting cooldownMs=$coolLeftMs")
+                return SlotOutcome(unresolved.sorted(), parsed, TRANSLATION_ERROR_RATE_LIMITED)
+            }
+            requests++
+            Log.i(
+                TAG,
+                "attempt $model …${key.takeLast(4)} lines=${sourceLines.size} level=$level urgent=$urgent" +
+                    geminiHintSuffix(model)
+            )
+            val startedAt = clock()
+            val result = translateAttempt?.invoke(model, key, sourceLines, targetLanguage)
+                ?: service.translateWith(
+                    model = model,
+                    apiKey = key,
+                    lines = sourceLines,
+                    targetLanguage = targetLanguage,
+                    context = context,
+                    callTimeoutMs = when {
+                        urgent -> URGENT_CALL_TIMEOUT_MS
+                        bulk -> BULK_CALL_TIMEOUT_MS
+                        else -> null
+                    }
+                )
+            // A big bulk call is slow by nature; it says nothing about urgent-cue pace.
+            if (!bulk) notePace(model, clock() - startedAt, result.translation.success)
+            result.quota?.let { lastQuota[slot] = it }
+            if (!result.translation.success) {
+                groups.forEach { unresolved += it.first }
+                unresolved += indices
+                val err = normalizeProviderError(result.translation.errorMessage, result.httpCode)
+                    .let { if (result.translation.errorMessage == TRANSLATION_ERROR_TIMEOUT) TRANSLATION_ERROR_TIMEOUT else it }
+                if (err == TRANSLATION_ERROR_RATE_LIMITED || result.httpCode == 429) {
+                    val now = System.currentTimeMillis()
+                    val until = result.quota?.cooldownUntilMs ?: (now + defaultCooldownMs)
+                    cooldownUntilMs[slot] = until
+                    Log.w(
+                        TAG,
+                        "$model …${key.takeLast(4)} rate-limited httpCode=${result.httpCode ?: 429} " +
+                            "cooldownMs=${(until - now).coerceAtLeast(0L)}" + geminiHintSuffix(model)
+                    )
+                    return SlotOutcome(unresolved.sorted(), parsed, TRANSLATION_ERROR_RATE_LIMITED)
+                }
+                if (result.httpCode == 401 || result.httpCode == 403 || err == TRANSLATION_ERROR_API_KEY_MISSING) {
+                    Log.w(TAG, "$model …${key.takeLast(4)} auth failed httpCode=${result.httpCode} — trying next key")
+                    return SlotOutcome(unresolved.sorted(), parsed, err, authFailed = true)
+                }
+                return SlotOutcome(unresolved.sorted(), parsed, err)
+            }
+            parsed = true
+            cooldownUntilMs.remove(slot)
+            val validated = SubtitleBatchValidator.validate(sourceLines, result.translation)
+            // Asked alone, echoed again, while this slot translates its neighbours: the line needs
+            // no translation ("A B C"), so keep it instead of spending the rest of the ladder and
+            // giving up. Never when nothing was translated, so a provider echoing everything
+            // cannot fill the cache with source text.
+            if (level >= 1 && indices.size == 1 && translatedAny &&
+                SubtitleBatchValidator.isEcho(sourceLines[0], result.translation.lines.firstOrNull())
+            ) {
+                out[indices[0]] = sourceLines[0]
+                Log.i(TAG, "$model …${key.takeLast(4)} kept echoed line as untranslatable level=$level")
+                continue
+            }
+            val bad = ArrayList<Int>()
+            indices.forEachIndexed { local, global ->
+                val line = validated.lines.getOrNull(local)
+                if (local in validated.rejected || line == null) {
+                    bad += global
+                } else {
+                    out[global] = line
+                    translatedAny = true
+                }
+            }
+            if (bad.isEmpty()) continue
+            Log.w(TAG, "$model …${key.takeLast(4)} rejected ${bad.size}/${indices.size} lines level=$level")
+            when {
+                level == 0 -> groups.addLast(bad to 1)
+                level <= 2 && bad.size > SINGLES_MAX -> {
+                    val mid = bad.size / 2
+                    groups.addLast(bad.subList(0, mid).toList() to 2)
+                    groups.addLast(bad.subList(mid, bad.size).toList() to 2)
+                }
+                level <= 2 -> bad.forEach { groups.addLast(listOf(it) to 3) }
+                else -> unresolved += bad
+            }
+        }
+        return SlotOutcome(unresolved.sorted(), parsed, null)
+    }
+
+    /**
+     * Slots in preference order. Keys that recently failed (non-429) go last instead of being
+     * skipped, so one flaky provider never blocks translation. Urgent batches additionally
+     * prefer keys whose Gemini min-interval slot is free now.
+     */
+    private fun orderedSlots(
+        providers: List<SubtitleAiProviderCredentials>,
+        urgent: Boolean
+    ): List<Pair<SubtitleAiModel, String>> {
+        val now = System.currentTimeMillis()
+        val slots = providers.flatMap { p -> p.usableKeys.map { p.model to it } }
+        val readiness = slots.associateWith { (model, key) ->
+            if (urgent && translateAttempt == null && model == SubtitleAiModel.GEMINI_FLASH_25) {
+                service.geminiReadyInMs(key, now)
+            } else {
+                0L
+            }
+        }
+        return slots.sortedWith(
+            compareBy<Pair<SubtitleAiModel, String>> { (model, key) ->
+                (errorBackoff[slotId(model, key)]?.untilMs ?: 0L) > now
+            }.thenBy { readiness[it] ?: 0L }
+        )
+    }
+
+    private fun noteErrorBackoff(slot: String, model: SubtitleAiModel, key: String, err: String?) {
+        val prev = errorBackoff[slot]?.failures ?: 0
+        val failures = prev + 1
+        val ms = (ERROR_BACKOFF_BASE_MS shl (failures - 1).coerceAtMost(4)).coerceAtMost(ERROR_BACKOFF_MAX_MS)
+        errorBackoff[slot] = ErrorBackoff(failures, System.currentTimeMillis() + ms)
+        Log.w(TAG, "$model …${key.takeLast(4)} error=$err backoffMs=$ms failures=$failures")
+    }
+
+    private data class ErrorBackoff(val failures: Int, val untilMs: Long)
+
+    private val errorBackoff = ConcurrentHashMap<String, ErrorBackoff>()
+
+    /** Per model, not per key: provider slowness (overload) hits every key alike. */
+    private class Pace(var slowStreak: Int = 0, var slowUntilMs: Long = 0L)
+
+    private val pace = ConcurrentHashMap<SubtitleAiModel, Pace>()
+
+    /** True while [model] answers slower than an on-screen cue can wait. */
+    fun isTooSlowForUrgent(model: SubtitleAiModel, nowMs: Long = clock()): Boolean =
+        (pace[model]?.slowUntilMs ?: 0L) > nowMs
+
+    /**
+     * Any call (ok or failed, any lane) that took the whole urgent budget counts as slow;
+     * [SLOW_STREAK] in a row mark the model. A successful call under the budget clears it.
+     * Fast failures (503 in 1 s) say nothing about pace and are left to [errorBackoff].
+     */
+    private fun notePace(model: SubtitleAiModel, elapsedMs: Long, success: Boolean) {
+        val p = pace.getOrPut(model) { Pace() }
+        val now = clock()
+        synchronized(p) {
+            if (elapsedMs >= URGENT_CALL_TIMEOUT_MS) {
+                p.slowStreak++
+                if (p.slowStreak >= SLOW_STREAK) {
+                    if (p.slowUntilMs <= now) {
+                        Log.w(
+                            TAG,
+                            "$model slow elapsedMs=$elapsedMs streak=${p.slowStreak} — " +
+                                "urgent skips it for ${SLOW_HOLD_MS}ms"
+                        )
+                    }
+                    p.slowUntilMs = now + SLOW_HOLD_MS
+                }
+            } else if (success) {
+                if (p.slowUntilMs > 0L) Log.i(TAG, "$model pace ok elapsedMs=$elapsedMs")
+                p.slowStreak = 0
+                p.slowUntilMs = 0L
+            }
+        }
     }
 
     private fun maybeLogGeminiMultiKeyNote(providers: List<SubtitleAiProviderCredentials>) {

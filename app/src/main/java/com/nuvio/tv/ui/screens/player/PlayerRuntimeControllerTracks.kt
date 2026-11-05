@@ -1480,9 +1480,12 @@ internal fun selectedAudioLanguageTarget(track: TrackInfo): String? {
     }?.code
 }
 
-private fun addonSubtitleIsForced(subtitle: Subtitle): Boolean {
+// Uploaders label forced subs in their own language ("Babylon...RARBG-forçada" on OpenSubtitles).
+private val ADDON_FORCED_REGEX = Regex("forced|for[çc]ad[ao]|forzad[ao]|forcée?", RegexOption.IGNORE_CASE)
+
+internal fun addonSubtitleIsForced(subtitle: Subtitle): Boolean {
     return listOf(subtitle.id, subtitle.url, subtitle.addonName).any {
-        it.contains("forced", ignoreCase = true)
+        ADDON_FORCED_REGEX.containsMatchIn(it)
     }
 }
 

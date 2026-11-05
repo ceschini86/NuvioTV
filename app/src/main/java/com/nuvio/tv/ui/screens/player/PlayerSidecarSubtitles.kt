@@ -82,11 +82,13 @@ internal fun PlayerRuntimeController.bindExoSubtitleView(subtitleView: SubtitleV
 }
 
 internal fun PlayerRuntimeController.stopSidecarAddonSubtitle(clearView: Boolean = true) {
+    if (activeSidecarSubtitleKey != null) sidecarDisplayProbe.summary("sidecar_stop")
     sidecarSubtitleJob?.cancel()
     sidecarSubtitleJob = null
     activeSidecarSubtitleKey = null
     sidecarTimedCues = emptyList()
     lastSidecarCueSignature = null
+    resetSidecarBulkState()
     if (clearView) {
         postToSubtitleView { view ->
             view.setTag(R.id.player_view_sidecar_generation_tag, null)
@@ -105,10 +107,12 @@ internal fun PlayerRuntimeController.startSidecarAddonSubtitle(subtitle: Subtitl
     val subtitleKey = addonSubtitleKey(subtitle)
     val urlMimeHint = PlayerSubtitleUtils.mimeTypeFromUrl(subtitle.url)
 
+    if (activeSidecarSubtitleKey != null) sidecarDisplayProbe.summary("sidecar_switch")
     sidecarSubtitleJob?.cancel()
     activeSidecarSubtitleKey = subtitleKey
     lastSidecarCueSignature = null
     sidecarTimedCues = emptyList()
+    resetSidecarBulkState()
     postToSubtitleView { view ->
         view.setTag(R.id.player_view_sidecar_generation_tag, subtitleKey)
         view.setCues(emptyList())
@@ -147,6 +151,7 @@ internal fun PlayerRuntimeController.startSidecarAddonSubtitle(subtitle: Subtitl
                 PlayerRuntimeController.TAG,
                 "Sidecar subtitle ready id=${subtitle.id} cues=${parseResult.cues.size} " +
                     "mime=${parseResult.effectiveMime} source=${parseResult.source} " +
+                    "banner=${parseResult.bannerFileName} " +
                     "(buffer preserved)"
             )
 
@@ -188,6 +193,12 @@ internal fun PlayerRuntimeController.renderSidecarCuesAtCurrentPosition() {
     val stripSdh = currentPlayerSettingsForReport.subtitleStyle.stripSdh
     val manager = subtitleTranslationManager
     val aiActive = manager?.isEnabled == true && !isUsingMpvEngine()
+    if (aiActive && manager != null) {
+        maybeQueueSidecarBulkTranslation(cues, positionUs, stripSdh, manager)
+    } else {
+        sidecarBulkQueuedKey = null
+        sidecarLastRenderPositionUs = Long.MIN_VALUE
+    }
     // Sign before sanitising, filtering and merging to skip that work while cues are
     // unchanged. stripSdh / AI cache hits are included because they change what is shown.
     val signatureBase = activeCueSignature(active, stripSdh)
@@ -202,88 +213,200 @@ internal fun PlayerRuntimeController.renderSidecarCuesAtCurrentPosition() {
     val signature = 31L * signatureBase + aiSignaturePart
     if (signature == lastSidecarCueSignature) return
     lastSidecarCueSignature = signature
-    val sanitized = active.map { SubtitleMojibakeSanitizer.sanitizeCue(it) }
-    val filtered = if (stripSdh) SubtitleSdhFilter.filterCues(sanitized) else sanitized
-    val translated = if (aiActive && manager != null) {
+    val filtered = sidecarShownCues(active, stripSdh)
+    val (translated, kind) = if (aiActive && manager != null) {
         applySidecarAiTranslation(filtered, manager)
     } else {
-        filtered
+        filtered to (if (filtered.isEmpty()) "empty_source" else "original")
     }
     val merged = PlayerSubtitleUtils.mergeOverlappingCues(translated)
     val currentKey = activeSidecarSubtitleKey ?: return
+    sidecarDisplayProbe.onDisplayed(merged, kind, positionUs)
     postToSubtitleView { view ->
         if (view.getTag(R.id.player_view_sidecar_generation_tag) == currentKey) {
             view.setCues(merged)
         }
     }
     if (aiActive && manager != null) {
-        prefetchSidecarAiWindow(cues, positionUs, manager)
+        prefetchSidecarAiWindow(cues, positionUs, stripSdh, manager)
     }
 }
 
+private val aiBracketRegex = Regex("""\[.*?\]""")
+private val aiMusicRegex = Regex("[♪♫]+")
+
+/** Sanitised and, when [stripSdh], SDH-filtered: what the sidecar puts on screen. */
+internal fun sidecarShownCues(cues: List<Cue>, stripSdh: Boolean): List<Cue> {
+    val sanitized = cues.map { SubtitleMojibakeSanitizer.sanitizeCue(it) }
+    return if (stripSdh) SubtitleSdhFilter.filterCues(sanitized) else sanitized
+}
+
+internal fun sidecarJoinedText(cues: List<Cue>): String =
+    cues.mapNotNull { it.text?.toString()?.trim() }
+        .filter { it.isNotBlank() }
+        .joinToString("\n")
+
+/**
+ * AI cache key for shown cues. Render and prefetch must both build it from [sidecarShownCues],
+ * or dash lines like "- [man] Thank you." are prefetched under one key and looked up under
+ * another (left a space behind) and always go out live.
+ */
+internal fun sidecarAiKey(joined: String, removeHearingImpaired: Boolean): String =
+    if (removeHearingImpaired) {
+        joined.replace(aiBracketRegex, "").replace(aiMusicRegex, "").trim()
+    } else {
+        joined
+    }
+
+/** Returns the cues to show and the `SubtitleCueDisplay` kind (same names as the embedded path). */
 private fun PlayerRuntimeController.applySidecarAiTranslation(
     cues: List<androidx.media3.common.text.Cue>,
     manager: com.nuvio.tv.ui.screens.player.subtitles.SubtitleTranslationManager
-): List<androidx.media3.common.text.Cue> {
-    if (cues.isEmpty()) return cues
-    val rawText = cues.mapNotNull { it.text?.toString()?.trim() }
-        .filter { it.isNotBlank() }
-        .joinToString("\n")
+): Pair<List<androidx.media3.common.text.Cue>, String> {
+    if (cues.isEmpty()) return cues to "empty_source"
+    val rawText = sidecarJoinedText(cues)
     if (rawText.isBlank()) {
         manager.onUntranslatableSource?.invoke()
-        return cues
+        return cues to "untranslatable"
     }
-    val text = if (manager.removeHearingImpaired) {
-        rawText.replace(Regex("""\[.*?\]"""), "").replace(Regex("[♪♫]+"), "").trim()
-    } else {
-        rawText
-    }
-    if (text.isBlank()) return emptyList()
+    val text = sidecarAiKey(rawText, manager.removeHearingImpaired)
+    if (text.isBlank()) return emptyList<androidx.media3.common.text.Cue>() to "hi_stripped"
     val cached = manager.getCached(text)
     if (cached != null) {
+        val kind = if (text == sidecarAsyncText) "translated_async" else "translated_cached"
         return com.nuvio.tv.ui.screens.player.subtitles.TranslatingTextOutput
-            .applyTranslatedLinesToCues(cues, cached)
+            .applyTranslatedLinesToCues(cues, cached) to kind
     }
+    if (manager.isGivenUp(text)) return cues to "passthrough_original"
     if (!manager.isInFlight(text)) {
         scope.launch {
             manager.translate(text)
+            // Given-up lines return the source at once with no cache entry: re-rendering then
+            // relaunches this immediately and spins the main thread (ANR seen on the TV).
+            if (manager.getCached(text) == null) return@launch
             // Force a re-render once the cache is warm.
+            sidecarAsyncText = text
             lastSidecarCueSignature = null
             renderSidecarCuesAtCurrentPosition()
         }
     }
     // Keep source text on screen while the translation is in flight (same UX as embedded).
-    return cues
+    return cues to "waiting"
+}
+
+private fun PlayerRuntimeController.resetSidecarBulkState() {
+    sidecarBulkJob?.cancel()
+    sidecarBulkJob = null
+    sidecarBulkQueuedKey = null
+    sidecarLastRenderPositionUs = Long.MIN_VALUE
+}
+
+/** Position moved further than playback could have, given the wall time since the last render. */
+private const val SIDECAR_SEEK_JUMP_US = 30_000_000L
+
+/** Cues this far ahead are owned by [prefetchSidecarAiWindow]; bulk starts beyond them. */
+private const val SIDECAR_AI_LOOKAHEAD_US = 2L * 60L * 1_000_000L
+
+/**
+ * Playback with AI on a subtitle needs before its whole file is sent: a track picked only to try it
+ * and switched away from costs no bulk quota. Pauses and menus don't count; a seek doesn't reset it.
+ */
+private const val SIDECAR_BULK_DWELL_MS = 60_000L
+
+/** Longer gaps between renders are stalls or a backgrounded app, not playback. */
+private const val SIDECAR_DWELL_MAX_TICK_MS = 2_000L
+
+/**
+ * The file is fully in memory, so once AI has been on it for [SIDECAR_BULK_DWELL_MS] of playback the
+ * whole of it is queued on the manager's BULK lane (in big chunks, behind everything live). Runs once
+ * per subtitle and again after a seek, so the chunks restart at the new playhead. Keys are built off
+ * the main thread: 2,000+ cues.
+ */
+private fun PlayerRuntimeController.maybeQueueSidecarBulkTranslation(
+    cues: List<androidx.media3.extractor.text.CuesWithTiming>,
+    positionUs: Long,
+    stripSdh: Boolean,
+    manager: com.nuvio.tv.ui.screens.player.subtitles.SubtitleTranslationManager
+) {
+    val key = activeSidecarSubtitleKey ?: return
+    val nowMs = System.currentTimeMillis()
+    val lastPosUs = sidecarLastRenderPositionUs
+    val tickMs = (nowMs - sidecarLastRenderWallMs).coerceAtLeast(0L)
+    val wallUs = tickMs * 1_000L
+    sidecarLastRenderPositionUs = positionUs
+    sidecarLastRenderWallMs = nowMs
+    val jumped = lastPosUs != Long.MIN_VALUE &&
+        kotlin.math.abs(positionUs - lastPosUs) > SIDECAR_SEEK_JUMP_US + 2L * wallUs
+    if (sidecarBulkDwellKey != key) {
+        sidecarBulkDwellKey = key
+        sidecarBulkDwellMs = 0L
+    }
+    if (sidecarBulkDwellMs < SIDECAR_BULK_DWELL_MS) {
+        if (lastPosUs != Long.MIN_VALUE && !jumped && tickMs <= SIDECAR_DWELL_MAX_TICK_MS &&
+            _exoPlayer?.isPlaying == true
+        ) {
+            sidecarBulkDwellMs += tickMs
+        }
+        if (sidecarBulkDwellMs < SIDECAR_BULK_DWELL_MS) {
+            if (jumped) manager.onSeek()
+            return
+        }
+        Log.d(PlayerRuntimeController.TAG, "Sidecar AI bulk: dwell reached, queuing whole file")
+    }
+    if (!jumped && sidecarBulkQueuedKey == key) return
+    sidecarBulkQueuedKey = key
+    if (jumped) manager.onSeek()
+    sidecarBulkJob?.cancel()
+    val removeHi = manager.removeHearingImpaired
+    sidecarBulkJob = scope.launch(Dispatchers.Default) {
+        val lookaheadUs = positionUs + SIDECAR_AI_LOOKAHEAD_US
+        var playhead = cues.size
+        val keys = ArrayList<String>(cues.size)
+        for ((i, entry) in cues.withIndex()) {
+            val end = when {
+                entry.endTimeUs != C.TIME_UNSET -> entry.endTimeUs
+                entry.durationUs != C.TIME_UNSET -> entry.startTimeUs + entry.durationUs
+                else -> entry.startTimeUs + 2_000_000L
+            }
+            // On screen or inside the prefetch lookahead: left to the live/near/far lanes.
+            val prefetchOwned = end > positionUs && entry.startTimeUs <= lookaheadUs
+            if (playhead == cues.size && entry.startTimeUs > lookaheadUs) playhead = i
+            keys += if (prefetchOwned) "" else
+                sidecarAiKey(sidecarJoinedText(sidecarShownCues(entry.cues, stripSdh)), removeHi)
+        }
+        if (!isActive || activeSidecarSubtitleKey != key) return@launch
+        manager.translateDocument(keys, playhead.coerceAtMost(cues.size - 1))
+    }
 }
 
 private fun PlayerRuntimeController.prefetchSidecarAiWindow(
     cues: List<androidx.media3.extractor.text.CuesWithTiming>,
     positionUs: Long,
+    stripSdh: Boolean,
     manager: com.nuvio.tv.ui.screens.player.subtitles.SubtitleTranslationManager
 ) {
-    val lookaheadUs = positionUs + 2L * 60L * 1_000_000L
+    val lookaheadUs = positionUs + SIDECAR_AI_LOOKAHEAD_US
+    val nearUs = positionUs + 30L * 1_000_000L
     val texts = ArrayList<String>(80)
+    var nearCount = 0
     for (entry in cues) {
         if (entry.startTimeUs > lookaheadUs) break
         if (entry.startTimeUs + (if (entry.durationUs != androidx.media3.common.C.TIME_UNSET) entry.durationUs else 2_000_000L) < positionUs) {
             continue
         }
-        val joined = entry.cues.mapNotNull { it.text?.toString()?.trim() }
-            .filter { it.isNotBlank() }
-            .joinToString("\n")
-        val text = if (manager.removeHearingImpaired) {
-            joined.replace(Regex("""\[.*?\]"""), "").replace(Regex("[♪♫]+"), "").trim()
-        } else {
-            joined
-        }
+        val text = sidecarAiKey(
+            sidecarJoinedText(sidecarShownCues(entry.cues, stripSdh)),
+            manager.removeHearingImpaired
+        )
         if (text.isNotBlank() && manager.getCached(text) == null && !manager.isInFlight(text)) {
             texts.add(text)
+            if (entry.startTimeUs <= nearUs) nearCount = texts.size
         }
         if (texts.size >= 80) break
     }
     if (texts.isEmpty()) return
     scope.launch {
-        manager.preTranslateWindow(texts)
+        manager.preTranslateWindow(texts, nearCount)
     }
 }
 
@@ -301,8 +424,31 @@ private fun PlayerRuntimeController.postToSubtitleView(block: (SubtitleView) -> 
 internal data class SidecarParseResult(
     val cues: List<CuesWithTiming>,
     val effectiveMime: String,
-    val source: String
+    val source: String,
+    /** Original file name from an addon banner cue (e.g. "...eng.Forced.srt"), banner dropped. */
+    val bannerFileName: String? = null
 )
+
+private val addonBannerRegex = Regex("""^\s*>>\s*OpenSubtitles\b""", RegexOption.IGNORE_CASE)
+private val htmlTagRegex = Regex("<[^>]+>")
+
+/**
+ * The OpenSubtitles v3 addon prepends a fake cue (">>OpenSubtitles v3+ v0.0.4<<" plus "=>file
+ * name") in the first seconds. It is not dialogue: it was shown on screen and the AI path spent
+ * ~10 requests on it before giving up (Travelers S01E01, real TV). Drop it, keep the file name.
+ */
+internal fun stripAddonBanner(cues: List<CuesWithTiming>): Pair<List<CuesWithTiming>, String?> {
+    val first = cues.firstOrNull() ?: return cues to null
+    if (first.startTimeUs > 15_000_000L) return cues to null
+    val text = first.cues.joinToString("\n") { it.text?.toString().orEmpty() }
+    if (!addonBannerRegex.containsMatchIn(text)) return cues to null
+    val fileName = text.lines()
+        .map { it.replace(htmlTagRegex, "").trim() }
+        .firstOrNull { it.startsWith("=>") }
+        ?.removePrefix("=>")?.trim()
+        ?.takeIf { it.isNotEmpty() }
+    return cues.drop(1) to fileName
+}
 
 /**
  * Tries Media3 parsers across sniffed + common mime types, then a lenient SRT/VTT fallback.
@@ -315,10 +461,12 @@ internal fun parseSidecarTimedCuesRobust(rawText: String, sourceUrl: String): Si
         if (parsed.isNotEmpty()) {
             val fixed = PlayerSubtitleRtlFix.fixTimedCues(parsed, isBuiltInSubtitle = false)
             val normalized = if (mime == MimeTypes.TEXT_VTT) normalizeTimedCuePositions(fixed) else fixed
+            val (withoutBanner, banner) = stripAddonBanner(normalized)
             return SidecarParseResult(
-                normalized,
+                withoutBanner,
                 mime,
-                source = "media3"
+                source = "media3",
+                bannerFileName = banner
             )
         }
     }
@@ -328,10 +476,12 @@ internal fun parseSidecarTimedCuesRobust(rawText: String, sourceUrl: String): Si
         val mime = PlayerSubtitleUtils.sniffSubtitleMimeType(cleaned, sourceUrl)
         val fixed = PlayerSubtitleRtlFix.fixTimedCues(lenient, isBuiltInSubtitle = false)
         val normalized = if (mime == MimeTypes.TEXT_VTT) normalizeTimedCuePositions(fixed) else fixed
+        val (withoutBanner, banner) = stripAddonBanner(normalized)
         return SidecarParseResult(
-            normalized,
+            withoutBanner,
             mime,
-            source = "lenient"
+            source = "lenient",
+            bannerFileName = banner
         )
     }
 

@@ -10,6 +10,7 @@ import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiCredentials
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiModel
 import com.nuvio.tv.ui.screens.player.subtitles.nextEligibleSubtitleAiModel
 import com.nuvio.tv.ui.screens.player.subtitles.shouldShowSubtitleAiProviderCycleCta
+import com.nuvio.tv.ui.screens.player.subtitles.SubtitleTranslationDiskCacheProvider
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleTranslationManager
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleTranslationService
 import com.nuvio.tv.ui.screens.player.subtitles.TRANSLATION_ERROR_API_KEY_MISSING
@@ -19,6 +20,7 @@ import com.nuvio.tv.ui.screens.player.subtitles.TRANSLATION_ERROR_RATE_LIMITED
 import com.nuvio.tv.ui.screens.player.subtitles.TRANSLATION_ERROR_UNTRANSLATABLE_SOURCE
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -28,8 +30,9 @@ import java.util.Locale
  *
  * Smart-subtitles ladder (when "smart AI subtitles" is on):
  * 1. Preferred-language embedded track (no AI)
- * 2. AI translation of embedded track (prefer original-language)
- * 3. Classic preferred-language auto-select (no AI; may pick an addon without translating)
+ * 2. Preferred-language addon subtitle, best release score (no AI)
+ * 3. AI translation of embedded track (prefer original-language)
+ * 4. Classic preferred-language auto-select (no AI; may pick an addon without translating)
  *
  * Addons are never auto-translated. Manual "Translate with AI" is user-locked and skips
  * automatic overrides.
@@ -42,7 +45,10 @@ internal fun PlayerRuntimeController.ensureSubtitleTranslationManager(): Subtitl
     val manager = SubtitleTranslationManager(
         service = SubtitleTranslationService(),
         targetLanguage = resolveSubtitleAiTargetLanguageName(),
-        scope = scope
+        scope = scope,
+        diskCache = runCatching {
+            SubtitleTranslationDiskCacheProvider.get(context.cacheDir)
+        }.getOrNull()
     )
     manager.removeHearingImpaired = currentPlayerSettingsForReport.subtitleStyle.stripSdh
     manager.onTranslatingChanged = { translating ->
@@ -133,6 +139,22 @@ internal fun PlayerRuntimeController.findPreferredLanguageEmbeddedTrackIndex(): 
     if (!trackMatchesPreferredLanguage(track, primaryTarget)) return -1
     return preferredInternalIndex
 }
+
+/**
+ * Best native addon subtitle in [primaryTarget] for the Smart ladder, or null.
+ * Skips forced tracks; ranks by [score] (release match), ties keep the addon order.
+ */
+internal fun pickPreferredLanguageAddonSubtitle(
+    addonSubtitles: List<Subtitle>,
+    primaryTarget: String,
+    score: (Subtitle) -> Int
+): Subtitle? =
+    addonSubtitles
+        .filter {
+            !addonSubtitleIsForced(it) &&
+                PlayerSubtitleUtils.matchesLanguageCode(it.lang, primaryTarget)
+        }
+        .maxByOrNull(score)
 
 /**
  * G3: UI Stop / toggle AI off (Info CTA on AI option, Col2 toggle).
@@ -310,6 +332,24 @@ internal fun shouldFallbackAiToClassicOnRateLimit(
 
 internal fun PlayerRuntimeController.observeSubtitleAiSettings() {
     scope.launch {
+        _uiState.map { state ->
+            Triple(state.aiSubtitleTranslationActive, state.selectedSubtitleTrackIndex, state.selectedAddonSubtitle) to
+                state.subtitleTracks
+        }.distinctUntilChanged().collect { (sel, tracks) ->
+            val (active, trackIndex, addon) = sel
+            val key = if (active) {
+                buildAiSubtitleSourceKey(
+                    mediaIdentity = aiSubtitleMediaIdentity(),
+                    addonSubtitleUrl = addon?.url,
+                    track = tracks.firstOrNull { it.index == trackIndex }
+                )
+            } else {
+                null
+            }
+            subtitleTranslationManager?.sourceKey = key
+        }
+    }
+    scope.launch {
         combine(
             playerSettingsDataStore.playerSettings,
             deviceLocalPlayerPreferences.subtitleAiCredentials,
@@ -460,8 +500,8 @@ internal fun PlayerRuntimeController.canRunAiAutoSelectLadder(): Boolean {
 }
 
 /**
- * Priority: preferred embedded → AI on original/embedded → classic auto-select.
- * Smart never evaluates or translates addons (Translate with AI only).
+ * Priority: preferred embedded → preferred-language addon → AI on original/embedded → classic.
+ * Smart picks native addons but never translates them (Translate with AI only).
  */
 internal fun PlayerRuntimeController.applyAiAutoSelectLadder() {
     if (isUserExplicitSubtitleSelection || aiSubtitleUserLocked) return
@@ -555,6 +595,41 @@ internal fun PlayerRuntimeController.applyAiAutoSelectLadder() {
                 sourceLabel = track.name,
                 sourceLanguage = track.language,
                 sourceInternalIndex = track.index,
+                targetLanguage = resolveSubtitleAiTargetLanguageName(),
+                model = subtitleAiModel.name,
+                userLocked = false
+            )
+        )
+        return
+    }
+
+    // A native subtitle beats AI on any source. Addons still loading: the fetch re-runs this
+    // policy when done, which upgrades an AI rung picked in the meantime.
+    val preferredAddon = pickPreferredLanguageAddonSubtitle(
+        addonSubtitles = state.addonSubtitles,
+        primaryTarget = primaryTarget,
+        score = { scoreAddonSubtitleCached(it) }
+    )
+    if (preferredAddon != null) {
+        Log.i(
+            PlayerRuntimeController.TAG,
+            "AI ladder: preferred addon lang=${preferredAddon.lang} addon=${preferredAddon.addonName} " +
+                "id=${preferredAddon.id.take(80)}"
+        )
+        // AI off first, so the sidecar never sends the native lines to the provider.
+        setAiSubtitleTranslationEnabled(false)
+        selectAddonSubtitle(preferredAddon)
+        _uiState.update {
+            it.copy(selectedAddonSubtitle = preferredAddon, selectedSubtitleTrackIndex = -1)
+        }
+        autoSubtitleSelected = true
+        publishAiSubtitleDiagnostics(
+            AiSubtitleDiagnostics(
+                rung = AiSubtitleLadderRung.PREFERRED_SCORED_ADDON,
+                reason = "preferred-language addon available",
+                sourceKind = AiSubtitleSourceKind.ADDON,
+                sourceLabel = preferredAddon.addonName,
+                sourceLanguage = preferredAddon.lang,
                 targetLanguage = resolveSubtitleAiTargetLanguageName(),
                 model = subtitleAiModel.name,
                 userLocked = false
@@ -1198,4 +1273,36 @@ internal fun PlayerRuntimeController.resolveSubtitleAiTargetLanguageName(): Stri
             Locale.forLanguageTag(code).displayLanguage
         }.getOrNull()?.takeIf { it.isNotBlank() }
         ?: code
+}
+
+/**
+ * Stable-across-sessions identity of what is playing: the Stremio video id (covers
+ * series:season:episode) or content id + S/E; falls back to the file name / video hash.
+ */
+internal fun PlayerRuntimeController.aiSubtitleMediaIdentity(): String? {
+    val base = currentVideoId?.takeIf { it.isNotBlank() }
+        ?: contentId?.takeIf { it.isNotBlank() }?.let { id ->
+            val s = currentSeason
+            val e = currentEpisode
+            if (s != null && e != null) "$id:$s:$e" else id
+        }
+    return base ?: currentVideoHash?.takeIf { it.isNotBlank() }
+        ?: currentFilename?.takeIf { it.isNotBlank() }
+}
+
+/**
+ * `<media>|emb|<trackId or index+lang+name>` for embedded tracks, `<media>|addon|<url>` for
+ * addon/sidecar subtitles; null when there is no identity or no source.
+ */
+internal fun buildAiSubtitleSourceKey(
+    mediaIdentity: String?,
+    addonSubtitleUrl: String?,
+    track: TrackInfo?
+): String? {
+    if (mediaIdentity.isNullOrBlank()) return null
+    if (!addonSubtitleUrl.isNullOrBlank()) return "$mediaIdentity|addon|$addonSubtitleUrl"
+    if (track == null) return null
+    val trackPart = track.trackId?.takeIf { it.isNotBlank() }
+        ?: "${track.index}-${track.language.orEmpty()}-${track.name}"
+    return "$mediaIdentity|emb|$trackPart"
 }

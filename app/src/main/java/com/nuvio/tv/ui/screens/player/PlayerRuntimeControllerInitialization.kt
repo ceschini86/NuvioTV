@@ -2510,6 +2510,7 @@ private class SubtitleOffsetRenderer(
             pendingSeek = true
             lookaheadJob?.cancel()
             lookaheadJob = null
+            translationManagerProvider()?.onSeek()
         }
         lastRenderPositionUs = positionUs
         tryPeriodicLookahead()

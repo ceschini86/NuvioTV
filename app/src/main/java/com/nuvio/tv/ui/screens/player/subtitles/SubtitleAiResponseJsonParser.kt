@@ -62,26 +62,34 @@ internal object SubtitleAiResponseJsonParser {
 
     /**
      * Gemini's JSON mode intermittently truncates output at the very tail (finishReason STOP but
-     * the closing bracket — sometimes a trailing element — is missing). The translations
-     * themselves are intact, so re-terminate the array instead of failing the whole batch.
+     * the closing bracket is missing). Re-terminate the array after the last complete element
+     * instead of failing the whole batch. An element cut mid-string is dropped, never closed:
+     * its index then reads as missing and is retried, rather than caching a half-translated line.
      */
     fun repairTruncatedArray(text: String): JSONArray? {
         val t = text.trim()
         if (!t.startsWith("[") || t.endsWith("]")) return null
-        val lastQuote = t.lastIndexOf('"')
-        if (lastQuote <= 0) return null
-        for (cut in listOf(t, t.substring(0, lastQuote + 1))) {
-            val trimmed = cut.trimEnd().trimEnd(',')
-            try {
-                return JSONArray("$trimmed]")
-            } catch (_: Exception) {
-            }
-            try {
-                return JSONArray("$trimmed\"]")
-            } catch (_: Exception) {
+        var inString = false
+        var escaped = false
+        var lastCompleteEnd = -1
+        for (i in t.indices) {
+            val c = t[i]
+            when {
+                escaped -> escaped = false
+                inString && c == '\\' -> escaped = true
+                c == '"' -> {
+                    inString = !inString
+                    if (!inString) lastCompleteEnd = i
+                }
             }
         }
-        return null
+        // Only an unterminated first element: the array is real but holds nothing usable.
+        if (lastCompleteEnd < 0) return if (inString) JSONArray() else null
+        return try {
+            JSONArray(t.substring(0, lastCompleteEnd + 1) + "]")
+        } catch (_: Exception) {
+            null
+        }
     }
 
     fun parseTranslationResult(
@@ -103,6 +111,15 @@ internal object SubtitleAiResponseJsonParser {
 
         val byIndex = HashMap<Int, String>()
         for (i in 0 until resultArray.length()) {
+            // Gemini structured output: {"i": id, "t": text}. Unknown/duplicate ids are ignored.
+            val obj = resultArray.optJSONObject(i)
+            if (obj != null) {
+                val id = if (obj.has("i")) obj.optInt("i", -1) else -1
+                val text = obj.optString("t", "")
+                if (id < 0 || text.isBlank()) continue
+                if (!byIndex.containsKey(id)) byIndex[id] = text.trim()
+                continue
+            }
             val element = resultArray.optString(i) ?: continue
             val match = indexPrefixRegex.find(element)
             val key: Int
@@ -125,12 +142,16 @@ internal object SubtitleAiResponseJsonParser {
         }
 
         val isRtl = RTL_LANGUAGES.contains(targetLanguage.lowercase())
+        val rejected = HashSet<Int>()
         val translated = lines.indices.map { i ->
-            val line = byIndex[i]?.replace(NL, "\n") ?: return@map lines[i]
+            val line = byIndex[i]?.replace(NL, "\n") ?: run {
+                rejected.add(i)
+                return@map lines[i]
+            }
             if (isRtl) "‏$line‏" else line
         }
 
-        return TranslationResult(translated, true)
+        return TranslationResult(translated, true, rejected = rejected)
     }
 
     /** Candidates ordered from most-unwrapped to raw, for parsing attempts. */

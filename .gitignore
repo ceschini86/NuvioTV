@@ -71,4 +71,6 @@ docs/*
 !docs/smoke-ai-subtitles.md
 !docs/handoff/
 !docs/handoff/**
+!docs/adr/
+!docs/adr/**
 status-page/
