@@ -8,7 +8,7 @@
 > Escopo: tradução automática de legendas, smart ladder, scoring, lock manual, diagnósticos e settings.  
 > Requisitos de produto: [`prd-ai-subtitles.md`](./prd-ai-subtitles.md).  
 > UX do overlay/menu: [`prd-ai-subtitles-ui-menu.md`](./prd-ai-subtitles-ui-menu.md).  
-> **Código neste working tree:** branch `fix/ai-ladder-and-rate-limit` (base ship `release/1.0.2`).  
+> **Código neste working tree:** branch `dev` (F1 de 2026-10-29 ainda não commitada).  
 > Paths relativos a `app/src/main/java/com/nuvio/tv/` salvo indicação contrária.
 
 ---
@@ -17,9 +17,10 @@
 
 | Situação | Detalhe |
 |----------|---------|
-| **Estado do tree** | Feature **presente** neste checkout (`PlayerRuntimeControllerAiSubtitles.kt`, pacote `ui/screens/player/subtitles/`). Branch ativa: `fix/ai-ladder-and-rate-limit`. |
+| **Estado do tree** | Feature **presente** neste checkout (`PlayerRuntimeControllerAiSubtitles.kt`, pacote `ui/screens/player/subtitles/`). Branch ativa: `dev`. |
 | **Merge `dev`** | `dev` pode ainda não ter a feature até merge — não assumir parity com `dev` remoto sem checar. |
 | **[GAP] README vs código** | README do fork deve citar Groq + Gemini + Claude e multi-key / ping (ver PRD §8). Se ainda divergir, trate como bug de docs. |
+| **F1 (refactor de legendas AI)** | Fila por faixas + hedge, validador de lote, ladder de retry no router, prompt v2 com contexto e cache em disco — ver §5.2, §5.3 e ADR-AI-9/10. **Gaps antigos fechados:** fila única live+prefetch (cue na tela esperava atrás de prefetch); lote com erro pausava a fila inteira (delay 5 s); resposta parcial/truncada aceita como sucesso; sem cache entre sessões. **Ainda abertos (aceitos):** com todas as keys em 429 a AI desliga na sessão e re-testa após o cooldown (pode oscilar on/off enquanto todas seguem limitadas); primeira cue traduzida após seek leva ~3 s. |
 | **Sync** | API keys ficam em `DeviceLocalPlayerPreferences` (DataStore `device_local_player_prefs`) — **nunca** no blob de perfil. Flags `subtitle_ai_enabled` / `auto_select` / `model` em `PlayerSettingsDataStore` estão em `localOnlyPlayerProfileSettingsKeys` e são **excluídas** do sync de perfil (`ProfileSettingsSyncService.kt`). |
 
 ---
@@ -80,8 +81,8 @@ Contexto mínimo de integração (não é o foco deste doc): tracks embutidas al
                                                       │         │
                                                       │         ▼
                                                       │   SubtitleAiRouter
-                                                      │   (preferred → outros;
-                                                      │    multi-key; 429 cooldown)
+                                                      │   (preferred → outros; multi-key;
+                                                      │    429 cooldown; validador + ladder)
                                                       │         │
                                                       │         ▼
                                                       │   SubtitleTranslationService
@@ -246,7 +247,7 @@ Cache: `scoreAddonSubtitleCached` no controller (invalida se o nome de release d
    - Cache hit → reescreve cues (`applyTranslatedLinesToCues`, marca RTL se necessário).
    - Cache miss → mostra **texto fonte** até a tradução chegar (`kind=waiting`) + `manager.translate(text)` async; reaplica se ainda for o último cue group.
 
-**Lookahead:** `SubtitleOffsetRenderer` / prefetch chama `BufferedCueReader.allCueTexts(renderer, …)` (reflection no buffer interno do text renderer) → `manager.preTranslateWindow` (chunks de 40). Só se `manager.isEnabled`.
+**Lookahead:** `SubtitleOffsetRenderer` / prefetch chama `BufferedCueReader.allCueTexts(renderer, …)` (reflection no buffer interno do text renderer) → `manager.preTranslateWindow` (até 80 cues ainda não cacheados, janela de 2 min, renovada quando faltam 30 s; as primeiras vão para a faixa NEAR). Sidecar (addon): `PlayerSidecarSubtitles.kt` manda até 80 cues à frente do playhead, e os dos próximos 30 s vão para NEAR. Só se `manager.isEnabled`.
 
 **Sidecar addon (SRT/VTT…):** `PlayerSidecarSubtitles.kt`
 
@@ -259,13 +260,40 @@ Cache: `scoreAddonSubtitleCached` no controller (invalida se o nome de release d
 
 | Classe | Path | Papel |
 |--------|------|-------|
-| `SubtitleTranslationManager` | `…/subtitles/SubtitleTranslationManager.kt` | Fila única live+prefetch, batch ≤40 / janela 150 ms (Groq/Claude) ou ~2 s (Gemini), cache, inFlight, callbacks UI |
-| `SubtitleAiRouter` | `…/subtitles/SubtitleAiRouter.kt` | Ordem de providers (preferred primeiro), multi-key, cooldown 429 (~60 s), ping |
-| `SubtitleTranslationService` | `…/subtitles/SubtitleTranslationService.kt` | HTTP por provider, parse JSON array, retries Gemini transient, throttle Gemini |
+| `SubtitleTranslationManager` | `…/subtitles/SubtitleTranslationManager.kt` | Fila por faixas LIVE / NEAR / FAR, lane live reservada, hedge, hold de prefetch fino, requeue com backoff, cache memória + disco, callbacks UI |
+| `SubtitleAiRouter` | `…/subtitles/SubtitleAiRouter.kt` | Ordem de providers (preferred primeiro), multi-key, cooldown 429 (~60 s), validador por tentativa, ladder retry → metades → linha a linha, backoff por slot, ping |
+| `SubtitleTranslationService` | `…/subtitles/SubtitleTranslationService.kt` | HTTP por provider, prompt v2 com contexto, parse JSON array, retries Gemini transient, espaçamento Gemini, override de base URL (debug) |
+| `SubtitleBatchValidator` | `…/subtitles/SubtitleBatchValidator.kt` | Rejeita linhas de resposta inutilizáveis (echo, vazio, recusa, saída desproporcional) |
+| `SubtitleTranslationDiskCache` | `…/subtitles/SubtitleTranslationDiskCache.kt` | Cache persistente por linha (TSV por fonte) |
 | `SubtitleAiCredentials` | `…/subtitles/SubtitleAiCredentials.kt` | Multi-provider JSON |
 | `SubtitleAiModel` | `…/subtitles/SubtitleAiModel.kt` | Enum persistido |
 
-**Batching:** channel ilimitado; junta até 40 linhas na janela do provider (150 ms Groq/Claude, ~2000 ms Gemini); prefetch enfileira na mesma fila (`source=prefetch`); erro → completa com texto original **sem cache** + delay 5 s (retry na próxima renderização).
+**Fila do Manager (`SubtitleTranslationManager`):**
+
+- **Faixas:** `LIVE` (cue na tela, `translate(text)`), `NEAR` (cabeça da janela de prefetch, `nearCount` = 8 linhas) e `FAR` (cauda). Prefetch entra via `preTranslateWindow`.
+- **Lane live reservada:** janela de agrupamento de 120 ms, até 8 linhas; roda **ao lado** de um lote de prefetch, então a cue na tela não espera atrás dele. Linha já enfileirada como prefetch que vira live é **promovida**.
+- **Hedge:** cue na tela cuja linha está dentro de um lote não-live em voo ganha um **duplicado live** após `HEDGE_AFTER_MS = 3 s`; vale a primeira resposta. Enquanto o hedge está na fila, a falha do original não consome tentativas.
+- **Hold de prefetch fino:** lote de prefetch com < 4 linhas espera até 8 s (NEAR) / 20 s (FAR) para crescer — exceto nos 20 s de warm-up após start/seek/reset. Economiza requests (free tier Gemini ≈ 15 RPM).
+- **Falha:** linha com erro/rejeição volta à fila com backoff **por linha** (base 1,5 s) e é **abandonada após 3 tentativas** — mostrada no idioma da fonte e **não** cacheada. Um lote com erro não pausa mais a fila inteira.
+- **`onSeek()`** descarta prefetch enfileirado e mantém o live (chamado pelo renderer embutido em `PlayerRuntimeControllerInitialization.kt`); **`reset()`** descarta a fila e mantém o cache. Gerações (`resetGen`/`seekGen`) invalidam requeues obsoletos. Lotes já enviados ainda gravam no cache.
+- **Lookup:** cache em memória → peek no disco → `put` em ambos ao traduzir.
+- **Batch:** até 40 linhas (`DEFAULT_MAX_BATCH_SIZE`); janela 150 ms (Groq/Claude) ou ~2 s (Gemini) para lotes não-live.
+
+**Router (`SubtitleAiRouter`):**
+
+- `SubtitleBatchValidator` roda **após cada tentativa**; linhas rejeitadas voltam em `TranslationResult.rejected` e não são cacheadas.
+- **Ladder dentro do slot (key/provider):** retry do lote → metades → linha a linha, orçamento de **3 requests por slot (2 se urgent)**; depois passa ao próximo slot.
+- **Backoff por slot** para erros não-429 (2–30 s); o slot vai para o fim da fila de tentativa. 429 segue com cooldown (~60 s).
+- **Urgent (live):** timeout de chamada 9 s e keys Gemini ordenadas por prontidão (a que está livre agora vai primeiro).
+- **Concorrência:** `maxConcurrentBatches()` = 1 lote compartilhado no Gemini, 2 no Groq/Claude, **mais** a lane live reservada.
+
+**Service (`SubtitleTranslationService`):**
+
+- Gemini com espaçamento de 4,2 s por key (`DEFAULT_GEMINI_MIN_INTERVAL_MS`); lote urgent pula o re-roll interno de parse.
+- Prompt com até 3 linhas anteriores como contexto (`buildTranslateUserMessage`); `SUBTITLE_PROMPT_VERSION = 2` (entra na chave do cache em disco).
+- **Override de base URL (só debug):** `adb shell setprop debug.nuvio.ai_base_url <url>`, checado com `BuildConfig.BUILD_TYPE == "debug"`; loga `DEBUG AI base URL override ACTIVE`. Usado pela bancada de mock (ver smoke).
+
+**Parser (`SubtitleAiResponseJsonParser`):** índices ausentes vão para `TranslationResult.rejected` (antes: sucesso parcial). `repairTruncatedArray` re-termina após o último elemento **completo** e descarta o elemento cortado no meio da string (é retentado) em vez de fechá-lo como linha válida.
 
 **Providers / modelos reais (IDs no Service; enum estável no DataStore):**
 
@@ -275,7 +303,7 @@ Cache: `scoreAddonSubtitleCached` no controller (invalida se o nome de release d
 | `GEMINI_FLASH_25` | `gemini-3.5-flash-lite` | Generative Language `…:generateContent` |
 | `CLAUDE_HAIKU` | `claude-haiku-4-5` | `https://api.anthropic.com/v1/messages` |
 
-Roteamento: providers **enabled + com key**; preferred model primeiro; em falha / 401–403 tenta próxima key; 429 coloca slot em cooldown; `CONTENT_BLOCKED` (Gemini) propaga sem toast “erro genérico” (UI filtra em `onBatchResult`).
+Roteamento: providers **enabled + com key**; preferred model primeiro; em falha / 401–403 tenta próxima key (após a ladder do slot); 429 coloca slot em cooldown; `CONTENT_BLOCKED` (Gemini) propaga sem toast “erro genérico” (UI filtra em `onBatchResult`).
 
 **Ping:** `SubtitleAiRouter.ping` / settings `pingSubtitleAiKey` — valida key e captura quota headers quando existirem.
 
@@ -287,6 +315,14 @@ Roteamento: providers **enabled + com key**; preferred model primeiro; em falha 
 - `subtitle_ai_credentials_json` — lista de providers `{id, enabled, keys[]}`
 - `subtitle_ai_api_key` — legacy single-key (migrado para credentials)
 - Comentário de classe: **não** amarrado a perfil; **não** sync entre devices
+
+**Cache de tradução em disco** (`SubtitleTranslationDiskCache`, F1) — em `cacheDir/ai_subtitle_cache`:
+
+- Um arquivo TSV por (prompt version, idioma alvo, `sourceKey`), nome `sha1("$promptVersion|$lang|$sourceKey").tsv`; linha = `<sha1(texto fonte)>\t<tradução escapada>`; última entrada por hash vence; linhas corrompidas são ignoradas.
+- `sourceKey` = `<videoId | contentId:s:e | videoHash | filename>|emb|<trackId>` ou `...|addon|<url>`, montada em `PlayerRuntimeControllerAiSubtitles.kt` (`buildAiSubtitleSourceKey`).
+- **Lookup por linha** dentro do arquivo da fonte (índice em memória; IO serial em `Dispatchers.IO`, `put` fire-and-forget). Compactação acima de 20 000 linhas com duplicatas; evicção LRU acima de 300 arquivos.
+- Fica em `cacheDir`: o sistema pode limpá-lo sob pressão de espaço, e ele **sobrevive a reinstall** em alguns cenários (nos testes, limpar com `pm trim-caches`).
+- Só entram traduções validadas; linhas abandonadas ou rejeitadas nunca são gravadas.
 
 Settings de feature (enable / smart / preferred model string) em `PlayerSettingsDataStore` → `SubtitleStyleSettings.aiEnabled|aiAutoSelect|aiModel`, keys `subtitle_ai_*`, mas **excluídas** do sync de perfil (`localOnlyPlayerProfileSettingsKeys`).
 
@@ -375,9 +411,13 @@ Enums: `AiSubtitleLadderRung`, `AiSubtitleSourceKind`, data class `AiSubtitleDia
 | MPV | AI ignorada |
 | 429 / rate limit | Cooldown por key; fallback multi-key. **Esgotadas:** AI off + **preserve selection** (sem classic/FR); `aiSubtitleQuotaExhausted` oculta Translate até cooldown; ver PRD UI §3.5. |
 | 401/403 | Próxima key |
-| Transient 5xx Gemini | Retry curto (até 2) |
+| Transient 5xx Gemini | Retry curto (até 2) no service; erro persistente → backoff do slot (2–30 s) e próximo slot |
+| Resposta inutilizável (echo / vazio / recusa / desproporcional / truncada / índice ausente) | Validador rejeita só essas linhas; ladder no slot (retry → metades → linha a linha); sem sucesso → requeue por linha com backoff |
+| Linha falhou 3x | Abandonada: mostra idioma da fonte, **não** cacheia |
+| Cue na tela atrás de lote lento (> 3 s) | Hedge: duplicado live; primeira resposta vence |
+| Seek com prefetch na fila | `onSeek()` descarta prefetch enfileirado; lote já enviado ainda cacheia o resultado |
 | `CONTENT_BLOCKED` | Sem toast de erro genérico; bisect no service |
-| Batch fail genérico | Mostra original sem cache; retry depois; `aiSubtitleLastError` |
+| Batch fail genérico | Linhas voltam à fila com backoff (até 3 tentativas); enquanto isso mostra original sem cache; `aiSubtitleLastError` |
 | PGS / sem texto | **MANUAL lock:** preserva fonte + erro. **Smart:** outra embedded ou desliga AI + ladder |
 | Score &lt; 50 | Addon não entra como pivot AI (rung 3); score = matching local de release-name |
 | Forced subs mode | Só desvia para classic se forced **aplica** (áudio ≈ preferido); senão continua ladder |
@@ -388,8 +428,17 @@ Enums: `AiSubtitleLadderRung`, `AiSubtitleSourceKind`, data class `AiSubtitleDia
 |---------|-------------|
 | `SubtitleRoutingTest.kt` | Roteamento HTTP de URI de legenda (não AI LLM) |
 | `SubtitleCredentialScopeTest.kt` | Escopo de headers stream→subtitle download (segurança de download, não API AI) |
+| `SubtitleAiChaosCharacterizationTest.kt` | Fila/router sob falhas (11 testes, asserta o comportamento corrigido, inclui hedge) |
+| `SubtitleBatchValidatorTest.kt` | Echo, batch echo, vazio, recusa, saída desproporcional |
+| `SubtitleTranslationPromptTest.kt` | Prompt v2 / contexto de linhas anteriores |
+| `SubtitleTranslationDiskCacheTest.kt` | Formato TSV, escape, compactação, evicção, linhas corrompidas |
+| `SubtitleTranslationManagerDiskCacheTest.kt` | Integração memória → disco → put no manager |
+| `SubtitleAiBaseUrlOverrideTest.kt` | Override de base URL só em debug |
+| `SubtitleAiResponseJsonParserTest.kt` | Parse, índices ausentes → `rejected`, reparo de array truncado |
 
-Não há unit test dedicado só da ladder no tree analisado; a lógica está concentrada em `PlayerRuntimeControllerAiSubtitles.kt` (testável via extração futura).
+Comando: `gradlew.bat :app:testFullDebugUnitTest --tests *Subtitle*` (`testDebugUnitTest` é ambíguo por flavor) → 210 testes, 0 falhas.
+
+Não há unit test dedicado só da ladder de seleção (§3) no tree analisado; a lógica está concentrada em `PlayerRuntimeControllerAiSubtitles.kt` (testável via extração futura).
 
 ---
 
@@ -399,7 +448,11 @@ Não há unit test dedicado só da ladder no tree analisado; a lógica está con
 |----------|-------------------------|
 | Ladder + lock + diagnostics API | `ui/screens/player/PlayerRuntimeControllerAiSubtitles.kt` |
 | Scoring | `ui/screens/player/SubtitleReleaseScoring.kt` |
-| Manager / batch / cache | `ui/screens/player/subtitles/SubtitleTranslationManager.kt` |
+| Manager / fila por faixas / hedge / cache | `ui/screens/player/subtitles/SubtitleTranslationManager.kt` |
+| Validador de lote | `ui/screens/player/subtitles/SubtitleBatchValidator.kt` |
+| Cache em disco | `ui/screens/player/subtitles/SubtitleTranslationDiskCache.kt` |
+| Parser de resposta JSON | `ui/screens/player/subtitles/SubtitleAiResponseJsonParser.kt` |
+| Source key do cache | `ui/screens/player/PlayerRuntimeControllerAiSubtitles.kt` (`buildAiSubtitleSourceKey`) |
 | HTTP providers | `ui/screens/player/subtitles/SubtitleTranslationService.kt` |
 | Multi-key router + ping | `ui/screens/player/subtitles/SubtitleAiRouter.kt` |
 | Credentials model | `ui/screens/player/subtitles/SubtitleAiCredentials.kt` |
@@ -419,6 +472,7 @@ Não há unit test dedicado só da ladder no tree analisado; a lógica está con
 | Sync exclusions | `core/sync/ProfileSettingsSyncService.kt` (`localOnlyPlayerProfileSettingsKeys`) |
 | README claims | `README.md` (seção AI subtitles) |
 | Strings | `app/src/main/res/values/strings.xml` (`sub_ai_*`) |
+| Testes F1 | `app/src/test/java/com/nuvio/tv/ui/screens/player/subtitles/` (§8) |
 
 ---
 
@@ -464,8 +518,8 @@ Não há unit test dedicado só da ladder no tree analisado; a lógica está con
 ### ADR-AI-7 — Falha sem cache permanente do original
 
 - **Contexto:** Cachear inglês após erro “gruda” tradução errada.  
-- **Decisão:** Em erro de batch, completa deferred com original **sem** `cache[]`; retry na próxima cue.  
-- **Consequência:** Pode mostrar fonte de novo no wait (`waiting`); melhor que stuck wrong language.
+- **Decisão:** Em erro/rejeição, a linha completa com o original **sem** gravar no cache (memória ou disco); desde F1 volta à fila com backoff por linha e, após 3 tentativas, é abandonada (mostra a fonte, não cacheia).  
+- **Consequência:** Pode mostrar fonte de novo no wait (`waiting`); melhor que stuck wrong language. O cache em disco (ADR-AI-10) guarda só traduções validadas, então a regra se mantém.
 
 ### ADR-AI-8 — Runtime backstop para bitmap
 
@@ -473,13 +527,26 @@ Não há unit test dedicado só da ladder no tree analisado; a lógica está con
 - **Decisão:** `onUntranslatableSource` quando `extractRawText` blank. Com **MANUAL lock**, não abandonar a fonte pedida — só erro + diagnostics. Sem lock, próxima fonte = outra **embedded**; sem hunt scored addon.  
 - **Consequência:** Smart sem embedded útil desliga AI (+ classic se smart). MANUAL fica na escolha do usuário até Stop/Reset.
 
+### ADR-AI-9 — Lotes validados + fila por faixas (LIVE/NEAR/FAR) com hedge
+
+- **Contexto:** Fila única: a cue na tela esperava atrás de prefetch (~30 s num lote lento); respostas truncadas/ecoadas eram aceitas (ex.: JSON cortado fechado como linha válida e cacheada); um erro pausava tudo.
+- **Decisão:** Manager com faixas LIVE/NEAR/FAR e lane live reservada (120 ms, ≤ 8 linhas); hedge após 3 s para cue na tela dentro de lote não-live; hold de prefetch fino; requeue por linha com backoff e limite de 3 tentativas. `SubtitleBatchValidator` após cada tentativa + ladder no slot do router (retry → metades → linha a linha, 3 req/slot, 2 se urgent); parser manda índices ausentes para `rejected`.
+- **Consequência:** Mais complexidade na fila (gerações, promoção, hedge). Gemini segue serializado (1 lote + live). O hold de prefetch reduz lotes de 1 linha, mas cues embutidas chegam ~1 a cada 6 s, então ganha pouco em linhas/request.
+
+### ADR-AI-10 — Cache em disco por linha, chave por fonte
+
+- **Contexto:** Reabrir o mesmo título gastava quota de novo; cache só em memória.
+- **Decisão:** TSV por (prompt version, idioma, `sourceKey`) em `cacheDir/ai_subtitle_cache`, consulta **por linha** (hash do texto fonte) dentro do arquivo da fonte. `sourceKey` = identidade da mídia + `emb|trackId` ou `addon|url`.
+- **Desvio do plano:** o plano propunha um hash do conteúdo inteiro da fonte; a implementação consulta por linha dentro do arquivo da fonte.
+- **Consequência:** Mudar o prompt (`SUBTITLE_PROMPT_VERSION`) invalida o cache; o mesmo texto em releases diferentes só reaproveita se a `sourceKey` coincidir (mesmo vídeo/faixa). Cache não é permanente garantido (`cacheDir`).
+
 ---
 
 ## Cheat sheet — respostas do critério de pronto
 
 1. **Ordem real da ladder?** §3 — `applyAiAutoSelectLadder`: preferred embedded → AI embedded → classic.  
-2. **API key / roteamento?** §5.2–5.3 — `DeviceLocalPlayerPreferences` JSON; `SubtitleAiRouter` preferred + fallback Groq/Gemini/Claude (`SubtitleTranslationService` IDs reais).  
-3. **Cue embutido → tela?** §5.1 — Exo `TextOutput` → `TranslatingTextOutput` → manager/router/service → cues com texto traduzido no `SubtitleView`.  
+2. **API key / roteamento?** §5.2–5.3 — `DeviceLocalPlayerPreferences` JSON; `SubtitleAiRouter` preferred + fallback Groq/Gemini/Claude (`SubtitleTranslationService` IDs reais), com validador + ladder por slot.  
+3. **Cue embutido → tela?** §5.1 — Exo `TextOutput` → `TranslatingTextOutput` → manager (live lane → cache memória/disco → router) → service → cues com texto traduzido no `SubtitleView`; prefetch por faixas NEAR/FAR.  
 4. **Lock manual impede?** §3 / §6 — ladder automática e upgrade para embedded preferido; diagnostics marca `userLocked`.  
 5. **Por que não no MPV?** §5.4 — gate explícito; sem `TranslatingTextOutput` no path MPV.
 

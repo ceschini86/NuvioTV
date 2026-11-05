@@ -6,7 +6,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.util.concurrent.atomic.AtomicLong
+import com.nuvio.tv.BuildConfig
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -21,8 +22,21 @@ private const val HTTP_TAG = "SubtitleAiHttp"
 data class TranslationResult(
     val lines: List<String>,
     val success: Boolean,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    /**
+     * Indices whose [lines] entry is NOT a usable translation (missing from the response, echoed
+     * source, blank...). Those slots hold the source text as a placeholder and must never be cached.
+     */
+    val rejected: Set<Int> = emptySet(),
+    /** Provider-stated wait before this key can be used again (Gemini 429 `retryDelay`). */
+    val retryAfterMs: Long? = null
 )
+
+/** Bump whenever the prompt changes in a way that should invalidate persisted translations. */
+internal const val SUBTITLE_PROMPT_VERSION = 3
+
+/** Request exceeded the caller's call timeout (short timeouts are used for on-screen cues). */
+const val TRANSLATION_ERROR_TIMEOUT = "TIMEOUT"
 
 // Marker error for Gemini's non-configurable content-policy rejections (finishReason
 // PROHIBITED_CONTENT etc. — safetySettings BLOCK_NONE does NOT cover these). Blocked batches are
@@ -55,6 +69,7 @@ private const val CLAUDE_MODEL_ID = "claude-haiku-4-5"
 private const val CLAUDE_URL = "https://api.anthropic.com/v1/messages"
 private const val CLAUDE_API_VERSION = "2023-06-01"
 private const val CLAUDE_MAX_TOKENS = 4096
+private const val CLAUDE_MAX_TOKENS_BULK = 8192
 
 // Transient-failure retry (server overload / flaky network). 503/500/502 and IOExceptions are
 // Google-side capacity blips that usually clear within ~1s; retry the same batch a couple times
@@ -66,6 +81,45 @@ private const val GEMINI_RETRY_BASE_DELAY_MS = 400L       // 400ms, then 800ms (
 // Free tier for flash-lite is ~15 RPM. Pace requests so preTranslate + live batches do not
 // instantly exhaust the minute budget and leave translation stuck on RATE_LIMITED.
 private val GEMINI_RETRYABLE_HTTP = setOf(500, 502, 503)
+
+// DEBUG-only test hook: `adb shell setprop debug.nuvio.ai_base_url http://10.0.2.2:8787` redirects every
+// provider (translate + ping + match) to a local mock server; only scheme/host/port are replaced, the
+// original path and query are kept. Clear with `setprop debug.nuvio.ai_base_url ""`. Read per request.
+private const val DEBUG_AI_BASE_URL_PROP = "debug.nuvio.ai_base_url"
+private val lastLoggedAiBaseUrlOverride = java.util.concurrent.atomic.AtomicReference<String?>(null)
+
+private fun readDebugAiBaseUrlOverride(): String? {
+    // Not BuildConfig.DEBUG: the debug build type ships with isDebuggable = false.
+    if (BuildConfig.BUILD_TYPE != "debug") return null
+    return try {
+        val cls = Class.forName("android.os.SystemProperties")
+        val value = cls.getMethod("get", String::class.java).invoke(null, DEBUG_AI_BASE_URL_PROP) as? String
+        value?.trim()?.takeIf { it.isNotEmpty() }
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+/** Replaces scheme+host+port of [original] with those of [override]; path/query are preserved. */
+internal fun rewriteBaseUrl(original: String, override: String?): String {
+    if (override.isNullOrBlank()) return original
+    val target = override.trim().toHttpUrlOrNull() ?: return original
+    val source = original.toHttpUrlOrNull() ?: return original
+    return source.newBuilder()
+        .scheme(target.scheme)
+        .host(target.host)
+        .port(target.port)
+        .build()
+        .toString()
+}
+
+private fun aiProviderUrl(original: String): String {
+    val override = readDebugAiBaseUrlOverride()
+    if (override != lastLoggedAiBaseUrlOverride.getAndSet(override) && override != null) {
+        Log.w(HTTP_TAG, "DEBUG AI base URL override ACTIVE: $override (providers redirected, path/query kept)")
+    }
+    return rewriteBaseUrl(original, override)
+}
 
 class SubtitleTranslationService(
     private val apiKeyProvider: () -> String = { "" },
@@ -82,16 +136,43 @@ class SubtitleTranslationService(
         .build()
 
     private val geminiRequestLock = Mutex()
-    private val lastGeminiRequestAtMs = AtomicLong(0L)
+    private val lastGeminiRequestAtMs = HashMap<String, Long>()
 
-    private suspend fun throttleGeminiRequests(): Long {
-        return geminiRequestLock.withLock {
-            val now = System.currentTimeMillis()
-            val waitMs = (geminiMinIntervalMs - (now - lastGeminiRequestAtMs.get())).coerceAtLeast(0L)
-            if (waitMs > 0L) delay(waitMs)
-            lastGeminiRequestAtMs.set(System.currentTimeMillis())
+    /**
+     * Reserves the next Gemini slot for [apiKey] (guarded by the mutex) and returns how long the
+     * caller must wait. Spacing is per key: each key may belong to a distinct AI Studio project
+     * with its own RPM, so one waiting key must not block another.
+     */
+    internal suspend fun reserveGeminiSlot(apiKey: String, nowMs: Long = System.currentTimeMillis()): Long =
+        geminiRequestLock.withLock {
+            val last = synchronized(lastGeminiRequestAtMs) { lastGeminiRequestAtMs[apiKey] }
+            val waitMs = if (last == null) 0L else (geminiMinIntervalMs - (nowMs - last)).coerceAtLeast(0L)
+            synchronized(lastGeminiRequestAtMs) { lastGeminiRequestAtMs[apiKey] = nowMs + waitMs }
             waitMs
         }
+
+    private suspend fun throttleGeminiRequests(apiKey: String): Long {
+        val waitMs = reserveGeminiSlot(apiKey)
+        if (waitMs > 0L) delay(waitMs)
+        return waitMs
+    }
+
+    /** How long a Gemini request with [apiKey] would wait for its min-interval slot right now. */
+    fun geminiReadyInMs(apiKey: String, nowMs: Long = System.currentTimeMillis()): Long {
+        val last = synchronized(lastGeminiRequestAtMs) { lastGeminiRequestAtMs[apiKey] } ?: return 0L
+        return (geminiMinIntervalMs - (nowMs - last)).coerceAtLeast(0L)
+    }
+
+    private fun executeCall(request: Request, callTimeoutMs: Long?): okhttp3.Response {
+        // The shared client reads for 30 s; a long bulk call has to outlive that as well.
+        val http = if (callTimeoutMs != null && callTimeoutMs > 30_000L) {
+            client.newBuilder().readTimeout(callTimeoutMs, TimeUnit.MILLISECONDS).build()
+        } else {
+            client
+        }
+        val call = http.newCall(request)
+        if (callTimeoutMs != null) call.timeout().timeout(callTimeoutMs, TimeUnit.MILLISECONDS)
+        return call.execute()
     }
 
     private fun extractJsonArray(text: String): JSONArray? =
@@ -104,7 +185,39 @@ class SubtitleTranslationService(
         "2. Every input element starts with a numeric prefix like '7: ' — keep the EXACT same numeric prefix on the corresponding translated element. Never merge or split elements.\n" +
         "3. Keep the exact same order and element count.\n" +
         "4. Preserve the '$NL' symbol exactly where it appears as a line break.\n" +
-        "5. Use informal, spoken $targetLanguage suitable for cinema."
+        "5. Use informal, spoken $targetLanguage suitable for cinema.\n" +
+        "6. If a 'Context' block is provided, those previous lines are only for coherence, gender and pronouns. Never translate them and never include them in the output."
+
+    /** Gemini structured-output variant: `{"i","t"}` objects instead of "7: " string prefixes. */
+    private fun buildGeminiSystemPrompt(targetLanguage: String, NL: String) =
+        "You are a professional subtitle translator. Translate the following JSON array into natural $targetLanguage.\n" +
+        "Rules:\n" +
+        "1. Each input element is an object {\"i\": <id>, \"t\": <text>}. Return a JSON array with exactly one {\"i\", \"t\"} object per input id, where \"t\" is the translation of that element's \"t\".\n" +
+        "2. Keep the EXACT same ids. Never merge or split elements.\n" +
+        "3. Keep the exact same order and element count.\n" +
+        "4. Preserve the '$NL' symbol exactly where it appears as a line break.\n" +
+        "5. Use informal, spoken $targetLanguage suitable for cinema.\n" +
+        "6. If a 'Context' block is provided, those previous lines are only for coherence, gender and pronouns. Never translate them and never include them in the output."
+
+    private fun encodeStructured(lines: List<String>, NL: String): JSONArray =
+        JSONArray().apply {
+            lines.forEachIndexed { i, line ->
+                put(JSONObject().apply { put("i", i); put("t", line.replace("\n", NL)) })
+            }
+        }
+
+    private fun geminiResponseSchema(): JSONObject = JSONObject().apply {
+        put("type", "ARRAY")
+        put("items", JSONObject().apply {
+            put("type", "OBJECT")
+            put("properties", JSONObject().apply {
+                put("i", JSONObject().apply { put("type", "INTEGER") })
+                put("t", JSONObject().apply { put("type", "STRING") })
+            })
+            put("required", JSONArray(listOf("i", "t")))
+            put("propertyOrdering", JSONArray(listOf("i", "t")))
+        })
+    }
 
     private fun encodeIndexed(lines: List<String>, NL: String): JSONArray =
         JSONArray(lines.mapIndexed { i, line -> "$i: ${line.replace("\n", NL)}" })
@@ -177,7 +290,7 @@ class SubtitleTranslationService(
             })
         }
         val request = Request.Builder()
-            .url(GROQ_URL)
+            .url(aiProviderUrl(GROQ_URL))
             .header("Authorization", "Bearer $apiKey")
             .header("Content-Type", "application/json")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
@@ -229,7 +342,7 @@ class SubtitleTranslationService(
             })
         }
         val request = Request.Builder()
-            .url("$GEMINI_BASE_URL?key=$apiKey")
+            .url(aiProviderUrl("$GEMINI_BASE_URL?key=$apiKey"))
             .header("Content-Type", "application/json")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
             .build()
@@ -260,7 +373,9 @@ class SubtitleTranslationService(
         model: SubtitleAiModel,
         apiKey: String,
         lines: List<String>,
-        targetLanguage: String
+        targetLanguage: String,
+        context: List<String> = emptyList(),
+        callTimeoutMs: Long? = null
     ): ProviderAttemptResult {
         if (lines.isEmpty()) {
             return ProviderAttemptResult(TranslationResult(lines, true))
@@ -268,7 +383,7 @@ class SubtitleTranslationService(
         if (apiKey.isBlank()) {
             return ProviderAttemptResult(TranslationResult(lines, false, "API key missing"), httpCode = 401)
         }
-        return translateWithInternal(model, apiKey, lines, targetLanguage, depth = 0)
+        return translateWithInternal(model, apiKey, lines, targetLanguage, depth = 0, context = context, callTimeoutMs = callTimeoutMs)
     }
 
     private suspend fun translateWithInternal(
@@ -276,12 +391,14 @@ class SubtitleTranslationService(
         apiKey: String,
         lines: List<String>,
         targetLanguage: String,
-        depth: Int
+        depth: Int,
+        context: List<String> = emptyList(),
+        callTimeoutMs: Long? = null
     ): ProviderAttemptResult {
         val translation = when (model) {
-            SubtitleAiModel.GROQ_LLAMA_70B -> translateGroq(lines, targetLanguage, apiKey)
-            SubtitleAiModel.GEMINI_FLASH_25 -> translateGemini(lines, targetLanguage, apiKey)
-            SubtitleAiModel.CLAUDE_HAIKU -> translateClaude(lines, targetLanguage, apiKey)
+            SubtitleAiModel.GROQ_LLAMA_70B -> translateGroq(lines, targetLanguage, apiKey, context, callTimeoutMs)
+            SubtitleAiModel.GEMINI_FLASH_25 -> translateGemini(lines, targetLanguage, apiKey, context = context, callTimeoutMs = callTimeoutMs)
+            SubtitleAiModel.CLAUDE_HAIKU -> translateClaude(lines, targetLanguage, apiKey, context = context, callTimeoutMs = callTimeoutMs)
         }
         val attempt = ProviderAttemptResult(
             translation = translation,
@@ -289,6 +406,16 @@ class SubtitleTranslationService(
                 "RATE_LIMITED" -> 429
                 "API key missing" -> 401
                 else -> null
+            },
+            // A spent daily quota says "retry in 12 h": without this the router retries every 60 s.
+            quota = translation.retryAfterMs?.let { waitMs ->
+                SubtitleAiQuotaSnapshot(
+                    model = model,
+                    keySuffix = maskApiKey(apiKey).removePrefix("••••"),
+                    remainingRequests = 0L,
+                    resetHint = "${waitMs / 1000}s",
+                    cooldownUntilMs = System.currentTimeMillis() + waitMs
+                )
             }
         )
         if (!attempt.translation.success &&
@@ -296,10 +423,15 @@ class SubtitleTranslationService(
             lines.size >= 2 && depth < 2
         ) {
             val mid = lines.size / 2
-            val left = translateWithInternal(model, apiKey, lines.subList(0, mid), targetLanguage, depth + 1)
-            val right = translateWithInternal(model, apiKey, lines.subList(mid, lines.size), targetLanguage, depth + 1)
+            val left = translateWithInternal(model, apiKey, lines.subList(0, mid), targetLanguage, depth + 1, context, callTimeoutMs)
+            val right = translateWithInternal(model, apiKey, lines.subList(mid, lines.size), targetLanguage, depth + 1, context, callTimeoutMs)
+            val rejected = HashSet<Int>()
+            if (left.translation.success) rejected.addAll(left.translation.rejected)
+            else rejected.addAll(0 until mid)
+            if (right.translation.success) right.translation.rejected.mapTo(rejected) { it + mid }
+            else rejected.addAll(mid until lines.size)
             return ProviderAttemptResult(
-                translation = TranslationResult(left.translation.lines + right.translation.lines, true),
+                translation = TranslationResult(left.translation.lines + right.translation.lines, true, rejected = rejected),
                 httpCode = attempt.httpCode,
                 quota = attempt.quota ?: left.quota ?: right.quota
             )
@@ -350,12 +482,21 @@ class SubtitleTranslationService(
             val left = translateBatchInternal(lines.subList(0, mid), targetLanguage, depth + 1)
             val right = translateBatchInternal(lines.subList(mid, lines.size), targetLanguage, depth + 1)
             // Best-effort merge: failed halves already carry their original lines.
-            return TranslationResult(left.lines + right.lines, true)
+            val rejected = HashSet<Int>()
+            if (left.success) rejected.addAll(left.rejected) else rejected.addAll(0 until mid)
+            if (right.success) right.rejected.mapTo(rejected) { it + mid } else rejected.addAll(mid until lines.size)
+            return TranslationResult(left.lines + right.lines, true, rejected = rejected)
         }
         return result
     }
 
-    private suspend fun translateGroq(lines: List<String>, targetLanguage: String, apiKey: String): TranslationResult {
+    private suspend fun translateGroq(
+        lines: List<String>,
+        targetLanguage: String,
+        apiKey: String,
+        context: List<String> = emptyList(),
+        callTimeoutMs: Long? = null
+    ): TranslationResult {
         val NL = "⏎"
         val inputArray = encodeIndexed(lines, NL)
         val systemPrompt = buildSystemPrompt(targetLanguage, NL)
@@ -372,13 +513,13 @@ class SubtitleTranslationService(
                 })
                 put(JSONObject().apply {
                     put("role", "user")
-                    put("content", "Translate to $targetLanguage:\n$inputArray")
+                    put("content", buildTranslateUserMessage(inputArray.toString(), targetLanguage, context))
                 })
             })
         }
 
         val request = Request.Builder()
-            .url(GROQ_URL)
+            .url(aiProviderUrl(GROQ_URL))
             .header("Authorization", "Bearer $apiKey")
             .header("Content-Type", "application/json")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
@@ -386,7 +527,7 @@ class SubtitleTranslationService(
 
         return withContext(Dispatchers.IO) {
             try {
-                val response = client.newCall(request).execute()
+                val response = executeCall(request, callTimeoutMs)
                 val responseBody = response.body?.string() ?: run {
                     Log.e(TAG, "Empty response body (HTTP ${response.code})")
                     return@withContext TranslationResult(lines, false, "Empty response (${response.code})")
@@ -407,6 +548,9 @@ class SubtitleTranslationService(
                 parseTranslationResult(lines, targetLanguage, rawText, NL)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                if (callTimeoutMs != null && e is java.io.InterruptedIOException) {
+                    return@withContext TranslationResult(lines, false, TRANSLATION_ERROR_TIMEOUT)
+                }
 
                 Log.e(TAG, "translateGroq exception: ${e.message}", e)
                 TranslationResult(lines, false, e.message)
@@ -426,12 +570,14 @@ class SubtitleTranslationService(
         targetLanguage: String,
         apiKey: String,
         attempt: Int = 0,
-        transientAttempt: Int = 0
+        transientAttempt: Int = 0,
+        context: List<String> = emptyList(),
+        callTimeoutMs: Long? = null
     ): TranslationResult {
-        val throttleWaitMs = throttleGeminiRequests()
+        val throttleWaitMs = throttleGeminiRequests(apiKey)
         val NL = "⏎"
-        val inputArray = encodeIndexed(lines, NL)
-        val systemPrompt = buildSystemPrompt(targetLanguage, NL)
+        val inputArray = encodeStructured(lines, NL)
+        val systemPrompt = buildGeminiSystemPrompt(targetLanguage, NL)
         val keySuffix = apiKey.takeLast(4)
         val preview = lines.firstOrNull()?.take(80).orEmpty()
 
@@ -445,7 +591,7 @@ class SubtitleTranslationService(
                 put(JSONObject().apply {
                     put("parts", JSONArray().apply {
                         put(JSONObject().apply {
-                            put("text", "Translate to $targetLanguage:\n$inputArray")
+                            put("text", buildTranslateUserMessage(inputArray.toString(), targetLanguage, context))
                         })
                     })
                 })
@@ -453,6 +599,7 @@ class SubtitleTranslationService(
             put("generationConfig", JSONObject().apply {
                 put("temperature", 0.1)
                 put("responseMimeType", "application/json")
+                put("responseSchema", geminiResponseSchema())
                 put("thinkingConfig", JSONObject().apply {
                     // Subtitles need raw inference speed, not reasoning. Measured on
                     // gemini-3.5-flash (July 2026): default = ~5s + 875 thought tokens per batch;
@@ -481,7 +628,7 @@ class SubtitleTranslationService(
         }
 
         val request = Request.Builder()
-            .url(GEMINI_BASE_URL)
+            .url(aiProviderUrl(GEMINI_BASE_URL))
             .header("x-goog-api-key", apiKey)
             .header("Content-Type", "application/json")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
@@ -497,7 +644,7 @@ class SubtitleTranslationService(
 
         return withContext(Dispatchers.IO) {
             try {
-                val response = client.newCall(request).execute()
+                val response = executeCall(request, callTimeoutMs)
                 val latencyMs = System.currentTimeMillis() - httpStartedAt
                 val responseBody = response.body?.string() ?: run {
                     Log.e(TAG, "Empty Gemini response body (HTTP ${response.code})")
@@ -519,16 +666,20 @@ class SubtitleTranslationService(
                         )
                         Log.w(TAG, "Gemini HTTP ${response.code} (transient) — retry ${transientAttempt + 1}/$GEMINI_MAX_TRANSIENT_RETRIES")
                         geminiBackoff(transientAttempt)
-                        return@withContext translateGemini(lines, targetLanguage, apiKey, attempt, transientAttempt + 1)
+                        return@withContext translateGemini(lines, targetLanguage, apiKey, attempt, transientAttempt + 1, context, callTimeoutMs)
                     }
                     val errorMsg = if (response.code == 429) "RATE_LIMITED" else "HTTP ${response.code}: $responseBody"
                     Log.w(
                         HTTP_TAG,
                         "Gemini POST end lines=${lines.size} key=…$keySuffix " +
                             "httpCode=${response.code} latencyMs=$latencyMs " +
-                            "throttleWaitMs=$throttleWaitMs success=false error=$errorMsg"
+                            "throttleWaitMs=$throttleWaitMs success=false error=$errorMsg" +
+                            if (response.code == 429) " quota=${geminiQuotaDetail(responseBody)}" else ""
                     )
-                    return@withContext TranslationResult(lines, false, errorMsg)
+                    return@withContext TranslationResult(
+                        lines, false, errorMsg,
+                        retryAfterMs = if (response.code == 429) geminiRetryDelayMs(responseBody) else null
+                    )
                 }
 
                 val json = JSONObject(responseBody)
@@ -589,7 +740,9 @@ class SubtitleTranslationService(
                     )
                     return@withContext TranslationResult(lines, false, TRANSLATION_ERROR_CONTENT_BLOCKED)
                 }
-                if (!parsed.success && attempt == 0) {
+                // Urgent (on-screen) calls skip the re-roll: the router moves to the next key at
+                // once instead of waiting out this key's min interval.
+                if (!parsed.success && attempt == 0 && callTimeoutMs == null) {
                     // Intermittent JSON-mode malformation (e.g. tail truncation with STOP) —
                     // one re-roll usually returns a clean array.
                     Log.w(TAG, "Parse failed (${parsed.errorMessage}, finish=$finishReason) — retrying batch once")
@@ -599,7 +752,7 @@ class SubtitleTranslationService(
                             "httpCode=200 latencyMs=$latencyMs throttleWaitMs=$throttleWaitMs " +
                             "success=false retry=parse"
                     )
-                    return@withContext translateGemini(lines, targetLanguage, apiKey, attempt = 1)
+                    return@withContext translateGemini(lines, targetLanguage, apiKey, attempt = 1, context = context, callTimeoutMs = callTimeoutMs)
                 }
                 if (!parsed.success) {
                     Log.e(TAG, "Parse failed after retry (finish=$finishReason) body=${responseBody.take(400)}")
@@ -621,6 +774,9 @@ class SubtitleTranslationService(
                 if (e is kotlinx.coroutines.CancellationException) throw e
 
                 val latencyMs = System.currentTimeMillis() - httpStartedAt
+                if (callTimeoutMs != null && e is java.io.InterruptedIOException) {
+                    return@withContext TranslationResult(lines, false, TRANSLATION_ERROR_TIMEOUT)
+                }
                 if (e is java.io.IOException && transientAttempt < GEMINI_MAX_TRANSIENT_RETRIES) {
                     Log.w(
                         HTTP_TAG,
@@ -630,7 +786,7 @@ class SubtitleTranslationService(
                     )
                     Log.w(TAG, "translateGemini network error (${e.message}) — retry ${transientAttempt + 1}/$GEMINI_MAX_TRANSIENT_RETRIES")
                     geminiBackoff(transientAttempt)
-                    return@withContext translateGemini(lines, targetLanguage, apiKey, attempt, transientAttempt + 1)
+                    return@withContext translateGemini(lines, targetLanguage, apiKey, attempt, transientAttempt + 1, context, callTimeoutMs)
                 }
                 Log.e(TAG, "translateGemini exception: ${e.message}", e)
                 Log.w(
@@ -672,7 +828,7 @@ class SubtitleTranslationService(
             })
         }
         val request = Request.Builder()
-            .url(CLAUDE_URL)
+            .url(aiProviderUrl(CLAUDE_URL))
             .header("x-api-key", apiKey)
             .header("anthropic-version", CLAUDE_API_VERSION)
             .header("Content-Type", "application/json")
@@ -699,7 +855,9 @@ class SubtitleTranslationService(
         lines: List<String>,
         targetLanguage: String,
         apiKey: String,
-        attempt: Int = 0
+        attempt: Int = 0,
+        context: List<String> = emptyList(),
+        callTimeoutMs: Long? = null
     ): TranslationResult {
         val NL = "⏎"
         val inputArray = encodeIndexed(lines, NL)
@@ -707,19 +865,20 @@ class SubtitleTranslationService(
 
         val body = JSONObject().apply {
             put("model", CLAUDE_MODEL_ID)
-            put("max_tokens", CLAUDE_MAX_TOKENS)
+            // Big (bulk) batches need more room than the 4096 default or the array is cut short.
+            put("max_tokens", (lines.size * 40 + 512).coerceIn(CLAUDE_MAX_TOKENS, CLAUDE_MAX_TOKENS_BULK))
             put("temperature", 0.1)
             put("system", systemPrompt)
             put("messages", JSONArray().apply {
                 put(JSONObject().apply {
                     put("role", "user")
-                    put("content", "Translate to $targetLanguage:\n$inputArray")
+                    put("content", buildTranslateUserMessage(inputArray.toString(), targetLanguage, context))
                 })
             })
         }
 
         val request = Request.Builder()
-            .url(CLAUDE_URL)
+            .url(aiProviderUrl(CLAUDE_URL))
             .header("x-api-key", apiKey)
             .header("anthropic-version", CLAUDE_API_VERSION)
             .header("Content-Type", "application/json")
@@ -728,7 +887,7 @@ class SubtitleTranslationService(
 
         return withContext(Dispatchers.IO) {
             try {
-                val response = client.newCall(request).execute()
+                val response = executeCall(request, callTimeoutMs)
                 val responseBody = response.body?.string() ?: run {
                     Log.e(TAG, "Empty Claude response body (HTTP ${response.code})")
                     return@withContext TranslationResult(lines, false, "Empty response (${response.code})")
@@ -745,13 +904,16 @@ class SubtitleTranslationService(
                 }
 
                 val parsed = parseTranslationResult(lines, targetLanguage, rawText, NL)
-                if (!parsed.success && attempt == 0) {
+                if (!parsed.success && attempt == 0 && callTimeoutMs == null) {
                     Log.w(TAG, "Claude parse failed (${parsed.errorMessage}) — retrying batch once")
-                    return@withContext translateClaude(lines, targetLanguage, apiKey, attempt = 1)
+                    return@withContext translateClaude(lines, targetLanguage, apiKey, attempt = 1, context = context, callTimeoutMs = callTimeoutMs)
                 }
                 parsed
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                if (callTimeoutMs != null && e is java.io.InterruptedIOException) {
+                    return@withContext TranslationResult(lines, false, TRANSLATION_ERROR_TIMEOUT)
+                }
                 Log.e(TAG, "translateClaude exception: ${e.message}", e)
                 TranslationResult(lines, false, e.message)
             }
@@ -772,7 +934,7 @@ class SubtitleTranslationService(
             })
         }
         val request = Request.Builder()
-            .url(GROQ_URL)
+            .url(aiProviderUrl(GROQ_URL))
             .header("Authorization", "Bearer $apiKey")
             .header("Content-Type", "application/json")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
@@ -812,7 +974,7 @@ class SubtitleTranslationService(
             })
         }
         val request = Request.Builder()
-            .url(GEMINI_BASE_URL)
+            .url(aiProviderUrl(GEMINI_BASE_URL))
             .header("x-goog-api-key", apiKey)
             .header("Content-Type", "application/json")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
@@ -849,7 +1011,7 @@ class SubtitleTranslationService(
             })
         }
         val request = Request.Builder()
-            .url(CLAUDE_URL)
+            .url(aiProviderUrl(CLAUDE_URL))
             .header("x-api-key", apiKey)
             .header("anthropic-version", CLAUDE_API_VERSION)
             .header("Content-Type", "application/json")
@@ -890,11 +1052,64 @@ class SubtitleTranslationService(
             // offending text or the toast is undiagnosable.
             Log.e(TAG, "No JSON array in model output (sent ${lines.size} lines): ${rawText.take(300)}")
         } else {
-            val translatedCount = parsed.lines.indices.count { parsed.lines[it] != lines[it] }
-            if (translatedCount < lines.size) {
-                Log.w(TAG, "Partial alignment: $translatedCount/${lines.size} lines translated")
+            if (parsed.rejected.isNotEmpty()) {
+                Log.w(TAG, "Partial alignment: rejected ${parsed.rejected.size}/${lines.size}")
             }
         }
         return parsed
     }
+}
+
+/**
+ * Which Gemini quota a 429 hit ("quotaId=value retry=Ns"), from the QuotaFailure/RetryInfo details.
+ * Tells a per-minute token cap (big batches only) from a request or daily cap. Never echoes the key.
+ */
+internal fun geminiQuotaDetail(body: String?): String {
+    if (body.isNullOrBlank()) return "none"
+    return try {
+        val details = JSONObject(body).optJSONObject("error")?.optJSONArray("details") ?: return "none"
+        val parts = ArrayList<String>()
+        for (i in 0 until details.length()) {
+            val d = details.optJSONObject(i) ?: continue
+            val violations = d.optJSONArray("violations")
+            if (violations != null) {
+                for (j in 0 until violations.length()) {
+                    val v = violations.optJSONObject(j) ?: continue
+                    parts += "${v.optString("quotaId")}=${v.optString("quotaValue")}"
+                }
+            }
+            d.optString("retryDelay").takeIf { it.isNotEmpty() }?.let { parts += "retry=$it" }
+        }
+        parts.joinToString(",").ifEmpty { "none" }
+    } catch (_: Exception) {
+        "unparsed"
+    }
+}
+
+/** Gemini 429 RetryInfo `retryDelay` ("37s", "0.5s") in ms, or null when absent. */
+internal fun geminiRetryDelayMs(body: String?): Long? {
+    if (body.isNullOrBlank()) return null
+    return try {
+        val details = JSONObject(body).optJSONObject("error")?.optJSONArray("details") ?: return null
+        (0 until details.length()).asSequence()
+            .mapNotNull { details.optJSONObject(it)?.optString("retryDelay")?.takeIf { d -> d.isNotEmpty() } }
+            .firstOrNull()
+            ?.removeSuffix("s")?.toDoubleOrNull()
+            ?.let { (it * 1000).toLong() }
+            ?.takeIf { it > 0L }
+    } catch (_: Exception) {
+        null
+    }
+}
+
+/** Builds the user message; the `Translate to <lang>:` block is identical with or without context. */
+internal fun buildTranslateUserMessage(
+    inputArray: String,
+    targetLanguage: String,
+    context: List<String>
+): String {
+    val translateBlock = "Translate to $targetLanguage:\n$inputArray"
+    if (context.isEmpty()) return translateBlock
+    val contextJson = JSONArray(context).toString()
+    return "Context (previous lines, do NOT translate or output):\n$contextJson\n\n$translateBlock"
 }

@@ -21,7 +21,7 @@ private object AiSubtitleRegexes {
  * Wall-clock probe for how long each rendered cue stays on screen (AI path).
  * Logcat tag: [SubtitleCueDisplay]
  */
-private class SubtitleCueDisplayProbe {
+internal class SubtitleCueDisplayProbe {
     private var shownKind: String? = null
     private var shownPreview: String = ""
     private var shownAtElapsedMs: Long = 0L
