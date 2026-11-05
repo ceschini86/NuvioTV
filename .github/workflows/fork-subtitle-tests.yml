@@ -1,0 +1,66 @@
+name: Fork subtitle tests
+
+# Fork-owned gate for AI subtitles. Kept apart from pr-full-debug-build.yml
+# (upstream file) so upstream merges do not conflict. See docs/adr/0001.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [dev]
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-subtitle-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  subtitle-tests:
+    name: Subtitle unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Prepare local properties
+        run: touch local.properties local.dev.properties
+
+      - name: Prepare CI signing config
+        run: |
+          keytool -genkeypair -keystore "$RUNNER_TEMP/ci-debug.jks" \
+            -storepass android -alias androiddebugkey -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US" \
+            -keyalg RSA -keysize 2048 -validity 10000
+          {
+            echo "NUVIO_RELEASE_STORE_FILE=$RUNNER_TEMP/ci-debug.jks"
+            echo "NUVIO_RELEASE_KEY_ALIAS=androiddebugkey"
+            echo "NUVIO_RELEASE_KEY_PASSWORD=android"
+            echo "NUVIO_RELEASE_STORE_PASSWORD=android"
+          } >> "$GITHUB_ENV"
+
+      - name: Run subtitle tests
+        run: >
+          ./gradlew :app:testFullDebugUnitTest
+          --tests '*Subtitle*'
+          --tests '*Sidecar*'
+          --tests '*PreferredAddon*'
+          --stacktrace
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: subtitle-test-reports
+          path: app/build/reports/tests/testFullDebugUnitTest/

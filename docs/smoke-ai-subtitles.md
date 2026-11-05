@@ -86,6 +86,34 @@ Cuidados:
 
 ---
 
+## Last results (2026-10-30)
+
+Rodada na TV real (`kirkwood`, Android 14), build debug 1.1.4 (`versionCode` 1081), Gemini real. Logs e scorecards em `NuvioTV-testbench\runs\2026-10-30\`.
+
+### Cobertura por sessão (`sub_scorecard.py`)
+
+"Cobertura" é a fração das cues com texto que apareceu traduzida enquanto a AI estava ativa. "EN s/h" são os segundos de inglês na tela por hora de vídeo.
+
+| Sessão | Minutos com AI | Cobertura | EN na tela | EN s/h |
+|--------|----------------|-----------|------------|--------|
+| Maniac E1, antes do fix (`maniac-e1-baseline.log`) | 40,3 | 94,1% | 55,8 s | 83,1 |
+| Maniac E2, depois do fix (`maniac-e2-fixed.log`) | sem scorecard | 99,7% (604/606 cues) | 2 cues | — |
+| Sandman E2 | 8,0 | 98,9% | 1,6 s | 12,1 |
+| Sandman E4 | 21,9 | 99,3% | 2,4 s | 6,5 |
+
+### Maniac, antes e depois do fix
+
+- E1: 174 lotes, todos com sucesso. A latência p50 foi de 1,3 s, a p95 de 6,2 s e a máxima de 22,8 s. As 38 cues em `waiting` são as que chegaram na tela antes da tradução.
+- E2: 129 lotes, todos com sucesso. Só 1 cue em `waiting`. A latência subiu (p50 de 4,1 s, p95 de 12,6 s, máxima de 35 s), porque quase tudo passou a sair por prefetch. Houve um HTTP 503 e 3 fallbacks de key, e nenhum 429.
+
+### Casos abertos
+
+- ANR às 09:36 (`anr-0936.txt`). O input travou por 5 s com a pilha em `prefetchSidecarAiWindow` (`PlayerSidecarSubtitles.kt:277`), chamado por `renderSidecarCuesAtCurrentPosition` dentro de `applySidecarAiTranslation`. O prefetch de sidecar com AI roda na main thread.
+- A ladder do Maniac E1 registra "forced on but audio≠preferred" duas vezes seguidas, e cada vez re-seleciona a mesma embutida `pt`. A decisão não muda, mas a ladder roda duas vezes.
+- Os logs `tv-full*.log` (cerca de 160 MB no total) ainda não foram resumidos.
+
+---
+
 ## Last results (2026-10-29)
 
 Refactor **F1** (fila LIVE/NEAR/FAR + hedge, validador, cache em disco). Logs em `NuvioTV-testbench\runs\2026-10-29\` (`fault_smoke.log`, `mini_smoke_fixes.log`, `real_round.log`).
