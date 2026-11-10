@@ -53,6 +53,16 @@ class DeviceLocalPlayerPreferences @Inject constructor(
     private val subtitleAiGeminiBatchWindowMsKey = intPreferencesKey("subtitle_ai_gemini_batch_window_ms")
     private val subtitleAiRateLimitCooldownMsKey = intPreferencesKey("subtitle_ai_rate_limit_cooldown_ms")
     private val subtitleAiGeminiMinIntervalMsKey = intPreferencesKey("subtitle_ai_gemini_min_interval_ms")
+    private val subtitleDiagnosticsEnabledKey = booleanPreferencesKey("subtitle_diagnostics_enabled")
+
+    /** Fork: on-device capture of subtitle logcat tags (see docs/adr/0002). */
+    val subtitleDiagnosticsEnabled: Flow<Boolean> = store.data.map { prefs ->
+        prefs[subtitleDiagnosticsEnabledKey] ?: false
+    }
+
+    suspend fun setSubtitleDiagnosticsEnabled(enabled: Boolean) {
+        store.edit { prefs -> prefs[subtitleDiagnosticsEnabledKey] = enabled }
+    }
 
     val aspectMode: Flow<AspectMode> = store.data.map { prefs ->
         prefs[aspectModeKey]?.let {

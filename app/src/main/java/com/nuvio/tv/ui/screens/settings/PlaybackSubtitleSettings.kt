@@ -434,6 +434,8 @@ internal fun LazyListScope.subtitleSettingsItems(
                 )
             }
         }
+
+        subtitleDiagnosticsItems(enabled = enabled, onItemFocused = onItemFocused)
     }
 
     item(key = "subtitle_size") {

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fork-only strings: subtitle diagnostics capture (docs/adr/0002). -->
+<resources>
+    <string name="sub_diag_title">Record subtitle diagnostics</string>
+    <string name="sub_diag_desc">Saves AI subtitle logs on this device for testing. %1$s MB in %2$s</string>
+    <string name="sub_diag_clear">Clear subtitle diagnostics</string>
+</resources>
