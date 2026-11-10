@@ -15,13 +15,14 @@ class MdbListTrackingLibraryProvider @Inject constructor(
 ) : TrackingLibraryProvider {
     override val providerId = TrackingProviderId.MDBLIST
     override val listManager = service.listManager
+    override val listSorter = service.listSorter
     override val isAuthenticated = tracking.isAuthenticated
     override val isRefreshing = service.isRefreshing
     override val items = service.items
     override val tabs = service.tabs
 
     override fun recognizesListKey(key: String): Boolean =
-        key == MDBLIST_WATCHLIST_KEY || key.startsWith(MDBLIST_LIST_KEY_PREFIX)
+        key == MDBLIST_WATCHLIST_KEY || key.startsWith(MDBLIST_LIST_KEY_PREFIX) || isMdbListReadOnlyListKey(key)
 
     override fun observeMembership(itemId: String, itemType: String) = service.observeMembership(itemId, itemType)
 

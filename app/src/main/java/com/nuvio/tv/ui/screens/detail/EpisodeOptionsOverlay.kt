@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
@@ -46,6 +47,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -66,13 +69,16 @@ import coil3.request.transformations
 import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.EpisodeOptionsOverlayStyle
 import com.nuvio.tv.domain.model.Video
-import com.nuvio.tv.ui.components.SeriesGraphRatingColors
+import com.nuvio.tv.ui.components.ImdbRatingSourceLabel
+import com.nuvio.tv.ui.theme.NuvioPrimitives
 import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.BlurTransformation
 import com.nuvio.tv.ui.util.contentTextDirection
 import com.nuvio.tv.ui.util.localizeEpisodeTitle
+import com.nuvio.tv.ui.util.toAbsoluteAlignment
 import kotlinx.coroutines.launch
 import java.util.Locale
+import com.nuvio.tv.ui.screens.ambient.AmbientDialogEffect
 
 private data class EpisodeOverlayAction(
     val label: String,
@@ -103,7 +109,10 @@ internal fun EpisodeOptionsOverlay(
     onToggleWatched: () -> Unit,
     onMarkSeasonWatched: () -> Unit = {},
     onMarkSeasonUnwatched: () -> Unit = {},
-    onMarkPreviousEpisodesWatched: () -> Unit = {}
+    onMarkPreviousEpisodesWatched: () -> Unit = {},
+    showWatchedActions: Boolean = true,
+    isCurrentlyPlaying: Boolean = false,
+    onNavigateEpisode: ((Int) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -164,16 +173,12 @@ internal fun EpisodeOptionsOverlay(
             colors = listOf(
                 Color(0xFF050505),
                 Color(0xFF090909),
-                Color(0xFF111111)
+                NuvioPrimitives.neutral925
             )
         )
     }
     val ratingLabel = remember(imdbRating) {
         imdbRating?.takeIf { it > 0.0 }?.let { String.format(Locale.US, "%.1f", it) }
-    }
-    val ratingColor = remember(imdbRating) {
-        imdbRating?.takeIf { it > 0.0 }?.let(SeriesGraphRatingColors::cellColor)
-            ?: Color.White.copy(alpha = 0.72f)
     }
     val episodeLabel = when {
         episode.season != null && episode.episode != null -> {
@@ -185,28 +190,30 @@ internal fun EpisodeOptionsOverlay(
         else -> stringResource(R.string.episodes_dialog_subtitle)
     }
     val actions = buildList {
-        add(
-            EpisodeOverlayAction(
-                label = if (isWatched) {
-                    stringResource(R.string.episodes_mark_unwatched)
-                } else {
-                    stringResource(R.string.episodes_mark_watched)
-                },
-                enabled = !isPending,
-                onClick = onToggleWatched
+        if (showWatchedActions) {
+            add(
+                EpisodeOverlayAction(
+                    label = if (isWatched) {
+                        stringResource(R.string.episodes_mark_unwatched)
+                    } else {
+                        stringResource(R.string.episodes_mark_watched)
+                    },
+                    enabled = !isPending,
+                    onClick = onToggleWatched
+                )
             )
-        )
-        add(
-            EpisodeOverlayAction(
-                label = if (isSeasonFullyWatched) {
-                    stringResource(R.string.episodes_mark_season_unwatched)
-                } else {
-                    stringResource(R.string.episodes_mark_season_watched)
-                },
-                onClick = if (isSeasonFullyWatched) onMarkSeasonUnwatched else onMarkSeasonWatched
+            add(
+                EpisodeOverlayAction(
+                    label = if (isSeasonFullyWatched) {
+                        stringResource(R.string.episodes_mark_season_unwatched)
+                    } else {
+                        stringResource(R.string.episodes_mark_season_watched)
+                    },
+                    onClick = if (isSeasonFullyWatched) onMarkSeasonUnwatched else onMarkSeasonWatched
+                )
             )
-        )
-        if (hasPreviousEpisodes) {
+        }
+        if (showWatchedActions && hasPreviousEpisodes) {
             add(
                 EpisodeOverlayAction(
                     label = stringResource(R.string.episodes_mark_previous_watched),
@@ -216,8 +223,14 @@ internal fun EpisodeOptionsOverlay(
         }
         add(
             EpisodeOverlayAction(
-                label = stringResource(if (isPlayEnabled) R.string.episodes_play else R.string.playback_unavailable),
-                enabled = isPlayEnabled,
+                label = stringResource(
+                    when {
+                        isCurrentlyPlaying -> R.string.sources_playing
+                        isPlayEnabled -> R.string.episodes_play
+                        else -> R.string.playback_unavailable
+                    }
+                ),
+                enabled = isPlayEnabled && !isCurrentlyPlaying,
                 onClick = onPlay
             )
         )
@@ -249,8 +262,16 @@ internal fun EpisodeOptionsOverlay(
     val initialActionIndex = actions.indexOfFirst { it.enabled }.coerceAtLeast(0)
     var acceptsSelectKey by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        primaryFocusRequester.requestFocus()
+    val hasEnabledAction = actions.any { it.enabled }
+    var descriptionFocused by remember { mutableStateOf(false) }
+
+    LaunchedEffect(episode.id) {
+        detailsScrollState.scrollTo(0)
+        if (descriptionFocused) return@LaunchedEffect
+        when {
+            hasEnabledAction -> primaryFocusRequester.requestFocus()
+            !isNoneStyle -> detailsFocusRequester.requestFocus()
+        }
     }
 
     Dialog(
@@ -260,6 +281,7 @@ internal fun EpisodeOptionsOverlay(
             decorFitsSystemWindows = false
         )
     ) {
+        AmbientDialogEffect(onDismiss)
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -350,9 +372,16 @@ internal fun EpisodeOptionsOverlay(
                                         }
                                     }
                                     .focusable()
+                                    .onFocusChanged { descriptionFocused = it.isFocused }
+                                    .semantics { contentDescription = title }
                                     .onPreviewKeyEvent { event ->
+                                        val step = episodeStepForKey(event.nativeKeyEvent.keyCode, isRtl)
                                         when {
                                             event.type != KeyEventType.KeyDown -> false
+                                            onNavigateEpisode != null && (step == -1 || (step == 1 && !hasEnabledAction)) -> {
+                                                onNavigateEpisode(step)
+                                                true
+                                            }
                                             event.key == Key.DirectionDown && detailsScrollState.value < detailsScrollState.maxValue -> {
                                                 coroutineScope.launch {
                                                     detailsScrollState.animateScrollTo(
@@ -392,16 +421,27 @@ internal fun EpisodeOptionsOverlay(
                         )
 
                         ratingLabel?.let { rating ->
-                            Text(
-                                text = rating,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = ratingColor
-                            )
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                ImdbRatingSourceLabel(
+                                    logoModifier = Modifier.size(30.dp),
+                                    textStyle = MaterialTheme.typography.titleMedium,
+                                    textColor = Color.White.copy(alpha = 0.72f)
+                                )
+                                Text(
+                                    text = rating,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = Color.White.copy(alpha = 0.72f)
+                                )
+                            }
                         }
                     }
 
                     Text(
                         text = title,
+                        modifier = Modifier.align(title.contentTextDirection().toAbsoluteAlignment()),
                         style = if (isNoneStyle) MaterialTheme.typography.displayLarge else titleStyle,
                         color = Color.White,
                         maxLines = if (isNoneStyle) 3 else Int.MAX_VALUE,
@@ -426,6 +466,18 @@ internal fun EpisodeOptionsOverlay(
                 Column(
                     modifier = Modifier
                         .width(actionsWidth)
+                        .onPreviewKeyEvent { event ->
+                            if (event.type != KeyEventType.KeyDown || onNavigateEpisode == null) {
+                                return@onPreviewKeyEvent false
+                            }
+                            val step = episodeStepForKey(event.nativeKeyEvent.keyCode, isRtl)
+                            if (step == 1 || (step == -1 && isNoneStyle)) {
+                                onNavigateEpisode(step)
+                                true
+                            } else {
+                                false
+                            }
+                        }
                         .focusGroup(),
                     verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
                 ) {
@@ -496,6 +548,18 @@ private fun episodeOverlayDescriptionStyle(length: Int): TextStyle {
             lineHeight = 22.sp
         )
     }
+}
+
+internal fun episodeStepForKey(keyCode: Int, isRtl: Boolean): Int = when (keyCode) {
+    AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> if (isRtl) -1 else 1
+    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> if (isRtl) 1 else -1
+    else -> 0
+}
+
+internal fun adjacentEpisode(episodes: List<Video>, current: Video, step: Int): Video? {
+    val index = episodes.indexOfFirst { it.id == current.id }
+    if (index < 0) return null
+    return episodes.getOrNull(index + step)
 }
 
 private fun isSelectKey(keyCode: Int): Boolean {

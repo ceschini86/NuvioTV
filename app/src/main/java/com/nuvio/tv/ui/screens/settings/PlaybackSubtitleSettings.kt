@@ -1,55 +1,20 @@
-@file:OptIn(ExperimentalTvMaterial3Api::class)
-
 package com.nuvio.tv.ui.screens.settings
 
-import com.nuvio.tv.ui.theme.NuvioTheme
-
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.background
-import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ClosedCaption
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.FormatBold
-import androidx.compose.material.icons.filled.FormatSize
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Subtitles
-import androidx.compose.material.icons.filled.VerticalAlignBottom
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import com.nuvio.tv.R
-import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Text
 import com.nuvio.tv.data.local.AVAILABLE_SUBTITLE_LANGUAGES
-import com.nuvio.tv.data.local.displayName
-import com.nuvio.tv.data.local.LibassRenderType
+import com.nuvio.tv.data.local.LibassRenderScale
+import com.nuvio.tv.data.local.LibassRenderMode
+import com.nuvio.tv.data.local.PlayerPreference
 import com.nuvio.tv.data.local.PlayerSettings
 import com.nuvio.tv.data.local.SubtitleLanguageOption
-import com.nuvio.tv.ui.components.NuvioDialog
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.filled.Tune
-import androidx.tv.material3.Border
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
-import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiAdvancedSettings
-import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiCredentials
-import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiModel
-import com.nuvio.tv.ui.screens.player.subtitles.maskApiKey
+import com.nuvio.tv.data.local.SubtitleStyleSettings
+import com.nuvio.tv.data.local.displayName
+import com.nuvio.tv.ui.theme.NuvioPrimitives
 
 private val subtitleColors = listOf(
     Color.White,
@@ -67,638 +32,314 @@ private val subtitleBackgroundColors = listOf(
     Color.Transparent,
     Color.Black,
     Color(0x80000000),
-    Color(0xFF1A1A1A),
-    Color(0xFF2D2D2D)
+    NuvioPrimitives.neutral900,
+    NuvioPrimitives.neutral800
 )
 
 private val subtitleOutlineColors = listOf(
     Color.Black,
-    Color(0xFF1A1A1A),
-    Color(0xFF333333),
+    NuvioPrimitives.neutral900,
+    NuvioPrimitives.neutral750,
     Color.White
 )
 
-internal fun LazyListScope.subtitleSettingsItems(
-    playerSettings: PlayerSettings,
-    subtitleAiCredentials: SubtitleAiCredentials,
-    subtitleAiAdvancedSettings: SubtitleAiAdvancedSettings = SubtitleAiAdvancedSettings.DEFAULT,
-    aiSubtitlesExpanded: Boolean = false,
-    onToggleAiSubtitlesExpanded: () -> Unit = {},
-    aiSubtitlesHeaderFocus: FocusRequester? = null,
-    onShowLanguageDialog: () -> Unit,
-    onShowSecondaryLanguageDialog: () -> Unit,
-    onShowTextColorDialog: () -> Unit,
-    onShowBackgroundColorDialog: () -> Unit,
-    onShowOutlineColorDialog: () -> Unit,
-    onShowAiProviderKeysDialog: (SubtitleAiModel) -> Unit,
-    onSetSubtitleAiProviderEnabled: (SubtitleAiModel, Boolean) -> Unit,
-    onSetSubtitleSize: (Int) -> Unit,
-    onSetSubtitleVerticalOffset: (Int) -> Unit,
-    onSetSubtitleBold: (Boolean) -> Unit,
-    onSetUseForcedSubtitles: (Boolean) -> Unit,
-    onSetSubtitleShowOnlyPreferredLanguages: (Boolean) -> Unit,
-    onSetSubtitleStripSdh: (Boolean) -> Unit,
-    onSetSubtitleAiEnabled: (Boolean) -> Unit,
-    onSetSubtitleAiAutoSelect: (Boolean) -> Unit,
-    onSetSubtitleAiSyncWithProfile: (Boolean) -> Unit,
-    onSetSubtitleAiModel: (String) -> Unit,
-    onSetSubtitleAiAdvancedSettings: (SubtitleAiAdvancedSettings) -> Unit = {},
-    onResetSubtitleAiAdvancedSettings: () -> Unit = {},
-    onSetSubtitleOutlineEnabled: (Boolean) -> Unit,
-    onSetUseLibass: (Boolean) -> Unit,
-    onSetLibassRenderType: (LibassRenderType) -> Unit,
-    onItemFocused: () -> Unit = {},
-    enabled: Boolean = true,
-    languageSelectionEnabled: Boolean = enabled
+@Composable
+internal fun PlaybackSubtitlesSection(
+    settings: PlayerSettings,
+    onUpdate: PlaybackSettingsUpdate,
+    onOpenDialog: (PlaybackDialog) -> Unit
 ) {
+    val style = settings.subtitleStyle
+    val enabled = settings.playerPreference != PlayerPreference.EXTERNAL
+    val languageSelectionEnabled = enabled || settings.externalPlayerForwardSubtitles
 
+    SettingsSectionLabel(text = stringResource(R.string.sub_languages_label))
+    SettingsActionRow(
+        title = stringResource(R.string.sub_preferred_lang),
+        subtitle = null,
+        value = subtitleLanguageLabel(style),
+        enabled = languageSelectionEnabled,
+        onClick = { onOpenDialog(PlaybackDialog.SUBTITLE_LANGUAGE) }
+    )
+    SettingsActionRow(
+        title = stringResource(R.string.sub_secondary_lang),
+        subtitle = null,
+        value = style.secondaryPreferredLanguage
+            ?.let { code -> AVAILABLE_SUBTITLE_LANGUAGES.find { it.code == code }?.displayName }
+            ?: stringResource(R.string.sub_not_set),
+        enabled = languageSelectionEnabled,
+        onClick = { onOpenDialog(PlaybackDialog.SECONDARY_SUBTITLE_LANGUAGE) }
+    )
+    autoSyncSettingsItems(enabled = enabled) // AutoSync hook
 
-    item(key = "subtitle_preferred_language") {
-        val languageName = when {
-            playerSettings.subtitleStyle.preferredLanguage == "none" -> stringResource(R.string.action_none)
-            playerSettings.subtitleStyle.isPreferredLanguageSystemDefault -> stringResource(R.string.appearance_language_system)
-            else -> AVAILABLE_SUBTITLE_LANGUAGES.find {
-                it.code == playerSettings.subtitleStyle.preferredLanguage
-            }?.displayName ?: stringResource(R.string.appearance_language_system)
-        }
+    SettingsToggleRow(
+        title = stringResource(R.string.sub_use_forced_subtitles),
+        subtitle = stringResource(R.string.sub_use_forced_subtitles_desc),
+        checked = style.useForcedSubtitles,
+        onToggle = { onUpdate { setUseForcedSubtitles(!style.useForcedSubtitles) } },
+        enabled = enabled
+    )
+    SettingsToggleRow(
+        title = stringResource(R.string.sub_show_only_preferred_languages),
+        subtitle = stringResource(R.string.sub_show_only_preferred_languages_desc),
+        checked = style.showOnlyPreferredLanguages,
+        onToggle = { onUpdate { setSubtitleShowOnlyPreferredLanguages(!style.showOnlyPreferredLanguages) } },
+        enabled = enabled
+    )
+    SettingsToggleRow(
+        title = stringResource(R.string.sub_strip_sdh),
+        subtitle = stringResource(R.string.sub_strip_sdh_desc),
+        checked = style.stripSdh,
+        onToggle = { onUpdate { setSubtitleStripSdh(!style.stripSdh) } },
+        enabled = enabled
+    )
 
-        NavigationSettingsItem(
-            icon = Icons.Default.Language,
-            title = stringResource(R.string.sub_preferred_lang),
-            subtitle = languageName,
-            onClick = onShowLanguageDialog,
-            onFocused = onItemFocused,
-            enabled = languageSelectionEnabled
-        )
-    }
-
-    item(key = "subtitle_secondary_language") {
-        val secondaryLanguageName = playerSettings.subtitleStyle.secondaryPreferredLanguage?.let { code ->
-            AVAILABLE_SUBTITLE_LANGUAGES.find { it.code == code }?.displayName
-        } ?: stringResource(R.string.sub_not_set)
-
-        NavigationSettingsItem(
-            icon = Icons.Default.Language,
-            title = stringResource(R.string.sub_secondary_lang),
-            subtitle = secondaryLanguageName,
-            onClick = onShowSecondaryLanguageDialog,
-            onFocused = onItemFocused,
-            enabled = languageSelectionEnabled
-        )
-    }
-
-    item(key = "subtitle_use_forced_subtitles") {
-        ToggleSettingsItem(
-            icon = Icons.Default.ClosedCaption,
-            title = stringResource(R.string.sub_use_forced_subtitles),
-            subtitle = stringResource(R.string.sub_use_forced_subtitles_desc),
-            isChecked = playerSettings.subtitleStyle.useForcedSubtitles,
-            onCheckedChange = onSetUseForcedSubtitles,
-            onFocused = onItemFocused,
-            enabled = enabled
-        )
-    }
-
-    item(key = "subtitle_show_only_preferred_languages") {
-        ToggleSettingsItem(
-            icon = Icons.Default.Language,
-            title = stringResource(R.string.sub_show_only_preferred_languages),
-            subtitle = stringResource(R.string.sub_show_only_preferred_languages_desc),
-            isChecked = playerSettings.subtitleStyle.showOnlyPreferredLanguages,
-            onCheckedChange = onSetSubtitleShowOnlyPreferredLanguages,
-            onFocused = onItemFocused,
-            enabled = enabled
-        )
-    }
-
-    item(key = "subtitle_strip_sdh") {
-        ToggleSettingsItem(
-            icon = Icons.Default.ClosedCaption,
-            title = stringResource(R.string.sub_strip_sdh),
-            subtitle = stringResource(R.string.sub_strip_sdh_desc),
-            isChecked = playerSettings.subtitleStyle.stripSdh,
-            onCheckedChange = onSetSubtitleStripSdh,
-            onFocused = onItemFocused,
-            enabled = enabled
-        )
-    }
-
-    item(key = "subtitle_ai_section_header") {
-        PlaybackSectionHeader(
-            title = stringResource(R.string.sub_ai_section),
-            description = stringResource(R.string.sub_ai_section_desc),
-            expanded = aiSubtitlesExpanded,
-            onToggle = onToggleAiSubtitlesExpanded,
-            focusRequester = aiSubtitlesHeaderFocus ?: androidx.compose.ui.focus.FocusRequester(),
-            onFocused = onItemFocused,
-            enabled = enabled
-        )
-    }
-
-    if (aiSubtitlesExpanded) {
-        item(key = "subtitle_ai_enabled") {
-            ToggleSettingsItem(
-                icon = Icons.Default.Subtitles,
-                title = stringResource(R.string.sub_ai_enabled),
-                subtitle = stringResource(R.string.sub_ai_enabled_desc),
-                isChecked = playerSettings.subtitleStyle.aiEnabled,
-                onCheckedChange = onSetSubtitleAiEnabled,
-                onFocused = onItemFocused,
-                enabled = enabled
-            )
-        }
-
-        item(key = "subtitle_ai_auto_select") {
-            ToggleSettingsItem(
-                icon = Icons.Default.Subtitles,
-                title = stringResource(R.string.sub_ai_auto_select),
-                subtitle = stringResource(R.string.sub_ai_auto_select_desc),
-                isChecked = playerSettings.subtitleStyle.aiAutoSelect,
-                onCheckedChange = onSetSubtitleAiAutoSelect,
-                onFocused = onItemFocused,
-                enabled = enabled && playerSettings.subtitleStyle.aiEnabled
-            )
-        }
-
-        item(key = "subtitle_ai_sync_with_profile") {
-            ToggleSettingsItem(
-                icon = Icons.Default.Subtitles,
-                title = stringResource(R.string.sub_ai_sync_with_profile),
-                subtitle = stringResource(R.string.sub_ai_sync_with_profile_desc),
-                isChecked = playerSettings.subtitleStyle.aiSyncWithProfile,
-                onCheckedChange = onSetSubtitleAiSyncWithProfile,
-                onFocused = onItemFocused,
-                enabled = enabled
-            )
-        }
-
-        item(key = "subtitle_ai_model") {
-            val modelLabel = when (playerSettings.subtitleStyle.aiModel) {
-                "GEMINI_FLASH_25" -> stringResource(R.string.sub_ai_model_gemini)
-                "CLAUDE_HAIKU" -> stringResource(R.string.sub_ai_model_claude)
-                else -> stringResource(R.string.sub_ai_model_groq)
-            }
-            NavigationSettingsItem(
-                icon = Icons.Default.Language,
-                title = stringResource(R.string.sub_ai_model),
-                subtitle = modelLabel + " · " + stringResource(R.string.sub_ai_model_preferred_desc),
-                onClick = {
-                    val next = when (playerSettings.subtitleStyle.aiModel) {
-                        "GROQ_LLAMA_70B" -> "GEMINI_FLASH_25"
-                        "GEMINI_FLASH_25" -> "CLAUDE_HAIKU"
-                        else -> "GROQ_LLAMA_70B"
-                    }
-                    onSetSubtitleAiModel(next)
-                },
-                onFocused = onItemFocused,
-                enabled = enabled && playerSettings.subtitleStyle.aiEnabled
-            )
-        }
-
-        SubtitleAiModel.entries.forEach { model ->
-            item(key = "subtitle_ai_provider_enabled_" + model.name) {
-                val provider = subtitleAiCredentials.provider(model)
-                val modelLabel = when (model) {
-                    SubtitleAiModel.GEMINI_FLASH_25 -> stringResource(R.string.sub_ai_model_gemini)
-                    SubtitleAiModel.CLAUDE_HAIKU -> stringResource(R.string.sub_ai_model_claude)
-                    SubtitleAiModel.GROQ_LLAMA_70B -> stringResource(R.string.sub_ai_model_groq)
-                }
-                ToggleSettingsItem(
-                    icon = Icons.Default.Subtitles,
-                    title = modelLabel,
-                    subtitle = stringResource(R.string.sub_ai_provider_enabled_desc),
-                    isChecked = provider.enabled && provider.usableKeys.isNotEmpty(),
-                    onCheckedChange = { onSetSubtitleAiProviderEnabled(model, it) },
-                    onFocused = onItemFocused,
-                    enabled = enabled &&
-                        playerSettings.subtitleStyle.aiEnabled &&
-                        provider.usableKeys.isNotEmpty()
-                )
-            }
-            item(key = "subtitle_ai_provider_keys_" + model.name) {
-                val provider = subtitleAiCredentials.provider(model)
-                val modelLabel = when (model) {
-                    SubtitleAiModel.GEMINI_FLASH_25 -> stringResource(R.string.sub_ai_model_gemini)
-                    SubtitleAiModel.CLAUDE_HAIKU -> stringResource(R.string.sub_ai_model_claude)
-                    SubtitleAiModel.GROQ_LLAMA_70B -> stringResource(R.string.sub_ai_model_groq)
-                }
-                val keysSub = when {
-                    provider.usableKeys.isEmpty() ->
-                        stringResource(R.string.sub_ai_provider_keys_none)
-                    else -> {
-                        val count = stringResource(
-                            R.string.sub_ai_provider_keys_count,
-                            provider.usableKeys.size
-                        )
-                        count + " · " + maskApiKey(provider.usableKeys.first())
-                    }
-                }
-                NavigationSettingsItem(
-                    icon = Icons.Default.Language,
-                    title = stringResource(R.string.sub_ai_provider_keys) + " — " + modelLabel,
-                    subtitle = keysSub,
-                    onClick = { onShowAiProviderKeysDialog(model) },
-                    onFocused = onItemFocused,
-                    enabled = enabled
-                )
-            }
-        }
-
-        item(key = "subtitle_ai_advanced_header") {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = NuvioTheme.spacing.md, bottom = NuvioTheme.spacing.xs)
-            ) {
-                Text(
-                    text = stringResource(R.string.sub_ai_advanced_section),
-                    color = NuvioTheme.colors.TextPrimary,
-                    style = MaterialTheme.typography.titleSmall
-                )
-                Spacer(modifier = Modifier.height(NuvioTheme.spacing.xs))
-                Text(
-                    text = stringResource(R.string.sub_ai_advanced_section_desc),
-                    color = NuvioTheme.colors.TextSecondary,
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-        }
-
-        item(key = "subtitle_ai_max_batch_size") {
-            SliderSettingsItem(
-                icon = Icons.Default.Tune,
-                title = stringResource(R.string.sub_ai_max_batch_size),
-                value = subtitleAiAdvancedSettings.maxBatchSize,
-                valueText = subtitleAiAdvancedSettings.maxBatchSize.toString(),
-                minValue = 5,
-                maxValue = 80,
-                step = 5,
-                onValueChange = {
-                    onSetSubtitleAiAdvancedSettings(subtitleAiAdvancedSettings.copy(maxBatchSize = it))
-                },
-                onFocused = onItemFocused,
-                enabled = enabled && playerSettings.subtitleStyle.aiEnabled
-            )
-        }
-        item(key = "subtitle_ai_batch_window") {
-            SliderSettingsItem(
-                icon = Icons.Default.Tune,
-                title = stringResource(R.string.sub_ai_batch_window),
-                value = subtitleAiAdvancedSettings.batchWindowMs,
-                valueText = "${subtitleAiAdvancedSettings.batchWindowMs} ms",
-                minValue = 50,
-                maxValue = 2000,
-                step = 50,
-                onValueChange = {
-                    onSetSubtitleAiAdvancedSettings(subtitleAiAdvancedSettings.copy(batchWindowMs = it))
-                },
-                onFocused = onItemFocused,
-                enabled = enabled && playerSettings.subtitleStyle.aiEnabled
-            )
-        }
-        item(key = "subtitle_ai_gemini_batch_window") {
-            SliderSettingsItem(
-                icon = Icons.Default.Tune,
-                title = stringResource(R.string.sub_ai_gemini_batch_window),
-                value = subtitleAiAdvancedSettings.geminiBatchWindowMs,
-                valueText = "${subtitleAiAdvancedSettings.geminiBatchWindowMs} ms",
-                minValue = 500,
-                maxValue = 10000,
-                step = 100,
-                onValueChange = {
-                    onSetSubtitleAiAdvancedSettings(
-                        subtitleAiAdvancedSettings.copy(geminiBatchWindowMs = it)
-                    )
-                },
-                onFocused = onItemFocused,
-                enabled = enabled && playerSettings.subtitleStyle.aiEnabled
-            )
-        }
-        item(key = "subtitle_ai_rate_limit_cooldown") {
-            val seconds = subtitleAiAdvancedSettings.rateLimitCooldownMs / 1000
-            SliderSettingsItem(
-                icon = Icons.Default.Tune,
-                title = stringResource(R.string.sub_ai_rate_limit_cooldown),
-                value = seconds,
-                valueText = "${seconds}s",
-                minValue = 5,
-                maxValue = 300,
-                step = 5,
-                onValueChange = {
-                    onSetSubtitleAiAdvancedSettings(
-                        subtitleAiAdvancedSettings.copy(rateLimitCooldownMs = it * 1000)
-                    )
-                },
-                onFocused = onItemFocused,
-                enabled = enabled && playerSettings.subtitleStyle.aiEnabled
-            )
-        }
-        item(key = "subtitle_ai_gemini_min_interval") {
-            SliderSettingsItem(
-                icon = Icons.Default.Tune,
-                title = stringResource(R.string.sub_ai_gemini_min_interval),
-                value = subtitleAiAdvancedSettings.geminiMinIntervalMs,
-                valueText = "${subtitleAiAdvancedSettings.geminiMinIntervalMs} ms",
-                minValue = 1000,
-                maxValue = 15000,
-                step = 200,
-                onValueChange = {
-                    onSetSubtitleAiAdvancedSettings(
-                        subtitleAiAdvancedSettings.copy(geminiMinIntervalMs = it)
-                    )
-                },
-                onFocused = onItemFocused,
-                enabled = enabled && playerSettings.subtitleStyle.aiEnabled
-            )
-        }
-        item(key = "subtitle_ai_advanced_reset") {
-            Button(
-                onClick = onResetSubtitleAiAdvancedSettings,
-                enabled = enabled && playerSettings.subtitleStyle.aiEnabled,
-                shape = ButtonDefaults.shape(shape = RoundedCornerShape(10.dp)),
-                colors = ButtonDefaults.colors(
-                    containerColor = NuvioTheme.colors.Background,
-                    focusedContainerColor = NuvioTheme.colors.Background
-                ),
-                border = ButtonDefaults.border(
-                    focusedBorder = Border(
-                        border = NuvioTheme.focusRing.border(NuvioTheme.spacing.hairline),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                )
-            ) {
-                Text(
-                    text = stringResource(R.string.sub_ai_advanced_reset),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = NuvioTheme.colors.TextPrimary
-                )
-            }
-        }
-
-        subtitleDiagnosticsItems(enabled = enabled, onItemFocused = onItemFocused)
-    }
-
-    item(key = "subtitle_size") {
-        SliderSettingsItem(
-            icon = Icons.Default.FormatSize,
-            title = stringResource(R.string.sub_size),
-            value = playerSettings.subtitleStyle.size,
-            valueText = "${playerSettings.subtitleStyle.size}%",
-            minValue = 50,
-            maxValue = 200,
-            step = 10,
-            onValueChange = onSetSubtitleSize,
-            onFocused = onItemFocused,
-            enabled = enabled
-        )
-    }
-
-    item(key = "subtitle_vertical_offset") {
-        SliderSettingsItem(
-            icon = Icons.Default.VerticalAlignBottom,
-            title = stringResource(R.string.sub_vertical_offset),
-            value = playerSettings.subtitleStyle.verticalOffset,
-            valueText = "${playerSettings.subtitleStyle.verticalOffset}%",
-            minValue = -20,
-            maxValue = 50,
-            step = 1,
-            onValueChange = onSetSubtitleVerticalOffset,
-            onFocused = onItemFocused,
-            enabled = enabled
-        )
-    }
-
-    item(key = "subtitle_bold") {
-        ToggleSettingsItem(
-            icon = Icons.Default.FormatBold,
-            title = stringResource(R.string.sub_bold),
-            subtitle = stringResource(R.string.sub_bold_sub),
-            isChecked = playerSettings.subtitleStyle.bold,
-            onCheckedChange = onSetSubtitleBold,
-            onFocused = onItemFocused,
-            enabled = enabled
-        )
-    }
-
-    item(key = "subtitle_text_color") {
+    SettingsSectionLabel(text = stringResource(R.string.sub_style_label))
+    SliderSettingsItem(
+        title = stringResource(R.string.sub_size),
+        value = style.size,
+        valueText = "${style.size}%",
+        minValue = 50,
+        maxValue = 200,
+        step = 10,
+        onValueChange = { size -> onUpdate { setSubtitleSize(size) } },
+        enabled = enabled
+    )
+    SliderSettingsItem(
+        title = stringResource(R.string.sub_vertical_offset),
+        value = style.verticalOffset,
+        valueText = "${style.verticalOffset}%",
+        minValue = -20,
+        maxValue = 50,
+        step = 1,
+        onValueChange = { offset -> onUpdate { setSubtitleVerticalOffset(offset) } },
+        enabled = enabled
+    )
+    SettingsToggleRow(
+        title = stringResource(R.string.sub_bold),
+        subtitle = stringResource(R.string.sub_bold_sub),
+        checked = style.bold,
+        onToggle = { onUpdate { setSubtitleBold(!style.bold) } },
+        enabled = enabled
+    )
+    ColorSettingsItem(
+        title = stringResource(R.string.sub_text_color),
+        currentColor = Color(style.textColor),
+        onClick = { onOpenDialog(PlaybackDialog.SUBTITLE_TEXT_COLOR) },
+        enabled = enabled
+    )
+    ColorSettingsItem(
+        title = stringResource(R.string.sub_bg_color),
+        currentColor = Color(style.backgroundColor),
+        showTransparent = style.backgroundColor == Color.Transparent.toArgb(),
+        onClick = { onOpenDialog(PlaybackDialog.SUBTITLE_BACKGROUND_COLOR) },
+        enabled = enabled
+    )
+    SettingsToggleRow(
+        title = stringResource(R.string.sub_outline),
+        subtitle = stringResource(R.string.sub_outline_sub),
+        checked = style.outlineEnabled,
+        onToggle = { onUpdate { setSubtitleOutlineEnabled(!style.outlineEnabled) } },
+        enabled = enabled
+    )
+    if (style.outlineEnabled) {
         ColorSettingsItem(
-            icon = Icons.Default.Palette,
-            title = stringResource(R.string.sub_text_color),
-            currentColor = Color(playerSettings.subtitleStyle.textColor),
-            onClick = onShowTextColorDialog,
-            onFocused = onItemFocused,
+            title = stringResource(R.string.sub_outline_color),
+            currentColor = Color(style.outlineColor),
+            onClick = { onOpenDialog(PlaybackDialog.SUBTITLE_OUTLINE_COLOR) },
             enabled = enabled
         )
     }
-
-    item(key = "subtitle_background_color") {
+    SettingsToggleRow(
+        title = stringResource(R.string.sub_hdr_style),
+        subtitle = stringResource(R.string.sub_hdr_style_sub),
+        checked = style.hdrStyleEnabled,
+        onToggle = { onUpdate { setSubtitleHdrStyleEnabled(!style.hdrStyleEnabled) } },
+        enabled = enabled
+    )
+    if (style.hdrStyleEnabled) {
         ColorSettingsItem(
-            icon = Icons.Default.Palette,
-            title = stringResource(R.string.sub_bg_color),
-            currentColor = Color(playerSettings.subtitleStyle.backgroundColor),
-            showTransparent = playerSettings.subtitleStyle.backgroundColor == Color.Transparent.toArgb(),
-            onClick = onShowBackgroundColorDialog,
-            onFocused = onItemFocused,
+            title = stringResource(R.string.sub_hdr_text_color),
+            currentColor = Color(style.hdrTextColor),
+            onClick = { onOpenDialog(PlaybackDialog.SUBTITLE_HDR_TEXT_COLOR) },
+            enabled = enabled
+        )
+        SliderSettingsItem(
+            title = stringResource(R.string.sub_hdr_brightness),
+            value = style.hdrBrightness,
+            valueText = "${style.hdrBrightness}%",
+            minValue = SubtitleStyleSettings.HDR_BRIGHTNESS_MIN,
+            maxValue = SubtitleStyleSettings.HDR_BRIGHTNESS_MAX,
+            step = 5,
+            onValueChange = { brightness -> onUpdate { setSubtitleHdrBrightness(brightness) } },
+            enabled = enabled
+        )
+        SettingsToggleRow(
+            title = stringResource(R.string.sub_hdr_dim_player_controls),
+            subtitle = stringResource(R.string.sub_hdr_dim_player_controls_sub),
+            checked = style.hdrDimPlayerControls,
+            onToggle = { onUpdate { setSubtitleHdrDimPlayerControls(!style.hdrDimPlayerControls) } },
             enabled = enabled
         )
     }
 
-    item(key = "subtitle_outline_toggle") {
-        ToggleSettingsItem(
-            icon = Icons.Default.ClosedCaption,
-            title = stringResource(R.string.sub_outline),
-            subtitle = stringResource(R.string.sub_outline_sub),
-            isChecked = playerSettings.subtitleStyle.outlineEnabled,
-            onCheckedChange = onSetSubtitleOutlineEnabled,
-            onFocused = onItemFocused,
-            enabled = enabled
+    SettingsSectionLabel(text = stringResource(R.string.sub_advanced_section))
+    SettingsToggleRow(
+        title = stringResource(R.string.sub_libass),
+        subtitle = stringResource(R.string.sub_libass_sub),
+        checked = settings.useLibass,
+        onToggle = { onUpdate { setUseLibass(!settings.useLibass) } },
+        enabled = enabled
+    )
+    if (settings.useLibass) {
+        SettingsActionRow(
+            title = stringResource(R.string.sub_libass_render_mode),
+            subtitle = if (settings.effectiveTunnelingEnabled)
+                stringResource(R.string.sub_libass_render_mode_tunneled_sub)
+            else
+                stringResource(R.string.sub_libass_render_mode_sub),
+            value = if (settings.effectiveTunnelingEnabled)
+                libassRenderModeLabel(LibassRenderMode.OVERLAY)
+            else
+                libassRenderModeLabel(settings.libassRenderMode),
+            onClick = { onOpenDialog(PlaybackDialog.LIBASS_RENDER_MODE) },
+            enabled = !settings.effectiveTunnelingEnabled
         )
-    }
-
-    if (playerSettings.subtitleStyle.outlineEnabled) {
-        item(key = "subtitle_outline_color") {
-            ColorSettingsItem(
-                icon = Icons.Default.Palette,
-                title = stringResource(R.string.sub_outline_color),
-                currentColor = Color(playerSettings.subtitleStyle.outlineColor),
-                onClick = onShowOutlineColorDialog,
-                onFocused = onItemFocused,
-                enabled = enabled
-            )
-        }
-    }
-
-    item(key = "subtitle_advanced_header") {
-        Spacer(modifier = androidx.compose.ui.Modifier.height(NuvioTheme.spacing.lg))
-        Text(
-            text = stringResource(R.string.sub_advanced_section),
-            style = MaterialTheme.typography.titleMedium,
-            color = NuvioTheme.colors.TextSecondary,
-            modifier = androidx.compose.ui.Modifier.padding(vertical = NuvioTheme.spacing.sm)
+        SettingsActionRow(
+            title = stringResource(R.string.sub_libass_render_scale),
+            subtitle = stringResource(R.string.sub_libass_render_scale_sub),
+            value = settings.libassRenderScale.label,
+            onClick = { onOpenDialog(PlaybackDialog.LIBASS_RENDER_SCALE) }
         )
-    }
-
-    item(key = "subtitle_libass") {
-        ToggleSettingsItem(
-            icon = Icons.Default.Subtitles,
-            title = stringResource(R.string.sub_libass),
-            subtitle = stringResource(R.string.sub_libass_sub),
-            isChecked = playerSettings.useLibass,
-            onCheckedChange = onSetUseLibass,
-            onFocused = onItemFocused,
-            enabled = enabled
-        )
-    }
-
-    if (playerSettings.useLibass) {
-        item(key = "subtitle_libass_render_header") {
-            Text(
-                text = stringResource(R.string.sub_libass_mode),
-                style = MaterialTheme.typography.titleMedium,
-                color = NuvioTheme.colors.TextSecondary,
-                modifier = androidx.compose.ui.Modifier.padding(vertical = NuvioTheme.spacing.sm)
-            )
-        }
-
-        item(key = "subtitle_libass_overlay_gl") {
-            RenderTypeSettingsItem(
-                title = stringResource(R.string.sub_mode_overlay_gl),
-                subtitle = stringResource(R.string.sub_mode_overlay_gl_sub),
-                isSelected = playerSettings.libassRenderType == LibassRenderType.OVERLAY_OPEN_GL,
-                onClick = { onSetLibassRenderType(LibassRenderType.OVERLAY_OPEN_GL) },
-                onFocused = onItemFocused
-            )
-        }
-
-        item(key = "subtitle_libass_overlay_canvas") {
-            RenderTypeSettingsItem(
-                title = stringResource(R.string.sub_mode_overlay_canvas),
-                subtitle = stringResource(R.string.sub_mode_overlay_canvas_sub),
-                isSelected = playerSettings.libassRenderType == LibassRenderType.OVERLAY_CANVAS,
-                onClick = { onSetLibassRenderType(LibassRenderType.OVERLAY_CANVAS) },
-                onFocused = onItemFocused
-            )
-        }
-
-        item(key = "subtitle_libass_effects_gl") {
-            RenderTypeSettingsItem(
-                title = stringResource(R.string.sub_mode_effects_gl),
-                subtitle = stringResource(R.string.sub_mode_effects_gl_sub),
-                isSelected = playerSettings.libassRenderType == LibassRenderType.EFFECTS_OPEN_GL,
-                onClick = { onSetLibassRenderType(LibassRenderType.EFFECTS_OPEN_GL) },
-                onFocused = onItemFocused
-            )
-        }
-
-        item(key = "subtitle_libass_effects_canvas") {
-            RenderTypeSettingsItem(
-                title = stringResource(R.string.sub_mode_effects_canvas),
-                subtitle = stringResource(R.string.sub_mode_effects_canvas_sub),
-                isSelected = playerSettings.libassRenderType == LibassRenderType.EFFECTS_CANVAS,
-                onClick = { onSetLibassRenderType(LibassRenderType.EFFECTS_CANVAS) },
-                onFocused = onItemFocused
-            )
-        }
-
-        item(key = "subtitle_libass_cues") {
-            RenderTypeSettingsItem(
-                title = stringResource(R.string.sub_mode_standard),
-                subtitle = stringResource(R.string.sub_mode_standard_sub),
-                isSelected = playerSettings.libassRenderType == LibassRenderType.CUES,
-                onClick = { onSetLibassRenderType(LibassRenderType.CUES) },
-                onFocused = onItemFocused
-            )
-        }
     }
 }
 
 @Composable
+internal fun subtitleLanguageLabel(style: SubtitleStyleSettings): String = when {
+    style.preferredLanguage == "none" -> stringResource(R.string.action_none)
+    style.isPreferredLanguageSystemDefault -> stringResource(R.string.appearance_language_system)
+    else -> AVAILABLE_SUBTITLE_LANGUAGES.find { it.code == style.preferredLanguage }?.displayName
+        ?: stringResource(R.string.appearance_language_system)
+}
+
+@Composable
+private fun libassRenderModeLabel(mode: LibassRenderMode): String = when (mode) {
+    LibassRenderMode.VIDEO_EFFECT -> stringResource(R.string.sub_libass_render_mode_video_effect)
+    LibassRenderMode.OVERLAY -> stringResource(R.string.sub_libass_render_mode_overlay)
+}
+
+@Composable
 internal fun SubtitleSettingsDialogs(
-    showLanguageDialog: Boolean,
-    showSecondaryLanguageDialog: Boolean,
-    showTextColorDialog: Boolean,
-    showBackgroundColorDialog: Boolean,
-    showOutlineColorDialog: Boolean,
-    playerSettings: PlayerSettings,
-    onSetPreferredLanguage: (String?) -> Unit,
-    onSetSecondaryLanguage: (String?) -> Unit,
-    onSetTextColor: (Color) -> Unit,
-    onSetBackgroundColor: (Color) -> Unit,
-    onSetOutlineColor: (Color) -> Unit,
-    onDismissLanguageDialog: () -> Unit,
-    onDismissSecondaryLanguageDialog: () -> Unit,
-    onDismissTextColorDialog: () -> Unit,
-    onDismissBackgroundColorDialog: () -> Unit,
-    onDismissOutlineColorDialog: () -> Unit
+    dialog: PlaybackDialog?,
+    settings: PlayerSettings,
+    onUpdate: PlaybackSettingsUpdate,
+    onDismiss: () -> Unit
 ) {
-    if (showLanguageDialog) {
-        LanguageSelectionDialog(
+    val style = settings.subtitleStyle
+    when (dialog) {
+        PlaybackDialog.SUBTITLE_LANGUAGE -> LanguageSelectionDialog(
             title = stringResource(R.string.sub_preferred_lang),
             selectedLanguage = when {
-                playerSettings.subtitleStyle.preferredLanguage == "none" -> null
-                playerSettings.subtitleStyle.isPreferredLanguageSystemDefault -> SubtitleLanguageOption.DEVICE
-                else -> playerSettings.subtitleStyle.preferredLanguage
+                style.preferredLanguage == "none" -> null
+                style.isPreferredLanguageSystemDefault -> SubtitleLanguageOption.DEVICE
+                else -> style.preferredLanguage
             },
             showNoneOption = true,
             extraOptions = listOf(SubtitleLanguageOption.DEVICE to stringResource(R.string.appearance_language_system)),
-            onLanguageSelected = {
-                onSetPreferredLanguage(it)
-                onDismissLanguageDialog()
+            onLanguageSelected = { language ->
+                onUpdate { setSubtitlePreferredLanguage(language ?: "none") }
+                onDismiss()
             },
-            onDismiss = onDismissLanguageDialog
+            onDismiss = onDismiss
         )
-    }
-
-    if (showSecondaryLanguageDialog) {
-        LanguageSelectionDialog(
+        PlaybackDialog.SECONDARY_SUBTITLE_LANGUAGE -> LanguageSelectionDialog(
             title = stringResource(R.string.sub_secondary_lang),
-            selectedLanguage = playerSettings.subtitleStyle.secondaryPreferredLanguage,
+            selectedLanguage = style.secondaryPreferredLanguage,
             showNoneOption = true,
-            onLanguageSelected = {
-                onSetSecondaryLanguage(it)
-                onDismissSecondaryLanguageDialog()
+            onLanguageSelected = { language ->
+                onUpdate { setSubtitleSecondaryLanguage(language) }
+                onDismiss()
             },
-            onDismiss = onDismissSecondaryLanguageDialog
+            onDismiss = onDismiss
         )
-    }
-
-    if (showTextColorDialog) {
-        ColorSelectionDialog(
+        PlaybackDialog.SUBTITLE_TEXT_COLOR -> ColorSelectionDialog(
             title = stringResource(R.string.sub_text_color),
             colors = subtitleColors,
-            selectedColor = Color(playerSettings.subtitleStyle.textColor),
-            onColorSelected = {
-                onSetTextColor(it)
-                onDismissTextColorDialog()
+            selectedColor = Color(style.textColor),
+            onColorSelected = { color ->
+                onUpdate { setSubtitleTextColor(color.toArgb()) }
+                onDismiss()
             },
-            onDismiss = onDismissTextColorDialog
+            onDismiss = onDismiss
         )
-    }
-
-    if (showBackgroundColorDialog) {
-        ColorSelectionDialog(
+        PlaybackDialog.SUBTITLE_BACKGROUND_COLOR -> ColorSelectionDialog(
             title = stringResource(R.string.sub_bg_color),
             colors = subtitleBackgroundColors,
-            selectedColor = Color(playerSettings.subtitleStyle.backgroundColor),
+            selectedColor = Color(style.backgroundColor),
             showTransparentOption = true,
-            onColorSelected = {
-                onSetBackgroundColor(it)
-                onDismissBackgroundColorDialog()
+            onColorSelected = { color ->
+                onUpdate { setSubtitleBackgroundColor(color.toArgb()) }
+                onDismiss()
             },
-            onDismiss = onDismissBackgroundColorDialog
+            onDismiss = onDismiss
         )
-    }
-
-    if (showOutlineColorDialog) {
-        ColorSelectionDialog(
+        PlaybackDialog.SUBTITLE_OUTLINE_COLOR -> ColorSelectionDialog(
             title = stringResource(R.string.sub_outline_color),
             colors = subtitleOutlineColors,
-            selectedColor = Color(playerSettings.subtitleStyle.outlineColor),
-            onColorSelected = {
-                onSetOutlineColor(it)
-                onDismissOutlineColorDialog()
+            selectedColor = Color(style.outlineColor),
+            onColorSelected = { color ->
+                onUpdate { setSubtitleOutlineColor(color.toArgb()) }
+                onDismiss()
             },
-            onDismiss = onDismissOutlineColorDialog
+            onDismiss = onDismiss
         )
+        PlaybackDialog.SUBTITLE_HDR_TEXT_COLOR -> ColorSelectionDialog(
+            title = stringResource(R.string.sub_hdr_text_color),
+            colors = subtitleColors,
+            selectedColor = Color(style.hdrTextColor),
+            onColorSelected = { color ->
+                onUpdate { setSubtitleHdrTextColor(color.toArgb()) }
+                onDismiss()
+            },
+            onDismiss = onDismiss
+        )
+        PlaybackDialog.LIBASS_RENDER_SCALE -> SettingsSingleChoiceDialog(
+            title = stringResource(R.string.sub_libass_render_scale),
+            options = LibassRenderScale.entries.map { scale ->
+                SettingsPickerOption(
+                    scale,
+                    scale.label,
+                    null
+                )
+            },
+            selectedValue = settings.libassRenderScale,
+            onOptionSelected = { scale ->
+                onUpdate { setLibassRenderScale(scale) }
+                onDismiss()
+            },
+            onDismiss = onDismiss
+        )
+        PlaybackDialog.LIBASS_RENDER_MODE -> SettingsSingleChoiceDialog(
+            title = stringResource(R.string.sub_libass_render_mode),
+            options = listOf(
+                SettingsPickerOption(
+                    LibassRenderMode.OVERLAY,
+                    stringResource(R.string.sub_libass_render_mode_overlay),
+                    stringResource(R.string.sub_libass_render_mode_overlay_sub)
+                ),
+                SettingsPickerOption(
+                    LibassRenderMode.VIDEO_EFFECT,
+                    stringResource(R.string.sub_libass_render_mode_video_effect),
+                    stringResource(R.string.sub_libass_render_mode_video_effect_sub)
+                )
+            ),
+            selectedValue = settings.libassRenderMode,
+            onOptionSelected = { mode ->
+                onUpdate { setLibassRenderMode(mode) }
+                onDismiss()
+            },
+            onDismiss = onDismiss
+        )
+        else -> Unit
     }
 }

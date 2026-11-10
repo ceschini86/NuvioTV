@@ -35,12 +35,6 @@ import com.nuvio.tv.core.util.filterReleasedItems
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 
-/** Max slides in the hero carousel (artwork Crossfade; keep modest for TV). */
-private const val HERO_CAROUSEL_MAX_ITEMS = 15
-
-/** When no hero catalogs are selected in settings, use the first N home catalogs. */
-private const val HERO_CAROUSEL_DEFAULT_CATALOG_COUNT = 2
-
 private data class CatalogUpdateResult(
     val displayRows: List<CatalogRow>,
     val heroItems: List<com.nuvio.tv.domain.model.MetaPreview>,
@@ -114,13 +108,12 @@ internal fun HomeViewModel.observeTmdbSettingsPipeline() {
         tmdbSettingsDataStore.settings
             .collectLatest { settings ->
                 val languageChanged = currentTmdbSettings.language != settings.language
-                val releaseDatesChanged = currentTmdbSettings.useReleaseDates != settings.useReleaseDates
                 currentTmdbSettings = settings
                 val tmdbEnabledForLayout = settings.enabled &&
                     (_uiState.value.homeLayout != HomeLayout.MODERN || settings.modernHomeEnabled)
                 val enrichEnabled = tmdbEnabledForLayout || externalMetaPrefetchEnabled
                 _uiState.update { it.copy(heroEnrichmentEnabled = enrichEnabled) }
-                if (languageChanged || releaseDatesChanged) {
+                if (languageChanged) {
                     // Allow re-enrichment with the updated TMDB metadata selection on next focus.
                     prefetchedTmdbIds.clear()
                     prefetchedExternalMetaIds.clear()
@@ -136,10 +129,11 @@ internal fun HomeViewModel.observeTmdbSettingsPipeline() {
 @OptIn(FlowPreview::class)
 internal fun HomeViewModel.observeInstalledAddonsPipeline() {
     viewModelScope.launch {
-        addonRepository.getInstalledAddons()
+        combine(addonRepository.getInstalledAddons(), serverCatalog.addons) { installed, servers ->
+            installed.enabledAddons() + servers
+        }
             .distinctUntilChanged()
-            .collectLatest { installedAddons ->
-                val addons = installedAddons.enabledAddons()
+            .collectLatest { addons ->
                 addonsCache = addons
                 loadAllCatalogsPipeline(addons)
             }
@@ -204,7 +198,7 @@ internal suspend fun HomeViewModel.loadAllCatalogsPipeline(
     try {
         if (addons.isEmpty()) {
             catalogsLoadInProgress = false
-            _uiState.update { it.copy(isLoading = false, error = appContext.getString(R.string.home_error_no_addons)) }
+            _uiState.update { it.copy(isLoading = false, error = appContext.getString(R.string.home_empty_no_sources_title)) }
             return
         }
 
@@ -452,6 +446,8 @@ internal fun HomeViewModel.loadCatalogPipeline(
                         if (!isRefresh || !mergeRefreshedCatalogRow(key, result.data, requestedByUser, forceReplace)) {
                             replaceCatalogRow(key, result.data)
                         }
+                        // Trigger MDBList batch for newly loaded catalog data.
+                        onCatalogRowItemsChanged(key)
                         // Remove placeholder descriptor now that real data is available
                         synchronized(catalogStateLock) {
                             placeholderDescriptors.removeAll { it.catalogKey == key }
@@ -561,6 +557,7 @@ internal fun HomeViewModel.loadMoreCatalogItemsPipeline(catalogId: String, addon
                     }
                     _loadingCatalogs.update { it - key }
                     scheduleUpdateCatalogRows()
+                    onCatalogRowItemsChanged(key)
                 }
                 is NetworkResult.Error -> {
                     updateCatalogRow(key) { it.copy(isLoading = false) }
@@ -624,49 +621,34 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
                     .thenBy { it.id }
             )
         }
-        // Merge catalogs then shuffle across sources (not per-catalog sequential slots).
-        // heroItemOrder keeps a stable order across recompositions / enrichment.
-        fun mergeShuffled(
-            rows: List<CatalogRow>,
-            filter: (MetaPreview) -> Boolean,
-            currentOrder: List<String>,
-            maxItems: Int = HERO_CAROUSEL_MAX_ITEMS
-        ): List<MetaPreview> {
-            if (rows.isEmpty()) return emptyList()
-            val byId = LinkedHashMap<String, MetaPreview>()
-            rows.forEach { row ->
-                row.items.filter(filter).forEach { item ->
-                    byId.putIfAbsent(item.id, item)
-                }
+        fun slotShuffled(rows: List<CatalogRow>, filter: (MetaPreview) -> Boolean, currentOrder: List<String>): List<MetaPreview> {
+            val totalCatalogs = rows.size.coerceAtLeast(1)
+            val baseSlot = 7 / totalCatalogs
+            val remainder = 7 % totalCatalogs
+            val seen = mutableSetOf<String>()
+            val result = mutableListOf<MetaPreview>()
+            rows.forEachIndexed { index, row ->
+                val slot = baseSlot + if (index < remainder) 1 else 0
+                val existing = currentOrder.filter { id -> row.items.any { it.id == id } }
+                val byId = row.items.filter(filter).associateBy { it.id }
+                val ordered = existing.mapNotNull { byId[it] }
+                val new = stableHeroCandidates(
+                    row = row,
+                    candidates = byId.values.filter { it.id !in existing }
+                )
+                // Filter out duplicates but keep taking until slot is filled
+                val unique = (ordered + new).filter { seen.add(it.id) }
+                result += unique.take(slot)
             }
-            if (byId.isEmpty()) return emptyList()
-
-            fun deterministicShuffle(items: List<MetaPreview>): List<MetaPreview> {
-                if (items.size <= 1) return items
-                val seed = items.map { it.id }.sorted().joinToString("|").hashCode().toLong()
-                return items.shuffled(kotlin.random.Random(seed))
-            }
-
-            if (currentOrder.isEmpty()) {
-                // Prefer artwork-stable ordering within each row as a base, then shuffle the merge.
-                val pooled = rows.flatMap { row ->
-                    stableHeroCandidates(row, row.items.filter(filter).filter { it.id in byId })
-                }.distinctBy { it.id }
-                return deterministicShuffle(pooled).take(maxItems)
-            }
-
-            val retained = currentOrder.mapNotNull { byId[it] }
-            val retainedIds = retained.mapTo(mutableSetOf()) { it.id }
-            val newcomers = byId.values.filter { it.id !in retainedIds }
-            return (retained + deterministicShuffle(newcomers)).take(maxItems)
+            return result
         }
 
         val currentHeroOrder = heroItemOrder
 
-        val heroItemsFromSelectedCatalogs = mergeShuffled(
+        val heroItemsFromSelectedCatalogs = slotShuffled(
             selectedHeroRows, { it.hasHeroArtwork() }, currentHeroOrder
         )
-        val fallbackHeroItemsFromSelectedCatalogs = mergeShuffled(
+        val fallbackHeroItemsFromSelectedCatalogs = slotShuffled(
             selectedHeroRows, { true }, currentHeroOrder
         )
         // When orderedRows is empty (all catalogs disabled), include any
@@ -684,11 +666,8 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
                 nonOrderedRows
             }
         }
-        // Default hero sources when no catalogs are explicitly selected: the first
-        // two home rows (typically the top catalogs), not the entire home feed.
-        val defaultHeroFallbackRows = allHeroFallbackRows.take(HERO_CAROUSEL_DEFAULT_CATALOG_COUNT)
-        val fallbackHeroItemsWithArtwork = mergeShuffled(
-            defaultHeroFallbackRows, { it.hasHeroArtwork() }, currentHeroOrder
+        val fallbackHeroItemsWithArtwork = slotShuffled(
+            allHeroFallbackRows, { it.hasHeroArtwork() }, currentHeroOrder
         )
 
         val computedHeroItems = when {
@@ -915,7 +894,7 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
     val tmdbEnabledForCurrentLayout = tmdbSettings.enabled &&
         (currentLayout != HomeLayout.MODERN || tmdbSettings.modernHomeEnabled)
     val shouldUseEnrichedHeroItems = tmdbEnabledForCurrentLayout &&
-        (tmdbSettings.useArtwork || tmdbSettings.useBasicInfo || tmdbSettings.useDetails || tmdbSettings.useReleaseDates)
+        (tmdbSettings.useArtwork || tmdbSettings.useBasicInfo || tmdbSettings.useDetails)
 
     if (shouldUseEnrichedHeroItems && baseHeroItems.isNotEmpty()) {
         heroEnrichmentJob?.cancel()
@@ -1184,6 +1163,7 @@ internal fun HomeViewModel.mergeRefreshedCatalogRow(
             HomeViewModel.TAG,
             "Home catalog refresh: +${added.size} item(s) catalogId=${fresh.catalogId}"
         )
+        onCatalogRowItemsChanged(key)
         return true
     }
 

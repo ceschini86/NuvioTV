@@ -40,11 +40,13 @@ class CatalogRepositoryMalformedEntryTest {
         coEvery { api.getCatalog(any()) } returns Response.success(response)
         val layoutPrefs = mockk<LayoutPreferenceDataStore> {
             every { customPosterUrlPattern } returns flowOf("")
+            every { customPosterEnabledScreens } returns flowOf(com.nuvio.tv.core.poster.CustomPosterScreen.ALL)
         }
         val repository = CatalogRepositoryImpl(
             context = mockk<Context>(relaxed = true),
             api = api,
-            layoutPreferenceDataStore = layoutPrefs
+            layoutPreferenceDataStore = layoutPrefs,
+            serverCatalog = mockk(relaxed = true)
         )
 
         val result = repository.getCatalog(
