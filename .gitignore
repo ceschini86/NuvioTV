@@ -74,3 +74,6 @@ docs/*
 !docs/adr/
 !docs/adr/**
 status-page/
+
+# Release-note generator scratch output
+.tmp-rn*

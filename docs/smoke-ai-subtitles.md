@@ -40,6 +40,7 @@ Ferramentas **fora do repo**, em `C:\Users\Usuario\Documents\.personal\NuvioTV-t
 | `quota_guard.py` | Rodar **antes de qualquer play no mock**; deve imprimir `GUARD OK ... override ACTIVE` (garante que o app aponta para o mock e não gasta quota real) |
 | `fault_smoke.py` | Cicla os modos de falha e marca linhas `PHASE` no logcat com a tag `SubtitleSmoke` |
 | `ai_sub_logcat.py summarize` | Resume o logcat (requests, falhas, cues traduzidas) |
+| `ai_sub_diag.py pull --serial <device>` | Puxa a captura que o app grava no aparelho com "Record subtitle diagnostics" ligado, junta os arquivos rotacionados em `combined.log` e roda o `summarize`. Dispensa o adb durante as sessões (ADR 0002) |
 
 Override de base URL (só build debug; o app loga `DEBUG AI base URL override ACTIVE`):
 

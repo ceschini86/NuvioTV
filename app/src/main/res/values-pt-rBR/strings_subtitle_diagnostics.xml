@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings só do fork: captura de diagnóstico de legendas (docs/adr/0002). -->
+<resources>
+    <string name="sub_diag_title">Registrar diagnóstico de legendas</string>
+    <string name="sub_diag_desc">Grava os logs de legendas com IA neste aparelho para testes. %1$s MB em %2$s</string>
+    <string name="sub_diag_clear">Limpar diagnóstico de legendas</string>
+</resources>
