@@ -23,7 +23,6 @@ import com.nuvio.tv.data.repository.TraktCommentsService
 import com.nuvio.tv.data.repository.TraktRelatedService
 import com.nuvio.tv.data.repository.parseContentIds
 import com.nuvio.tv.domain.model.ContentType
-import com.nuvio.tv.domain.model.EpisodeRatingSource
 import com.nuvio.tv.domain.model.LibraryEntryInput
 import com.nuvio.tv.domain.model.LibrarySourceMode
 import com.nuvio.tv.domain.model.ListMembershipChanges
@@ -392,7 +391,6 @@ class MetaDetailsViewModel @Inject constructor(
             MetaDetailsEvent.OnRemovalCancelled -> cancelPickerRemoval()
             MetaDetailsEvent.OnClearMessage -> clearMessage()
             MetaDetailsEvent.OnLifecyclePause -> handleLifecyclePause()
-            is MetaDetailsEvent.OnEpisodeRatingSourceSelected -> setEpisodeRatingSource(event.source)
         }
     }
 
@@ -719,12 +717,6 @@ class MetaDetailsViewModel @Inject constructor(
                         }
                     }
                 }
-        }
-    }
-
-    private fun setEpisodeRatingSource(source: EpisodeRatingSource) {
-        viewModelScope.launch {
-            layoutPreferenceDataStore.setEpisodeRatingSource(source)
         }
     }
 

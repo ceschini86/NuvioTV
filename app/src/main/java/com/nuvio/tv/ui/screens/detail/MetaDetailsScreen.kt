@@ -888,6 +888,7 @@ fun MetaDetailsScreen(
                     collectionName = uiState.collectionName,
                     relatedWatchedStatus = uiState.relatedWatchedStatus,
                     episodeImdbRatings = uiState.episodeImdbRatings,
+                    ratingsTabEpisodeRatings = uiState.episodeRatingsForSource(), // fork: source from Layout → Details
                     isEpisodeRatingsLoading = uiState.isEpisodeRatingsLoading,
                     episodeRatingsError = uiState.episodeRatingsError,
                     mdbListRatings = uiState.mdbListRatings,
@@ -1231,6 +1232,7 @@ private fun MetaDetailsContent(
     collectionName: String?,
     relatedWatchedStatus: Map<String, Boolean> = emptyMap(),
     episodeImdbRatings: Map<Pair<Int, Int>, Double>,
+    ratingsTabEpisodeRatings: Map<Pair<Int, Int>, Double> = episodeImdbRatings, // fork: Series Graph or IMDb
     isEpisodeRatingsLoading: Boolean,
     episodeRatingsError: String?,
     mdbListRatings: MDBListRatings?,
@@ -1885,6 +1887,19 @@ private fun MetaDetailsContent(
         watchedEpisodes
     ) {
         episodeImdbRatings.filterKeys { episodeKey ->
+            val isWatched = episodeProgressMap[episodeKey]?.isCompleted() == true ||
+                watchedEpisodes.contains(episodeKey)
+            detailImdbRatingsVisibility.showEpisodeRating(isWatched)
+        }
+    }
+    // fork: the Ratings tab follows the source picked in Layout → Details; episode cards keep IMDb.
+    val visibleRatingsTabRatings = remember(
+        ratingsTabEpisodeRatings,
+        detailImdbRatingsVisibility,
+        episodeProgressMap,
+        watchedEpisodes
+    ) {
+        ratingsTabEpisodeRatings.filterKeys { episodeKey ->
             val isWatched = episodeProgressMap[episodeKey]?.isCompleted() == true ||
                 watchedEpisodes.contains(episodeKey)
             detailImdbRatingsVisibility.showEpisodeRating(isWatched)
@@ -2827,7 +2842,7 @@ private fun MetaDetailsContent(
                             PeopleSectionTab.RATINGS -> {
                                 EpisodeRatingsSection(
                                     episodes = meta.videos,
-                                    ratings = visibleEpisodeImdbRatings,
+                                    ratings = visibleRatingsTabRatings, // fork: rating source
                                     isLoading = isEpisodeRatingsLoading,
                                     error = episodeRatingsError,
                                     title = if (hasVisiblePeopleTabs) "" else strTabRatings,

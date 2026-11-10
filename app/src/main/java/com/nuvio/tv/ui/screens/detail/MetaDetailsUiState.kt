@@ -140,5 +140,4 @@ sealed class MetaDetailsEvent {
     data object OnRemovalCancelled : MetaDetailsEvent()
     data object OnClearMessage : MetaDetailsEvent()
     data object OnLifecyclePause : MetaDetailsEvent()
-    data class OnEpisodeRatingSourceSelected(val source: EpisodeRatingSource) : MetaDetailsEvent()
 }

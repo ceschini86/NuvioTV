@@ -50,6 +50,7 @@ internal fun LayoutDetailPageSection(
         value = episodeRatingsVisibilityLabel(uiState.detailImdbRatingsVisibility),
         onClick = { showRatingsDialog = true }
     )
+    EpisodeRatingSourceSettingRow(uiState, onEvent) // fork: Series Graph or IMDb scores
 
     SettingsSectionLabel(text = stringResource(R.string.layout_detail_group_trailers))
     if (AppFeaturePolicy.inAppTrailerPlaybackEnabled) {
