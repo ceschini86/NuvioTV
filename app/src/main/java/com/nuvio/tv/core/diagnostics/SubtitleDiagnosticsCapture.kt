@@ -63,7 +63,7 @@ class SubtitleDiagnosticsCapture @Inject constructor(
     }
 
     private fun startCaptureLocked() {
-        if (process?.isAlive == true) return
+        if (process?.isRunning() == true) return
         val dir = directory
         if (!dir.isDirectory && !dir.mkdirs()) {
             Log.w(TAG, "capture not started: cannot create $dir")
@@ -95,6 +95,15 @@ class SubtitleDiagnosticsCapture @Inject constructor(
                 "device=${Build.MANUFACTURER} ${Build.MODEL} sdk=${Build.VERSION.SDK_INT}"
         )
     }
+
+    /** [Process.isAlive] needs API 26; the app supports API 24. */
+    private fun Process.isRunning(): Boolean =
+        try {
+            exitValue()
+            false
+        } catch (_: IllegalThreadStateException) {
+            true
+        }
 
     private fun pump(source: Process, writer: RotatingLineWriter) {
         writer.use { out ->

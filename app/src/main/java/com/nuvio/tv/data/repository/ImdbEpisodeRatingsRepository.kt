@@ -71,6 +71,15 @@ class ImdbEpisodeRatingsRepository @Inject constructor(
         return deferred.await()
     }
 
+    /**
+     * Upstream call shape (continue watching, detail fallbacks): IMDb rating per episode.
+     * The fork resolves everything through Series Graph by TMDB id, so [imdbId] is ignored.
+     */
+    suspend fun getEpisodeRatings(
+        @Suppress("UNUSED_PARAMETER") imdbId: String?,
+        tmdbId: Int?
+    ): Map<Pair<Int, Int>, Double> = getEpisodeRatings(tmdbId).imdbByEpisode
+
     private suspend fun fetchFromSeriesGraph(tmdbId: Int): EpisodeRatingsPayload {
         return try {
             val response = seriesGraphApi.getSeasonRatings(tmdbId)
