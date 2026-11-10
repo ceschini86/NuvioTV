@@ -3002,7 +3002,7 @@ private fun PlayerControlsOverlay(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
+                Spacer(modifier = Modifier.height(NuvioTheme.spacing.xs)) // fork: the seek bar carries its own padding
             } else {
                 Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
             }
@@ -3249,9 +3249,11 @@ private fun PlayerControlsProgressBarHost(
     onClick: (() -> Unit)? = null
 ) {
     val playbackTimeline by viewModel.playbackTimeline.collectAsState()
+    val isScrubbing by rememberPlayerScrubbing(viewModel) // fork: Stremio-style seek bar
 
     ChapterTitle(chapters = chapters, positionMs = playbackTimeline.currentPosition)
-    ProgressBar(
+    PlayerSeekBar( // fork: Stremio-style seek bar
+        isScrubbing = isScrubbing,
         chapters = chapters,
         currentPosition = playbackTimeline.currentPosition,
         duration = playbackTimeline.duration,
@@ -3282,8 +3284,9 @@ private fun PlayerControlsTimeTextHost(viewModel: PlayerViewModel) {
 
     Text(
         text = timeText,
-        style = MaterialTheme.typography.bodyMedium,
-        color = Color.White.copy(alpha = 0.9f)
+        style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"), // fork: steady width while scrubbing
+        color = Color.White.copy(alpha = 0.9f),
+        maxLines = 1
     )
 }
 
@@ -3390,6 +3393,7 @@ private fun ControlButton(
             contentColor = contentColor,
             focusedContentColor = Color.Black
         ),
+        scale = IconButtonDefaults.scale(focusedScale = 1f, pressedScale = 1f), // fork: solid focus disc, no bubble
         shape = IconButtonDefaults.shape(shape = CircleShape)
     ) {
         if (iconPainter != null) {
@@ -3408,6 +3412,7 @@ private fun ControlButton(
     }
 }
 
+@Suppress("unused") // fork: PlayerSeekBar replaces it (PlayerSeekBar.kt)
 @Composable
 private fun ProgressBar(
     currentPosition: Long,
@@ -3619,16 +3624,18 @@ private fun SeekOverlay(
     ) {
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
             ChapterTitle(chapters = chapters, positionMs = currentPosition)
-            ProgressBar(
+            PlayerSeekBar( // fork: Stremio-style seek bar, full scrub look while seeking
                 currentPosition = currentPosition,
                 duration = duration,
                 onSeekPreview = {},
                 onSeekCommit = {},
+                preferFullScrubVisual = true,
+                isScrubbing = true,
                 bufferedPosition = bufferedPosition,
                 chapters = chapters
             )
 
-            Spacer(modifier = Modifier.height(NuvioTheme.spacing.md))
+            Spacer(modifier = Modifier.height(NuvioTheme.spacing.xs)) // fork: the seek bar carries its own padding
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
