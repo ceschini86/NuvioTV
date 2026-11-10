@@ -2108,6 +2108,7 @@ fun PlayerScreen(
             addonSubtitles = uiState.addonSubtitles,
             selectedAddonSubtitle = uiState.selectedAddonSubtitle,
             subtitleStyle = uiState.editableSubtitleStyle,
+            isEditingHdrStyle = uiState.isEditingHdrSubtitleStyle,
             subtitleDelayMs = uiState.subtitleDelayMs,
             installedSubtitleAddonOrder = uiState.installedSubtitleAddonOrder,
             isLoadingAddons = uiState.isLoadingAddonSubtitles,
