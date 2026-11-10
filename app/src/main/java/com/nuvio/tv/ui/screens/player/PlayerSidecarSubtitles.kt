@@ -47,7 +47,8 @@ private val mainHandler = Handler(Looper.getMainLooper())
  *
  * ASS/SSA are excluded when libass is requested/active: those must stay on the media-source path so
  * [com.nuvio.tv.libass.media.parser.AssSubtitleParserFactory] / AssSubtitleSurfaceView keep full
- * styling. SRT/VTT/TTML still use the buffer-preserving sidecar.
+ * styling. SRT/VTT/TTML still use the buffer-preserving sidecar. While AI translates, ASS/SSA comes
+ * here too, because libass hands no text to translate (see PlayerAiSubtitleRouting.kt).
  */
 internal fun PlayerRuntimeController.canAttachAddonSubtitleViaSidecar(subtitle: Subtitle): Boolean {
     val mime = PlayerSubtitleUtils.mimeTypeFromUrl(subtitle.url)
@@ -76,7 +77,10 @@ internal fun PlayerRuntimeController.canAttachAddonSubtitleViaSidecar(
  */
 private fun PlayerRuntimeController.shouldKeepAssOnLibassMediaPath(): Boolean {
     if (isUsingMpvEngine()) return false
-    return requestedUseLibassByUser || activePlayerUsesLibass
+    return keepAssOnLibass(
+        libassWanted = requestedUseLibassByUser || activePlayerUsesLibass,
+        aiTranslating = isAiTranslationOn(),
+    )
 }
 
 internal fun PlayerRuntimeController.isSidecarAddonSubtitleActive(): Boolean {

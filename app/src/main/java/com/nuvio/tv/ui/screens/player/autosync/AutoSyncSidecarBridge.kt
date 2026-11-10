@@ -191,7 +191,7 @@ private fun clampIntroducedSidecarOverlaps(
     }
 }
 
-private fun retimeSidecarTimedCues(
+internal fun retimeSidecarTimedCues( // fork: internal for the AI + AutoSync test (#16)
     source: List<CuesWithTiming>,
     timeline: AutoSyncTimelineRetimeResult,
 ): List<CuesWithTiming> {

@@ -107,7 +107,7 @@ internal fun PlayerRuntimeController.maybeRunAutomaticSubtitleSync(
     }
 
     val player = _exoPlayer ?: return
-    val useLibass = requestedUseLibassByUser || activePlayerUsesLibass
+    val useLibass = keepAssOnLibass(requestedUseLibassByUser || activePlayerUsesLibass, isAiTranslationOn()) // fork: AI needs text cues (#16)
 
     // ASS/SSA stays on libass's own path so its styling is kept; the result is applied there.
     if (useLibass && isLibassAddonSubtitle(selectedSubtitle)) {
@@ -292,6 +292,7 @@ internal fun PlayerRuntimeController.maybeRunAutomaticSubtitleSync(
             }
             if (!resolved.reused) setSubtitleDelayMs(targetMs = 0, showOverlay = false)
             AutoSyncSyncedSubtitle.mark(chosenSubtitle.url)
+            logAutoSyncAdjustedTranslatedSource(chosenSubtitle) // fork: Diagnóstico de legendas (#16)
         } catch (cancel: CancellationException) {
             throw cancel
         } catch (error: Throwable) {

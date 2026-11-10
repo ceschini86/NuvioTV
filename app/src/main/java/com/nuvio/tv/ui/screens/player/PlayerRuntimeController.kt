@@ -754,6 +754,8 @@ class PlayerRuntimeController(
     internal var libassPipelineSwitchInFlight: Boolean = false
     internal var hasDetectedAssSsaTrackForCurrentStream: Boolean = false
     internal var libassPipelineDecisionStreamUrl: String? = null
+    /** Fork (#16): stream that runs without libass so AI can read its embedded ASS/SSA track. */
+    internal var aiTextPipelineStreamUrl: String? = null
     internal var torrentStreamJob: Job? = null
     internal var torrentStateObserverJob: Job? = null
     internal var isTorrentStream: Boolean = navigationArgs.infoHash != null && !initialStreamUrl.startsWith("http")

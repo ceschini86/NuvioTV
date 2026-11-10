@@ -469,9 +469,10 @@ internal fun PlayerRuntimeController.maybeAdjustLibassPipelineForTracks(tracks: 
 
     // Don't rebuild just to drop libass, except when it's holding the MKV extractor on a DV
     // file and blocking conversion; then drop it so the DV extractor runs.
-    val desiredUseLibass = requestedUseLibassByUser && hasDetectedAssSsaTrackForCurrentStream
+    val aiNeedsText = aiNeedsTextPipeline(tracks.hasSelectedAssSsaTextTrack()) // fork: AI reads ASS as text (#16)
+    val desiredUseLibass = requestedUseLibassByUser && hasDetectedAssSsaTrackForCurrentStream && !aiNeedsText
     val needsLibassPipelineSwitch = desiredUseLibass != activePlayerUsesLibass &&
-        (desiredUseLibass || run {
+        (desiredUseLibass || aiNeedsText || run {
             val libassBlockingDvConvert = activePlayerUsesLibass &&
                     isExperimentalDv7ToDv81ActiveForCurrentPlayback &&
                     tracks.hasDolbyVisionConvertibleVideoTrack()
