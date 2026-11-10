@@ -3520,6 +3520,11 @@
     <string name="sub_ai_option_meta">Tradução com IA para o idioma preferido</string>
     <string name="sub_ai_translating">Traduzindo…</string>
     <string name="sub_ai_option_badge">IA</string>
+    <string name="sub_ai_enabled">Tradução de legendas com IA</string>
+    <string name="sub_ai_enabled_desc">Traduza legendas com sua própria chave de API do Groq, Gemini ou Claude (só ExoPlayer)</string>
+    <string name="sub_ai_model_groq">Groq (gpt-oss-120b)</string>
+    <string name="sub_ai_model_gemini">Gemini (3.5 Flash Lite)</string>
+    <string name="sub_ai_model_claude">Claude (Haiku 4.5)</string>
     <string name="sub_ai_auto_select">Legendas inteligentes com IA</string>
     <string name="sub_ai_auto_select_desc">Embutida no idioma preferido, depois IA a partir da embutida; senão seleção clássica. Addons só com Traduzir com IA</string>
 </resources>
