@@ -967,6 +967,7 @@
     <string name="sub_ai_advanced_reset">Reset AI tuning to defaults</string>
     <string name="sub_ai_model_preferred_desc">Tried first among enabled providers</string>
     <string name="sub_ai_translating">Translating…</string>
+    <string name="autosync_label_syncing">Syncing…</string>
     <string name="sub_ai_translate_action">AI translate</string>
     <string name="sub_ai_unavailable_mpv">AI translation is available only with ExoPlayer</string>
     <string name="sub_organization">Subtitle Organization</string>

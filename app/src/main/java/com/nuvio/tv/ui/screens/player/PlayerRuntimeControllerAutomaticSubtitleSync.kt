@@ -148,6 +148,7 @@ internal fun PlayerRuntimeController.maybeRunAutomaticSubtitleSync(
         .build()
 
     automaticSubtitleSyncJob = scope.launch {
+        trackAutoSyncRun(selectedUrl) // fork: "Syncing…" chip
         launch {
             val body = try {
                 AutomaticSubtitleSync.downloadSubtitleBody(
@@ -326,6 +327,7 @@ private fun PlayerRuntimeController.runMpvAutomaticSubtitleSync(
     val candidateByUrl = candidatesAtStart.associateBy { it.url }
 
     automaticSubtitleSyncJob = scope.launch {
+        trackAutoSyncRun(selectedUrl) // fork: "Syncing…" chip
         fun streamUnchanged(): Boolean =
             currentStreamUrl == sourceUrlAtStart && isUsingMpvEngine()
 
@@ -471,6 +473,7 @@ private fun PlayerRuntimeController.runLibassAutomaticSubtitleSync(
     val candidateByUrl = candidatesAtStart.associateBy { it.url }
 
     automaticSubtitleSyncJob = scope.launch {
+        trackAutoSyncRun(selectedUrl) // fork: "Syncing…" chip
         fun streamUnchanged(): Boolean =
             currentStreamUrl == sourceUrlAtStart && _exoPlayer === player && !isUsingMpvEngine()
 
