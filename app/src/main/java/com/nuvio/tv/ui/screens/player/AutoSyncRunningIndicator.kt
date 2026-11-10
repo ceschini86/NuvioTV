@@ -31,6 +31,7 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
+import com.nuvio.tv.ui.screens.player.autosync.AutoSyncAnalysisOutcome
 import com.nuvio.tv.ui.screens.player.autosync.AutoSyncSyncedSubtitle
 import com.nuvio.tv.ui.theme.NuvioTheme
 import kotlinx.coroutines.CoroutineScope
@@ -48,10 +49,42 @@ import kotlinx.coroutines.flow.asStateFlow
 
 internal enum class AutoSyncRunState { RUNNING, FAILED }
 
-internal data class AutoSyncRunStatus(val url: String, val state: AutoSyncRunState)
+/** Why a run ended without a match, for the Info card. */
+internal enum class AutoSyncFailureReason {
+    /** The subtitle clearly fits none of the video's own subtitles: another release. */
+    NO_FIT,
+    /** The video has no embedded subtitles to compare against. */
+    NO_EMBEDDED,
+    /** Embedded subtitles exist but none could serve (image-based, or not loaded in time). */
+    NO_USABLE_REFERENCE,
+    /** The add-on subtitle could not be downloaded. */
+    DOWNLOAD_FAILED,
+    /** No confident match, and nothing shows it does not fit. */
+    INCONCLUSIVE,
+    /** The run ended without an analysis result (error, or the result could not be applied). */
+    NOT_APPLIED,
+}
+
+internal fun autoSyncFailureReason(outcome: AutoSyncAnalysisOutcome?): AutoSyncFailureReason =
+    when (outcome) {
+        AutoSyncAnalysisOutcome.NO_FIT -> AutoSyncFailureReason.NO_FIT
+        AutoSyncAnalysisOutcome.NO_SUBTITLE_TRACKS -> AutoSyncFailureReason.NO_EMBEDDED
+        AutoSyncAnalysisOutcome.NO_USABLE_REFERENCE -> AutoSyncFailureReason.NO_USABLE_REFERENCE
+        AutoSyncAnalysisOutcome.SUBTITLE_UNAVAILABLE -> AutoSyncFailureReason.DOWNLOAD_FAILED
+        AutoSyncAnalysisOutcome.INCONCLUSIVE -> AutoSyncFailureReason.INCONCLUSIVE
+        null -> AutoSyncFailureReason.NOT_APPLIED
+    }
+
+internal data class AutoSyncRunStatus(
+    val url: String,
+    val state: AutoSyncRunState,
+    val reason: AutoSyncFailureReason? = null,
+)
 
 internal object AutoSyncRunningSubtitle {
-    private data class Run(val url: String, val job: Job)
+    private class Run(val url: String, val job: Job) {
+        @Volatile var outcome: AutoSyncAnalysisOutcome? = null
+    }
 
     private val current = MutableStateFlow<Run?>(null)
     private val _status = MutableStateFlow<AutoSyncRunStatus?>(null)
@@ -76,9 +109,18 @@ internal object AutoSyncRunningSubtitle {
             _status.value = when {
                 cause != null -> null
                 syncedUrl() == subtitleUrl -> null // the "Auto synced" chip takes over
-                else -> AutoSyncRunStatus(subtitleUrl, AutoSyncRunState.FAILED)
+                else -> AutoSyncRunStatus(
+                    subtitleUrl,
+                    AutoSyncRunState.FAILED,
+                    autoSyncFailureReason(run.outcome),
+                )
             }
         }
+    }
+
+    /** The analysis of the current run for [subtitleUrl] ended with [outcome]; the last one wins. */
+    fun noteOutcome(subtitleUrl: String, outcome: AutoSyncAnalysisOutcome) {
+        current.value?.takeIf { it.url == subtitleUrl }?.outcome = outcome
     }
 }
 
@@ -116,38 +158,142 @@ internal fun AutoSyncStatusChip(subtitleUrl: String, selected: Boolean) {
             ),
             style = MaterialTheme.typography.labelSmall,
             color = contentColor,
+            maxLines = 1,
+            softWrap = false,
         )
     }
 }
 
-/** The dot on the player's subtitle button: AutoSync's state for the selected add-on subtitle. */
-internal enum class AutoSyncDotState { RUNNING, SYNCED, FAILED }
+/**
+ * AutoSync lines of the subtitle Info card for the add-on subtitle at [subtitleUrl]: whether it
+ * is syncing, synced or failed, and why it failed. Empty when AutoSync has not checked it.
+ */
+@Composable
+internal fun AutoSyncInfoLines(subtitleUrl: String?) {
+    val status by AutoSyncRunningSubtitle.status.collectAsState()
+    val syncedUrl by AutoSyncSyncedSubtitle.url.collectAsState()
+    if (subtitleUrl == null) return
+    val runStatus = status?.takeIf { it.url == subtitleUrl }
+    val state = autoSyncDotState(subtitleUrl, runStatus, syncedUrl) ?: return
+    val stateLabel = stringResource(autoSyncStateLabel(state))
+    Text(
+        text = stringResource(R.string.autosync_info_status, stateLabel),
+        style = MaterialTheme.typography.bodySmall,
+        color = if (state.isFailure) autoSyncDotColor(state) else Color.White.copy(alpha = 0.7f),
+    )
+    if (state == AutoSyncDotState.SYNCED) {
+        AutoSyncAdjustmentLines(subtitleUrl)
+        return
+    }
+    val reason = runStatus?.reason?.takeIf { state.isFailure } ?: return
+    Text(
+        text = stringResource(autoSyncFailureReasonText(reason)),
+        style = MaterialTheme.typography.bodySmall,
+        color = Color.White.copy(alpha = 0.7f),
+    )
+}
+
+/** How the synced subtitle was corrected and by how much ([AutoSyncAdjustment]). */
+@Composable
+private fun AutoSyncAdjustmentLines(subtitleUrl: String) {
+    val applied by AutoSyncLastAdjustment.value.collectAsState()
+    val adjustment = applied?.takeIf { it.url == subtitleUrl }?.adjustment ?: return
+    val lines = buildList {
+        add(
+            stringResource(
+                R.string.autosync_info_method,
+                stringResource(
+                    when (adjustment.method) {
+                        AutoSyncMethod.KEPT -> R.string.autosync_method_kept
+                        AutoSyncMethod.DELAY -> R.string.autosync_method_delay
+                        AutoSyncMethod.DELAY_AND_SPEED -> R.string.autosync_method_speed
+                    }
+                ),
+            )
+        )
+        add(
+            when (adjustment.method) {
+                AutoSyncMethod.KEPT -> stringResource(
+                    R.string.autosync_info_kept_diff,
+                    formatAutoSyncShift(adjustment.startShiftMs).removePrefix("+"),
+                )
+                AutoSyncMethod.DELAY -> stringResource(
+                    R.string.autosync_info_shift,
+                    formatAutoSyncShift(adjustment.startShiftMs),
+                )
+                AutoSyncMethod.DELAY_AND_SPEED -> stringResource(
+                    R.string.autosync_info_shift_range,
+                    formatAutoSyncShift(adjustment.startShiftMs),
+                    formatAutoSyncShift(adjustment.endShiftMs),
+                    formatAutoSyncSpeed(adjustment.speedPercent),
+                )
+            }
+        )
+        if (adjustment.locallyAdjustedLines > 0) {
+            add(stringResource(R.string.autosync_info_local_lines, adjustment.locallyAdjustedLines))
+        }
+        if (adjustment.switchedSubtitle) add(stringResource(R.string.autosync_info_switched))
+    }
+    lines.forEach { line ->
+        Text(
+            text = line,
+            style = MaterialTheme.typography.bodySmall,
+            color = Color.White.copy(alpha = 0.7f),
+        )
+    }
+}
+
+private fun autoSyncFailureReasonText(reason: AutoSyncFailureReason): Int = when (reason) {
+    AutoSyncFailureReason.NO_FIT -> R.string.autosync_reason_no_fit
+    AutoSyncFailureReason.NO_EMBEDDED -> R.string.autosync_reason_no_embedded
+    AutoSyncFailureReason.NO_USABLE_REFERENCE -> R.string.autosync_reason_no_usable_reference
+    AutoSyncFailureReason.DOWNLOAD_FAILED -> R.string.autosync_reason_download_failed
+    AutoSyncFailureReason.INCONCLUSIVE -> R.string.autosync_reason_inconclusive
+    AutoSyncFailureReason.NOT_APPLIED -> R.string.autosync_reason_not_applied
+}
+
+/**
+ * The dot on the player's subtitle button: whether the subtitle on screen is in sync with the
+ * video. Green for an embedded track (timed with the video itself) or an add-on subtitle AutoSync
+ * synced or confirmed; white while AutoSync checks; red when it found the subtitle does not fit
+ * this release; amber when it could not tell (no embedded reference, inconclusive, error).
+ */
+internal enum class AutoSyncDotState { RUNNING, SYNCED, EMBEDDED, FAILED, NO_FIT }
+
+internal val AutoSyncDotState.isFailure: Boolean
+    get() = this == AutoSyncDotState.FAILED || this == AutoSyncDotState.NO_FIT
 
 internal fun autoSyncDotState(
     selectedAddonUrl: String?,
     runStatus: AutoSyncRunStatus?,
     syncedUrl: String?,
+    embeddedSelected: Boolean = false,
 ): AutoSyncDotState? {
-    if (selectedAddonUrl == null) return null
+    if (selectedAddonUrl == null) return if (embeddedSelected) AutoSyncDotState.EMBEDDED else null
     if (runStatus?.url == selectedAddonUrl) {
         return when (runStatus.state) {
             AutoSyncRunState.RUNNING -> AutoSyncDotState.RUNNING
-            AutoSyncRunState.FAILED -> AutoSyncDotState.FAILED
+            AutoSyncRunState.FAILED ->
+                if (runStatus.reason == AutoSyncFailureReason.NO_FIT) AutoSyncDotState.NO_FIT else AutoSyncDotState.FAILED
         }
     }
     return if (syncedUrl == selectedAddonUrl) AutoSyncDotState.SYNCED else null
 }
 
 /**
- * Wraps the player's subtitle button with a small dot for AutoSync, so the state shows with the
- * controls without opening the subtitle menu: white pulsing while checking, green once synced,
- * amber when it failed (no fit, no embedded reference, inconclusive). No dot otherwise.
+ * Wraps the player's subtitle button with a small dot telling whether the subtitle is in sync,
+ * visible with the controls without opening the subtitle menu (colors in [AutoSyncDotState]).
+ * No dot with subtitles off, or for an add-on subtitle AutoSync has not checked.
  */
 @Composable
-internal fun AutoSyncStatusBadge(selectedAddonUrl: String?, content: @Composable () -> Unit) {
+internal fun AutoSyncStatusBadge(
+    selectedAddonUrl: String?,
+    embeddedSelected: Boolean = false,
+    content: @Composable () -> Unit,
+) {
     val runStatus by AutoSyncRunningSubtitle.status.collectAsState()
     val syncedUrl by AutoSyncSyncedSubtitle.url.collectAsState()
-    val state = autoSyncDotState(selectedAddonUrl, runStatus, syncedUrl)
+    val state = autoSyncDotState(selectedAddonUrl, runStatus, syncedUrl, embeddedSelected)
     Box {
         content()
         if (state != null) {
@@ -163,13 +309,7 @@ internal fun AutoSyncStatusBadge(selectedAddonUrl: String?, content: @Composable
             } else {
                 1f
             }
-            val label = stringResource(
-                when (state) {
-                    AutoSyncDotState.RUNNING -> R.string.autosync_label_syncing
-                    AutoSyncDotState.SYNCED -> R.string.autosync_label_synced
-                    AutoSyncDotState.FAILED -> R.string.autosync_label_failed
-                }
-            )
+            val label = stringResource(autoSyncStateLabel(state))
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -187,6 +327,14 @@ internal fun AutoSyncStatusBadge(selectedAddonUrl: String?, content: @Composable
 
 private fun autoSyncDotColor(state: AutoSyncDotState): Color = when (state) {
     AutoSyncDotState.RUNNING -> Color.White
-    AutoSyncDotState.SYNCED -> Color(0xFF4CAF50)
+    AutoSyncDotState.SYNCED, AutoSyncDotState.EMBEDDED -> Color(0xFF4CAF50)
     AutoSyncDotState.FAILED -> Color(0xFFFFB300)
+    AutoSyncDotState.NO_FIT -> Color(0xFFE53935)
+}
+
+private fun autoSyncStateLabel(state: AutoSyncDotState): Int = when (state) {
+    AutoSyncDotState.RUNNING -> R.string.autosync_label_syncing
+    AutoSyncDotState.SYNCED -> R.string.autosync_label_synced
+    AutoSyncDotState.EMBEDDED -> R.string.autosync_label_embedded
+    AutoSyncDotState.FAILED, AutoSyncDotState.NO_FIT -> R.string.autosync_label_failed
 }

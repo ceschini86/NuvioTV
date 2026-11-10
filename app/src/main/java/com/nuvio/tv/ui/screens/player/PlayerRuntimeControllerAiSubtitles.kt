@@ -374,7 +374,8 @@ internal fun PlayerRuntimeController.observeSubtitleAiSettings() {
             subtitleAiApiKey = credentials.enabledProviders().firstOrNull()?.usableKeys?.firstOrNull()
                 ?: legacyKey
             subtitleAiFeatureEnabled = style.aiEnabled
-            subtitleAiAutoSelect = style.aiAutoSelect
+            // Smart AI (the AI auto-select ladder) is hidden: upstream's auto-select only.
+            subtitleAiAutoSelect = SMART_AI_AUTO_SELECT_AVAILABLE && style.aiAutoSelect
 
             val manager = ensureSubtitleTranslationManager()
             manager.updateCredentials(credentials)
@@ -396,7 +397,7 @@ internal fun PlayerRuntimeController.observeSubtitleAiSettings() {
 
             if (!canUseAi && manager.isEnabled) {
                 setAiSubtitleTranslationEnabled(false)
-            } else if (style.aiAutoSelect && canUseAi) {
+            } else if (subtitleAiAutoSelect && canUseAi) {
                 applySubtitleAutoSelectPolicy()
             }
 
@@ -446,6 +447,9 @@ internal fun PlayerRuntimeController.cycleSubtitleAiPreferredProvider() {
         playerSettingsDataStore.setSubtitleAiModel(next.name)
     }
 }
+
+/** Smart AI subtitles (AI auto-select ladder). Hidden since 1.1.0's AutoSync makes add-ons reliable. */
+internal const val SMART_AI_AUTO_SELECT_AVAILABLE = false
 
 private data class AiSettingsSnapshot(
     val style: com.nuvio.tv.data.local.SubtitleStyleSettings,

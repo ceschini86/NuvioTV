@@ -62,7 +62,7 @@ import com.nuvio.tv.ui.theme.NuvioTheme
 import kotlinx.coroutines.launch
 
 /**
- * Fork: Playback → AI subtitles section (providers, keys, Smart AI, profile sync, advanced tuning,
+ * Fork: Playback → AI subtitles section (providers, keys, profile sync, advanced tuning,
  * subtitle diagnostics). Lives in its own file so upstream settings files only carry the section
  * enum entry and the `when` branch (docs/adr/0001).
  */
@@ -91,13 +91,6 @@ internal fun PlaybackAiSubtitlesSection(
         checked = style.aiEnabled,
         onToggle = { onUpdate { setSubtitleAiEnabled(!style.aiEnabled) } },
         enabled = enabled
-    )
-    SettingsToggleRow(
-        title = stringResource(R.string.sub_ai_auto_select),
-        subtitle = stringResource(R.string.sub_ai_auto_select_desc),
-        checked = style.aiAutoSelect,
-        onToggle = { onUpdate { setSubtitleAiAutoSelect(!style.aiAutoSelect) } },
-        enabled = aiOn
     )
     SettingsToggleRow(
         title = stringResource(R.string.sub_ai_sync_with_profile),

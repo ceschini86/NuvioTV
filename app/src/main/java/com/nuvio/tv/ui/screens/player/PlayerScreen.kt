@@ -3049,7 +3049,7 @@ private fun PlayerControlsOverlay(
                     }
 
                     if (hasSubtitleControl) {
-                        AutoSyncStatusBadge(uiState.selectedAddonSubtitle?.url) { // fork: AutoSync dot
+                        AutoSyncStatusBadge(uiState.selectedAddonSubtitle?.url, embeddedSelected = uiState.selectedSubtitleTrackIndex >= 0) { // fork: AutoSync dot
                             ControlButton(
                                 icon = Icons.Default.ClosedCaption,
                                 iconPainter = customSubtitlePainter,

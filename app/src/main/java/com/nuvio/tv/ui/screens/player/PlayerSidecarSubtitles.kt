@@ -495,7 +495,7 @@ private fun PlayerRuntimeController.prefetchSidecarAiWindow(
 }
 
 private fun PlayerRuntimeController.showSidecarCues(view: SubtitleView, cues: List<Cue>) {
-    view.setCues(cues)
+    view.setCues(topBoxCues(cues)) // fork: SubtitleTopBox.kt
     subtitleCueTracker.update(cues)
 }
 

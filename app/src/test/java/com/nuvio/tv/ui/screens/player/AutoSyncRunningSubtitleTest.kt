@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.player
 
+import com.nuvio.tv.ui.screens.player.autosync.AutoSyncAnalysisOutcome
 import kotlinx.coroutines.Job
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -27,7 +28,7 @@ class AutoSyncRunningSubtitleTest {
         AutoSyncRunningSubtitle.track(url, run, syncedUrl = { null })
 
         run.complete()
-        assertEquals(AutoSyncRunStatus(url, AutoSyncRunState.FAILED), status())
+        assertEquals(AutoSyncRunStatus(url, AutoSyncRunState.FAILED, AutoSyncFailureReason.NOT_APPLIED), status())
     }
 
     @Test
@@ -36,7 +37,7 @@ class AutoSyncRunningSubtitleTest {
         AutoSyncRunningSubtitle.track(url, run, syncedUrl = { "https://addon/other.srt" })
 
         run.complete()
-        assertEquals(AutoSyncRunStatus(url, AutoSyncRunState.FAILED), status())
+        assertEquals(AutoSyncRunStatus(url, AutoSyncRunState.FAILED, AutoSyncFailureReason.NOT_APPLIED), status())
     }
 
     @Test
@@ -59,7 +60,7 @@ class AutoSyncRunningSubtitleTest {
         assertEquals(AutoSyncRunStatus(url, AutoSyncRunState.RUNNING), status())
 
         second.complete()
-        assertEquals(AutoSyncRunStatus(url, AutoSyncRunState.FAILED), status())
+        assertEquals(AutoSyncRunStatus(url, AutoSyncRunState.FAILED, AutoSyncFailureReason.NOT_APPLIED), status())
     }
 
     @Test
@@ -87,5 +88,38 @@ class AutoSyncRunningSubtitleTest {
         assertNull(autoSyncDotState(selectedAddonUrl = null, runStatus = other, syncedUrl = url))
         assertNull(autoSyncDotState(url, other, syncedUrl = null))
         assertNull(autoSyncDotState(url, runStatus = null, syncedUrl = null))
+    }
+
+    @Test
+    fun `a failed run carries the reason of its last analysis`() {
+        val run = Job()
+        AutoSyncRunningSubtitle.track(url, run, syncedUrl = { null })
+        AutoSyncRunningSubtitle.noteOutcome(url, AutoSyncAnalysisOutcome.INCONCLUSIVE)
+        AutoSyncRunningSubtitle.noteOutcome(url, AutoSyncAnalysisOutcome.NO_FIT)
+        AutoSyncRunningSubtitle.noteOutcome("https://addon/other.srt", AutoSyncAnalysisOutcome.NO_SUBTITLE_TRACKS)
+
+        run.complete()
+        assertEquals(AutoSyncRunStatus(url, AutoSyncRunState.FAILED, AutoSyncFailureReason.NO_FIT), status())
+    }
+
+    @Test
+    fun `every analysis outcome maps to a reason`() {
+        assertEquals(AutoSyncFailureReason.NO_EMBEDDED, autoSyncFailureReason(AutoSyncAnalysisOutcome.NO_SUBTITLE_TRACKS))
+        assertEquals(AutoSyncFailureReason.NO_USABLE_REFERENCE, autoSyncFailureReason(AutoSyncAnalysisOutcome.NO_USABLE_REFERENCE))
+        assertEquals(AutoSyncFailureReason.DOWNLOAD_FAILED, autoSyncFailureReason(AutoSyncAnalysisOutcome.SUBTITLE_UNAVAILABLE))
+        assertEquals(AutoSyncFailureReason.INCONCLUSIVE, autoSyncFailureReason(AutoSyncAnalysisOutcome.INCONCLUSIVE))
+        assertEquals(AutoSyncFailureReason.NOT_APPLIED, autoSyncFailureReason(null))
+    }
+
+    @Test
+    fun `dot is green for an embedded track and red only for a confirmed no-fit`() {
+        assertEquals(AutoSyncDotState.EMBEDDED, autoSyncDotState(null, null, null, embeddedSelected = true))
+        assertNull(autoSyncDotState(null, null, null, embeddedSelected = false))
+        val noFit = AutoSyncRunStatus(url, AutoSyncRunState.FAILED, AutoSyncFailureReason.NO_FIT)
+        val unverified = AutoSyncRunStatus(url, AutoSyncRunState.FAILED, AutoSyncFailureReason.NO_EMBEDDED)
+        assertEquals(AutoSyncDotState.NO_FIT, autoSyncDotState(url, noFit, null))
+        assertEquals(AutoSyncDotState.FAILED, autoSyncDotState(url, unverified, null))
+        // The add-on subtitle wins over a stale embedded index.
+        assertEquals(AutoSyncDotState.SYNCED, autoSyncDotState(url, null, url, embeddedSelected = true))
     }
 }

@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -159,6 +160,29 @@ internal fun SubtitleOverlayStyleRail(
                             color = Color.White.copy(alpha = 0.7f)
                         )
                     }
+                }
+            }
+            item {
+                // Fork: per-title "Top + black background" (SubtitleTopBox.kt).
+                val topBoxOn by SubtitleTopBox.enabled.collectAsState()
+                OverlaySectionCard(
+                    title = stringResource(R.string.subtitle_top_box),
+                    modifier = styleCardModifier
+                ) {
+                    ToggleChip(
+                        label = if (topBoxOn) stringResource(R.string.subtitle_style_on) else stringResource(R.string.subtitle_style_off),
+                        isEnabled = topBoxOn,
+                        onMoveLeft = onMoveLeft,
+                        focusRequester = focusRequesters[StyleFocusKey.TopBox],
+                        focusKey = StyleFocusKey.TopBox,
+                        onFocused = onStyleFocused,
+                        onClick = { dispatchStyleEvent(PlayerEvent.OnToggleSubtitleTopBox) }
+                    )
+                    Text(
+                        text = stringResource(R.string.subtitle_top_box_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.6f)
+                    )
                 }
             }
             item {
@@ -706,6 +730,7 @@ internal object StyleFocusKey {
     const val OffsetDecrease = "offset_decrease"
     const val OffsetIncrease = "offset_increase"
     const val DelaySet = "delay_set"
+    const val TopBox = "top_box"
     const val Reset = "reset"
     const val TextColorPrefix = "text_color"
     const val OpacityDecrease = "opacity_decrease"
@@ -721,21 +746,22 @@ internal fun String.isHdrBrightnessFocusKey(): Boolean =
 
 /** The HDR brightness item sits right after opacity, shifting every later item down by one. */
 internal fun styleListIndexForFocusKey(focusKey: String, hasHdrBrightnessItem: Boolean): Int {
-    if (focusKey.isHdrBrightnessFocusKey()) return 5
+    if (focusKey.isHdrBrightnessFocusKey()) return 6
     val index = styleListIndexForFocusKey(focusKey)
-    return if (hasHdrBrightnessItem && index >= 5) index + 1 else index
+    return if (hasHdrBrightnessItem && index >= 6) index + 1 else index
 }
 
 internal fun styleListIndexForFocusKey(focusKey: String): Int {
     return when {
         focusKey == StyleFocusKey.DelaySet -> 0
-        focusKey == StyleFocusKey.FontSizeDecrease || focusKey == StyleFocusKey.FontSizeIncrease -> 1
-        focusKey == StyleFocusKey.Bold -> 2
-        focusKey.startsWith("${StyleFocusKey.TextColorPrefix}:") -> 3
-        focusKey == StyleFocusKey.OpacityDecrease || focusKey == StyleFocusKey.OpacityIncrease -> 4
-        focusKey == StyleFocusKey.OutlineToggle || focusKey.startsWith("${StyleFocusKey.OutlineColorPrefix}:") -> 5
-        focusKey == StyleFocusKey.OffsetDecrease || focusKey == StyleFocusKey.OffsetIncrease -> 6
-        focusKey == StyleFocusKey.Reset -> 7
+        focusKey == StyleFocusKey.TopBox -> 1
+        focusKey == StyleFocusKey.FontSizeDecrease || focusKey == StyleFocusKey.FontSizeIncrease -> 2
+        focusKey == StyleFocusKey.Bold -> 3
+        focusKey.startsWith("${StyleFocusKey.TextColorPrefix}:") -> 4
+        focusKey == StyleFocusKey.OpacityDecrease || focusKey == StyleFocusKey.OpacityIncrease -> 5
+        focusKey == StyleFocusKey.OutlineToggle || focusKey.startsWith("${StyleFocusKey.OutlineColorPrefix}:") -> 6
+        focusKey == StyleFocusKey.OffsetDecrease || focusKey == StyleFocusKey.OffsetIncrease -> 7
+        focusKey == StyleFocusKey.Reset -> 8
         else -> 0
     }
 }
@@ -756,6 +782,7 @@ internal fun rememberStyleFocusRequesters(): Map<String, FocusRequester> {
             StyleFocusKey.OffsetDecrease,
             StyleFocusKey.OffsetIncrease,
             StyleFocusKey.DelaySet,
+            StyleFocusKey.TopBox,
             StyleFocusKey.Reset
         ).associateWith { FocusRequester() } +
             SubtitleTextColorPresets.associate { color ->

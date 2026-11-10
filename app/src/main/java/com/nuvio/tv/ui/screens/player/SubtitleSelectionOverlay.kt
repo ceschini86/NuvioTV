@@ -187,7 +187,7 @@ internal fun SubtitleSelectionOverlay(
         embeddedAiAvailability
     ) {
         SubtitleInfoSmartContext(
-            smartAiEnabled = subtitleStyle.aiAutoSelect,
+            smartAiEnabled = false, // fork: Smart AI hidden, upstream auto-select only
             preferredLanguageNone = preferredLanguageNone,
             forcedApplies = forcedAppliesSmartBlock,
             embeddedAvailability = embeddedAiAvailability,
@@ -1346,6 +1346,10 @@ internal fun SubtitleSelectionOverlay(
                                 aiSubtitleLastError = aiSubtitleLastError,
                                 aiSubtitleTranslationActive = aiSubtitleTranslationActive,
                                 subtitleAiCredentials = subtitleAiCredentials,
+                                autoSyncSubtitleUrl = infoDisplayOption?.addonSubtitle?.url
+                                    ?: selectedAddonSubtitle?.url?.takeIf {
+                                        infoDisplayOption?.kind == SubtitleOptionKind.AI && aiSubtitleTranslationActive
+                                    },
                                 onMoveLeft = ::moveFocusBackToOptionRail,
                                 onBack = ::handleOverlayBack,
                                 ctaFocusRequester = infoTranslateRequester,
@@ -1636,6 +1640,7 @@ private fun SubtitleInfoRail(
     aiSubtitleLastError: String?,
     aiSubtitleTranslationActive: Boolean,
     subtitleAiCredentials: SubtitleAiCredentials,
+    autoSyncSubtitleUrl: String?,
     onMoveLeft: () -> Unit,
     onBack: () -> Unit,
     ctaFocusRequester: FocusRequester,
@@ -1658,6 +1663,7 @@ private fun SubtitleInfoRail(
             aiSubtitleLastError = aiSubtitleLastError,
             aiSubtitleTranslationActive = aiSubtitleTranslationActive,
             subtitleAiCredentials = subtitleAiCredentials,
+            autoSyncSubtitleUrl = autoSyncSubtitleUrl,
             onMoveLeft = onMoveLeft,
             onBack = onBack,
             ctaFocusRequester = ctaFocusRequester,
@@ -1677,6 +1683,7 @@ private fun SubtitleInfoPane(
     aiSubtitleLastError: String?,
     aiSubtitleTranslationActive: Boolean,
     subtitleAiCredentials: SubtitleAiCredentials,
+    autoSyncSubtitleUrl: String?,
     onMoveLeft: () -> Unit,
     onBack: () -> Unit,
     ctaFocusRequester: FocusRequester,
@@ -1765,7 +1772,8 @@ private fun SubtitleInfoPane(
                             }
                         )
                     }
-                    content.unavailableReason?.let { reason ->
+                    AutoSyncInfoLines(autoSyncSubtitleUrl) // fork: AutoSync status, not translation diagnostics
+                    content.unavailableReason?.takeIf { it.blocksAiTranslate() }?.let { reason ->
                         val reasonText = when (reason) {
                             SubtitleInfoUnavailableReason.MPV ->
                                 stringResource(R.string.sub_ai_unavailable_mpv)
@@ -1812,7 +1820,8 @@ private fun SubtitleInfoPane(
                     content.fields.forEach { field ->
                         if (field.key == SubtitleInfoFieldKey.STATUS ||
                             field.key == SubtitleInfoFieldKey.SCORE ||
-                            field.key == SubtitleInfoFieldKey.TRACK_NAME
+                            field.key == SubtitleInfoFieldKey.TRACK_NAME ||
+                            field.key in TranslationDiagnosticFields
                         ) {
                             return@forEach
                         }
@@ -1874,7 +1883,8 @@ private fun SubtitleInfoPane(
             }
             SubtitleInfoCtaAction.RESET_TO_CLASSIC_AUTO -> {
                 SubtitleInfoActionCard(
-                    label = stringResource(R.string.sub_ai_reset_to_classic),
+                    // Smart AI is hidden, so classic is the only automatic selection.
+                    label = stringResource(R.string.sub_ai_reset_to_smart),
                     focusKey = InfoFocusKey.ResetSmart,
                     focusRequester = if (cta.canMoveFocusToCta) ctaFocusRequester else null,
                     enabled = cta.enabled,
@@ -1906,6 +1916,17 @@ private fun SubtitleInfoPane(
         }
     }
 }
+
+/** Translation/ladder diagnostics the Info card no longer shows (AutoSync status replaced them). */
+private val TranslationDiagnosticFields = setOf(
+    SubtitleInfoFieldKey.SOURCE,
+    SubtitleInfoFieldKey.METHOD,
+    SubtitleInfoFieldKey.RUNG,
+    SubtitleInfoFieldKey.REASON,
+    SubtitleInfoFieldKey.TARGET,
+    SubtitleInfoFieldKey.MODEL,
+    SubtitleInfoFieldKey.LOCKED
+)
 
 @Composable
 private fun infoFieldLabel(key: SubtitleInfoFieldKey): String? = when (key) {

@@ -800,6 +800,7 @@ class PlayerRuntimeController(
         // fired before the DB read completed.
         observeSubtitleSettings()
         observeSubtitleAiSettings()
+        loadSubtitleTopBox() // fork: SubtitleTopBox.kt
         if (contentType.equals("cloud", ignoreCase = true)) {
             initializeCloudPlaybackSequence()
         } else {
@@ -864,6 +865,7 @@ class PlayerRuntimeController(
     }
 
     fun onCleared() {
+        SubtitleTopBox.reset() // fork
         playerSession.close()
         stopServerPlayback()
         releasePlayer()

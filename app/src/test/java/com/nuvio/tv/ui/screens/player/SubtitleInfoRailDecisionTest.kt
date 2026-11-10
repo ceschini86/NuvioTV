@@ -834,7 +834,7 @@ class SubtitleInfoRailDecisionTest {
             smart = SubtitleInfoSmartContext(smartAiEnabled = false)
         )
         assertEquals(SubtitleInfoCtaAction.RESET_TO_CLASSIC_AUTO, reset.cta.action)
-        assertFalse(reset.cta.enabled)
+        assertTrue(reset.cta.enabled)
         assertFalse(isSyntheticAiOptionSelectable(EmbeddedAiAvailability.NONE, translationActive = false))
         assertTrue(isSyntheticAiOptionSelectable(EmbeddedAiAvailability.NONE, translationActive = true))
     }

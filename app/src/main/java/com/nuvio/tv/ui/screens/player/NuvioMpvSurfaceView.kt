@@ -463,6 +463,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
             }
             mpv.setPropertyDouble("sub-pos", liftedSubPos)
             mpv.setPropertyInt("sub-margin-y", subMarginY)
+            mpv.setPropertyString("sub-align-y", if (SubtitleTopBox.enabled.value) "top" else "bottom") // fork: SubtitleTopBox.kt
             mpv.setPropertyDouble("sub-shadow-offset", shadowOffset)
             mpv.setPropertyString("sub-border-style", borderStyle)
             mpv.setPropertyString("sub-color", toMpvColor(style.textColor))

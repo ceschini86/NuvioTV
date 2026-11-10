@@ -195,7 +195,10 @@ internal fun PlayerRuntimeController.maybeRunAutomaticSubtitleSync(
                     null
                 },
                 onReferenceReady = {},
-                onAnalysisOutcome = { outcome -> analysisOutcome = outcome },
+                onAnalysisOutcome = { outcome ->
+                    analysisOutcome = outcome
+                    AutoSyncRunningSubtitle.noteOutcome(selectedUrl, outcome) // fork: Info card reason
+                },
             )
             var resolved = search(
                 withAlternatives = candidateScope == AutoSyncCandidateScope.STARTUP_SEARCH,
@@ -293,6 +296,7 @@ internal fun PlayerRuntimeController.maybeRunAutomaticSubtitleSync(
             }
             if (!resolved.reused) setSubtitleDelayMs(targetMs = 0, showOverlay = false)
             AutoSyncSyncedSubtitle.mark(chosenSubtitle.url)
+            noteAutoSyncAdjustment(chosenSubtitle.url, resolved.timeline, keptTiming = withinToleranceMs != null, switched = chosenSubtitle.url != selectedUrl) // fork: Info card
             logAutoSyncAdjustedTranslatedSource(chosenSubtitle) // fork: Diagnóstico de legendas (#16)
         } catch (cancel: CancellationException) {
             throw cancel
@@ -354,7 +358,10 @@ private fun PlayerRuntimeController.runMpvAutomaticSubtitleSync(
                 } else {
                     null
                 },
-                onAnalysisOutcome = { outcome -> analysisOutcome = outcome },
+                onAnalysisOutcome = { outcome ->
+                    analysisOutcome = outcome
+                    AutoSyncRunningSubtitle.noteOutcome(selectedUrl, outcome) // fork: Info card reason
+                },
                 allowLiveReference = false,
             )
             var resolved = search(
@@ -427,6 +434,7 @@ private fun PlayerRuntimeController.runMpvAutomaticSubtitleSync(
             if (!withinTolerance) updateMpvAvailableTracks()
             if (!resolved.reused) setSubtitleDelayMs(targetMs = 0, showOverlay = false)
             AutoSyncSyncedSubtitle.mark(chosenSubtitle.url)
+            noteAutoSyncAdjustment(chosenSubtitle.url, resolved.timeline, keptTiming = withinTolerance, switched = chosenSubtitle.url != selectedUrl) // fork: Info card
             Log.d(
                 PlayerRuntimeController.TAG,
                 "AUTO_SYNC_V2 mpv applied id=${chosenSubtitle.id} " +
@@ -508,7 +516,10 @@ private fun PlayerRuntimeController.runLibassAutomaticSubtitleSync(
                 } else {
                     null
                 },
-                onAnalysisOutcome = { outcome -> analysisOutcome = outcome },
+                onAnalysisOutcome = { outcome ->
+                    analysisOutcome = outcome
+                    AutoSyncRunningSubtitle.noteOutcome(selectedUrl, outcome) // fork: Info card reason
+                },
             )
             var resolved = search(ass = true)
             if (
@@ -582,6 +593,7 @@ private fun PlayerRuntimeController.runLibassAutomaticSubtitleSync(
             }
             if (!resolved.reused) setSubtitleDelayMs(targetMs = 0, showOverlay = false)
             AutoSyncSyncedSubtitle.mark(chosenSubtitle.url)
+            noteAutoSyncAdjustment(chosenSubtitle.url, resolved.timeline, keptTiming = withinTolerance, switched = chosenSubtitle.url != selectedUrl) // fork: Info card
             Log.d(
                 PlayerRuntimeController.TAG,
                 "AUTO_SYNC_V2 libass applied id=${chosenSubtitle.id} " +

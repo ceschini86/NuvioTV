@@ -653,8 +653,8 @@ private fun decideResetCta(
     val canSmart = canResetToSmartAiAuto(smart) &&
         systemNotice != SubtitleInfoUnavailableReason.MPV &&
         systemNotice != SubtitleInfoUnavailableReason.NO_API_KEY
+    // Smart off still allows the classic automatic selection (Smart AI is hidden in the fork).
     val enabled = when (systemNotice) {
-        SubtitleInfoUnavailableReason.SMART_OFF,
         SubtitleInfoUnavailableReason.PREFERRED_NONE,
         SubtitleInfoUnavailableReason.MPV,
         SubtitleInfoUnavailableReason.NO_API_KEY -> false

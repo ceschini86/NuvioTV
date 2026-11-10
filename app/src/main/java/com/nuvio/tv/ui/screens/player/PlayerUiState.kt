@@ -263,11 +263,12 @@ data class PlayerUiState(
     // When true, suppress all torrent stats text (buffer, seeds, peers, speed)
     // from loading overlay, rebuffering indicator, and corner overlay.
     val hideTorrentStats: Boolean = true,
-    val isLive: Boolean = false
+    val isLive: Boolean = false,
+    val subtitleTopBox: Boolean = false // fork: SubtitleTopBox.kt
 ) {
     /** Subtitle style to render with, after applying the HDR override for the current video. */
     val effectiveSubtitleStyle: SubtitleStyleSettings
-        get() = subtitleStyle.forVideo(isHdrVideo)
+        get() = subtitleStyle.forVideo(isHdrVideo).withTopBox(subtitleTopBox) // fork: withTopBox
 
     /** In-player style edits to the text color go to the HDR override while this is true. */
     val isEditingHdrSubtitleStyle: Boolean
@@ -359,6 +360,8 @@ sealed class PlayerEvent {
     data object OnResetToSmartAuto : PlayerEvent()
     /** Cycle preferred AI provider among enabled+keyed providers (Info Col3 CTA). */
     data object OnCycleSubtitleAiProvider : PlayerEvent()
+    /** Fork: Style tab "Top + black background" for this title (SubtitleTopBox.kt). */
+    data object OnToggleSubtitleTopBox : PlayerEvent()
     data class OnShowSubtitleTranslateMenu(val optionId: String) : PlayerEvent()
     data object OnDismissSubtitleTranslateMenu : PlayerEvent()
     data class OnSelectAddonSubtitle(val subtitle: Subtitle) : PlayerEvent()

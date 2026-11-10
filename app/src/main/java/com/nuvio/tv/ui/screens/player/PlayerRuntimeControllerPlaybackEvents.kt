@@ -1739,6 +1739,7 @@ fun PlayerRuntimeController.onEvent(
         PlayerEvent.OnCycleSubtitleAiProvider -> {
             cycleSubtitleAiPreferredProvider()
         }
+        PlayerEvent.OnToggleSubtitleTopBox -> toggleSubtitleTopBox() // fork
         is PlayerEvent.OnShowSubtitleTranslateMenu -> {
             _uiState.update {
                 it.copy(
