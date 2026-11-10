@@ -16,7 +16,7 @@
 | Ladder real, pipeline, keys, ADRs, mapa de arquivos | [`architecture-ai-subtitles.md`](./architecture-ai-subtitles.md) | Implementação / ordem da ladder |
 | Overlay, locks UX, matrizes de fluxo do menu | [`prd-ai-subtitles-ui-menu.md`](./prd-ai-subtitles-ui-menu.md) | Comportamento do menu (não settings) |
 
-**Estado (2026-09-27):** shipped **[1.1.2](https://github.com/ceschini86/NuvioTV/releases/tag/1.1.2)** (`versionCode` 1079) — AI off / PGS preserve, Sync AI settings with profile, advanced AI tuning, Simkl device auth, Info Right→Translate sem seleção. **Smart AI = só embutidas**; **Translate with AI** = qualquer fonte.
+**Estado (2026-11-10):** fork **1.2.0** (`versionCode` 1082) sobre o **Nuvio 1.1.0** do upstream (`12d96bc`), na branch `sync/upstream-1.1.0` (spec #10). Base, regra de merge commit e versão: [ADR 0001](./adr/0001-codigo-do-fork-isolado-do-upstream.md). IA com ASS/SSA e AutoSync: [ADR 0003](./adr/0003-ia-le-ass-pelo-renderizador-de-texto.md). Última release publicada: [1.1.4](https://github.com/ceschini86/NuvioTV/releases/tag/1.1.4). **Smart AI = só embutidas**; **Translate with AI** = qualquer fonte.
 
 ### Âncoras de código (AI)
 
