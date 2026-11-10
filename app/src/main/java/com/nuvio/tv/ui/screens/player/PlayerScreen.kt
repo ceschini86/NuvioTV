@@ -687,6 +687,10 @@ fun PlayerScreen(
                 if (keyEvent.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_ESCAPE ||
                     (keyEvent.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_BACK && !postPlayHandlesBack)
                 ) {
+                    // Fork: the subtitle overlay owns BACK for column-by-column navigation.
+                    if (uiState.showSubtitleOverlay) {
+                        return@onPreviewKeyEvent false
+                    }
                     return@onPreviewKeyEvent when (keyEvent.nativeKeyEvent.action) {
                         KeyEvent.ACTION_DOWN -> true
                         KeyEvent.ACTION_UP -> {
@@ -1702,6 +1706,20 @@ fun PlayerScreen(
             StreamSourceIndicator(text = uiState.streamSourceIndicatorText)
         }
 
+        // Fork: Chip Traduzindo — the visible cue is still in the source language.
+        AnimatedVisibility(
+            visible = uiState.isAiSubtitleTranslating && uiState.aiSubtitleTranslationActive && uiState.error == null,
+            enter = fadeIn(animationSpec = tween(NuvioMotion.tokens.durations.fast)),
+            exit = fadeOut(animationSpec = tween(NuvioMotion.tokens.durations.fast)),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 24.dp, top = 48.dp)
+                .zIndex(2.2f)
+                .then(playerControlsDim)
+        ) {
+            StreamSourceIndicator(text = stringResource(R.string.sub_ai_translating))
+        }
+
         partyState.party?.let { party ->
             val waitingNames = if (partyPlayback?.paused == true && partyPlayback?.waiting == true) {
                 PartySync.waitingMemberIds(party, emptySet())
@@ -2090,15 +2108,30 @@ fun PlayerScreen(
             addonSubtitles = uiState.addonSubtitles,
             selectedAddonSubtitle = uiState.selectedAddonSubtitle,
             subtitleStyle = uiState.editableSubtitleStyle,
-            isEditingHdrStyle = uiState.isEditingHdrSubtitleStyle,
             subtitleDelayMs = uiState.subtitleDelayMs,
             installedSubtitleAddonOrder = uiState.installedSubtitleAddonOrder,
             isLoadingAddons = uiState.isLoadingAddonSubtitles,
             useLibass = uiState.useLibass,
             isUsingMpv = uiState.internalPlayerEngine == InternalPlayerEngine.MVP_PLAYER,
+            // Fork: AI subtitle state for the Info rail (ui/screens/player/subtitles).
+            aiSubtitleAvailable = uiState.aiSubtitleAvailable,
+            aiSubtitleQuotaExhausted = uiState.aiSubtitleQuotaExhausted,
+            aiSubtitleTranslationActive = uiState.aiSubtitleTranslationActive,
+            isAiSubtitleTranslating = uiState.isAiSubtitleTranslating,
+            aiSubtitleDiagnostics = uiState.aiSubtitleDiagnostics,
+            aiSubtitleLastError = uiState.aiSubtitleLastError,
+            subtitleAiCredentials = uiState.subtitleAiCredentials,
+            userExplicitSubtitleSelection = uiState.userExplicitSubtitleSelection,
+            selectedAudioTrack = uiState.audioTracks.getOrNull(uiState.selectedAudioTrackIndex)
+                ?: uiState.audioTracks.firstOrNull { it.isSelected },
+            streamReleaseName = listOfNotNull(uiState.currentStreamName, uiState.contentName, uiState.title)
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .maxByOrNull { it.length },
             onInternalTrackSelected = { viewModel.onEvent(PlayerEvent.OnSelectSubtitleTrack(it)) },
             onAddonSubtitleSelected = { viewModel.onEvent(PlayerEvent.OnSelectAddonSubtitle(it)) },
             onDisableSubtitles = { viewModel.onEvent(PlayerEvent.OnDisableSubtitles) },
+            onToggleAiTranslation = { viewModel.onEvent(PlayerEvent.OnToggleAiSubtitleTranslation) },
             onEvent = { viewModel.onEvent(it) },
             onDismiss = { viewModel.onEvent(PlayerEvent.OnDismissTransientOverlay) },
             modifier = Modifier

@@ -681,6 +681,61 @@ class SubtitleInfoRailDecisionTest {
 
     // --- K1 ---
 
+    @Test
+    fun k1_preferredLanguageCount_includesSyntheticAiWhenListed() {
+        assertEquals(1, languageRailCountIncludingAi(trackAndAddonCount = 0, aiOptionListed = true))
+        assertEquals(3, languageRailCountIncludingAi(trackAndAddonCount = 2, aiOptionListed = true))
+        assertEquals(2, languageRailCountIncludingAi(trackAndAddonCount = 2, aiOptionListed = false))
+
+        // Preferred = en; one embedded EN + synthetic AI → count 2.
+        val withAi = buildSubtitleLanguageRailItems(
+            internalTracks = listOf(
+                TrackInfo(index = 0, name = "English", language = "eng", codec = "SRT")
+            ),
+            addonSubtitles = emptyList(),
+            preferredLanguage = "en",
+            secondaryPreferredLanguage = null,
+            showOnlyPreferredLanguages = false,
+            currentLanguageKey = "en",
+            noneLabel = "None",
+            unknownLabel = "Unknown",
+            includeSyntheticAiOnPreferred = true
+        )
+        val withoutAi = buildSubtitleLanguageRailItems(
+            internalTracks = listOf(
+                TrackInfo(index = 0, name = "English", language = "eng", codec = "SRT")
+            ),
+            addonSubtitles = emptyList(),
+            preferredLanguage = "en",
+            secondaryPreferredLanguage = null,
+            showOnlyPreferredLanguages = false,
+            currentLanguageKey = "en",
+            noneLabel = "None",
+            unknownLabel = "Unknown",
+            includeSyntheticAiOnPreferred = false
+        )
+
+        assertEquals(2, withAi.first { it.key == "en" }.count)
+        assertEquals(1, withoutAi.first { it.key == "en" }.count)
+
+        // Preferred with zero tracks still appears with count 1 (AI only).
+        val aiOnlyPreferred = buildSubtitleLanguageRailItems(
+            internalTracks = listOf(
+                TrackInfo(index = 0, name = "French", language = "fra", codec = "SRT")
+            ),
+            addonSubtitles = emptyList(),
+            preferredLanguage = "es",
+            secondaryPreferredLanguage = null,
+            showOnlyPreferredLanguages = false,
+            currentLanguageKey = "fr",
+            noneLabel = "None",
+            unknownLabel = "Unknown",
+            includeSyntheticAiOnPreferred = true
+        )
+        assertEquals(1, aiOnlyPreferred.first { it.key == "es" }.count)
+    }
+
+
     // --- B6d ---
 
     @Test
