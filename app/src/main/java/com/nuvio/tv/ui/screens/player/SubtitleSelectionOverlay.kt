@@ -2282,7 +2282,7 @@ private fun SubtitleOptionCard(
                 ) {
                     SourceChip(label = item.sourceLabel, selected = onPurpleFill)
                     item.addonSubtitle?.let { AutoSyncedChip(it.url, item.isSelected) } // AutoSync hook
-                    item.addonSubtitle?.let { AutoSyncRunningChip(it.url, item.isSelected) } // fork: AutoSync in progress
+                    item.addonSubtitle?.let { AutoSyncStatusChip(it.url, item.isSelected) } // fork: AutoSync running / failed
                     // F2: yellow "Fonte IA" chip beside the origin chip.
                     if (item.isAiSource) {
                         SourceChip(

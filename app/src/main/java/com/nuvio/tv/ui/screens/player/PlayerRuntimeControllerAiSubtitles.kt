@@ -618,10 +618,15 @@ internal fun PlayerRuntimeController.applyAiAutoSelectLadder() {
         )
         // AI off first, so the sidecar never sends the native lines to the provider.
         setAiSubtitleTranslationEnabled(false)
+        val pickChanged = _uiState.value.selectedAddonSubtitle?.url != preferredAddon.url
         selectAddonSubtitle(preferredAddon)
         _uiState.update {
             it.copy(selectedAddonSubtitle = preferredAddon, selectedSubtitleTrackIndex = -1)
         }
+        // AutoSync checks this pick like a manual one. Only this subtitle: the ladder chose it, and
+        // the startup search may already have run for this stream. The ladder re-runs when addons
+        // finish loading, so a pick it keeps is not synced again.
+        if (pickChanged) runSelectedAutomaticSubtitleSync(preferredAddon)
         autoSubtitleSelected = true
         publishAiSubtitleDiagnostics(
             AiSubtitleDiagnostics(
@@ -1259,10 +1264,12 @@ internal fun PlayerRuntimeController.enableAiFromOptionClick() {
                 labelOk && langOk && !addon.isStreamProvided
             }
             if (match != null) {
+                val pickChanged = _uiState.value.selectedAddonSubtitle?.url != match.url
                 selectAddonSubtitle(match)
                 _uiState.update {
                     it.copy(selectedAddonSubtitle = match, selectedSubtitleTrackIndex = -1)
                 }
+                if (pickChanged) runSelectedAutomaticSubtitleSync(match)
             } else {
                 selectEmbeddedAiSourceIfAvailable()
             }

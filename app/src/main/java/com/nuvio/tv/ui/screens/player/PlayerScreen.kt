@@ -3049,15 +3049,17 @@ private fun PlayerControlsOverlay(
                     }
 
                     if (hasSubtitleControl) {
-                        ControlButton(
-                            icon = Icons.Default.ClosedCaption,
-                            iconPainter = customSubtitlePainter,
-                            contentDescription = stringResource(R.string.cd_subtitles),
-                            onClick = onShowSubtitleDialog,
-                            upFocusRequester = progressUpTarget,
-                            onDownKey = onHideControls,
-                            onFocused = onResetHideTimer
-                        )
+                        AutoSyncStatusBadge(uiState.selectedAddonSubtitle?.url) { // fork: AutoSync dot
+                            ControlButton(
+                                icon = Icons.Default.ClosedCaption,
+                                iconPainter = customSubtitlePainter,
+                                contentDescription = stringResource(R.string.cd_subtitles),
+                                onClick = onShowSubtitleDialog,
+                                upFocusRequester = progressUpTarget,
+                                onDownKey = onHideControls,
+                                onFocused = onResetHideTimer
+                            )
+                        }
                     }
 
                     if (hasAudioControl) {

@@ -7,27 +7,85 @@ import org.junit.Test
 
 class AutoSyncRunningSubtitleTest {
 
+    private val url = "https://addon/a.srt"
+
+    private fun status() = AutoSyncRunningSubtitle.status.value
+
     @Test
-    fun `subtitle shows as syncing until its run ends`() {
+    fun `a run that ends with a match leaves the chip to Auto synced`() {
         val run = Job()
-        AutoSyncRunningSubtitle.track("https://addon/a.srt", run)
-        assertEquals("https://addon/a.srt", AutoSyncRunningSubtitle.url.value)
+        AutoSyncRunningSubtitle.track(url, run, syncedUrl = { url })
+        assertEquals(AutoSyncRunStatus(url, AutoSyncRunState.RUNNING), status())
 
         run.complete()
-        assertNull(AutoSyncRunningSubtitle.url.value)
+        assertNull(status())
     }
 
     @Test
-    fun `a replaced run ending does not clear the newer run`() {
+    fun `a run that ends without a match shows Sync failed`() {
+        val run = Job()
+        AutoSyncRunningSubtitle.track(url, run, syncedUrl = { null })
+
+        run.complete()
+        assertEquals(AutoSyncRunStatus(url, AutoSyncRunState.FAILED), status())
+    }
+
+    @Test
+    fun `a match on another subtitle is a failure for this one`() {
+        val run = Job()
+        AutoSyncRunningSubtitle.track(url, run, syncedUrl = { "https://addon/other.srt" })
+
+        run.complete()
+        assertEquals(AutoSyncRunStatus(url, AutoSyncRunState.FAILED), status())
+    }
+
+    @Test
+    fun `a cancelled run leaves no status`() {
+        val run = Job()
+        AutoSyncRunningSubtitle.track(url, run, syncedUrl = { null })
+
+        run.cancel()
+        assertNull(status())
+    }
+
+    @Test
+    fun `a replaced run ending does not touch the newer run`() {
         val first = Job()
         val second = Job()
-        AutoSyncRunningSubtitle.track("https://addon/a.srt", first)
-        AutoSyncRunningSubtitle.track("https://addon/a.srt", second)
+        AutoSyncRunningSubtitle.track(url, first, syncedUrl = { null })
+        AutoSyncRunningSubtitle.track(url, second, syncedUrl = { null })
 
-        first.cancel()
-        assertEquals("https://addon/a.srt", AutoSyncRunningSubtitle.url.value)
+        first.complete()
+        assertEquals(AutoSyncRunStatus(url, AutoSyncRunState.RUNNING), status())
 
-        second.cancel()
-        assertNull(AutoSyncRunningSubtitle.url.value)
+        second.complete()
+        assertEquals(AutoSyncRunStatus(url, AutoSyncRunState.FAILED), status())
+    }
+
+    @Test
+    fun `a new run clears an earlier failure`() {
+        val failed = Job()
+        AutoSyncRunningSubtitle.track(url, failed, syncedUrl = { null })
+        failed.complete()
+
+        AutoSyncRunningSubtitle.track(url, Job(), syncedUrl = { null })
+        assertEquals(AutoSyncRunStatus(url, AutoSyncRunState.RUNNING), status())
+    }
+
+    @Test
+    fun `dot follows the selected add-on subtitle`() {
+        val running = AutoSyncRunStatus(url, AutoSyncRunState.RUNNING)
+        val failed = AutoSyncRunStatus(url, AutoSyncRunState.FAILED)
+        assertEquals(AutoSyncDotState.RUNNING, autoSyncDotState(url, running, syncedUrl = null))
+        assertEquals(AutoSyncDotState.FAILED, autoSyncDotState(url, failed, syncedUrl = null))
+        assertEquals(AutoSyncDotState.SYNCED, autoSyncDotState(url, runStatus = null, syncedUrl = url))
+    }
+
+    @Test
+    fun `no dot without an add-on subtitle or for another subtitle's run`() {
+        val other = AutoSyncRunStatus("https://addon/other.srt", AutoSyncRunState.FAILED)
+        assertNull(autoSyncDotState(selectedAddonUrl = null, runStatus = other, syncedUrl = url))
+        assertNull(autoSyncDotState(url, other, syncedUrl = null))
+        assertNull(autoSyncDotState(url, runStatus = null, syncedUrl = null))
     }
 }
