@@ -1,0 +1,146 @@
+name: Fork release
+
+# Fork-owned (ADR 0001). Publishes the fork's release when dev gets a new version: a push to dev that
+# changes app/build.gradle.kts builds the signed APKs and creates release "X.Y.Z" with tag
+# "fork-X.Y.Z", unless that tag already exists. The in-app updater reads the plain version from the
+# release name and offers it to the TVs. Upstream's android-release.yml stays untouched.
+#
+# A sync PR from fork-sync-upstream.yml bumps the version, so merging it publishes the release.
+# A fork-only release: bump with scripts/fork-bump-version.sh patch and merge into dev.
+# Run it by hand (workflow_dispatch) to publish the version dev already has.
+
+on:
+  push:
+    branches: [dev]
+    paths: [app/build.gradle.kts]
+  workflow_dispatch:
+    inputs:
+      draft:
+        description: Create the release as a draft
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fork-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      UPSTREAM: NuvioMedia/NuvioTV
+      LOCAL_PROPERTIES_BASE64: ${{ secrets.LOCAL_PROPERTIES_BASE64 }}
+      LOCAL_DEV_PROPERTIES_BASE64: ${{ secrets.LOCAL_DEV_PROPERTIES_BASE64 }}
+      RELEASE_KEYSTORE_BASE64: ${{ secrets.NUVIO_RELEASE_KEYSTORE_BASE64 }}
+      RELEASE_KEY_ALIAS: ${{ secrets.NUVIO_RELEASE_KEY_ALIAS }}
+      RELEASE_KEY_PASSWORD: ${{ secrets.NUVIO_RELEASE_KEY_PASSWORD }}
+      RELEASE_STORE_PASSWORD: ${{ secrets.NUVIO_RELEASE_STORE_PASSWORD }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version
+        id: version
+        run: |
+          set -euo pipefail
+          version="$(sed -nE 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' app/build.gradle.kts | head -n1)"
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::versionName '${version}' is not plain semver; the updater could not read it."
+            exit 1
+          fi
+          tag="fork-${version}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null \
+            || gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" >/dev/null 2>&1; then
+            echo "Release ${tag} already exists; nothing to publish."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write release notes
+        if: steps.version.outputs.skip != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Upstream base: the newest upstream stable tag this commit contains.
+          git fetch --no-tags "https://github.com/${UPSTREAM}.git" "+refs/tags/*:refs/tags/upstream/*" >/dev/null 2>&1 || true
+          base=""
+          while read -r ref; do
+            if git merge-base --is-ancestor "${ref}" HEAD; then base="${ref#upstream/}"; break; fi
+          done < <(git tag --list 'upstream/*' | grep -E '^upstream/[0-9]+\.[0-9]+\.[0-9]+$' | sort -t/ -k2 -V -r)
+          previous="$(git tag --list 'fork-*' --sort=-v:refname | head -n1)"
+          {
+            echo "Fork **${VERSION}**${base:+, based on upstream Nuvio [\`${base}\`](https://github.com/${UPSTREAM}/releases/tag/${base})}."
+            echo
+            if [[ -n "${previous}" ]]; then
+              echo "### Changes since ${previous#fork-}"
+              echo
+              git log --first-parent --no-merges --format='- %s' "${previous}..HEAD" -- . ':!docs' | head -n 60
+              git log --first-parent --merges --format='- %s' "${previous}..HEAD" | head -n 20
+            fi
+          } > release-notes.md
+          cat release-notes.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up Java
+        if: steps.version.outputs.skip != 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        if: steps.version.outputs.skip != 'true'
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Configure release signing
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          for name in LOCAL_PROPERTIES_BASE64 RELEASE_KEYSTORE_BASE64; do
+            if [[ -z "${!name}" ]]; then echo "::error::Missing release secret ${name}."; exit 1; fi
+          done
+          keystore_path="${RUNNER_TEMP}/nuviotv-release.jks"
+          printf '%s' "${RELEASE_KEYSTORE_BASE64}" | base64 --decode > "${keystore_path}"
+          printf '%s' "${LOCAL_PROPERTIES_BASE64}" | base64 --decode > local.properties
+          if [[ -n "${LOCAL_DEV_PROPERTIES_BASE64}" ]]; then
+            printf '%s' "${LOCAL_DEV_PROPERTIES_BASE64}" | base64 --decode > local.dev.properties
+          else
+            touch local.dev.properties
+          fi
+          set_property() {
+            [[ -n "$2" ]] || return 0
+            sed -i -E "/^[[:space:]]*$1[[:space:]]*=/d" local.properties
+            printf '\n%s=%s\n' "$1" "$2" >> local.properties
+          }
+          sed -i -E '/^[[:space:]]*(sdk\.dir|NUVIO_RELEASE_STORE_FILE)[[:space:]]*=/d' local.properties
+          set_property NUVIO_RELEASE_STORE_FILE "${keystore_path}"
+          set_property NUVIO_RELEASE_KEY_ALIAS "${RELEASE_KEY_ALIAS}"
+          set_property NUVIO_RELEASE_KEY_PASSWORD "${RELEASE_KEY_PASSWORD}"
+          set_property NUVIO_RELEASE_STORE_PASSWORD "${RELEASE_STORE_PASSWORD}"
+
+      - name: Build signed release APKs
+        if: steps.version.outputs.skip != 'true'
+        run: ./gradlew :app:testFullReleaseUnitTest --tests 'com.nuvio.tv.updater.*' :app:assembleFullRelease --stacktrace
+
+      - name: Publish release
+        if: steps.version.outputs.skip != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+          DRAFT: ${{ inputs.draft }}
+        run: |
+          set -euo pipefail
+          mapfile -t apks < <(find app/build/outputs/apk/full/release -maxdepth 1 -name '*.apk' | sort)
+          if (( ${#apks[@]} == 0 )); then echo "::error::No release APKs were built."; exit 1; fi
+          args=("${TAG}" --target "${GITHUB_SHA}" --title "${VERSION}" --notes-file release-notes.md)
+          if [[ "${DRAFT}" == "true" ]]; then args+=(--draft); else args+=(--latest); fi
+          gh release create "${args[@]}" "${apks[@]}"

@@ -77,3 +77,7 @@ status-page/
 
 # Release-note generator scratch output
 .tmp-rn*
+
+# fork: upstream sync and release scripts (ADR 0001)
+!scripts/fork-bump-version.sh
+!scripts/fork_resolve_version_conflict.py

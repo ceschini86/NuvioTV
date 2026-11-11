@@ -1,0 +1,193 @@
+name: Fork sync upstream
+
+# Fork-owned (ADR 0001). Watches NuvioMedia/NuvioTV for stable releases and opens a sync PR into dev:
+# merge the upstream tag on sync/upstream-<tag>, keep the fork's version on the version-line
+# conflict every sync hits, bump the fork's minor version, open the PR. Its CI runs on the PR.
+# Merging the PR (with a merge commit) is the approval: fork-release.yml then publishes the release.
+# Any other conflict opens an issue instead.
+#
+# Needs secret SYNC_UPSTREAM_TOKEN: a PAT with Contents, Pull requests, Issues and Workflows (write)
+# on this repo. Upstream merges can touch .github/workflows, which GITHUB_TOKEN cannot push, and a PR
+# opened with GITHUB_TOKEN would not trigger the PR workflows.
+# Scheduled workflows stay off on forks until enabled once in the Actions tab.
+
+on:
+  schedule:
+    - cron: "0 14 * * *" # daily 14:00 UTC
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Upstream tag to sync (empty = latest stable release)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      UPSTREAM: NuvioMedia/NuvioTV
+      BASE_BRANCH: dev
+      # gh defaults to the parent repo inside a fork; every call pins this fork instead.
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Refuse to run on upstream
+        run: |
+          if [[ "${GH_REPO}" == "${UPSTREAM}" ]]; then
+            echo "::error::This workflow belongs to the fork and must not run on ${UPSTREAM}."
+            exit 1
+          fi
+
+      - name: Resolve upstream stable release
+        id: stable
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          # One page of 100 is enough; --paginate with .[0] would print one release per page.
+          filter='
+            [ .[]
+              | select(.draft == false and .prerelease == false)
+              | select(((.tag_name // "") + " " + (.name // ""))
+                  | test("(?i)(^|[^a-z])(beta|rc|alpha|preview)([^a-z]|$)") | not)
+              | select(($tag == "") or (.tag_name == $tag)) ]
+            | sort_by(.published_at) | reverse | .[0]
+            | if . == null then empty else {tag: .tag_name, url: .html_url} end'
+          release="$(gh api "repos/${UPSTREAM}/releases?per_page=100" | jq -c --arg tag "${REQUESTED_TAG}" "${filter}")"
+          if [[ -z "${release}" ]]; then
+            echo "No matching stable upstream release."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          {
+            echo "tag=$(jq -r .tag <<<"${release}")"
+            echo "url=$(jq -r .url <<<"${release}")"
+            echo "skip=false"
+          } >> "$GITHUB_OUTPUT"
+          echo "Upstream stable release: $(jq -r .tag <<<"${release}")"
+
+      - name: Require SYNC_UPSTREAM_TOKEN
+        if: steps.stable.outputs.skip != 'true'
+        env:
+          SYNC_UPSTREAM_TOKEN: ${{ secrets.SYNC_UPSTREAM_TOKEN }}
+        run: |
+          if [[ -z "${SYNC_UPSTREAM_TOKEN}" ]]; then
+            echo "::error::Missing secret SYNC_UPSTREAM_TOKEN (see the comment at the top of this workflow)."
+            exit 1
+          fi
+
+      - name: Check out fork
+        if: steps.stable.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BASE_BRANCH }}
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_UPSTREAM_TOKEN }}
+
+      - name: Merge, bump and open the sync PR (or an issue on conflict)
+        if: steps.stable.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_UPSTREAM_TOKEN }}
+          TAG: ${{ steps.stable.outputs.tag }}
+          RELEASE_URL: ${{ steps.stable.outputs.url }}
+        run: |
+          set -euo pipefail
+          BRANCH="sync/upstream-${TAG}"
+          UPSTREAM_REF="refs/tags/upstream/${TAG}"
+
+          if [[ -n "$(gh pr list --repo "$GH_REPO" --state open --head "$BRANCH" --json url --jq '.[0].url // empty')" ]]; then
+            echo "A sync PR for ${TAG} is already open."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --no-tags "https://github.com/${UPSTREAM}.git" "refs/tags/${TAG}:${UPSTREAM_REF}"
+          # A branch left by an earlier, closed sync PR gives --force-with-lease a real lease.
+          git fetch origin "+refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}" || true
+
+          if git merge-base --is-ancestor "${UPSTREAM_REF}" HEAD; then
+            echo "${BASE_BRANCH} already contains upstream ${TAG}; nothing to sync."
+            exit 0
+          fi
+
+          git checkout -B "$BRANCH"
+          merged=true
+          if ! git merge --no-ff "${UPSTREAM_REF}" -m "Merge Nuvio ${TAG} (upstream tag ${TAG}) into the fork."; then
+            conflicted="$(git diff --name-only --diff-filter=U)"
+            if [[ "${conflicted}" == "app/build.gradle.kts" ]] \
+              && python3 scripts/fork_resolve_version_conflict.py app/build.gradle.kts; then
+              git add app/build.gradle.kts
+              git commit --no-edit
+            else
+              merged=false
+              echo "Conflicted files:"; echo "${conflicted}"
+              git merge --abort || true
+            fi
+          fi
+
+          if [[ "${merged}" == "true" ]]; then
+            new_version="$(scripts/fork-bump-version.sh minor)"
+            git commit -am "Bump the fork to ${new_version} for upstream ${TAG}."
+            git push --force-with-lease -u origin "$BRANCH"
+
+            body="$(cat <<EOF
+          Automated sync of upstream stable release [\`${TAG}\`](${RELEASE_URL}) into the fork as **${new_version}**.
+
+          The merge applied cleanly (the fork's version lines were kept and bumped). Before merging:
+
+          - [ ] CI on this PR is green (\`fork-subtitle-tests\`, full debug build).
+          - [ ] Smoke on the TV: the checklist in \`docs/smoke-ai-subtitles.md\`.
+          - [ ] Merge with a **merge commit** (no squash or rebase), so the next sync starts from \`${TAG}\` (ADR 0001).
+
+          Merging publishes release \`${new_version}\` (tag \`fork-${new_version}\`) through \`fork-release.yml\`, and the TVs' updater picks it up.
+          EOF
+          )"
+            body="$(sed 's/^          //' <<<"${body}")"
+            for attempt in 1 2 3 4 5; do
+              if gh pr create --repo "$GH_REPO" --base "$BASE_BRANCH" --head "$BRANCH" \
+                --title "Sync Nuvio ${TAG} into the fork (fork ${new_version})" --body "${body}"; then
+                exit 0
+              fi
+              echo "gh pr create attempt ${attempt} failed; retrying in 10s"
+              sleep 10
+            done
+            echo "::error::Could not open the sync PR for ${TAG}."
+            exit 1
+          fi
+
+          title="Upstream ${TAG} needs a manual sync"
+          if [[ -n "$(gh issue list --repo "$GH_REPO" --state open --search "\"${title}\" in:title" --json url --jq '.[0].url // empty')" ]]; then
+            echo "Issue already open: ${title}"
+            exit 0
+          fi
+          body="$(cat <<EOF
+          Upstream published stable release [\`${TAG}\`](${RELEASE_URL}), and merging it into \`${BASE_BRANCH}\` conflicted beyond the version lines.
+
+          Conflicted files:
+
+          \`\`\`
+          ${conflicted}
+          \`\`\`
+
+          Manual sync (ADR 0001: fork code stays behind short hooks; merge into \`${BASE_BRANCH}\` with a merge commit):
+
+          \`\`\`bash
+          git fetch https://github.com/${UPSTREAM}.git "refs/tags/${TAG}:refs/tags/upstream/${TAG}"
+          git switch -c ${BRANCH} origin/${BASE_BRANCH}
+          git merge upstream/${TAG}
+          # resolve, keep the fork's version lines, then:
+          scripts/fork-bump-version.sh minor
+          git push -u origin ${BRANCH}
+          \`\`\`
+          EOF
+          )"
+          body="$(sed 's/^          //' <<<"${body}")"
+          gh issue create --repo "$GH_REPO" --title "${title}" --body "${body}"
