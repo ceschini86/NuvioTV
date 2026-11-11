@@ -23,6 +23,12 @@ class ProfileSettingsCredentialPolicyTest {
     }
 
     @Test
+    fun `4k trailers stay on the device while other trailer settings sync`() {
+        assertTrue(shouldExcludePreferenceFromProfileSettingsSync("trailer_settings", "trailer_allow_4k"))
+        assertFalse(shouldExcludePreferenceFromProfileSettingsSync("trailer_settings", "trailer_enabled"))
+    }
+
+    @Test
     fun `subtitle AI keys stay local unless profile sync is enabled`() {
         assertTrue(
             shouldExcludePreferenceFromProfileSettingsSync(

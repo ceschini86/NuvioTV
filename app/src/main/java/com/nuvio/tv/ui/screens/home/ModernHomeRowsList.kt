@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.home
 
+import com.nuvio.tv.domain.model.catalogRowLegacyKey
 import com.nuvio.tv.ui.theme.NuvioTheme
 
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -108,6 +109,7 @@ internal fun ModernHomeRowsList(
     trailerPreviewUrls: StableMap<String, String>,
     trailerPreviewAudioUrls: StableMap<String, String>,
     useLandscapePosters: Boolean,
+    alwaysShowLandscapeClearlogo: Boolean = false,
     showLabels: Boolean,
     posterCardCornerRadius: Dp,
     focusedPosterBackdropTrailerMuted: Boolean,
@@ -144,9 +146,6 @@ internal fun ModernHomeRowsList(
     onFocusedHeroMediaNonceChange: (Int) -> Unit,
     onExpansionInteractionNonceChange: (Int) -> Unit,
     blockLeftOnFirstExpandedItem: Boolean = false,
-    onNavigateToHeroCarousel: (() -> Unit)? = null,
-    /** When true, row focusRestorer must not reclaim focus from the hero carousel. */
-    carouselOwnsFocus: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     // Unwrap StableRef wrappers for internal use (not passed to child composables)
@@ -236,7 +235,11 @@ internal fun ModernHomeRowsList(
             for (idx in firstVisible.coerceAtLeast(0)..(lastVisible + prefetchAheadForLazy)) {
                 val row = rows.list.getOrNull(idx) ?: continue
                 if (row.isLoading && row.items.list.firstOrNull()?.imageUrl.isPlaceholder()) {
-                    val legacyKey = "${row.addonId}_${row.apiType}_${row.catalogId}"
+                    val legacyKey = catalogRowLegacyKey(
+                        row.addonId ?: continue,
+                        row.apiType ?: continue,
+                        row.catalogId ?: continue
+                    )
                     latestOnRequestLazyCatalogLoad.value(legacyKey)
                 }
             }
@@ -287,10 +290,7 @@ internal fun ModernHomeRowsList(
                 .clipToBounds()
                 .graphicsLayer { alpha = trailerContentAlpha() }
                 .focusRequester(contentFocusRequester)
-                .then(
-                    if (carouselOwnsFocus) Modifier
-                    else Modifier.focusRestorer { focusRestorerRequester() }
-                )
+                .focusRestorer { focusRestorerRequester() }
                 .onPreviewKeyEvent { event ->
                     val firstRowKey = carouselRows.list.firstOrNull()?.key
                     val lastRowKey = carouselRows.list.lastOrNull()?.key
@@ -300,14 +300,6 @@ internal fun ModernHomeRowsList(
                         expandedCatalogFocusKey.value != null &&
                         activeRowKey.value == firstRowKey
                     ) return@onPreviewKeyEvent true
-                    if (event.type == KeyEventType.KeyDown &&
-                        event.key == Key.DirectionUp &&
-                        activeRowKey.value == firstRowKey &&
-                        onNavigateToHeroCarousel != null
-                    ) {
-                        onNavigateToHeroCarousel.invoke()
-                        return@onPreviewKeyEvent true
-                    }
                     if (event.type == KeyEventType.KeyDown &&
                         event.key == Key.DirectionDown &&
                         effectiveExpandEnabled &&
@@ -438,6 +430,7 @@ internal fun ModernHomeRowsList(
                     rowTitleBottom = 14.dp, // rowTitleBottom
                     defaultBringIntoViewSpec = defaultBringIntoViewSpec,
                     focusStateCatalogRowScrollIndex = focusState.catalogRowScrollStates[row.key] ?: 0,
+                    focusStateCatalogRowScrollAnchor = focusState.catalogRowScrollAnchors[row.key],
                     focusedItemByRow = focusedItemByRow,
                     rowListStates = rowListStates,
                     loadMoreRequestedTotals = loadMoreRequestedTotals,
@@ -447,6 +440,7 @@ internal fun ModernHomeRowsList(
                     onPendingRowFocusCleared = onPendingRowFocusCleared,
                     onRowItemFocused = stableOnRowItemFocused,
                     useLandscapePosters = useLandscapePosters,
+                    alwaysShowLandscapeClearlogo = alwaysShowLandscapeClearlogo,
                     showLabels = showLabels,
                     posterCardCornerRadius = posterCardCornerRadius,
                     focusedPosterBackdropTrailerMuted = focusedPosterBackdropTrailerMuted,

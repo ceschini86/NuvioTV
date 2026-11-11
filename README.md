@@ -8,7 +8,7 @@
     Bring your own sources. Nuvio turns them into a library with artwork, ratings, subtitles, and your place saved on every screen.
   </p>
 
-  <p><strong>Fork build</strong> with smarter AI subtitles and a refined player seek experience.</p>
+  <p><strong>Fork build</strong> with smarter AI subtitles and a refined player seek experience.<br />Fork 1.2.0 is based on upstream Nuvio <strong>1.1.0</strong>.</p>
 
   [Website](https://nuvio.tv) · [Releases](https://github.com/ceschini86/NuvioTV/releases/latest) · [Upstream](https://github.com/NuvioMedia/NuvioTV)
 

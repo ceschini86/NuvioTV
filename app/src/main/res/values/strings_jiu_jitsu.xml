@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fork: the Jiu Jitsu tab of the Library (LibraryJiuJitsu.kt). -->
+<resources>
+    <string name="library_source_jiu_jitsu" translatable="false">Jiu Jitsu</string>
+    <string name="library_jiu_jitsu_missing_title">Video translation add-on not installed</string>
+    <string name="library_jiu_jitsu_missing_message">Install the Video translation add-on in Add-ons to see the collections here.</string>
+    <string name="library_jiu_jitsu_failed_title">Couldn\'t load the collections</string>
+    <string name="library_jiu_jitsu_failed_message">The Video translation add-on did not answer. Try again later.</string>
+    <string name="library_jiu_jitsu_empty_title">No collections yet</string>
+    <string name="library_jiu_jitsu_empty_message">The add-on lists a collection once a volume has a subtitle and a copy in Torbox.</string>
+</resources>

@@ -374,7 +374,8 @@ internal fun PlayerRuntimeController.observeSubtitleAiSettings() {
             subtitleAiApiKey = credentials.enabledProviders().firstOrNull()?.usableKeys?.firstOrNull()
                 ?: legacyKey
             subtitleAiFeatureEnabled = style.aiEnabled
-            subtitleAiAutoSelect = style.aiAutoSelect
+            // Smart AI (the AI auto-select ladder) is hidden: upstream's auto-select only.
+            subtitleAiAutoSelect = SMART_AI_AUTO_SELECT_AVAILABLE && style.aiAutoSelect
 
             val manager = ensureSubtitleTranslationManager()
             manager.updateCredentials(credentials)
@@ -396,7 +397,7 @@ internal fun PlayerRuntimeController.observeSubtitleAiSettings() {
 
             if (!canUseAi && manager.isEnabled) {
                 setAiSubtitleTranslationEnabled(false)
-            } else if (style.aiAutoSelect && canUseAi) {
+            } else if (subtitleAiAutoSelect && canUseAi) {
                 applySubtitleAutoSelectPolicy()
             }
 
@@ -446,6 +447,9 @@ internal fun PlayerRuntimeController.cycleSubtitleAiPreferredProvider() {
         playerSettingsDataStore.setSubtitleAiModel(next.name)
     }
 }
+
+/** Smart AI subtitles (AI auto-select ladder). Hidden since 1.1.0's AutoSync makes add-ons reliable. */
+internal const val SMART_AI_AUTO_SELECT_AVAILABLE = false
 
 private data class AiSettingsSnapshot(
     val style: com.nuvio.tv.data.local.SubtitleStyleSettings,
@@ -618,10 +622,15 @@ internal fun PlayerRuntimeController.applyAiAutoSelectLadder() {
         )
         // AI off first, so the sidecar never sends the native lines to the provider.
         setAiSubtitleTranslationEnabled(false)
+        val pickChanged = _uiState.value.selectedAddonSubtitle?.url != preferredAddon.url
         selectAddonSubtitle(preferredAddon)
         _uiState.update {
             it.copy(selectedAddonSubtitle = preferredAddon, selectedSubtitleTrackIndex = -1)
         }
+        // AutoSync checks this pick like a manual one. Only this subtitle: the ladder chose it, and
+        // the startup search may already have run for this stream. The ladder re-runs when addons
+        // finish loading, so a pick it keeps is not synced again.
+        if (pickChanged) runSelectedAutomaticSubtitleSync(preferredAddon)
         autoSubtitleSelected = true
         publishAiSubtitleDiagnostics(
             AiSubtitleDiagnostics(
@@ -766,7 +775,9 @@ internal fun PlayerRuntimeController.resetSubtitleAiPolicyForNewMedia() {
 internal fun PlayerRuntimeController.setAiSubtitleTranslationEnabled(
     enabled: Boolean,
     allowPreferredUpgrade: Boolean = !aiSubtitleUserLocked,
-    refreshSource: Boolean = true
+    refreshSource: Boolean = true,
+    /** False when the caller is changing the selection itself and routes the Fonte afterwards. */
+    routeSource: Boolean = true
 ) {
     if (enabled && isUsingMpvEngine()) {
         Log.i(PlayerRuntimeController.TAG, "AI subtitle translation ignored on MPV")
@@ -797,6 +808,10 @@ internal fun PlayerRuntimeController.setAiSubtitleTranslationEnabled(
         selectAiTranslationSourceIfAvailable()
     }
     manager.isEnabled = effective
+    if (effective && routeSource) {
+        // libass hands no text to translate: move an ASS/SSA Fonte to the text renderer (#16).
+        routeAiSourceToTextRenderer()
+    }
     if (!effective) {
         manager.reset()
         _uiState.update { it.copy(isAiSubtitleTranslating = false) }
@@ -844,6 +859,9 @@ internal fun PlayerRuntimeController.translateSubtitleWithAi(
     when {
         internalTrackIndex != null && internalTrackIndex >= 0 -> {
             val track = _uiState.value.subtitleTracks.getOrNull(internalTrackIndex) ?: return
+            // A new track reaches the libass check through onTracksChanged; the current tracks
+            // still describe the old one until then.
+            val sameTrack = _uiState.value.selectedSubtitleTrackIndex == internalTrackIndex
             selectSubtitleTrack(internalTrackIndex)
             _uiState.update {
                 it.copy(selectedSubtitleTrackIndex = internalTrackIndex, selectedAddonSubtitle = null)
@@ -854,7 +872,8 @@ internal fun PlayerRuntimeController.translateSubtitleWithAi(
             setAiSubtitleTranslationEnabled(
                 true,
                 allowPreferredUpgrade = false,
-                refreshSource = false
+                refreshSource = false,
+                routeSource = sameTrack
             )
             publishAiSubtitleDiagnostics(
                 AiSubtitleDiagnostics(
@@ -878,16 +897,27 @@ internal fun PlayerRuntimeController.translateSubtitleWithAi(
             )
         }
         addonSubtitle != null -> {
+            val alreadySelected = _uiState.value.selectedAddonSubtitle?.url == addonSubtitle.url
+            aiSubtitleUserLocked = true
+            // AI goes on before the selection, so an ASS/SSA Fonte goes straight to the text
+            // renderer instead of loading into libass first (#16).
+            setAiSubtitleTranslationEnabled(
+                true,
+                allowPreferredUpgrade = false,
+                refreshSource = false,
+                routeSource = false
+            )
             selectAddonSubtitle(addonSubtitle)
             _uiState.update {
                 it.copy(selectedAddonSubtitle = addonSubtitle, selectedSubtitleTrackIndex = -1)
             }
-            aiSubtitleUserLocked = true
-            setAiSubtitleTranslationEnabled(
-                true,
-                allowPreferredUpgrade = false,
-                refreshSource = false
-            )
+            // AutoSync runs for a newly picked Fonte, as for a plain addon pick. One already
+            // selected keeps its sync, unless libass was drawing it: it moves and syncs again.
+            if (alreadySelected) {
+                routeAiSourceToTextRenderer()
+            } else {
+                runSelectedAutomaticSubtitleSync(addonSubtitle)
+            }
             val score = scoreAddonSubtitleCached(addonSubtitle)
             publishAiSubtitleDiagnostics(
                 AiSubtitleDiagnostics(
@@ -1238,10 +1268,12 @@ internal fun PlayerRuntimeController.enableAiFromOptionClick() {
                 labelOk && langOk && !addon.isStreamProvided
             }
             if (match != null) {
+                val pickChanged = _uiState.value.selectedAddonSubtitle?.url != match.url
                 selectAddonSubtitle(match)
                 _uiState.update {
                     it.copy(selectedAddonSubtitle = match, selectedSubtitleTrackIndex = -1)
                 }
+                if (pickChanged) runSelectedAutomaticSubtitleSync(match)
             } else {
                 selectEmbeddedAiSourceIfAvailable()
             }

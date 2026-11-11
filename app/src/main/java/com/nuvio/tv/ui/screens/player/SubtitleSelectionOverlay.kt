@@ -36,6 +36,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -51,6 +52,11 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.Card
@@ -73,7 +79,6 @@ private const val SubtitleOffLanguageKey = "__off__"
 private const val SubtitleUnknownLanguageKey = "__unknown__"
 private const val SubtitleFocusTag = "SubtitleFocus"
 
-internal const val SubtitleAiOptionId = "ai:translate"
 
 private const val RailFadeDurationMs = 120
 private val InfoRailWidth = 280.dp
@@ -90,6 +95,7 @@ internal fun SubtitleSelectionOverlay(
     addonSubtitles: List<Subtitle>,
     selectedAddonSubtitle: Subtitle?,
     subtitleStyle: SubtitleStyleSettings,
+    isEditingHdrStyle: Boolean = false,
     subtitleDelayMs: Int,
     installedSubtitleAddonOrder: List<String>,
     isLoadingAddons: Boolean,
@@ -180,7 +186,7 @@ internal fun SubtitleSelectionOverlay(
         embeddedAiAvailability
     ) {
         SubtitleInfoSmartContext(
-            smartAiEnabled = subtitleStyle.aiAutoSelect,
+            smartAiEnabled = false, // fork: Smart AI hidden, upstream auto-select only
             preferredLanguageNone = preferredLanguageNone,
             forcedApplies = forcedAppliesSmartBlock,
             embeddedAvailability = embeddedAiAvailability,
@@ -414,10 +420,29 @@ internal fun SubtitleSelectionOverlay(
     val languageItemRequesters = rememberFocusRequesterMap(languageItems.map { it.key })
     val optionItemRequesters = rememberFocusRequesterMap(subtitleOptions.map { it.id })
     val infoTranslateRequester = remember { FocusRequester() }
+    // Col3 tabs (Info | Style). Style content is upstream's style rail (SubtitleOverlayStyleRail.kt).
+    var col3Tab by rememberSaveable { mutableStateOf(SubtitleCol3Tab.INFO) }
+    val infoTabRequester = remember { FocusRequester() }
+    val styleTabRequester = remember { FocusRequester() }
+    var tabFocusToken by remember(visible) { mutableStateOf(0) }
+    var pendingTabFocus by remember(visible) { mutableStateOf<SubtitleCol3Tab?>(null) }
+    var persistedStyleFocusKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var activeStyleFocusKey by remember(visible) { mutableStateOf<String?>(null) }
+    var lastStyleFocusKey by remember(visible) { mutableStateOf(persistedStyleFocusKey) }
+    var styleFocusToken by remember(visible) { mutableStateOf(0) }
+    var pendingStyleFocusKey by remember(visible) { mutableStateOf<String?>(null) }
+    val styleListState = remember(overlaySessionKey) { LazyListState() }
+    val styleRequesters = rememberStyleFocusRequesters()
     val optionRailVisible = browsedLanguageKey != SubtitleOffLanguageKey
-    // N1: Col3 content only when focus is on Col2 or Col3 (not Col1).
-    val infoContentVisible = optionRailVisible &&
-        (activeRail == OverlayFocusRail.OPTION || activeRail == OverlayFocusRail.INFO)
+    // N1: Col3 content only when focus is on Col2 or Col3 (not Col1). Tabs and Style count as Col3.
+    val col3Visible = optionRailVisible && (
+        activeRail == OverlayFocusRail.OPTION ||
+            activeRail == OverlayFocusRail.INFO ||
+            activeRail == OverlayFocusRail.TABS ||
+            activeRail == OverlayFocusRail.STYLE
+        )
+    val infoContentVisible = col3Visible && col3Tab == SubtitleCol3Tab.INFO
+    val styleContentVisible = col3Visible && col3Tab == SubtitleCol3Tab.STYLE
     val optionTargetId: String? = remember(subtitleOptions, optionFocusMemory, browsedLanguageKey, selectedOptionId) {
         selectedOptionId?.takeIf { id -> subtitleOptions.any { it.id == id } }
             ?: optionFocusMemory[browsedLanguageKey]?.takeIf { id -> subtitleOptions.any { it.id == id } }
@@ -448,7 +473,9 @@ internal fun SubtitleSelectionOverlay(
     // cannot swap the Info card mid-transition.
     val infoDisplayRail = when (activeRail) {
         OverlayFocusRail.OPTION -> SubtitleInfoDisplayRail.OPTION
-        OverlayFocusRail.INFO -> SubtitleInfoDisplayRail.INFO
+        OverlayFocusRail.INFO,
+        OverlayFocusRail.TABS,
+        OverlayFocusRail.STYLE -> SubtitleInfoDisplayRail.INFO
         else -> SubtitleInfoDisplayRail.LANGUAGE_OR_HIDDEN
     }
     val infoDisplayOption = resolveSubtitleInfoDisplayOption(
@@ -502,11 +529,13 @@ internal fun SubtitleSelectionOverlay(
         aiSubtitleDiagnostics,
         infoStatusLine,
         userExplicitSubtitleSelection,
-        smartInfoContext
+        smartInfoContext,
+        subtitleStyle.aiEnabled
     ) {
         val snapshot = infoDisplayOption?.toInfoSnapshot(unknownLabel = unknownLabel)
         val selectedId = playbackSelectedOption?.id
         decideSubtitleInfoRail(
+            aiFeatureEnabled = subtitleStyle.aiEnabled, // fork: no AI notices with AI off
             displayOption = snapshot,
             isPlaybackSelected = snapshot != null && snapshot.id == selectedId,
             diagnostics = aiSubtitleDiagnostics?.toInfoSnapshot(),
@@ -525,6 +554,36 @@ internal fun SubtitleSelectionOverlay(
         isAiOption = infoDisplayOption?.kind == SubtitleOptionKind.AI
     )
     var pendingPostActionFocus by remember(visible) { mutableStateOf<String?>(null) }
+    val isStyleDisabledByLibass = remember(
+        useLibass,
+        isUsingMpv,
+        subtitleOptions,
+        selectedOptionId,
+        sessionInternalTracks,
+        sessionSelectedInternalIndex,
+        sessionSelectedAddonSubtitle
+    ) {
+        if (!useLibass && !isUsingMpv) return@remember false
+        val selected = subtitleOptions.firstOrNull { it.id == selectedOptionId }
+        when (selected?.kind) {
+            SubtitleOptionKind.INTERNAL -> {
+                val track = selected.internalTrackIndex?.let { sessionInternalTracks.getOrNull(it) }
+                val codec = track?.codec?.lowercase(java.util.Locale.US).orEmpty()
+                codec.contains("ass") || codec.contains("ssa") || track?.name?.contains("ASS", ignoreCase = true) == true
+            }
+            SubtitleOptionKind.ADDON -> {
+                val url = selected.addonSubtitle?.url?.lowercase(java.util.Locale.US).orEmpty()
+                url.contains(".ass") || url.contains(".ssa")
+            }
+            SubtitleOptionKind.AI -> false
+            null -> {
+                val track = sessionInternalTracks.getOrNull(sessionSelectedInternalIndex)
+                val codec = track?.codec?.lowercase(java.util.Locale.US).orEmpty()
+                val url = sessionSelectedAddonSubtitle?.url?.lowercase(java.util.Locale.US).orEmpty()
+                codec.contains("ass") || codec.contains("ssa") || url.contains(".ass") || url.contains(".ssa")
+            }
+        }
+    }
 
     fun requestLanguageFocus(targetKey: String?) {
         val resolvedKey = targetKey
@@ -667,6 +726,8 @@ internal fun SubtitleSelectionOverlay(
         infoAnchorLocked = false
         activeInfoFocusKey = null
         pendingInfoFocusKey = null
+        pendingStyleFocusKey = null
+        pendingTabFocus = null
         val targetId = infoEntryOptionId?.takeIf { id -> subtitleOptions.any { it.id == id } }
             ?: optionTargetId
         requestOptionFocus(
@@ -676,7 +737,57 @@ internal fun SubtitleSelectionOverlay(
         )
     }
 
+    fun requestTabFocus(tab: SubtitleCol3Tab, reason: String) {
+        pendingTabFocus = tab
+        Log.d(SubtitleFocusTag, "tab_focus_schedule source=$reason tab=$tab")
+        tabFocusToken += 1
+    }
+
+    fun requestStyleFocus(targetKey: String?, reason: String) {
+        if (isStyleDisabledByLibass) return
+        val requestedKey = targetKey ?: StyleFocusKey.DelaySet
+        val resolvedKey = when {
+            requestedKey.startsWith("${StyleFocusKey.OutlineColorPrefix}:") && !subtitleStyle.outlineEnabled ->
+                StyleFocusKey.OutlineToggle
+            requestedKey.isHdrBrightnessFocusKey() && !isEditingHdrStyle -> StyleFocusKey.OpacityDecrease
+            else -> requestedKey
+        }.takeIf { key -> styleRequesters.containsKey(key) } ?: StyleFocusKey.DelaySet
+        pendingStyleFocusKey = resolvedKey
+        Log.d(SubtitleFocusTag, "style_focus_schedule source=$reason key=$resolvedKey")
+        styleFocusToken += 1
+    }
+
+    /** Freeze Col3 to the focused Col2 option before focus leaves Col2 (same lock as Info). */
+    fun anchorCol3ToFocusedOption(): Boolean {
+        val optionId = resolveCol2OptionIdForBrowsedLanguage(
+            activeOptionFocusId = activeOptionFocusId,
+            optionFocusMemoryId = optionFocusMemory[browsedLanguageKey],
+            optionTargetId = optionTargetId,
+            currentOptionIds = subtitleOptions.map { it.id }
+        ) ?: return false
+        activeOptionFocusId = optionId
+        infoEntryOptionId = optionId
+        infoAnchorLocked = true
+        return true
+    }
+
+    fun moveFocusToStyleRail() {
+        if (!anchorCol3ToFocusedOption()) return
+        col3Tab = SubtitleCol3Tab.STYLE
+        if (isStyleDisabledByLibass) {
+            activeRail = OverlayFocusRail.TABS
+            requestTabFocus(SubtitleCol3Tab.STYLE, reason = "option_to_style_disabled")
+        } else {
+            activeRail = OverlayFocusRail.STYLE
+            requestStyleFocus(lastStyleFocusKey, reason = "option_to_style")
+        }
+    }
+
     fun moveFocusToInfoRail() {
+        if (col3Tab == SubtitleCol3Tab.STYLE) {
+            moveFocusToStyleRail()
+            return
+        }
         // Resolve against the *browsed* Col2 list only — never a ✓ from another language.
         val optionId = resolveCol2OptionIdForBrowsedLanguage(
             activeOptionFocusId = activeOptionFocusId,
@@ -687,9 +798,16 @@ internal fun SubtitleSelectionOverlay(
         val option = subtitleOptions.first { it.id == optionId }
         // Keep live focus id coherent before CTA decision / Info freeze.
         activeOptionFocusId = option.id
-        // Col2 → Col3 only when an enabled CTA exists (selection not required).
+        // Col2 → Col3 CTA when an enabled CTA exists (selection not required).
         // Provider-cycle CTA alone also opens Col3 (and only for the AI option).
-        if (decideSubtitleInfoEntryFocus(infoCtaState, showProviderCycleCta) == null) return
+        // Without a CTA, Right lands on the Info tab so Style stays reachable.
+        if (decideSubtitleInfoEntryFocus(infoCtaState, showProviderCycleCta) == null) {
+            infoEntryOptionId = option.id
+            infoAnchorLocked = true
+            activeRail = OverlayFocusRail.TABS
+            requestTabFocus(SubtitleCol3Tab.INFO, reason = "option_to_tabs_no_cta")
+            return
+        }
         // Lock + freeze Col3 to the focused option *before* requesting CTA focus.
         // TV focus search may briefly hit the playback-selected row on the way;
         // without the lock, Info flips to the selected track (N4/B6 regression).
@@ -735,8 +853,10 @@ internal fun SubtitleSelectionOverlay(
 
     fun handleOverlayBack() {
         when (activeRail) {
-            // Col3: one column back to Col2. Col1/Col2 Back always dismisses.
-            OverlayFocusRail.INFO -> moveFocusBackToOptionRail()
+            // Col3 (Info, tabs, Style): one column back to Col2. Col1/Col2 Back always dismisses.
+            OverlayFocusRail.INFO,
+            OverlayFocusRail.TABS,
+            OverlayFocusRail.STYLE -> moveFocusBackToOptionRail()
             else -> onDismiss()
         }
     }
@@ -917,6 +1037,45 @@ internal fun SubtitleSelectionOverlay(
             }
             Log.d(SubtitleFocusTag, "info_focus_timeout key=$targetKey activeInfoKey=$activeInfoFocusKey")
             pendingInfoFocusKey = null
+        }
+
+        LaunchedEffect(visible, col3Visible, tabFocusToken) {
+            if (!visible || !col3Visible || tabFocusToken <= 0) return@LaunchedEffect
+            val tab = pendingTabFocus ?: return@LaunchedEffect
+            val requester = if (tab == SubtitleCol3Tab.INFO) infoTabRequester else styleTabRequester
+            repeat(8) { attempt ->
+                runCatching { requester.requestFocusAfterFrames(frames = if (attempt == 0) 2 else 1) }
+                if (activeRail == OverlayFocusRail.TABS && col3Tab == tab) {
+                    Log.d(SubtitleFocusTag, "tab_focus_complete attempt=$attempt tab=$tab")
+                    pendingTabFocus = null
+                    return@LaunchedEffect
+                }
+            }
+            Log.d(SubtitleFocusTag, "tab_focus_timeout tab=$tab")
+            pendingTabFocus = null
+        }
+
+        LaunchedEffect(visible, styleContentVisible, styleFocusToken, isStyleDisabledByLibass) {
+            if (!visible || !styleContentVisible || styleFocusToken <= 0 || isStyleDisabledByLibass) {
+                return@LaunchedEffect
+            }
+            val targetKey = pendingStyleFocusKey ?: return@LaunchedEffect
+            val requester = styleRequesters[targetKey] ?: run {
+                pendingStyleFocusKey = null
+                return@LaunchedEffect
+            }
+            val targetIndex = styleListIndexForFocusKey(targetKey, hasHdrBrightnessItem = isEditingHdrStyle)
+            repeat(8) { attempt ->
+                styleListState.scrollItemIntoView(targetIndex)
+                runCatching { requester.requestFocusAfterFrames(frames = if (attempt == 0) 2 else 1) }
+                if (activeRail == OverlayFocusRail.STYLE && activeStyleFocusKey == targetKey) {
+                    Log.d(SubtitleFocusTag, "style_focus_complete attempt=$attempt key=$targetKey")
+                    pendingStyleFocusKey = null
+                    return@LaunchedEffect
+                }
+            }
+            Log.d(SubtitleFocusTag, "style_focus_timeout key=$targetKey activeStyleKey=$activeStyleFocusKey")
+            pendingStyleFocusKey = null
         }
 
         // Top → bottom fill: title (intrinsic) + rails Row (weight) so Col1–Col3
@@ -1120,6 +1279,66 @@ internal fun SubtitleSelectionOverlay(
                             .width(InfoRailWidth)
                             .fillMaxHeight()
                     ) {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
+                        ) {
+                        if (col3Visible) {
+                            SubtitleCol3Tabs(
+                                selectedTab = col3Tab,
+                                infoTabRequester = infoTabRequester,
+                                styleTabRequester = styleTabRequester,
+                                onTabFocused = { tab ->
+                                    col3Tab = tab
+                                    activeRail = OverlayFocusRail.TABS
+                                    infoAnchorLocked = true
+                                    activeInfoFocusKey = null
+                                    activeStyleFocusKey = null
+                                },
+                                onMoveLeftFromFirstTab = ::moveFocusBackToOptionRail,
+                                onMoveDown = { tab ->
+                                    when (tab) {
+                                        SubtitleCol3Tab.INFO -> {
+                                            if (decideSubtitleInfoEntryFocus(infoCtaState, showProviderCycleCta) != null) {
+                                                activeRail = OverlayFocusRail.INFO
+                                                requestInfoFocus(reason = "tab_to_info")
+                                            }
+                                        }
+                                        SubtitleCol3Tab.STYLE -> {
+                                            if (!isStyleDisabledByLibass) {
+                                                activeRail = OverlayFocusRail.STYLE
+                                                requestStyleFocus(lastStyleFocusKey, reason = "tab_to_style")
+                                            }
+                                        }
+                                    }
+                                },
+                                onBack = ::handleOverlayBack
+                            )
+                        }
+                        if (styleContentVisible) {
+                            SubtitleOverlayStyleRail(
+                                subtitleStyle = subtitleStyle,
+                                isEditingHdrStyle = isEditingHdrStyle,
+                                subtitleDelayMs = subtitleDelayMs,
+                                listState = styleListState,
+                                onMoveLeft = ::moveFocusBackToOptionRail,
+                                focusRequesters = styleRequesters,
+                                onStyleFocused = {
+                                    activeRail = OverlayFocusRail.STYLE
+                                    infoAnchorLocked = true
+                                    activeStyleFocusKey = it
+                                    pendingStyleFocusKey = null
+                                    lastStyleFocusKey = it
+                                    persistedStyleFocusKey = it
+                                },
+                                onEvent = onEvent,
+                                isStyleDisabledByLibass = isStyleDisabledByLibass,
+                                onMoveUpFromTop = {
+                                    activeRail = OverlayFocusRail.TABS
+                                    requestTabFocus(SubtitleCol3Tab.STYLE, reason = "style_up_to_tab")
+                                }
+                            )
+                        }
                         if (infoContentVisible) {
                             SubtitleInfoRail(
                                 selectedOption = infoDisplayOption,
@@ -1128,6 +1347,10 @@ internal fun SubtitleSelectionOverlay(
                                 aiSubtitleLastError = aiSubtitleLastError,
                                 aiSubtitleTranslationActive = aiSubtitleTranslationActive,
                                 subtitleAiCredentials = subtitleAiCredentials,
+                                autoSyncSubtitleUrl = infoDisplayOption?.addonSubtitle?.url
+                                    ?: selectedAddonSubtitle?.url?.takeIf {
+                                        infoDisplayOption?.kind == SubtitleOptionKind.AI && aiSubtitleTranslationActive
+                                    },
                                 onMoveLeft = ::moveFocusBackToOptionRail,
                                 onBack = ::handleOverlayBack,
                                 ctaFocusRequester = infoTranslateRequester,
@@ -1188,6 +1411,7 @@ internal fun SubtitleSelectionOverlay(
                                     onEvent(PlayerEvent.OnCycleSubtitleAiProvider)
                                 }
                             )
+                        }
                         }
                     }
                 }
@@ -1283,6 +1507,7 @@ private fun SubtitleLanguageRail(
                     // V1: ~50% when this language's Col2 is open and focus is elsewhere.
                     emphasized = isBrowsed && !focusOnLanguageRail,
                     showAiSourceDot = item.key == aiSourceLanguageKey,
+                    selected = isBrowsed,
                     onClick = { onLanguageClicked(item.key) },
                     focusRequester = itemFocusRequesters[item.key],
                     onMoveRight = onMoveRight,
@@ -1416,6 +1641,7 @@ private fun SubtitleInfoRail(
     aiSubtitleLastError: String?,
     aiSubtitleTranslationActive: Boolean,
     subtitleAiCredentials: SubtitleAiCredentials,
+    autoSyncSubtitleUrl: String?,
     onMoveLeft: () -> Unit,
     onBack: () -> Unit,
     ctaFocusRequester: FocusRequester,
@@ -1438,6 +1664,7 @@ private fun SubtitleInfoRail(
             aiSubtitleLastError = aiSubtitleLastError,
             aiSubtitleTranslationActive = aiSubtitleTranslationActive,
             subtitleAiCredentials = subtitleAiCredentials,
+            autoSyncSubtitleUrl = autoSyncSubtitleUrl,
             onMoveLeft = onMoveLeft,
             onBack = onBack,
             ctaFocusRequester = ctaFocusRequester,
@@ -1457,6 +1684,7 @@ private fun SubtitleInfoPane(
     aiSubtitleLastError: String?,
     aiSubtitleTranslationActive: Boolean,
     subtitleAiCredentials: SubtitleAiCredentials,
+    autoSyncSubtitleUrl: String?,
     onMoveLeft: () -> Unit,
     onBack: () -> Unit,
     ctaFocusRequester: FocusRequester,
@@ -1545,7 +1773,8 @@ private fun SubtitleInfoPane(
                             }
                         )
                     }
-                    content.unavailableReason?.let { reason ->
+                    AutoSyncInfoLines(autoSyncSubtitleUrl) // fork: AutoSync status, not translation diagnostics
+                    content.unavailableReason?.takeIf { it.blocksAiTranslate() }?.let { reason ->
                         val reasonText = when (reason) {
                             SubtitleInfoUnavailableReason.MPV ->
                                 stringResource(R.string.sub_ai_unavailable_mpv)
@@ -1592,7 +1821,8 @@ private fun SubtitleInfoPane(
                     content.fields.forEach { field ->
                         if (field.key == SubtitleInfoFieldKey.STATUS ||
                             field.key == SubtitleInfoFieldKey.SCORE ||
-                            field.key == SubtitleInfoFieldKey.TRACK_NAME
+                            field.key == SubtitleInfoFieldKey.TRACK_NAME ||
+                            field.key in TranslationDiagnosticFields
                         ) {
                             return@forEach
                         }
@@ -1654,7 +1884,8 @@ private fun SubtitleInfoPane(
             }
             SubtitleInfoCtaAction.RESET_TO_CLASSIC_AUTO -> {
                 SubtitleInfoActionCard(
-                    label = stringResource(R.string.sub_ai_reset_to_classic),
+                    // Smart AI is hidden, so classic is the only automatic selection.
+                    label = stringResource(R.string.sub_ai_reset_to_smart),
                     focusKey = InfoFocusKey.ResetSmart,
                     focusRequester = if (cta.canMoveFocusToCta) ctaFocusRequester else null,
                     enabled = cta.enabled,
@@ -1686,6 +1917,17 @@ private fun SubtitleInfoPane(
         }
     }
 }
+
+/** Translation/ladder diagnostics the Info card no longer shows (AutoSync status replaced them). */
+private val TranslationDiagnosticFields = setOf(
+    SubtitleInfoFieldKey.SOURCE,
+    SubtitleInfoFieldKey.METHOD,
+    SubtitleInfoFieldKey.RUNG,
+    SubtitleInfoFieldKey.REASON,
+    SubtitleInfoFieldKey.TARGET,
+    SubtitleInfoFieldKey.MODEL,
+    SubtitleInfoFieldKey.LOCKED
+)
 
 @Composable
 private fun infoFieldLabel(key: SubtitleInfoFieldKey): String? = when (key) {
@@ -1775,6 +2017,10 @@ private fun SubtitleInfoActionCard(
         modifier = Modifier
             .fillMaxWidth()
             .alpha(if (enabled) 1f else 0.45f)
+            .semantics {
+                role = Role.Button
+                if (!enabled) disabled()
+            }
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .focusProperties { canFocus = focusable }
             .onPreviewKeyEvent { event ->
@@ -1852,6 +2098,7 @@ private fun SubtitleLanguageCard(
     onClick: () -> Unit,
     focusRequester: FocusRequester?,
     onMoveRight: (() -> Unit)?,
+    selected: Boolean = false,
     onBack: () -> Unit,
     onFocused: () -> Unit
 ) {
@@ -1869,6 +2116,10 @@ private fun SubtitleLanguageCard(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
+            .semantics {
+                role = Role.RadioButton
+                this.selected = selected
+            }
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .onPreviewKeyEvent { event ->
                 when (event.nativeKeyEvent.keyCode) {
@@ -1978,6 +2229,11 @@ private fun SubtitleOptionCard(
         modifier = Modifier
             .fillMaxWidth()
             .alpha(if (item.isSelectable) 1f else 0.45f)
+            .semantics {
+                role = Role.RadioButton
+                this.selected = item.isSelected
+                if (!item.isSelectable) disabled()
+            }
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .onPreviewKeyEvent { event ->
                 when (event.nativeKeyEvent.keyCode) {
@@ -2047,6 +2303,7 @@ private fun SubtitleOptionCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     SourceChip(label = item.sourceLabel, selected = onPurpleFill)
+                    item.addonSubtitle?.let { AutoSyncStatusChip(it.url, item.isSelected) } // fork: AutoSync synced / running / failed, replaces AutoSyncedChip
                     // F2: yellow "Fonte IA" chip beside the origin chip.
                     if (item.isAiSource) {
                         SourceChip(
@@ -2275,7 +2532,88 @@ private fun overlayCardBorder() = CardDefaults.border(
 private enum class OverlayFocusRail {
     LANGUAGE,
     OPTION,
-    INFO
+    INFO,
+    /** Col3 tab row (Info | Style). */
+    TABS,
+    /** Col3 Style tab content. */
+    STYLE
+}
+
+internal enum class SubtitleCol3Tab {
+    INFO,
+    STYLE
+}
+
+@Composable
+private fun SubtitleCol3Tabs(
+    selectedTab: SubtitleCol3Tab,
+    infoTabRequester: FocusRequester,
+    styleTabRequester: FocusRequester,
+    onTabFocused: (SubtitleCol3Tab) -> Unit,
+    onMoveLeftFromFirstTab: () -> Unit,
+    onMoveDown: (SubtitleCol3Tab) -> Unit,
+    onBack: () -> Unit
+) {
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val moveLeftKey = if (isRtl) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
+    ) {
+        listOf(
+            SubtitleCol3Tab.INFO to stringResource(R.string.subtitle_tab_info),
+            SubtitleCol3Tab.STYLE to stringResource(R.string.subtitle_tab_style)
+        ).forEach { (tab, label) ->
+            val selected = tab == selectedTab
+            Card(
+                onClick = { onTabFocused(tab) },
+                colors = overlayRailCardColors(
+                    if (selected) OverlayRailVisualRole.LanguageBrowsed else OverlayRailVisualRole.Neutral
+                ),
+                shape = CardDefaults.shape(RoundedCornerShape(NuvioTheme.radii.md)),
+                border = overlayCardBorder(),
+                scale = CardDefaults.scale(focusedScale = 1f, pressedScale = 1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics {
+                        role = Role.Tab
+                        this.selected = selected
+                    }
+                    .focusRequester(if (tab == SubtitleCol3Tab.INFO) infoTabRequester else styleTabRequester)
+                    .onPreviewKeyEvent { event ->
+                        val isDown = event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN
+                        when (event.nativeKeyEvent.keyCode) {
+                            moveLeftKey -> if (tab == SubtitleCol3Tab.INFO) {
+                                if (isDown) onMoveLeftFromFirstTab()
+                                true
+                            } else {
+                                false
+                            }
+                            KeyEvent.KEYCODE_DPAD_DOWN -> {
+                                if (isDown) onMoveDown(tab)
+                                true
+                            }
+                            KeyEvent.KEYCODE_DPAD_UP -> true
+                            KeyEvent.KEYCODE_BACK -> {
+                                if (event.nativeKeyEvent.action == KeyEvent.ACTION_UP) onBack()
+                                true
+                            }
+                            else -> false
+                        }
+                    }
+                    .onFocusChanged { if (it.isFocused) onTabFocused(tab) }
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = NuvioTheme.spacing.md, vertical = 10.dp)
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -2648,7 +2986,7 @@ private fun normalizeOverlayLanguageKey(language: String?): String {
     if (language.isNullOrBlank()) return SubtitleUnknownLanguageKey
     val normalized = PlayerSubtitleUtils.normalizeLanguageCode(language)
     return when (normalized) {
-        "pt-br", "es-419" -> normalized
+        "pt-br", "es-419", "sr-me" -> normalized
         else -> normalized
             .substringBefore('-')
             .substringBefore('_')
@@ -2668,7 +3006,7 @@ private fun normalizeOverlayLanguageKeyForTrack(track: TrackInfo): String {
         trackId = track.trackId
     )
     return when (variant) {
-        "pt-br", "es-419" -> variant
+        "pt-br", "es-419", "sr-me" -> variant
         else -> variant
             .substringBefore('-')
             .substringBefore('_')

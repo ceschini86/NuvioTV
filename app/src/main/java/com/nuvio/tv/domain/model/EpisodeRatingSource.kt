@@ -1,7 +1,7 @@
 package com.nuvio.tv.domain.model
 
 /**
- * Which score to show in the detail Ratings tab (and episode cards).
+ * Which score to show in the detail Ratings tab. Episode cards keep IMDb, under their IMDb badge.
  *
  * Both values come from the same Series Graph season-ratings payload:
  * - [SERIES_GRAPH] → `community_avg`

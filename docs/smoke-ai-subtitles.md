@@ -74,7 +74,27 @@ Cuidados:
 - **Quota / rate-limit:** `aiSubtitleQuotaExhausted` oculta Translate; S6 preserve selection (não é falha da ladder).
 - **Task de teste:** `gradlew.bat :app:testFullDebugUnitTest --tests *Subtitle*` (`testDebugUnitTest` é ambíguo por flavor).
 - **APK emulador:** `app-full-x86_64-debug.apk` (`app/build/outputs/apk/full/debug/`).
-- **Series Graph:** fora deste smoke; não misturar no mesmo commit AI.
+- **Series Graph:** fora dos casos 1–4. Entra no smoke de release do 1.2.0 (abaixo).
+
+---
+
+## Smoke de release 1.2.0 (sync com o Nuvio 1.1.0) — pendente na TV
+
+Rodar na TV com a 1.1.4 instalada, instalando o APK 1.2.0 por cima e com o Diagnóstico de legendas ligado. Registrar PASS/FAIL e a data em "Last results". Ticket #19.
+
+| # | Caso | Esperado | Resultado |
+|---|------|----------|-----------|
+| R1 | Instalar 1.2.0 por cima da 1.1.4 | Perfis, keys de IA e configs de legendas preservados | |
+| R2 | Smart AI (casos 1–3 acima) | Mesmas rungs da 1.1.4 | |
+| R3 | Translate with AI + Lock manual (caso 4) | `MANUAL`, `locked=true`; AutoSync roda na Fonte de addon | |
+| R4 | Tradução pausada com Key gratuita | Quota esgotada → cues no idioma da Fonte, motivo na tela; a tradução volta sozinha | |
+| R5 | Chip Traduzindo | Aparece só enquanto a cue visível espera a tradução; some com os controles escurecidos junto | |
+| R6 | AutoSync com legenda traduzida | Log `AI_AUTOSYNC adjusted`; cues traduzidas no tempo novo; sem chamada repetida ao provider | |
+| R7 | Fonte ASS de addon com IA | Log `AI_ROUTE fonte=addon_ass renderer=text`; tradução na tela (sem estilo ASS) | |
+| R8 | Fonte ASS embutida com IA | Log `AI_ROUTE fonte=embedded_ass ... rebuild_without_libass`; player reconstrói uma vez; tradução na tela | |
+| R9 | Seek bar | Trilha fina, thumb com anel no foco; cresce no scrub segurado; OK retoma; capítulos aparecem num arquivo com capítulos | |
+| R10 | Aba Ratings | Series Graph (padrão) e IMDb trocam em Layout → Detail Page sem reiniciar; cards de episódio ficam no IMDb | |
+| R11 | Updater | TV com 1.1.4 oferece a release `1.2.0` | |
 
 ---
 

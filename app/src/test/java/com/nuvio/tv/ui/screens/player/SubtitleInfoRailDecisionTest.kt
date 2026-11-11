@@ -679,6 +679,46 @@ class SubtitleInfoRailDecisionTest {
         assertEquals(SubtitleInfoUnavailableReason.MPV, mpv.content.unavailableReason)
     }
 
+    // --- AI setting off ---
+
+    @Test
+    fun aiSettingOff_infoShowsNoAiNoticeAndNoTranslateCta() {
+        listOf(embeddedOption(), addonOption()).forEach { option ->
+            listOf(false, true).forEach { mpv ->
+                val decision = decideSubtitleInfoRail(
+                    displayOption = option,
+                    isPlaybackSelected = true,
+                    diagnostics = null,
+                    statusLine = null,
+                    aiAvailable = false,
+                    aiQuotaExhausted = false,
+                    isUsingMpv = mpv,
+                    userExplicitSelection = true,
+                    aiFeatureEnabled = false
+                )
+                assertNull(decision.content.unavailableReason)
+                assertEquals(SubtitleInfoCtaAction.NONE, decision.cta.action)
+            }
+        }
+    }
+
+    @Test
+    fun aiSettingOff_runningTranslationKeepsItsNotices() {
+        val decision = decideSubtitleInfoRail(
+            displayOption = embeddedOption(),
+            isPlaybackSelected = true,
+            diagnostics = null,
+            statusLine = null,
+            aiAvailable = false,
+            aiQuotaExhausted = false,
+            isUsingMpv = false,
+            userExplicitSelection = true,
+            translationActive = true,
+            aiFeatureEnabled = false
+        )
+        assertEquals(SubtitleInfoUnavailableReason.NO_API_KEY, decision.content.unavailableReason)
+    }
+
     // --- K1 ---
 
     @Test
@@ -734,6 +774,7 @@ class SubtitleInfoRailDecisionTest {
         )
         assertEquals(1, aiOnlyPreferred.first { it.key == "es" }.count)
     }
+
 
     // --- B6d ---
 
@@ -833,7 +874,7 @@ class SubtitleInfoRailDecisionTest {
             smart = SubtitleInfoSmartContext(smartAiEnabled = false)
         )
         assertEquals(SubtitleInfoCtaAction.RESET_TO_CLASSIC_AUTO, reset.cta.action)
-        assertFalse(reset.cta.enabled)
+        assertTrue(reset.cta.enabled)
         assertFalse(isSyntheticAiOptionSelectable(EmbeddedAiAvailability.NONE, translationActive = false))
         assertTrue(isSyntheticAiOptionSelectable(EmbeddedAiAvailability.NONE, translationActive = true))
     }

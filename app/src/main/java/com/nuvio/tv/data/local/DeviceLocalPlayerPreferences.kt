@@ -26,10 +26,15 @@ import javax.inject.Singleton
  * These values stay on the device and are never synced across devices or profiles.
  *
  * Currently stores:
- *  - aspectMode
- *  - playerStatsHudButtonEnabled / playerStatsHudActive
+ *  - aspectMode  (player aspect ratio mode)
+ *  - transparentLetterbox  (true-black bars; device compositor behavior)
+ *  - tunneledSurfaceFill  (ExoPlayer surface fill while tunneling; does not affect aspectMode)
+ *  - playerStatsHudButtonEnabled  (whether stats overlay button is available in stream info)
+ *  - playerStatsHudActive  (whether playback stats HUD is turned on by the user)
+ *  - releaseDecoderOnBackground  (free the hardware decoder when the app leaves the foreground)
  *  - subtitle AI credentials (multi-provider / multi-key), plus legacy single-key for migration
  *  - subtitle AI advanced tunables (batch / cooldown / Gemini pacing)
+ *  - subtitleDiagnosticsEnabled  (fork: on-device subtitle diagnostics capture, ADR 0002)
  */
 @Singleton
 class DeviceLocalPlayerPreferences @Inject constructor(
@@ -44,8 +49,11 @@ class DeviceLocalPlayerPreferences @Inject constructor(
     }
 
     private val aspectModeKey = stringPreferencesKey("aspect_mode")
+    private val transparentLetterboxKey = booleanPreferencesKey("transparent_letterbox")
+    private val tunneledSurfaceFillKey = booleanPreferencesKey("tunneled_surface_fill")
     private val playerStatsHudButtonEnabledKey = booleanPreferencesKey("player_stats_hud_enabled")
     private val playerStatsHudActiveKey = booleanPreferencesKey("player_stats_hud_active")
+    private val releaseDecoderOnBackgroundKey = booleanPreferencesKey("release_decoder_on_background")
     private val subtitleAiApiKeyKey = stringPreferencesKey("subtitle_ai_api_key")
     private val subtitleAiCredentialsKey = stringPreferencesKey("subtitle_ai_credentials_json")
     private val subtitleAiMaxBatchSizeKey = intPreferencesKey("subtitle_ai_max_batch_size")
@@ -73,6 +81,26 @@ class DeviceLocalPlayerPreferences @Inject constructor(
     suspend fun setAspectMode(mode: AspectMode) {
         store.edit { prefs ->
             prefs[aspectModeKey] = mode.name
+        }
+    }
+
+    val transparentLetterbox: Flow<Boolean> = store.data.map { prefs ->
+        prefs[transparentLetterboxKey] ?: false
+    }
+
+    suspend fun setTransparentLetterbox(enabled: Boolean) {
+        store.edit { prefs ->
+            prefs[transparentLetterboxKey] = enabled
+        }
+    }
+
+    val tunneledSurfaceFill: Flow<Boolean> = store.data.map { prefs ->
+        prefs[tunneledSurfaceFillKey] ?: false
+    }
+
+    suspend fun setTunneledSurfaceFill(fill: Boolean) {
+        store.edit { prefs ->
+            prefs[tunneledSurfaceFillKey] = fill
         }
     }
 
@@ -120,6 +148,16 @@ class DeviceLocalPlayerPreferences @Inject constructor(
     suspend fun setPlayerStatsHudActive(active: Boolean) {
         store.edit { prefs ->
             prefs[playerStatsHudActiveKey] = active
+        }
+    }
+
+    val releaseDecoderOnBackground: Flow<Boolean> = store.data.map { prefs ->
+        prefs[releaseDecoderOnBackgroundKey] ?: false
+    }
+
+    suspend fun setReleaseDecoderOnBackground(enabled: Boolean) {
+        store.edit { prefs ->
+            prefs[releaseDecoderOnBackgroundKey] = enabled
         }
     }
 

@@ -257,6 +257,9 @@ internal fun decideResetSmartOutcome(rung: AiSubtitleLadderRung): ResetSmartOutc
         )
     }
 
+/** Option id of the synthetic "Translate with AI" entry in the subtitle overlay. */
+internal const val SubtitleAiOptionId = "ai:translate"
+
 /**
  * S6: after Reset Smart, focus the option that became selected.
  */

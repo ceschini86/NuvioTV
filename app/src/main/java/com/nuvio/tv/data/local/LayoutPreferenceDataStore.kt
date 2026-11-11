@@ -15,6 +15,8 @@ import com.nuvio.tv.core.sync.SyncHomeCatalogPayload
 import com.nuvio.tv.core.sync.buildHomeCatalogSyncPayload
 import com.nuvio.tv.core.sync.homeCatalogKey
 import com.nuvio.tv.core.sync.homeCollectionKey
+import com.nuvio.tv.core.sync.withLocalServerKeys
+import com.nuvio.tv.data.mediaserver.ServerCatalog
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CardDepthStyle
 import com.nuvio.tv.domain.model.CardDepthSurface
@@ -103,7 +105,10 @@ class LayoutPreferenceDataStore @Inject constructor(
     private val cardDepthCastEnabledKey = booleanPreferencesKey("card_depth_cast_enabled")
     private val cardDepthTrailersEnabledKey = booleanPreferencesKey("card_depth_trailers_enabled")
     private val blurUnwatchedEpisodesKey = booleanPreferencesKey("blur_unwatched_episodes")
+    private val randomEpisodeEnabledKey = booleanPreferencesKey("random_episode_enabled")
     private val startupSplashEnabledKey = booleanPreferencesKey("startup_splash_enabled")
+    private val alwaysShowLandscapeClearlogoKey = booleanPreferencesKey("always_show_landscape_clearlogo")
+    private val heroDescriptionAutoScrollEnabledKey = booleanPreferencesKey("hero_description_auto_scroll_enabled")
     private val episodeOptionsOverlayStyleKey = stringPreferencesKey("episode_options_overlay_style")
     private val homeImdbRatingsVisibilityKey = stringPreferencesKey("home_imdb_ratings_visibility")
     private val detailImdbRatingsVisibilityKey = stringPreferencesKey("detail_imdb_ratings_visibility")
@@ -127,6 +132,7 @@ class LayoutPreferenceDataStore @Inject constructor(
     private val composeHighlighterEnabledKey = booleanPreferencesKey("compose_highlighter_enabled")
 
     private val customPosterUrlPatternKey = stringPreferencesKey("custom_poster_url_pattern")
+    private val customPosterEnabledScreensKey = stringPreferencesKey("custom_poster_enabled_screens")
 
     private fun <T> profileFlow(extract: (prefs: androidx.datastore.preferences.core.Preferences) -> T): Flow<T> =
         profileManager.activeProfileId.flatMapLatest { pid ->
@@ -337,8 +343,23 @@ class LayoutPreferenceDataStore @Inject constructor(
         prefs[blurUnwatchedEpisodesKey] ?: false
     }
 
+    val randomEpisodeEnabled: Flow<Boolean> = profileFlow { prefs ->
+        prefs[randomEpisodeEnabledKey] ?: false
+    }
+
+    fun randomEpisodeEnabledForProfile(profileId: Int): Flow<Boolean> =
+        factory.get(profileId, FEATURE).data.map { it[randomEpisodeEnabledKey] ?: false }
+
     val startupSplashEnabled: Flow<Boolean> = profileFlow { prefs ->
         prefs[startupSplashEnabledKey] ?: true
+    }
+
+    val alwaysShowLandscapeClearlogo: Flow<Boolean> = profileFlow { prefs ->
+        prefs[alwaysShowLandscapeClearlogoKey] ?: false
+    }
+
+    val heroDescriptionAutoScrollEnabled: Flow<Boolean> = profileFlow { prefs ->
+        prefs[heroDescriptionAutoScrollEnabledKey] ?: false
     }
 
     val episodeOptionsOverlayStyle: Flow<EpisodeOptionsOverlayStyle> = profileFlow { prefs ->
@@ -427,6 +448,10 @@ class LayoutPreferenceDataStore @Inject constructor(
         prefs[customPosterUrlPatternKey] ?: ""
     }
 
+    val customPosterEnabledScreens: Flow<Set<com.nuvio.tv.core.poster.CustomPosterScreen>> = profileFlow { prefs ->
+        com.nuvio.tv.core.poster.CustomPosterScreen.fromStorageValue(prefs[customPosterEnabledScreensKey])
+    }
+
     suspend fun setMemoryOnlyVerticalScroll(enabled: Boolean) {
         store().edit { prefs ->
             prefs[memoryOnlyVerticalScrollKey] = enabled
@@ -470,6 +495,18 @@ class LayoutPreferenceDataStore @Inject constructor(
     suspend fun clearCustomPosterSettings() {
         store().edit { prefs ->
             prefs.remove(customPosterUrlPatternKey)
+            prefs.remove(customPosterEnabledScreensKey)
+        }
+    }
+
+    suspend fun setCustomPosterEnabledScreens(screens: Set<com.nuvio.tv.core.poster.CustomPosterScreen>) {
+        store().edit { prefs ->
+            val stored = com.nuvio.tv.core.poster.CustomPosterScreen.toStorageValue(screens)
+            if (stored == null) {
+                prefs.remove(customPosterEnabledScreensKey)
+            } else {
+                prefs[customPosterEnabledScreensKey] = stored
+            }
         }
     }
 
@@ -714,9 +751,27 @@ class LayoutPreferenceDataStore @Inject constructor(
         }
     }
 
+    suspend fun setRandomEpisodeEnabled(enabled: Boolean) {
+        store().edit { prefs ->
+            prefs[randomEpisodeEnabledKey] = enabled
+        }
+    }
+
     suspend fun setStartupSplashEnabled(enabled: Boolean) {
         store().edit { prefs ->
             prefs[startupSplashEnabledKey] = enabled
+        }
+    }
+
+    suspend fun setAlwaysShowLandscapeClearlogo(enabled: Boolean) {
+        store().edit { prefs ->
+            prefs[alwaysShowLandscapeClearlogoKey] = enabled
+        }
+    }
+
+    suspend fun setHeroDescriptionAutoScrollEnabled(enabled: Boolean) {
+        store().edit { prefs ->
+            prefs[heroDescriptionAutoScrollEnabledKey] = enabled
         }
     }
 
@@ -867,21 +922,25 @@ class LayoutPreferenceDataStore @Inject constructor(
 
     suspend fun applyCatalogSettingsFromRemote(payload: SyncHomeCatalogPayload) {
         val sortedItems = payload.items.sortedBy { it.order }
-        val orderKeys = sortedItems.map { item ->
+        val remoteOrderKeys = sortedItems.map { item ->
             if (item.isCollection) homeCollectionKey(item.collectionId)
             else homeCatalogKey(item.addonId, item.type, item.catalogId)
         }
-        val disabledKeys = sortedItems.filter { !it.enabled }.map { item ->
+        val remoteDisabledKeys = sortedItems.filter { !it.enabled }.map { item ->
             if (item.isCollection) homeCollectionKey(item.collectionId)
             else homeCatalogKey(item.addonId, item.type, item.catalogId)
         }
-        val titles = sortedItems.associate { item ->
+        val remoteTitles = sortedItems.associate { item ->
             val key = if (item.isCollection) homeCollectionKey(item.collectionId)
             else homeCatalogKey(item.addonId, item.type, item.catalogId)
             key to item.customTitle
         }.filterValues { it.isNotBlank() }
 
         store().edit { prefs ->
+            val local = readHomeCatalogSettingsState(prefs)
+            val orderKeys = remoteOrderKeys.withLocalServerKeys(local.orderKeys)
+            val disabledKeys = remoteDisabledKeys + local.disabledKeys.filter(ServerCatalog::isServerKey)
+            val titles = remoteTitles + local.customTitles.filterKeys(ServerCatalog::isServerKey)
             prefs[hideUnreleasedContentKey] = payload.hideUnreleasedContent
             if (orderKeys.isNotEmpty()) {
                 prefs[homeCatalogOrderKeysKey] = gson.toJson(orderKeys)

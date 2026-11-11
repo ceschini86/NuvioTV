@@ -13,7 +13,6 @@ data class MetaPreview(
     val background: String?,
     val logo: String?,
     val description: String?,
-    val tagline: String? = null,
     val releaseInfo: String?,
     val imdbRating: Float?,
     val genres: List<String>,
@@ -35,7 +34,9 @@ data class MetaPreview(
     val trailerYtIds: List<String> = emptyList(),
     val seasonCount: Int? = null,
     val voteCount: Int? = null,
-    val sourceAddonBaseUrl: String? = null
+    val sourceAddonBaseUrl: String? = null,
+    val mdbListRatings: MDBListRatings? = null,
+    val mdbListRatingOrder: List<String> = MDBListSettings.DEFAULT_RATING_ORDER
 ) {
     val apiType: String
         get() = type.toApiString(rawType)
