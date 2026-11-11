@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fork: a aba Jiu Jitsu da Biblioteca (LibraryJiuJitsu.kt). -->
+<resources>
+    <string name="library_jiu_jitsu_missing_title">Addon Video translation não instalado</string>
+    <string name="library_jiu_jitsu_missing_message">Instale o addon Video translation em Addons para ver as coleções aqui.</string>
+    <string name="library_jiu_jitsu_failed_title">Não foi possível carregar as coleções</string>
+    <string name="library_jiu_jitsu_failed_message">O addon Video translation não respondeu. Tente de novo mais tarde.</string>
+    <string name="library_jiu_jitsu_empty_title">Nenhuma coleção ainda</string>
+    <string name="library_jiu_jitsu_empty_message">O addon lista uma coleção quando um volume tem legenda e uma cópia no Torbox.</string>
+</resources>

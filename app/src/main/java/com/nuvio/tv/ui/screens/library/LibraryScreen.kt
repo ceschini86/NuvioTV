@@ -120,6 +120,7 @@ private const val KEY_REPEAT_THROTTLE_MS = 80L
 private enum class LibraryViewMode {
     Saved,
     Cloud,
+    JiuJitsu, // fork: LibraryJiuJitsu.kt
     Servers
 }
 
@@ -134,6 +135,7 @@ private fun localizedTypeLabel(key: String): String = when (key.lowercase()) {
 fun LibraryScreen(
     viewModel: LibraryViewModel = hiltViewModel(),
     serversViewModel: LibraryServersViewModel = hiltViewModel(),
+    jiuJitsuViewModel: LibraryJiuJitsuViewModel = hiltViewModel(), // fork
     showBuiltInHeader: Boolean = true,
     onNavigateToDetail: (String, String, String?) -> Unit,
     onNavigateToCatalogSeeAll: (String, String, String) -> Unit = { _, _, _ -> },
@@ -149,6 +151,7 @@ fun LibraryScreen(
     var selectedViewMode by rememberSaveable { mutableStateOf(LibraryViewMode.Saved) }
     val servers by serversViewModel.servers.collectAsState()
     val serverShelves by serversViewModel.shelves.collectAsState()
+    val jiuJitsuState by jiuJitsuViewModel.state.collectAsState() // fork
     val hasServers = servers.enabledConnections.isNotEmpty()
     val viewModes = LibraryViewMode.entries.filter { it != LibraryViewMode.Servers || hasServers }
     val viewMode = selectedViewMode.takeIf { it in viewModes } ?: LibraryViewMode.Saved
@@ -210,6 +213,10 @@ fun LibraryScreen(
 
     LaunchedEffect(viewMode, servers.revision) {
         if (viewMode == LibraryViewMode.Servers) serversViewModel.load()
+    }
+
+    LaunchedEffect(viewMode) { // fork
+        if (viewMode == LibraryViewMode.JiuJitsu) jiuJitsuViewModel.load()
     }
 
     LaunchedEffect(uiState.isLoading) {
@@ -350,6 +357,7 @@ fun LibraryScreen(
                     text = when {
                         viewMode == LibraryViewMode.Cloud -> stringResource(R.string.library_source_cloud).uppercase()
                         viewMode == LibraryViewMode.Servers -> stringResource(R.string.library_source_servers).uppercase()
+                        viewMode == LibraryViewMode.JiuJitsu -> stringResource(R.string.library_source_jiu_jitsu).uppercase() // fork
                         uiState.sourceMode == LibrarySourceMode.TRAKT -> "TRAKT"
                         uiState.sourceMode == LibrarySourceMode.SIMKL -> "SIMKL"
                         uiState.sourceMode == LibrarySourceMode.MDBLIST -> "MDBLIST"
@@ -391,6 +399,20 @@ fun LibraryScreen(
                                     stringResource(R.string.cloud_library_refresh)
                                 }
                             )
+                        }
+                    }
+                } else if (viewMode == LibraryViewMode.JiuJitsu) { // fork: reload after `vt addon publish`
+                    {
+                        Button(
+                            onClick = { jiuJitsuViewModel.load(force = true) },
+                            enabled = jiuJitsuState !is JiuJitsuState.Loading,
+                            colors = ButtonDefaults.colors(
+                                containerColor = NuvioTheme.colors.BackgroundCard,
+                                contentColor = NuvioTheme.colors.TextPrimary
+                            )
+                        ) {
+                            Text(stringResource(R.string.library_syncing_btn).takeIf { jiuJitsuState is JiuJitsuState.Loading }
+                                ?: stringResource(R.string.cloud_library_refresh))
                         }
                     }
                 } else {
@@ -532,6 +554,14 @@ fun LibraryScreen(
                 },
                 onItemClick = { itemId, itemType, addonBaseUrl -> onNavigateToDetail(itemId, itemType, addonBaseUrl) },
                 onSeeAll = { row -> onNavigateToCatalogSeeAll(row.catalogId, row.addonId, row.apiType) },
+                onItemLongPress = { item, addonBaseUrl -> viewModel.posterOptions.show(item, addonBaseUrl) }
+            )
+        } else if (viewMode == LibraryViewMode.JiuJitsu) { // fork
+            libraryJiuJitsuContent(
+                state = jiuJitsuState,
+                posterCardStyle = posterCardStyle,
+                isWatched = { item -> item.id in watchedSeriesIds },
+                onItemClick = { itemId, itemType, addonBaseUrl -> onNavigateToDetail(itemId, itemType, addonBaseUrl) },
                 onItemLongPress = { item, addonBaseUrl -> viewModel.posterOptions.show(item, addonBaseUrl) }
             )
         } else {
@@ -763,6 +793,7 @@ private fun LibraryViewModeRow(
                             LibraryViewMode.Saved -> stringResource(R.string.library_source_saved)
                             LibraryViewMode.Cloud -> stringResource(R.string.library_source_cloud)
                             LibraryViewMode.Servers -> stringResource(R.string.library_source_servers)
+                            LibraryViewMode.JiuJitsu -> stringResource(R.string.library_source_jiu_jitsu) // fork
                         }
                     )
                 }
