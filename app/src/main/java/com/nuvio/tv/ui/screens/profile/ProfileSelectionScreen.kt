@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.profile
 
+import androidx.compose.material.icons.rounded.Star
 import androidx.tv.material3.MaterialTheme
 import com.nuvio.tv.ui.theme.NuvioPrimitives
 import com.nuvio.tv.ui.util.contentTextDirection
@@ -1214,12 +1215,12 @@ private fun ProfileCard(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "\u2605",
-                        color = Color.White,
-                        fontSize = if (compact) 12.sp else 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center
+                    // fork: a vector star; the "\u2605" font glyph rendered crooked and jagged on the TV
+                    androidx.tv.material3.Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Rounded.Star,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(if (compact) 14.dp else 16.dp)
                     )
                 }
             }
