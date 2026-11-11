@@ -6,6 +6,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.SyncProblem
 import androidx.compose.runtime.Composable
@@ -129,35 +131,40 @@ internal fun CoroutineScope.trackAutoSyncRun(subtitleUrl: String) =
     AutoSyncRunningSubtitle.track(subtitleUrl, coroutineContext.job)
 
 /**
- * "Syncing…" while AutoSync checks the selected add-on subtitle, "Sync failed" when it ended without
- * a match; empty otherwise ("Auto synced" is upstream's chip).
+ * AutoSync chip for the selected add-on subtitle: green "Synced", white "Syncing…" or yellow
+ * "Failed"; empty when AutoSync has not checked it. It replaces upstream's single-color
+ * "Auto synced" chip, which looked too much like "Syncing…".
  */
 @Composable
 internal fun AutoSyncStatusChip(subtitleUrl: String, selected: Boolean) {
     val status by AutoSyncRunningSubtitle.status.collectAsState()
-    val state = status?.takeIf { selected && it.url == subtitleUrl }?.state ?: return
-    val failed = state == AutoSyncRunState.FAILED
+    val syncedUrl by AutoSyncSyncedSubtitle.url.collectAsState()
+    if (!selected) return
+    val state = autoSyncDotState(subtitleUrl, status, syncedUrl) ?: return
 
-    val contentColor = NuvioTheme.colors.OnSecondary.copy(alpha = 0.9f)
+    val color = autoSyncChipColor(state)
     Row(
         modifier = Modifier
-            .background(NuvioTheme.colors.OnSecondary.copy(alpha = 0.14f), RoundedCornerShape(999.dp))
+            .background(color.copy(alpha = 0.22f), RoundedCornerShape(999.dp))
+            .border(NuvioTheme.spacing.hairline, color.copy(alpha = 0.55f), RoundedCornerShape(999.dp))
             .padding(horizontal = NuvioTheme.spacing.sm, vertical = 3.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = if (failed) Icons.Default.SyncProblem else Icons.Default.Sync,
+            imageVector = when (state) {
+                AutoSyncDotState.SYNCED -> Icons.Default.Check
+                AutoSyncDotState.FAILED, AutoSyncDotState.NO_FIT -> Icons.Default.SyncProblem
+                AutoSyncDotState.RUNNING, AutoSyncDotState.EMBEDDED -> Icons.Default.Sync
+            },
             contentDescription = null,
-            tint = contentColor,
+            tint = color,
             modifier = Modifier.size(12.dp),
         )
         Text(
-            text = stringResource(
-                if (failed) R.string.autosync_label_failed else R.string.autosync_label_syncing
-            ),
+            text = stringResource(autoSyncStateLabel(state)),
             style = MaterialTheme.typography.labelSmall,
-            color = contentColor,
+            color = color,
             maxLines = 1,
             softWrap = false,
         )
@@ -325,11 +332,22 @@ internal fun AutoSyncStatusBadge(
     }
 }
 
+private val AutoSyncGreen = Color(0xFF4CAF50)
+private val AutoSyncAmber = Color(0xFFFFB300)
+private val AutoSyncRed = Color(0xFFE53935)
+
 private fun autoSyncDotColor(state: AutoSyncDotState): Color = when (state) {
     AutoSyncDotState.RUNNING -> Color.White
-    AutoSyncDotState.SYNCED, AutoSyncDotState.EMBEDDED -> Color(0xFF4CAF50)
-    AutoSyncDotState.FAILED -> Color(0xFFFFB300)
-    AutoSyncDotState.NO_FIT -> Color(0xFFE53935)
+    AutoSyncDotState.SYNCED, AutoSyncDotState.EMBEDDED -> AutoSyncGreen
+    AutoSyncDotState.FAILED -> AutoSyncAmber
+    AutoSyncDotState.NO_FIT -> AutoSyncRed
+}
+
+/** The subtitle-menu chip: one color per outcome, so every failure (no-fit included) is yellow. */
+private fun autoSyncChipColor(state: AutoSyncDotState): Color = when (state) {
+    AutoSyncDotState.RUNNING -> Color.White
+    AutoSyncDotState.SYNCED, AutoSyncDotState.EMBEDDED -> AutoSyncGreen
+    AutoSyncDotState.FAILED, AutoSyncDotState.NO_FIT -> AutoSyncAmber
 }
 
 private fun autoSyncStateLabel(state: AutoSyncDotState): Int = when (state) {

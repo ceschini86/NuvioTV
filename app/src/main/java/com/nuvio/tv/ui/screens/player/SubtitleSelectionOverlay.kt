@@ -3,7 +3,6 @@
 package com.nuvio.tv.ui.screens.player
 
 import com.nuvio.tv.ui.theme.NuvioTheme
-import com.nuvio.tv.ui.screens.player.autosync.AutoSyncedChip
 
 import android.util.Log
 import android.view.KeyEvent
@@ -2302,8 +2301,7 @@ private fun SubtitleOptionCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     SourceChip(label = item.sourceLabel, selected = onPurpleFill)
-                    item.addonSubtitle?.let { AutoSyncedChip(it.url, item.isSelected) } // AutoSync hook
-                    item.addonSubtitle?.let { AutoSyncStatusChip(it.url, item.isSelected) } // fork: AutoSync running / failed
+                    item.addonSubtitle?.let { AutoSyncStatusChip(it.url, item.isSelected) } // fork: AutoSync synced / running / failed, replaces AutoSyncedChip
                     // F2: yellow "Fonte IA" chip beside the origin chip.
                     if (item.isAiSource) {
                         SourceChip(
