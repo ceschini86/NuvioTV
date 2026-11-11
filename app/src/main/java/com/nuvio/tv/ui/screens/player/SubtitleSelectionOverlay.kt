@@ -529,11 +529,13 @@ internal fun SubtitleSelectionOverlay(
         aiSubtitleDiagnostics,
         infoStatusLine,
         userExplicitSubtitleSelection,
-        smartInfoContext
+        smartInfoContext,
+        subtitleStyle.aiEnabled
     ) {
         val snapshot = infoDisplayOption?.toInfoSnapshot(unknownLabel = unknownLabel)
         val selectedId = playbackSelectedOption?.id
         decideSubtitleInfoRail(
+            aiFeatureEnabled = subtitleStyle.aiEnabled, // fork: no AI notices with AI off
             displayOption = snapshot,
             isPlaybackSelected = snapshot != null && snapshot.id == selectedId,
             diagnostics = aiSubtitleDiagnostics?.toInfoSnapshot(),

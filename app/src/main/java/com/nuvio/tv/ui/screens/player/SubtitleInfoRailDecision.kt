@@ -360,14 +360,22 @@ internal fun decideSubtitleInfoRail(
     isUsingMpv: Boolean,
     userExplicitSelection: Boolean = false,
     translationActive: Boolean = false,
-    smart: SubtitleInfoSmartContext = SubtitleInfoSmartContext()
+    smart: SubtitleInfoSmartContext = SubtitleInfoSmartContext(),
+    aiFeatureEnabled: Boolean = true
 ): SubtitleInfoRailDecision {
-    val rawNotice = resolveSubtitleInfoSystemNotice(
-        aiAvailable = aiAvailable,
-        aiQuotaExhausted = aiQuotaExhausted,
-        isUsingMpv = isUsingMpv,
-        smart = smart
-    )
+    // With the AI subtitle setting off, Info shows no AI notice ("API key missing", MPV, …) and no
+    // Translate CTA: AI is not on offer. A translation still running keeps its context.
+    val aiOff = !aiFeatureEnabled && !translationActive
+    val rawNotice = if (aiOff) {
+        null
+    } else {
+        resolveSubtitleInfoSystemNotice(
+            aiAvailable = aiAvailable,
+            aiQuotaExhausted = aiQuotaExhausted,
+            isUsingMpv = isUsingMpv,
+            smart = smart
+        )
+    }
     val showSmartContext = translationActive ||
         displayOption?.kind == SubtitleInfoOptionKind.AI ||
         diagnostics?.rung == AiSubtitleLadderRung.MANUAL ||
@@ -385,14 +393,18 @@ internal fun decideSubtitleInfoRail(
         systemNotice = systemNotice,
         translationActive = translationActive
     )
-    val cta = decideInfoCta(
-        displayOption = displayOption,
-        isPlaybackSelected = isPlaybackSelected,
-        diagnostics = diagnostics,
-        systemNotice = rawNotice,
-        userExplicitSelection = userExplicitSelection,
-        smart = smart
-    )
+    val cta = if (aiOff && displayOption?.kind != SubtitleInfoOptionKind.AI) {
+        SubtitleInfoCtaDecision.None
+    } else {
+        decideInfoCta(
+            displayOption = displayOption,
+            isPlaybackSelected = isPlaybackSelected,
+            diagnostics = diagnostics,
+            systemNotice = rawNotice,
+            userExplicitSelection = userExplicitSelection,
+            smart = smart
+        )
+    }
     return SubtitleInfoRailDecision(content = content, cta = cta)
 }
 
