@@ -20,6 +20,7 @@ class SettingsStructureTest {
                 PlaybackSection.PLAYER_INTERFACE,
                 PlaybackSection.AUDIO,
                 PlaybackSection.SUBTITLES,
+                PlaybackSection.AI_SUBTITLES, // fork: AI subtitles section
                 PlaybackSection.VIDEO,
                 PlaybackSection.BUFFER_NETWORK,
                 PlaybackSection.P2P
