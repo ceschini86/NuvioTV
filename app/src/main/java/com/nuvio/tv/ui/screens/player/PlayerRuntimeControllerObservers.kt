@@ -30,8 +30,13 @@ internal data class SubtitleFetchRequest(
 )
 
 internal fun PlayerRuntimeController.buildSubtitleFetchRequest(): SubtitleFetchRequest? {
-    val id = contentId ?: return null
     val type = contentType ?: return null
+    // Fork: a Cloud Library file has no content id (no IMDb id exists for it), so the add-ons were
+    // never asked. The file key stands in as the id: the add-ons that take type "cloud" match on the
+    // video hash that fetchAddonSubtitlesNow computes, and add-ons limited to "tt" ids skip it.
+    val id = contentId
+        ?: currentVideoId?.takeIf { type.equals("cloud", ignoreCase = true) && it.isNotBlank() }
+        ?: return null
     return SubtitleFetchRequest(
         type = type.lowercase(),
         id = id,
