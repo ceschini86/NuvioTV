@@ -29,6 +29,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
@@ -320,6 +321,7 @@ internal fun AutoSyncStatusBadge(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
+                    .zIndex(1f) // the focused IconButton draws above its siblings; keep the dot on top
                     .padding(top = 4.dp, end = 4.dp)
                     .size(10.dp)
                     .graphicsLayer { alpha = pulse }

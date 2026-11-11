@@ -64,6 +64,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ClosedCaption
@@ -120,6 +121,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -2841,7 +2843,6 @@ private fun PlayerControlsOverlay(
     }
     val customPlayPainter = rememberRawSvgPainter(R.raw.ic_player_play)
     val customPausePainter = rememberRawSvgPainter(R.raw.ic_player_pause)
-    val customSubtitlePainter = rememberRawSvgPainter(R.raw.ic_player_subtitles)
     val customAudioPainter = rememberRawSvgPainter(R.raw.ic_player_audio_filled)
     val customSourcePainter = rememberRawSvgPainter(R.raw.ic_player_source)
     val customAspectPainter = rememberRawSvgPainter(R.raw.ic_player_aspect_ratio)
@@ -2953,7 +2954,7 @@ private fun PlayerControlsOverlay(
                         PlayerBadges(
                             badges = playerBadges,
                             modifier = Modifier
-                                .padding(vertical = NuvioTheme.spacing.xs)
+                                .padding(top = NuvioTheme.spacing.xs) // fork: no bottom padding, the seek bar has its own
                                 .reportRightEdge("badges", titleRights)
                         )
                     }
@@ -2969,7 +2970,10 @@ private fun PlayerControlsOverlay(
                 }
             }
 
-            Spacer(modifier = Modifier.height(NuvioTheme.spacing.md))
+            // fork: the badges row ends the title block when there is no year; the 30dp seek bar already
+            // leaves room above its track, so a full spacer there made the controls too tall.
+            val badgesEndTitleBlock = !skipIntroVisible && playerBadges.isNotEmpty() && uiState.releaseYear.isNullOrBlank()
+            Spacer(modifier = Modifier.height(if (badgesEndTitleBlock) NuvioTheme.spacing.xxs else NuvioTheme.spacing.md))
 
             if (!isLivePlayback) {
                 // Progress bar — always LTR regardless of locale
@@ -3051,8 +3055,8 @@ private fun PlayerControlsOverlay(
                     if (hasSubtitleControl) {
                         AutoSyncStatusBadge(uiState.selectedAddonSubtitle?.url, embeddedSelected = uiState.selectedSubtitleTrackIndex >= 0) { // fork: AutoSync dot
                             ControlButton(
-                                icon = Icons.Default.ClosedCaption,
-                                iconPainter = customSubtitlePainter,
+                                icon = Icons.Default.Subtitles, // fork: the icon of Settings > Playback > Subtitles
+                                iconSize = 24.dp,
                                 contentDescription = stringResource(R.string.cd_subtitles),
                                 onClick = onShowSubtitleDialog,
                                 upFocusRequester = progressUpTarget,
@@ -3344,7 +3348,8 @@ private fun ControlButton(
     enabled: Boolean = true,
     onDownKey: (() -> Unit)? = null,
     onFocused: (() -> Unit)? = null,
-    contentColor: Color = Color.White
+    contentColor: Color = Color.White,
+    iconSize: Dp = 28.dp // fork: size of a vector icon
 ) {
     var isFocused by remember { mutableStateOf(false) }
 
@@ -3408,7 +3413,7 @@ private fun ControlButton(
             Icon(
                 imageVector = icon,
                 contentDescription = contentDescription,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(iconSize)
             )
         }
     }
