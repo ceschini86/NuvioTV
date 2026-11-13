@@ -263,6 +263,23 @@ private fun PlaybackNavHost(
                     }
                     navController.navigate(createContinueWatchingRoute(item))
                 },
+                onContinueWatchingOpenDetails = { item -> // fork
+                    val route = when (item) {
+                        is ContinueWatchingItem.InProgress -> Screen.Detail.createRoute(
+                            itemId = item.progress.contentId,
+                            itemType = item.progress.contentType,
+                            returnFocusSeason = item.progress.season,
+                            returnFocusEpisode = item.progress.episode
+                        )
+                        is ContinueWatchingItem.NextUp -> Screen.Detail.createRoute(
+                            itemId = item.info.contentId,
+                            itemType = item.info.contentType,
+                            returnFocusSeason = item.info.season,
+                            returnFocusEpisode = item.info.episode
+                        )
+                    }
+                    navController.navigate(route)
+                },
                 onContinueWatchingStartFromBeginning = onContinueWatchingStartFromBeginning@{ item ->
                     if (!playbackAvailability.canStream(item)) {
                         Toast.makeText(context, R.string.playback_unavailable_message, Toast.LENGTH_SHORT).show()

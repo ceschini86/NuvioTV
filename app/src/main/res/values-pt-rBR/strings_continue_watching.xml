@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fork: the Continue Watching option that opens the details page (LayoutCardSettings.kt). -->
+<resources>
+    <string name="layout_cw_opens_details">Abrir detalhes pelo \"Continuar Assistindo\"</string>
+    <string name="layout_cw_opens_details_sub">Ao selecionar um card, abre a página do título com o episódio em foco, em vez da lista de streams.</string>
+</resources>

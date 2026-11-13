@@ -119,6 +119,7 @@ class LayoutPreferenceDataStore @Inject constructor(
     private val showUnairedNextUpKey = booleanPreferencesKey("show_unaired_next_up")
     private val nextUpFromFurthestEpisodeKey = booleanPreferencesKey("next_up_from_furthest_episode")
     private val blurContinueWatchingNextUpKey = booleanPreferencesKey("blur_continue_watching_next_up")
+    private val continueWatchingOpensDetailsKey = booleanPreferencesKey("continue_watching_opens_details") // fork
     private val continueWatchingSortModeKey = stringPreferencesKey("continue_watching_sort_mode")
     private val detailPageTrailerButtonEnabledKey = booleanPreferencesKey("detail_page_trailer_button_enabled")
     private val preferExternalMetaAddonDetailKey = booleanPreferencesKey("prefer_external_meta_addon_detail")
@@ -399,6 +400,11 @@ class LayoutPreferenceDataStore @Inject constructor(
 
     val blurContinueWatchingNextUp: Flow<Boolean> = profileFlow { prefs ->
         prefs[blurContinueWatchingNextUpKey] ?: false
+    }
+
+    // fork: a Continue Watching card opens the details page instead of the streams.
+    val continueWatchingOpensDetails: Flow<Boolean> = profileFlow { prefs ->
+        prefs[continueWatchingOpensDetailsKey] ?: false
     }
 
     val continueWatchingSortMode: Flow<ContinueWatchingSortMode> = profileFlow { prefs ->
@@ -832,6 +838,13 @@ class LayoutPreferenceDataStore @Inject constructor(
     suspend fun setBlurContinueWatchingNextUp(enabled: Boolean) {
         store().edit { prefs ->
             prefs[blurContinueWatchingNextUpKey] = enabled
+        }
+    }
+
+    // fork
+    suspend fun setContinueWatchingOpensDetails(enabled: Boolean) {
+        store().edit { prefs ->
+            prefs[continueWatchingOpensDetailsKey] = enabled
         }
     }
 
