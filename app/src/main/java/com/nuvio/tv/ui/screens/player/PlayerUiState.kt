@@ -130,6 +130,7 @@ data class PlayerUiState(
     val subtitleAutoSyncLoading: Boolean = false,
     val subtitleAutoSyncLoadedTrackKey: String? = null,
     val showSpeedDialog: Boolean = false,
+    val showResolutionPicker: Boolean = false, // fork: PlayerRuntimeControllerResolution.kt
     val showMoreDialog: Boolean = false,
     // Subtitle style settings
     val subtitleStyle: SubtitleStyleSettings = SubtitleStyleSettings(),
@@ -381,6 +382,9 @@ sealed class PlayerEvent {
     data class OnAdjustSubtitleDelay(val deltaMs: Int, val showOverlay: Boolean = true) : PlayerEvent()
     data class OnResetSubtitleDelay(val showOverlay: Boolean = true) : PlayerEvent()
     data object OnShowSpeedDialog : PlayerEvent()
+    data object OnShowResolutionPicker : PlayerEvent() // fork: PlayerRuntimeControllerResolution.kt
+    data object OnDismissResolutionPicker : PlayerEvent() // fork
+    data class OnResolutionSelected(val resolution: com.nuvio.tv.domain.model.DebridStreamResolution) : PlayerEvent() // fork
     data object OnShowMoreDialog : PlayerEvent()
     data object OnDismissMoreDialog : PlayerEvent()
     data object OnShowEpisodesPanel : PlayerEvent()
