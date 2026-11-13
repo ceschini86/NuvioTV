@@ -648,7 +648,11 @@ internal fun PlayerRuntimeController.rememberAddonSubtitleSelection(subtitle: Su
         id = subtitle.id,
         url = subtitle.url,
         language = PlayerSubtitleUtils.normalizeLanguageCode(subtitle.lang),
-        addonName = subtitle.addonName
+        addonName = subtitle.addonName,
+        chosenOverEmbedded = com.nuvio.tv.ui.screens.player.subtitles.RememberedAddonSubtitlePolicy.embeddedTrackIndex(
+            _uiState.value.subtitleTracks,
+            PlayerSubtitleUtils.normalizeLanguageCode(subtitle.lang)
+        ) >= 0 // fork
     )
     val basePreference = currentTrackPreferenceForPersistence()
     setUserExplicitSubtitleSelection(true)
@@ -711,6 +715,7 @@ internal fun PlayerRuntimeController.persistTrackPreference() {
         addonSubtitleId = (subtitle as? PlayerRuntimeController.RememberedSubtitleSelection.Addon)?.id,
         addonSubtitleUrl = (subtitle as? PlayerRuntimeController.RememberedSubtitleSelection.Addon)?.url,
         addonSubtitleAddonName = (subtitle as? PlayerRuntimeController.RememberedSubtitleSelection.Addon)?.addonName,
+        addonSubtitleOverEmbedded = (subtitle as? PlayerRuntimeController.RememberedSubtitleSelection.Addon)?.chosenOverEmbedded, // fork
         audioLanguage = audio?.language,
         audioName = audio?.name,
         audioTrackId = audio?.trackId

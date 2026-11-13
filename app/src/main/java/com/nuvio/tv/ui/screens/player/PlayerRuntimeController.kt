@@ -154,7 +154,9 @@ class PlayerRuntimeController(
             val id: String,
             val url: String,
             val language: String,
-            val addonName: String
+            val addonName: String,
+            // fork: the file had an embedded track in this language when the user picked this one
+            val chosenOverEmbedded: Boolean = false
         ) : RememberedSubtitleSelection()
     }
 

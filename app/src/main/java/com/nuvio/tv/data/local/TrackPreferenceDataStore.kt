@@ -24,6 +24,7 @@ class TrackPreferenceDataStore @Inject constructor(
         private const val SUB_ADDON_ID = "sub_addon_id"
         private const val SUB_ADDON_URL = "sub_addon_url"
         private const val SUB_ADDON_NAME = "sub_addon_name"
+        private const val SUB_ADDON_OVER_EMBEDDED = "sub_addon_over_embedded" // fork
         private const val AUDIO_LANG = "audio_lang"
         private const val AUDIO_NAME = "audio_name"
         private const val AUDIO_TRACK_ID = "audio_track_id"
@@ -59,6 +60,7 @@ class TrackPreferenceDataStore @Inject constructor(
             set(SUB_ADDON_ID, pref.addonSubtitleId)
             set(SUB_ADDON_URL, pref.addonSubtitleUrl)
             set(SUB_ADDON_NAME, pref.addonSubtitleAddonName)
+            set(SUB_ADDON_OVER_EMBEDDED, pref.addonSubtitleOverEmbedded?.toString()) // fork
             set(AUDIO_LANG, pref.audioLanguage)
             set(AUDIO_NAME, pref.audioName)
             set(AUDIO_TRACK_ID, pref.audioTrackId)
@@ -86,6 +88,7 @@ class TrackPreferenceDataStore @Inject constructor(
             addonSubtitleId = prefs[key(SUB_ADDON_ID, contentId)],
             addonSubtitleUrl = prefs[key(SUB_ADDON_URL, contentId)],
             addonSubtitleAddonName = prefs[key(SUB_ADDON_NAME, contentId)],
+            addonSubtitleOverEmbedded = prefs[key(SUB_ADDON_OVER_EMBEDDED, contentId)]?.toBooleanStrictOrNull(), // fork
             audioLanguage = audioLang,
             audioName = audioName,
             audioTrackId = audioTrackId
@@ -131,6 +134,7 @@ data class PersistedTrackPreference(
     val addonSubtitleId: String?,
     val addonSubtitleUrl: String?,
     val addonSubtitleAddonName: String?,
+    val addonSubtitleOverEmbedded: Boolean? = null, // fork
     val audioLanguage: String?,
     val audioName: String?,
     val audioTrackId: String?
@@ -158,7 +162,8 @@ internal fun PersistedTrackPreference.toTrackPreference(): com.nuvio.tv.ui.scree
             id = addonSubtitleId ?: "",
             url = addonSubtitleUrl ?: "",
             language = subtitleLanguage ?: "",
-            addonName = addonSubtitleAddonName ?: ""
+            addonName = addonSubtitleAddonName ?: "",
+            chosenOverEmbedded = addonSubtitleOverEmbedded == true // fork
         )
         "DISABLED" -> com.nuvio.tv.ui.screens.player.PlayerRuntimeController.RememberedSubtitleSelection.Disabled
         else -> null

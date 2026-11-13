@@ -1201,26 +1201,24 @@ private fun ProfileCard(
             }
 
             if (profile.isPrimary) {
+                // fork: the badge sits on the ring at 45°, so it moves with the ring when it grows on focus
+                val badgeSize = if (compact) 24.dp else 28.dp
+                val badgeOffset = outerAvatarSize / 2 * 0.7071f
                 Box(
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .offset(x = NuvioTheme.spacing.xxs, y = NuvioTheme.spacing.hairline)
-                        .size(if (compact) 22.dp else 26.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFFFFB300), CircleShape)
-                        .border(
-                            width = NuvioTheme.spacing.xxs,
-                            color = NuvioTheme.colors.Background,
-                            shape = CircleShape
-                        ),
+                        .align(Alignment.Center)
+                        .offset(x = badgeOffset, y = badgeOffset)
+                        .size(badgeSize)
+                        .background(Color(0xFFFFB300), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    // fork: a vector star; the "\u2605" font glyph rendered crooked and jagged on the TV
                     androidx.tv.material3.Icon(
                         imageVector = androidx.compose.material.icons.Icons.Rounded.Star,
                         contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(if (compact) 14.dp else 16.dp)
+                        tint = Color(0xFF1F1A0A),
+                        modifier = Modifier
+                            .size(if (compact) 16.dp else 18.dp)
+                            .offset(y = (-0.5).dp)
                     )
                 }
             }

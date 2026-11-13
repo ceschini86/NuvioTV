@@ -165,8 +165,17 @@ fun HomeScreen(
     val continueWatchingOpensDetails by viewModel.continueWatchingOpensDetails.collectAsStateWithLifecycle(
         initialValue = false
     )
-    val onContinueWatchingClickStable = remember(onContinueWatchingClick, onContinueWatchingOpenDetails, continueWatchingOpensDetails) {
-        onContinueWatchingOpenDetails?.takeIf { continueWatchingOpensDetails } ?: onContinueWatchingClick
+    // The cards remember the click they first get, so this lambda keeps one identity and reads the
+    // latest option and callbacks when it runs.
+    val latestOpensDetails = androidx.compose.runtime.rememberUpdatedState(continueWatchingOpensDetails)
+    val latestContinueWatchingClick = androidx.compose.runtime.rememberUpdatedState(onContinueWatchingClick)
+    val latestOpenDetails = androidx.compose.runtime.rememberUpdatedState(onContinueWatchingOpenDetails)
+    val onContinueWatchingClickStable: (ContinueWatchingItem) -> Unit = remember {
+        { item ->
+            val openDetails = latestOpenDetails.value
+            if (latestOpensDetails.value && openDetails != null) openDetails(item)
+            else latestContinueWatchingClick.value(item)
+        }
     }
     val onContinueWatchingStartFromBeginningStable = remember(onContinueWatchingStartFromBeginning) { onContinueWatchingStartFromBeginning }
     val onContinueWatchingPlayManuallyStable = remember(onContinueWatchingPlayManually) { onContinueWatchingPlayManually }
