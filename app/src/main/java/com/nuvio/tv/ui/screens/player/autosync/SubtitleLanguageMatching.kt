@@ -1,5 +1,7 @@
 package com.nuvio.tv.ui.screens.player.autosync
 
+import com.nuvio.tv.ui.screens.player.subtitles.PortugueseSubtitleVariants
+
 internal object SubtitleLanguageMatching {
     internal val BRAZILIAN_TAGS = listOf(
         "pt-br", "pt_br", "pob", "brazilian", "brazil", "brasil", "brasileiro", " br", "(br)",
@@ -313,6 +315,7 @@ internal object SubtitleLanguageMatching {
         normalizedLanguage: String,
         normalizedTarget: String,
     ): Boolean {
+        if (PortugueseSubtitleVariants.sameLanguage(normalizedLanguage, normalizedTarget)) return true
         if (normalizedTarget == "pt") return normalizedLanguage == "pt"
         if (normalizedTarget == "es") return normalizedLanguage == "es"
         return normalizedLanguage == normalizedTarget ||

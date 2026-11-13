@@ -72,6 +72,7 @@ import com.nuvio.tv.domain.model.Subtitle
 import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.screens.detail.requestFocusAfterFrames
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiCredentials
+import com.nuvio.tv.ui.screens.player.subtitles.PortugueseSubtitleVariants // fork
 import com.nuvio.tv.ui.screens.player.subtitles.SubtitleAiModel
 import com.nuvio.tv.ui.screens.player.subtitles.shouldShowSubtitleAiProviderCycleCta
 
@@ -2828,7 +2829,7 @@ private fun buildSubtitleOptionRailItems(
                 Subtitle.languageCodeToName(PlayerSubtitleUtils.normalizeLanguageCode(subtitle.lang))
             },
             sourceLabel = if (subtitle.isStreamProvided) builtInLabel else subtitle.addonName,
-            meta = fileName,
+            meta = null, // fork: the file name shows only in the info rail (fileName below)
             isSelected = optionId == selectedOptionId,
             matchScore = scoreByOptionId[optionId] ?: 0,
             addonSubtitle = subtitle,
@@ -2991,7 +2992,7 @@ private fun normalizeOverlayLanguageKey(language: String?): String {
             .substringBefore('-')
             .substringBefore('_')
             .ifBlank { SubtitleUnknownLanguageKey }
-    }
+    }.let(PortugueseSubtitleVariants::overlayKey) // fork: one Portuguese row
 }
 
 /**
@@ -3011,7 +3012,7 @@ private fun normalizeOverlayLanguageKeyForTrack(track: TrackInfo): String {
             .substringBefore('-')
             .substringBefore('_')
             .ifBlank { SubtitleUnknownLanguageKey }
-    }
+    }.let(PortugueseSubtitleVariants::overlayKey) // fork: one Portuguese row
 }
 
 private fun subtitleLanguageLabel(key: String, unknownLabel: String): String {
