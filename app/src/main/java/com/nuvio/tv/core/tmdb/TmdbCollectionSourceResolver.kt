@@ -245,10 +245,10 @@ class TmdbCollectionSourceResolver @Inject constructor(
                     TmdbCollectionSourceType.COMPANY -> source.tmdbId?.toString()
                     else -> filters.withCompanies
                 },
-                releaseDateLte = filters.releaseDateLte,
+                releaseDateLte = RelativeTmdbDate.resolve(filters.releaseDateLte), // fork
                 voteCountGte = filters.voteCountGte,
                 withGenres = filters.withGenres,
-                releaseDateGte = filters.releaseDateGte,
+                releaseDateGte = RelativeTmdbDate.resolve(filters.releaseDateGte), // fork
                 voteAverageGte = filters.voteAverageGte,
                 voteAverageLte = filters.voteAverageLte,
                 withOriginalLanguage = filters.withOriginalLanguage,
@@ -278,11 +278,11 @@ class TmdbCollectionSourceResolver @Inject constructor(
                     TmdbCollectionSourceType.NETWORK -> source.tmdbId?.toString()
                     else -> filters.withNetworks
                 },
-                firstAirDateLte = filters.releaseDateLte ?: if (source.sourceType == TmdbCollectionSourceType.NETWORK) today else null,
+                firstAirDateLte = RelativeTmdbDate.resolve(filters.releaseDateLte) ?: if (source.sourceType == TmdbCollectionSourceType.NETWORK) today else null,
                 withStatus = if (source.sourceType == TmdbCollectionSourceType.NETWORK) "0|3|4" else null,
                 voteCountGte = filters.voteCountGte,
                 withGenres = filters.withGenres,
-                firstAirDateGte = filters.releaseDateGte,
+                firstAirDateGte = RelativeTmdbDate.resolve(filters.releaseDateGte), // fork
                 voteAverageGte = filters.voteAverageGte,
                 voteAverageLte = filters.voteAverageLte,
                 withOriginalLanguage = filters.withOriginalLanguage,

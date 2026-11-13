@@ -1235,8 +1235,26 @@ internal fun PlayerRuntimeController.applyPersistedTrackPreference(
                 }
             }
         }
-        is PlayerRuntimeController.RememberedSubtitleSelection.Addon -> {
+        is PlayerRuntimeController.RememberedSubtitleSelection.Addon -> run addonRestore@{
             val state = _uiState.value
+            // fork: another file of this title may carry the language inside it; then the embedded
+            // track wins, unless the user picked this add-on subtitle over an embedded one.
+            val embeddedIndex = if (usingSwitchPending) -1 else
+                com.nuvio.tv.ui.screens.player.subtitles.RememberedAddonSubtitlePolicy.embeddedReplacementIndex(
+                    subtitleTracks, subtitleSelection.language, subtitleSelection.chosenOverEmbedded
+                )
+            if (embeddedIndex >= 0) {
+                Log.d(
+                    PlayerRuntimeController.TAG,
+                    "TRACK_PREF restore: embedded subtitle index=$embeddedIndex replaces remembered addon lang=${subtitleSelection.language}"
+                )
+                autoSubtitleSelected = true
+                setUserExplicitSubtitleSelection(true)
+                if (subtitleTracks.getOrNull(embeddedIndex)?.isSelected != true) selectSubtitleTrack(embeddedIndex)
+                updatedSubtitleIndex = embeddedIndex
+                updatedPending = updatedPending.copy(subtitle = null)
+                return@addonRestore
+            }
             // Only restore addon subtitle on exact match (same addon + same track ID).
             // Looser matches (same addon + same language, or any addon + same language)
             // should NOT override the normal auto-selection logic which prefers embedded

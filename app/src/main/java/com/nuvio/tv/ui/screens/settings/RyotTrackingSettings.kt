@@ -6,8 +6,6 @@ import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Dns
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -149,7 +147,7 @@ internal fun RyotTrackingAccountRow(viewModel: RyotTrackerViewModel = hiltViewMo
             if (state.isConnected) R.string.tracking_status_connected else R.string.tracking_status_disconnected
         ),
         valueColor = if (state.isConnected) NuvioTheme.colors.Success else NuvioTheme.colors.TextSecondary,
-        leadingIcon = Icons.Default.Dns,
+        leadingRawIconRes = R.raw.ryot_logo, // the Ryot project's icon (libs/assets/icon-512x512.png), drawn white
         leadingArtworkSize = 40.dp,
         onClick = {
             viewModel.clearError()
