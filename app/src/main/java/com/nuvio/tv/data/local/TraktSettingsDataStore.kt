@@ -26,6 +26,7 @@ enum class WatchProgressSource {
     TRAKT,
     SIMKL,
     MDBLIST,
+    RYOT, // fork: data/ryot
     NUVIO_SYNC;
 
     companion object {

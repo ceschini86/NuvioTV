@@ -94,6 +94,7 @@ fun HomeScreen(
     },
     onContinueWatchingStartFromBeginning: (ContinueWatchingItem) -> Unit = onContinueWatchingClick,
     onContinueWatchingPlayManually: (ContinueWatchingItem) -> Unit = onContinueWatchingClick,
+    onContinueWatchingOpenDetails: ((ContinueWatchingItem) -> Unit)? = null, // fork
     onNavigateToCatalogSeeAll: (String, String, String) -> Unit = { _, _, _ -> },
     onNavigateToFolderDetail: (String, String) -> Unit = { _, _ -> }
 ) {
@@ -160,7 +161,13 @@ fun HomeScreen(
     }
 
     val onNavigateToDetailStable = remember(onNavigateToDetail) { onNavigateToDetail }
-    val onContinueWatchingClickStable = remember(onContinueWatchingClick) { onContinueWatchingClick }
+    // fork: with the option on, a Continue Watching card opens the details page instead of playing.
+    val continueWatchingOpensDetails by viewModel.continueWatchingOpensDetails.collectAsStateWithLifecycle(
+        initialValue = false
+    )
+    val onContinueWatchingClickStable = remember(onContinueWatchingClick, onContinueWatchingOpenDetails, continueWatchingOpensDetails) {
+        onContinueWatchingOpenDetails?.takeIf { continueWatchingOpensDetails } ?: onContinueWatchingClick
+    }
     val onContinueWatchingStartFromBeginningStable = remember(onContinueWatchingStartFromBeginning) { onContinueWatchingStartFromBeginning }
     val onContinueWatchingPlayManuallyStable = remember(onContinueWatchingPlayManually) { onContinueWatchingPlayManually }
     val onNavigateToCatalogSeeAllStable = remember(onNavigateToCatalogSeeAll) { onNavigateToCatalogSeeAll }

@@ -76,6 +76,7 @@ data class LayoutSettingsUiState(
     val detailImdbRatingsVisibility: DetailImdbRatingsVisibility = DetailImdbRatingsVisibility.SHOW_ALL,
     val episodeRatingSource: EpisodeRatingSource = EpisodeRatingSource.DEFAULT,
     val blurContinueWatchingNextUp: Boolean = false,
+    val continueWatchingOpensDetails: Boolean = false, // fork
     val useEpisodeThumbnailsInCw: Boolean = true,
     val detailPageTrailerButtonEnabled: Boolean = true,
     val detailPageTrailerAutoplayEnabled: Boolean = true,
@@ -142,6 +143,7 @@ sealed class LayoutSettingsEvent {
     data class SetDetailImdbRatingsVisibility(val visibility: DetailImdbRatingsVisibility) : LayoutSettingsEvent()
     data class SetEpisodeRatingSource(val source: EpisodeRatingSource) : LayoutSettingsEvent()
     data class SetBlurContinueWatchingNextUp(val enabled: Boolean) : LayoutSettingsEvent()
+    data class SetContinueWatchingOpensDetails(val enabled: Boolean) : LayoutSettingsEvent() // fork
     data class SetUseEpisodeThumbnailsInCw(val enabled: Boolean) : LayoutSettingsEvent()
     data class SetDetailPageTrailerButtonEnabled(val enabled: Boolean) : LayoutSettingsEvent()
     data class SetDetailPageTrailerAutoplayEnabled(val enabled: Boolean) : LayoutSettingsEvent()
@@ -359,6 +361,11 @@ class LayoutSettingsViewModel @Inject constructor(
                 updateUiStateIfChanged { it.copy(blurContinueWatchingNextUp = enabled) }
             }
         }
+        viewModelScope.launch { // fork
+            layoutPreferenceDataStore.continueWatchingOpensDetails.distinctUntilChanged().collectLatest { enabled ->
+                updateUiStateIfChanged { it.copy(continueWatchingOpensDetails = enabled) }
+            }
+        }
         viewModelScope.launch {
             layoutPreferenceDataStore.useEpisodeThumbnailsInCw.distinctUntilChanged().collectLatest { enabled ->
                 updateUiStateIfChanged { it.copy(useEpisodeThumbnailsInCw = enabled) }
@@ -495,6 +502,7 @@ class LayoutSettingsViewModel @Inject constructor(
             is LayoutSettingsEvent.SetDetailImdbRatingsVisibility -> setDetailImdbRatingsVisibility(event.visibility)
             is LayoutSettingsEvent.SetEpisodeRatingSource -> setEpisodeRatingSource(event.source)
             is LayoutSettingsEvent.SetBlurContinueWatchingNextUp -> setBlurContinueWatchingNextUp(event.enabled)
+            is LayoutSettingsEvent.SetContinueWatchingOpensDetails -> setContinueWatchingOpensDetails(event.enabled) // fork
             is LayoutSettingsEvent.SetUseEpisodeThumbnailsInCw -> setUseEpisodeThumbnailsInCw(event.enabled)
             is LayoutSettingsEvent.SetDetailPageTrailerButtonEnabled -> setDetailPageTrailerButtonEnabled(event.enabled)
             is LayoutSettingsEvent.SetDetailPageTrailerAutoplayEnabled -> setDetailPageTrailerAutoplayEnabled(event.enabled)
@@ -857,6 +865,14 @@ class LayoutSettingsViewModel @Inject constructor(
         if (_uiState.value.blurContinueWatchingNextUp == enabled) return
         viewModelScope.launch {
             layoutPreferenceDataStore.setBlurContinueWatchingNextUp(enabled)
+        }
+    }
+
+    // fork
+    private fun setContinueWatchingOpensDetails(enabled: Boolean) {
+        if (_uiState.value.continueWatchingOpensDetails == enabled) return
+        viewModelScope.launch {
+            layoutPreferenceDataStore.setContinueWatchingOpensDetails(enabled)
         }
     }
 

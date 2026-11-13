@@ -113,6 +113,14 @@ internal fun LayoutContinueWatchingSection(
             }
         }
 
+        // fork
+        SettingsToggleRow(
+            title = stringResource(R.string.layout_cw_opens_details),
+            subtitle = stringResource(R.string.layout_cw_opens_details_sub),
+            checked = uiState.continueWatchingOpensDetails,
+            onToggle = { onEvent(LayoutSettingsEvent.SetContinueWatchingOpensDetails(!uiState.continueWatchingOpensDetails)) }
+        )
+
         val episodeThumbnailsApply = uiState.continueWatchingCardStyle != ContinueWatchingCardStyle.POSTER
         if (episodeThumbnailsApply) {
             SettingsToggleRow(
