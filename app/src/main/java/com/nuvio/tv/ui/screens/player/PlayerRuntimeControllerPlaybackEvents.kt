@@ -1892,6 +1892,9 @@ fun PlayerRuntimeController.onEvent(
         is PlayerEvent.OnResetSubtitleDelay -> {
             resetSubtitleDelay(event.showOverlay)
         }
+        PlayerEvent.OnShowResolutionPicker -> showResolutionPicker() // fork
+        PlayerEvent.OnDismissResolutionPicker -> dismissResolutionPicker() // fork
+        is PlayerEvent.OnResolutionSelected -> selectResolution(event.resolution) // fork
         PlayerEvent.OnShowSpeedDialog -> {
             val state = _uiState.value
             if (state.tunnelingEnabled) {

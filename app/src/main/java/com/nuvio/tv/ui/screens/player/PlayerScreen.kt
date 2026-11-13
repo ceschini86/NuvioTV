@@ -74,6 +74,9 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.HighQuality // fork
+import com.nuvio.tv.ui.screens.player.resolution.ResolutionPickerDialog // fork
+import com.nuvio.tv.ui.screens.player.resolution.ControlButtonLabel // fork
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -2190,6 +2193,16 @@ fun PlayerScreen(
                 brightness = uiState.playerControlsBrightness
             )
         }
+
+        if (uiState.showResolutionPicker) { // fork: resolution list
+            ResolutionPickerDialog(
+                options = viewModel.controller.resolutionOptions(uiState),
+                isLoading = uiState.isLoadingSourceStreams,
+                onResolutionSelected = { viewModel.onEvent(PlayerEvent.OnResolutionSelected(it)) },
+                onDismiss = { viewModel.onEvent(PlayerEvent.OnDismissResolutionPicker) },
+                brightness = uiState.playerControlsBrightness
+            )
+        }
     }
 }
 
@@ -3089,6 +3102,18 @@ private fun PlayerControlsOverlay(
                         )
                     }
 
+                    if (!isLivePlayback) { // fork: resolution list (resolution/ResolutionPickerDialog.kt)
+                        ControlButton(
+                            icon = Icons.Default.HighQuality,
+                            contentDescription = stringResource(R.string.cd_player_resolution),
+                            onClick = { viewModel.onEvent(PlayerEvent.OnShowResolutionPicker) },
+                            upFocusRequester = progressUpTarget,
+                            onDownKey = onHideControls,
+                            onFocused = onResetHideTimer,
+                            label = viewModel.controller.currentResolutionLabel(uiState)
+                        )
+                    }
+
                     ControlButton(
                         icon = Icons.Default.SwapHoriz,
                         iconPainter = customSourcePainter,
@@ -3349,7 +3374,8 @@ private fun ControlButton(
     onDownKey: (() -> Unit)? = null,
     onFocused: (() -> Unit)? = null,
     contentColor: Color = Color.White,
-    iconSize: Dp = 28.dp // fork: size of a vector icon
+    iconSize: Dp = 28.dp, // fork: size of a vector icon
+    label: String? = null // fork: text in place of the icon (resolution button)
 ) {
     var isFocused by remember { mutableStateOf(false) }
 
@@ -3403,7 +3429,9 @@ private fun ControlButton(
         scale = IconButtonDefaults.scale(focusedScale = 1f, pressedScale = 1f), // fork: solid focus disc, no bubble
         shape = IconButtonDefaults.shape(shape = CircleShape)
     ) {
-        if (iconPainter != null) {
+        if (label != null) { // fork
+            ControlButtonLabel(label)
+        } else if (iconPainter != null) {
             Icon(
                 painter = iconPainter,
                 contentDescription = contentDescription,

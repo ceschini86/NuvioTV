@@ -95,6 +95,7 @@ internal object PlayerSubtitleUtils {
         normalizedLanguage: String,
         normalizedTarget: String
     ): Boolean {
+        if (com.nuvio.tv.ui.screens.player.subtitles.PortugueseSubtitleVariants.sameLanguage(normalizedLanguage, normalizedTarget)) return true // fork
         // Exact regional targets: "pt" should not match "pt-br", "es" should not match "es-419"
         if (normalizedTarget == "pt") {
             return normalizedLanguage == "pt"

@@ -59,8 +59,8 @@ class PreferredAddonSubtitlePickTest {
     }
 
     @Test
-    fun europeanPortugueseIsNotPtBr() {
-        assertNull(pickPreferredLanguageAddonSubtitle(listOf(sub("pt", "por"), sub("en", "eng")), "pt-br") { 0 })
+    fun anyPortugueseServesAPtBrPreference() { // fork: PortugueseSubtitleVariants
+        assertEquals("pt", pickPreferredLanguageAddonSubtitle(listOf(sub("en", "eng"), sub("pt", "por")), "pt-br") { 0 }?.id)
     }
 
     @Test

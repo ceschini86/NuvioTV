@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fork: a lista de resoluções do player (ui/screens/player/resolution/). -->
+<resources>
+    <string name="player_resolution_title">Resolução</string>
+    <string name="cd_player_resolution">Escolher resolução</string>
+    <string name="player_resolution_loading">Procurando outras resoluções…</string>
+    <string name="player_resolution_none">Os addons não trouxeram outra resolução para este título.</string>
+    <string name="player_resolution_current">Tocando</string>
+    <plurals name="player_resolution_count">
+        <item quantity="one">%d stream</item>
+        <item quantity="other">%d streams</item>
+    </plurals>
+</resources>
