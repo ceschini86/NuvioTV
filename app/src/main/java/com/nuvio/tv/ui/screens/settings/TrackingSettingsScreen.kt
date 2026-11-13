@@ -115,7 +115,7 @@ fun TrackingSettingsContent(
             TrackingProviderId.TRAKT -> traktState.mode == TraktConnectionMode.CONNECTED
             TrackingProviderId.SIMKL -> simklState.mode == SimklConnectionMode.CONNECTED
             TrackingProviderId.MDBLIST -> mdbListState.isConnected
-            null -> false
+            TrackingProviderId.RYOT, null -> false // fork: Ryot has its own row and dialog (RyotTrackingSettings.kt)
         }
         if (activeProvider == dismissOnConnected && connected) {
             activeProvider = null
@@ -146,6 +146,7 @@ fun TrackingSettingsContent(
             TrackingProviderId.TRAKT -> TrackingFocusTarget.TRAKT
             TrackingProviderId.SIMKL -> TrackingFocusTarget.SIMKL
             TrackingProviderId.MDBLIST -> TrackingFocusTarget.MDBLIST
+            TrackingProviderId.RYOT -> null // fork
         }
         activeProvider = provider
         disconnectProvider = null
@@ -179,6 +180,7 @@ fun TrackingSettingsContent(
                     mdbListViewModel.onConnect()
                 }
             }
+            TrackingProviderId.RYOT -> Unit // fork
         }
     }
 
@@ -282,7 +284,7 @@ fun TrackingSettingsContent(
                 }
             )
         }
-        null -> Unit
+        TrackingProviderId.RYOT, null -> Unit // fork
     }
 
     disconnectProvider?.let { provider ->
@@ -296,6 +298,7 @@ fun TrackingSettingsContent(
                     TrackingProviderId.TRAKT -> R.string.trakt_disconnect_title
                     TrackingProviderId.SIMKL -> R.string.simkl_disconnect_title
                     TrackingProviderId.MDBLIST -> R.string.mdblist_disconnect_title
+                    TrackingProviderId.RYOT -> R.string.ryot_disconnect_title // fork
                 }
             ),
             subtitle = stringResource(
@@ -303,6 +306,7 @@ fun TrackingSettingsContent(
                     TrackingProviderId.TRAKT -> R.string.trakt_disconnect_subtitle
                     TrackingProviderId.SIMKL -> R.string.simkl_disconnect_subtitle
                     TrackingProviderId.MDBLIST -> R.string.mdblist_disconnect_subtitle
+                    TrackingProviderId.RYOT -> R.string.ryot_disconnect_subtitle // fork
                 }
             ),
             width = 520.dp,
@@ -324,6 +328,7 @@ fun TrackingSettingsContent(
                             TrackingProviderId.TRAKT -> traktViewModel.onDisconnectClick()
                             TrackingProviderId.SIMKL -> simklViewModel.onDisconnect()
                             TrackingProviderId.MDBLIST -> mdbListViewModel.onDisconnect()
+                            TrackingProviderId.RYOT -> Unit // fork
                         }
                     },
                     primary = true
@@ -558,6 +563,7 @@ internal fun TrackingSettingsOverview(
                                 .focusRequester(mdbListFocusRequester)
                                 .testTag(TrackingSettingsTestTags.MDBLIST_PROVIDER)
                         )
+                        RyotTrackingAccountRow() // fork: RyotTrackingSettings.kt
                     }
                 }
                 item(key = "tracking_sources") {
@@ -761,6 +767,7 @@ private fun watchProgressSourceLabel(source: WatchProgressSource): String = when
     WatchProgressSource.TRAKT -> stringResource(R.string.trakt_name)
     WatchProgressSource.SIMKL -> stringResource(R.string.simkl_name)
     WatchProgressSource.MDBLIST -> stringResource(R.string.mdblist_name)
+    WatchProgressSource.RYOT -> stringResource(R.string.ryot_name) // fork
     WatchProgressSource.NUVIO_SYNC -> stringResource(R.string.trakt_watch_progress_source_nuvio)
 }
 
@@ -769,6 +776,7 @@ private fun librarySourceLabel(mode: LibrarySourceMode): String = when (mode) {
     LibrarySourceMode.TRAKT -> stringResource(R.string.trakt_name)
     LibrarySourceMode.SIMKL -> stringResource(R.string.simkl_name)
     LibrarySourceMode.MDBLIST -> stringResource(R.string.mdblist_name)
+    LibrarySourceMode.RYOT -> stringResource(R.string.ryot_name) // fork
     LibrarySourceMode.LOCAL -> stringResource(R.string.trakt_library_source_nuvio)
 }
 

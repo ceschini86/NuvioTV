@@ -48,6 +48,7 @@ class TrackingSettingsViewModel @Inject constructor(
     traktAuthDataStore: TraktAuthDataStore,
     simklAuthRepository: SimklAuthRepository,
     mdbListAuth: MdbListAuthStore,
+    ryotAuth: com.nuvio.tv.data.ryot.RyotAuthStore, // fork
     profiles: ProfileManager
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(TrackingSettingsUiState())
@@ -55,11 +56,12 @@ class TrackingSettingsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            val connected = combine(traktAuthDataStore.state, simklAuthRepository.state, mdbListAuth.state, profiles.activeProfileId) { trakt, simkl, mdblist, profileId ->
+            val connected = combine(traktAuthDataStore.state, simklAuthRepository.state, mdbListAuth.state, ryotAuth.state, profiles.activeProfileId) { trakt, simkl, mdblist, ryot, profileId ->
                 if (mdblist.scope.profileId != profileId) null else buildSet<TrackingProviderId> {
                     if (trakt.isAuthenticated) add(TrackingProviderId.TRAKT)
                     if (simkl.isAuthenticated) add(TrackingProviderId.SIMKL)
                     if (mdblist.isAuthenticated) add(TrackingProviderId.MDBLIST)
+                    if (ryot.isAuthenticated && ryot.scope.profileId == profileId) add(TrackingProviderId.RYOT) // fork
                 }
             }
             combine(

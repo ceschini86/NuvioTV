@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fork: Ryot tracking provider (data/ryot, RyotTrackingSettings.kt). -->
+<resources>
+    <string name="ryot_name" translatable="false">Ryot</string>
+    <string name="ryot_tracking_description">Your own self-hosted tracker. Syncs what you watch, your progress and your watchlist.</string>
+    <string name="ryot_connected_as">Connected as %1$s</string>
+    <string name="ryot_connected_details">Connected as %1$s on %2$s.</string>
+    <string name="ryot_login_title">Connect to Ryot</string>
+    <string name="ryot_login_subtitle">Enter your Ryot server address and account. The app keeps only the session token, never the password.</string>
+    <string name="ryot_server_url_placeholder">Server address, e.g. ryot.example.com</string>
+    <string name="ryot_username_placeholder">User name</string>
+    <string name="ryot_password_placeholder">Password</string>
+    <string name="ryot_connect">Connect</string>
+    <string name="ryot_disconnect_title">Disconnect Ryot?</string>
+    <string name="ryot_disconnect_subtitle">This device stops sending what you watch to Ryot. Your history stays on the server.</string>
+    <string name="ryot_error_invalid_url">This is not a valid server address.</string>
+    <string name="ryot_error_unreachable">Could not reach the server. Check the address and the connection.</string>
+    <string name="ryot_error_not_ryot">The server answered, but it is not a Ryot server.</string>
+    <string name="ryot_error_wrong_credentials">Wrong user name or password.</string>
+    <string name="ryot_error_two_factor">This account uses two-factor authentication, which the app does not support yet.</string>
+    <string name="ryot_error_account_disabled">This Ryot account is disabled.</string>
+    <string name="ryot_error_session_expired">Your Ryot session expired. Connect again.</string>
+    <string name="ryot_error_integration">Logged in, but the app could not create its integration on the server.</string>
+</resources>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fork: provedor de tracking Ryot (data/ryot, RyotTrackingSettings.kt). -->
+<resources>
+    <string name="ryot_tracking_description">Seu tracker próprio. Sincroniza o que você assiste, o progresso e a watchlist.</string>
+    <string name="ryot_connected_as">Conectado como %1$s</string>
+    <string name="ryot_connected_details">Conectado como %1$s em %2$s.</string>
+    <string name="ryot_login_title">Conectar ao Ryot</string>
+    <string name="ryot_login_subtitle">Informe o endereço do seu servidor Ryot e a conta. O app guarda só o token da sessão, nunca a senha.</string>
+    <string name="ryot_server_url_placeholder">Endereço do servidor, ex.: ryot.exemplo.com</string>
+    <string name="ryot_username_placeholder">Usuário</string>
+    <string name="ryot_password_placeholder">Senha</string>
+    <string name="ryot_connect">Conectar</string>
+    <string name="ryot_disconnect_title">Desconectar o Ryot?</string>
+    <string name="ryot_disconnect_subtitle">Este aparelho para de enviar o que você assiste ao Ryot. O histórico continua no servidor.</string>
+    <string name="ryot_error_invalid_url">Este não é um endereço de servidor válido.</string>
+    <string name="ryot_error_unreachable">Não foi possível alcançar o servidor. Confira o endereço e a conexão.</string>
+    <string name="ryot_error_not_ryot">O servidor respondeu, mas não é um servidor Ryot.</string>
+    <string name="ryot_error_wrong_credentials">Usuário ou senha incorretos.</string>
+    <string name="ryot_error_two_factor">Esta conta usa autenticação em duas etapas, que o app ainda não suporta.</string>
+    <string name="ryot_error_account_disabled">Esta conta do Ryot está desativada.</string>
+    <string name="ryot_error_session_expired">Sua sessão do Ryot expirou. Conecte de novo.</string>
+    <string name="ryot_error_integration">O login funcionou, mas o app não conseguiu criar a integração dele no servidor.</string>
+</resources>
