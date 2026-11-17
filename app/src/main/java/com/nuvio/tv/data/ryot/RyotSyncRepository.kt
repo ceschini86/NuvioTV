@@ -80,6 +80,13 @@ class RyotSyncRepository(
     private val gate = TrackingRefreshGate()
     @Volatile private var imdbJob: kotlinx.coroutines.Job? = null
     private val mutableState = MutableStateFlow(RyotSyncState())
+    /**
+     * Local changes in the order they were made. A sync reads the server before the change reaches it,
+     * so its result would undo the change on screen until the next sync; [refresh] replays the
+     * changes made while it ran.
+     */
+    private val localChanges = mutableListOf<Pair<Long, (RyotSnapshot) -> RyotSnapshot>>()
+    private var lastChangeId = 0L
     val state: StateFlow<RyotSyncState> = mutableState.asStateFlow()
 
     init {
@@ -117,7 +124,8 @@ class RyotSyncRepository(
         }) {
             val attemptedAt = now()
             try {
-                val snapshot = mutex.withLock { loadCurrent() } ?: return@runIfNeeded
+                var changesSeenId = 0L
+                val snapshot = mutex.withLock { changesSeenId = lastChangeId; loadCurrent() } ?: return@runIfNeeded
                 mutableState.value = mutableState.value.copy(isLoading = true, error = null, attemptedAtEpochMs = attemptedAt)
                 val full = intent == TrackingRefreshIntent.USER_INITIATED || !snapshot.isInitialized ||
                     snapshot.fullSyncAtEpochMs?.let { now() - it !in 0 until FULL_SYNC_INTERVAL_MS } ?: true
@@ -129,10 +137,15 @@ class RyotSyncRepository(
                 mutex.withLock {
                     // Keep imdb ids resolved meanwhile; the server state wins for everything else.
                     val current = loadCurrent() ?: return@withLock
-                    commit(scope, next.copy(metadata = next.metadata.mapValues { (id, entry) ->
+                    val synced = next.copy(metadata = next.metadata.mapValues { (id, entry) ->
                         current.metadata[id]?.takeIf { it.imdbChecked && !entry.imdbChecked }
                             ?.let { entry.copy(imdb = it.imdb, imdbChecked = true) } ?: entry
-                    }))
+                    })
+                    // The sync started before these changes, so the server answer predates them.
+                    val replayed = localChanges.filter { (id, _) -> id > changesSeenId }
+                        .fold(synced) { snapshot, (_, change) -> change(snapshot) }
+                    localChanges.removeAll { (id, _) -> id <= changesSeenId }
+                    commit(scope, replayed)
                 }
                 Log.d(TAG, "Ryot sync full=$full titles=${next.user.size} in ${now() - startedAt} ms")
                 launchImdbResolution(scope)
@@ -179,6 +192,7 @@ class RyotSyncRepository(
             val scope = store.scope()
             val snapshot = loadCurrent() ?: return@withLock
             val next = transform(snapshot)
+            localChanges += ++lastChangeId to transform
             if (next != snapshot) commit(scope, next)
         }
     }
