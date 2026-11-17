@@ -2239,14 +2239,15 @@ class MetaDetailsViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     defaultLibraryTogglePending = true,
-                    isInLibrary = !(wasInLibrary || wasInWatchlist)
+                    // Providers toggle only the watchlist, so a title in another list still adds to it
+                    isInLibrary = !wasInWatchlist
                 )
             }
             runCatching {
                 libraryRepository.toggleDefault(input)
             }.onSuccess { result ->
-                syncLibraryState(input)
                 if (result.requiresRemovalConfirmation) {
+                    syncLibraryState(input)
                     pendingDefaultLibraryToggle = input
                     _uiState.update {
                         it.copy(
@@ -2256,6 +2257,9 @@ class MetaDetailsViewModel @Inject constructor(
                     }
                     return@onSuccess
                 }
+                // The optimistic state stays. A tracker can finish the write before its local
+                // snapshot lists the item (Ryot adds a new title through a webhook), so reading
+                // the repository here would flip the icon back until the next refresh.
                 pendingDefaultLibraryToggle = null
                 _uiState.update { it.copy(defaultLibraryTogglePending = false) }
                 val message = if (wasInLibrary || wasInWatchlist) {
