@@ -21,14 +21,14 @@ import kotlinx.coroutines.launch
 class ServerCatalogViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val serverCatalog: ServerCatalog
-) : ViewModel() {
+) : ViewModel(), CatalogRowSource { // fork: CatalogRowSource
     private val collection = ServerItemRef.parse(savedStateHandle.get<String>("itemId"))
     private val connectionId = savedStateHandle.get<String>("addonId")?.let(ServerCatalog::connectionIdFromAddonId)
     private val catalogId = savedStateHandle.get<String>("catalogId")
     private val _row = MutableStateFlow<CatalogRow?>(null)
     private val _failed = MutableStateFlow(false)
-    val row: StateFlow<CatalogRow?> = _row.asStateFlow()
-    val failed: StateFlow<Boolean> = _failed.asStateFlow()
+    override val row: StateFlow<CatalogRow?> = _row.asStateFlow()
+    override val failed: StateFlow<Boolean> = _failed.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -43,7 +43,7 @@ class ServerCatalogViewModel @Inject constructor(
         }
     }
 
-    fun loadMore() {
+    override fun loadMore() {
         val current = _row.value ?: return
         if (current.isLoading || !current.hasMore) return
         _row.value = current.copy(isLoading = true)

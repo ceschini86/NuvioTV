@@ -11,6 +11,7 @@ import com.nuvio.tv.domain.model.Collection
 import com.nuvio.tv.domain.model.HomeLayout
 import com.nuvio.tv.domain.model.catalogRowStableKey
 import com.nuvio.tv.domain.model.enabledAddons
+import com.nuvio.tv.domain.model.isChannelCatalog
 import com.nuvio.tv.domain.model.legacyKey
 import com.nuvio.tv.domain.model.mergeCatalogPage
 import com.nuvio.tv.domain.model.nextCatalogSkip
@@ -243,7 +244,8 @@ internal suspend fun HomeViewModel.loadAllCatalogsPipeline(
                 addon.catalogs
                     .filter { catalog ->
                         val key = catalogKey(addonId = addon.id, type = catalog.apiType, catalogId = catalog.id)
-                        key in heroCatalogSet && key !in alreadyLoadingKeys && !catalog.isSearchOnlyCatalog()
+                        key in heroCatalogSet && key !in alreadyLoadingKeys && !catalog.isSearchOnlyCatalog() &&
+                            !catalog.isChannelCatalog() // fork
                     }
                     .map { catalog -> addon to catalog }
             }
@@ -388,7 +390,8 @@ internal fun HomeViewModel.loadHeroCatalogsPipeline() {
         addon.catalogs
             .filter { catalog ->
                 val key = catalogKey(addonId = addon.id, type = catalog.apiType, catalogId = catalog.id)
-                key in missingHeroKeys && !catalog.isSearchOnlyCatalog()
+                key in missingHeroKeys && !catalog.isSearchOnlyCatalog() &&
+                    !catalog.isChannelCatalog() // fork
             }
             .map { catalog -> addon to catalog }
     }

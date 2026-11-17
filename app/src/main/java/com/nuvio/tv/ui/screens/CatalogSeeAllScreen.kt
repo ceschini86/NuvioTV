@@ -78,7 +78,7 @@ fun CatalogSeeAllScreen(
     addonId: String,
     type: String,
     searchViewModel: SearchViewModel? = null,
-    serverCatalog: ServerCatalogViewModel? = null,
+    serverCatalog: CatalogRowSource? = null, // fork: any row source, not only media servers
     viewModel: HomeViewModel = hiltViewModel(),
     posterOptionsViewModel: com.nuvio.tv.ui.components.posteroptions.PosterOptionsViewModel = hiltViewModel(),
     onNavigateToDetail: (String, String, String) -> Unit,

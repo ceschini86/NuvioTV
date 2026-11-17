@@ -11,6 +11,7 @@ import com.nuvio.tv.data.mediaserver.ServerCatalog
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.Collection
 import com.nuvio.tv.domain.model.enabledAddons
+import com.nuvio.tv.domain.model.isChannelCatalog
 import com.nuvio.tv.domain.repository.AddonRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -402,7 +403,7 @@ class CatalogOrderViewModel @Inject constructor(
 
         addons.forEach { addon ->
             addon.catalogs
-                .filterNot { it.isSearchOnlyCatalog() }
+                .filterNot { it.isSearchOnlyCatalog() || it.isChannelCatalog() } // fork: channels are not Home rows
                 .forEach { catalog ->
                     val key = catalogKey(
                         addonId = addon.id,

@@ -46,6 +46,7 @@ import com.nuvio.tv.domain.model.TmdbCollectionSource
 import com.nuvio.tv.domain.model.TmdbCollectionSourceType
 import com.nuvio.tv.domain.model.TraktCollectionSource
 import com.nuvio.tv.domain.model.enabledAddons
+import com.nuvio.tv.domain.model.isChannelCatalog
 import com.nuvio.tv.domain.repository.AddonRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -840,7 +841,7 @@ class AddonManagerViewModel @Inject constructor(
 
         addons.enabledAddons().forEach { addon ->
             addon.catalogs
-                .filterNot { it.isSearchOnlyCatalog() }
+                .filterNot { it.isSearchOnlyCatalog() || it.isChannelCatalog() } // fork: channels are not Home rows
                 .forEach { catalog ->
                     val key = catalogKey(
                         addonId = addon.id,

@@ -6,6 +6,7 @@ import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogDescriptor
 import com.nuvio.tv.domain.model.CatalogRow
 import com.nuvio.tv.domain.model.MetaPreview
+import com.nuvio.tv.domain.model.isChannelCatalog
 import com.nuvio.tv.domain.model.stableKey
 import kotlinx.coroutines.Job
 
@@ -360,6 +361,7 @@ internal fun HomeViewModel.disableCatalogKey(
 
 internal fun CatalogDescriptor.shouldShowOnHome(): Boolean {
     if (isSearchOnlyCatalog()) return false
+    if (isChannelCatalog()) return false // fork: channels live in the Channels section
     return !hasExplicitShowInHome || showInHome
 }
 

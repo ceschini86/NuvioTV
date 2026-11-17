@@ -140,6 +140,13 @@ sealed class Screen(val route: String) {
     }
     data object Search : Screen("search")
     data object Discover : Screen("discover")
+    data object Channels : Screen("channels") // fork
+    data object ChannelSeeAll : Screen("channel_see_all/{catalogId}/{addonId}/{type}") { // fork
+        fun createRoute(catalogId: String, addonId: String, type: String): String {
+            fun encode(value: String) = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+            return "channel_see_all/${encode(catalogId)}/${encode(addonId)}/${encode(type)}"
+        }
+    }
     data object Library : Screen("library")
     data object Settings : Screen("settings")
     data object Tracking : Screen("trakt")
