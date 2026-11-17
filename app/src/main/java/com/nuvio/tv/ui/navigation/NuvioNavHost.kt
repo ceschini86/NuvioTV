@@ -264,18 +264,19 @@ private fun PlaybackNavHost(
                     navController.navigate(createContinueWatchingRoute(item))
                 },
                 onContinueWatchingOpenDetails = { item -> // fork
+                    // The details page shows this backdrop while it loads; without one it shows a
+                    // black skeleton for a moment. Use the hero on screen, else the card's backdrop.
+                    val heroBackdrop = HeroBackdropState.consumeAndClear()
                     val route = when (item) {
                         is ContinueWatchingItem.InProgress -> Screen.Detail.createRoute(
                             itemId = item.progress.contentId,
                             itemType = item.progress.contentType,
-                            returnFocusSeason = item.progress.season,
-                            returnFocusEpisode = item.progress.episode
+                            heroBackdropUrl = heroBackdrop ?: item.progress.backdrop
                         )
                         is ContinueWatchingItem.NextUp -> Screen.Detail.createRoute(
                             itemId = item.info.contentId,
                             itemType = item.info.contentType,
-                            returnFocusSeason = item.info.season,
-                            returnFocusEpisode = item.info.episode
+                            heroBackdropUrl = heroBackdrop ?: item.info.backdrop
                         )
                     }
                     navController.navigate(route)

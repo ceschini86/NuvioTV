@@ -2234,10 +2234,18 @@ class MetaDetailsViewModel @Inject constructor(
             val input = meta.toLibraryEntryInput()
             val wasInWatchlist = _uiState.value.isInWatchlist
             val wasInLibrary = _uiState.value.isInLibrary
-            _uiState.update { it.copy(defaultLibraryTogglePending = true) }
+            // The button flips before the repository answers. Tracker providers wait on the
+            // network, and the icon would otherwise stay unchanged for that whole round trip.
+            _uiState.update {
+                it.copy(
+                    defaultLibraryTogglePending = true,
+                    isInLibrary = !(wasInLibrary || wasInWatchlist)
+                )
+            }
             runCatching {
                 libraryRepository.toggleDefault(input)
             }.onSuccess { result ->
+                syncLibraryState(input)
                 if (result.requiresRemovalConfirmation) {
                     pendingDefaultLibraryToggle = input
                     _uiState.update {
@@ -2258,6 +2266,7 @@ class MetaDetailsViewModel @Inject constructor(
                 showMessage(message)
             }.onFailure { error ->
                 pendingDefaultLibraryToggle = null
+                syncLibraryState(input)
                 _uiState.update { it.copy(defaultLibraryTogglePending = false) }
                 showMessage(
                     message = error.message ?: context.getString(com.nuvio.tv.R.string.detail_error_update_library_failed),
@@ -2265,6 +2274,14 @@ class MetaDetailsViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    /** Replaces the optimistic library state with what the repository reports now. */
+    private suspend fun syncLibraryState(input: LibraryEntryInput) {
+        val actual = runCatching {
+            libraryRepository.isInLibrary(itemId = input.itemId, itemType = input.itemType).first()
+        }.getOrNull() ?: return
+        _uiState.update { if (it.isInLibrary == actual) it else it.copy(isInLibrary = actual) }
     }
 
     private fun openListPicker() {
