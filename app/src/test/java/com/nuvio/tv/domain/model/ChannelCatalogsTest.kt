@@ -15,6 +15,13 @@ class ChannelCatalogsTest {
     }
 
     @Test
+    fun `live sport and event catalogs are channel catalogs`() {
+        // The Sports Streams addon declares every catalog as "sport"; AIOStreams uses "events".
+        assertTrue(catalog("sport").isChannelCatalog())
+        assertTrue(catalog("events").isChannelCatalog())
+    }
+
+    @Test
     fun `movie series and custom catalogs are not channel catalogs`() {
         assertFalse(catalog("movie").isChannelCatalog())
         assertFalse(catalog("series").isChannelCatalog())
