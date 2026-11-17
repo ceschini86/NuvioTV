@@ -2010,8 +2010,16 @@ private fun MetaDetailsContent(
     var activePeopleTab by rememberSaveable(meta.id) { mutableStateOf(initialPeopleTab) }
     var seasonOptionsDialogSeason by remember { mutableStateOf<Int?>(null) }
     // Tracks whether the initial auto-scroll to the "next to play" episode has fired.
-    // Once it fires, no more auto-scrolls happen for the lifetime of this detail screen.
-    var initialEpisodeScrollDone by remember(meta.id) { mutableStateOf(false) }
+    // fork: it re-arms when the next episode or the season changes. Watch progress can land after
+    // the meta, and the first pass then points at S1E1; without this the row stays on episode 1.
+    // An episode the user focused in the season still wins (scrollToEpisodeId is null then).
+    var initialEpisodeScrollDone by remember(
+        meta.id,
+        nextToWatch?.nextVideoId,
+        nextToWatch?.nextSeason,
+        nextToWatch?.nextEpisode,
+        selectedSeason
+    ) { mutableStateOf(false) }
     val episodeFocusRequestersBySeason = remember(meta.id) { mutableMapOf<Int, MutableMap<String, FocusRequester>>() }
     val seasonEpisodeFocusRequesters = remember(selectedSeason, episodesForSeason) {
         val byEpisodeId = episodeFocusRequestersBySeason.getOrPut(selectedSeason) { mutableMapOf() }

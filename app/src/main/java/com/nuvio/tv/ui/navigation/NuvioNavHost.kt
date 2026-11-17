@@ -1249,6 +1249,8 @@ private fun PlaybackNavHost(
             )
         }
 
+        channelsDestinations(navController, hideBuiltInHeaders) // fork
+
         composable(Screen.Library.route) {
             LibraryScreen(
                 showBuiltInHeader = !hideBuiltInHeaders,

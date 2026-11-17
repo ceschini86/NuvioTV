@@ -30,6 +30,7 @@ import com.nuvio.tv.domain.model.FocusedPosterTrailerPlaybackTarget
 import com.nuvio.tv.domain.model.HomeLayout
 import com.nuvio.tv.domain.model.HomeImdbRatingsVisibility
 import com.nuvio.tv.domain.model.enabledAddons
+import com.nuvio.tv.domain.model.isChannelCatalog
 import com.nuvio.tv.domain.repository.AddonRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -1054,7 +1055,8 @@ class LayoutSettingsViewModel @Inject constructor(
                 val catalogs = addons.flatMap { addon ->
                     addon.catalogs
                         .filter { catalog ->
-                            !catalog.isSearchOnlyCatalog()
+                            !catalog.isSearchOnlyCatalog() &&
+                                !catalog.isChannelCatalog() // fork: channels stay out of the hero
                         }
                         .map { catalog ->
                             CatalogInfo(

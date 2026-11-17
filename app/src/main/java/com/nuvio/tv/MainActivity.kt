@@ -51,6 +51,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -107,6 +108,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.nuvio.tv.ui.screens.ambient.AmbientIdleController
 import com.nuvio.tv.ui.screens.ambient.AmbientModeHost
 import com.nuvio.tv.ui.screens.ambient.LocalAmbientIdleController
+import com.nuvio.tv.ui.screens.channels.hasChannelCatalogs
 import com.nuvio.tv.ui.components.LocalStartupLoadingState
 import com.nuvio.tv.ui.components.LocalStartupSplashEnabled
 import com.nuvio.tv.ui.components.StartupLoadingState
@@ -1045,9 +1047,16 @@ open class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    // fork: the Channels item shows only while an addon has channel catalogs.
+                    val hasChannelCatalogs by remember {
+                        addonRepository.hasChannelCatalogs()
+                    }.collectAsState(initial = false)
+
                     val rootRoutes = remember(discoverLocation) {
                         buildSet {
                             add(Screen.Home.route)
+                            // fork: always a root, so the sidebar stays when the channel addon goes away
+                            add(Screen.Channels.route)
                             add(Screen.Search.route)
                             add(Screen.Library.route)
                             add(Screen.Settings.route)
@@ -1062,13 +1071,16 @@ open class MainActivity : ComponentActivity() {
                     val strNavSearch = stringResource(R.string.nav_search)
                     val strNavLibrary = stringResource(R.string.nav_library)
                     val strNavSettings = stringResource(R.string.nav_settings)
+                    val strNavChannels = stringResource(R.string.nav_channels) // fork
                     val drawerItems = remember(
                         strNavHome,
                         strNavDiscover,
                         strNavSearch,
                         strNavLibrary,
                         strNavSettings,
-                        discoverLocation
+                        discoverLocation,
+                        strNavChannels,
+                        hasChannelCatalogs
                     ) {
                         buildList {
                             add(
@@ -1078,6 +1090,15 @@ open class MainActivity : ComponentActivity() {
                                     icon = Icons.Default.Home
                                 )
                             )
+                            if (hasChannelCatalogs) { // fork
+                                add(
+                                    DrawerItem(
+                                        route = Screen.Channels.route,
+                                        label = strNavChannels,
+                                        icon = Icons.Default.LiveTv
+                                    )
+                                )
+                            }
                             if (discoverLocation == DiscoverLocation.IN_SIDEBAR) {
                                 add(
                                     DrawerItem(

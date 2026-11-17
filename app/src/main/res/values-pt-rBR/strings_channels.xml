@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- fork: Channels section (docs/plan-channels.md) -->
+<resources>
+    <string name="nav_channels">Canais</string>
+    <string name="channels_empty_title">Nenhum canal</string>
+    <string name="channels_empty_subtitle">Instale ou ative um addon com catálogos de canais para vê-los aqui.</string>
+</resources>
