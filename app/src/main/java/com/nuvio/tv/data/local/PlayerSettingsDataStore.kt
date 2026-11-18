@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.player.LastPlaybackDiagnostics
+import com.nuvio.tv.core.player.SubtitleFonts
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -152,7 +153,7 @@ data class SubtitleStyleSettings(
     val backgroundColor: Int = Color.Transparent.toArgb(),
     val outlineEnabled: Boolean = true,
     val outlineColor: Int = Color.Black.toArgb(),
-    val outlineWidth: Int = 2, // 1-5
+    val outlineWidth: Int = OUTLINE_WIDTH_DEFAULT, // 1-5
     val hdrStyleEnabled: Boolean = false,
     val hdrTextColor: Int = Color.White.toArgb(),
     val hdrBrightness: Int = HDR_BRIGHTNESS_DEFAULT, // 0-100, see hdrBrightnessFactor
@@ -161,7 +162,12 @@ data class SubtitleStyleSettings(
     val aiAutoSelect: Boolean = false,
     val aiModel: String = "GROQ_LLAMA_70B",
     /** When true, AI subtitle prefs/keys are included in profile settings sync. Default off (device-local). */
-    val aiSyncWithProfile: Boolean = false
+    val aiSyncWithProfile: Boolean = false,
+    val fontId: String = SubtitleFonts.DEFAULT,
+    val backgroundRadius: Int = 0,
+    val shadowEnabled: Boolean = false,
+    val shadowOpacity: Int = SHADOW_OPACITY_DEFAULT,
+    val shadowSize: Int = SHADOW_SIZE_DEFAULT
 ) {
     /**
      * The style to render with: on HDR/Dolby Vision video with the override enabled, the HDR text
@@ -196,6 +202,14 @@ data class SubtitleStyleSettings(
         const val HDR_BRIGHTNESS_MIN = 0
         const val HDR_BRIGHTNESS_MAX = 100
         const val HDR_BRIGHTNESS_DEFAULT = 40
+        const val BACKGROUND_RADIUS_MAX = 24
+        const val OUTLINE_WIDTH_MIN = 1
+        const val OUTLINE_WIDTH_MAX = 5
+        const val OUTLINE_WIDTH_DEFAULT = 2
+        const val SHADOW_OPACITY_DEFAULT = 75
+        const val SHADOW_SIZE_MIN = 1
+        const val SHADOW_SIZE_MAX = 8
+        const val SHADOW_SIZE_DEFAULT = 2
 
         /** Maps the 0-100 setting onto 30%-100% of full brightness, so 0 still leaves readable text. */
         private fun hdrBrightnessFactor(brightness: Int): Float =
@@ -745,6 +759,11 @@ class PlayerSettingsDataStore @Inject constructor(
     private val subtitleHdrTextColorKey = intPreferencesKey("subtitle_hdr_text_color")
     private val subtitleHdrBrightnessKey = intPreferencesKey("subtitle_hdr_brightness")
     private val subtitleHdrDimPlayerControlsKey = booleanPreferencesKey("subtitle_hdr_dim_player_controls")
+    private val subtitleFontIdKey = stringPreferencesKey("subtitle_font_id")
+    private val subtitleBackgroundRadiusKey = intPreferencesKey("subtitle_background_radius")
+    private val subtitleShadowEnabledKey = booleanPreferencesKey("subtitle_shadow_enabled")
+    private val subtitleShadowOpacityKey = intPreferencesKey("subtitle_shadow_opacity")
+    private val subtitleShadowSizeKey = intPreferencesKey("subtitle_shadow_size")
 
     // Buffer settings keys
     private val minBufferMsKey = intPreferencesKey("min_buffer_ms")
@@ -1191,11 +1210,20 @@ class PlayerSettingsDataStore @Inject constructor(
                         backgroundColor = prefs[subtitleBackgroundColorKey] ?: Color.Transparent.toArgb(),
                         outlineEnabled = prefs[subtitleOutlineEnabledKey] ?: true,
                         outlineColor = prefs[subtitleOutlineColorKey] ?: Color.Black.toArgb(),
-                        outlineWidth = prefs[subtitleOutlineWidthKey] ?: 2,
+                        outlineWidth = (prefs[subtitleOutlineWidthKey] ?: SubtitleStyleSettings.OUTLINE_WIDTH_DEFAULT)
+                            .coerceIn(SubtitleStyleSettings.OUTLINE_WIDTH_MIN, SubtitleStyleSettings.OUTLINE_WIDTH_MAX),
                         hdrStyleEnabled = prefs[subtitleHdrStyleEnabledKey] ?: false,
                         hdrTextColor = prefs[subtitleHdrTextColorKey] ?: Color.White.toArgb(),
                         hdrBrightness = prefs[subtitleHdrBrightnessKey] ?: SubtitleStyleSettings.HDR_BRIGHTNESS_DEFAULT,
-                        hdrDimPlayerControls = prefs[subtitleHdrDimPlayerControlsKey] ?: false
+                        hdrDimPlayerControls = prefs[subtitleHdrDimPlayerControlsKey] ?: false,
+                        fontId = prefs[subtitleFontIdKey] ?: SubtitleFonts.DEFAULT,
+                        backgroundRadius = (prefs[subtitleBackgroundRadiusKey] ?: 0)
+                            .coerceIn(0, SubtitleStyleSettings.BACKGROUND_RADIUS_MAX),
+                        shadowEnabled = prefs[subtitleShadowEnabledKey] ?: false,
+                        shadowOpacity = (prefs[subtitleShadowOpacityKey] ?: SubtitleStyleSettings.SHADOW_OPACITY_DEFAULT)
+                            .coerceIn(0, 100),
+                        shadowSize = (prefs[subtitleShadowSizeKey] ?: SubtitleStyleSettings.SHADOW_SIZE_DEFAULT)
+                            .coerceIn(SubtitleStyleSettings.SHADOW_SIZE_MIN, SubtitleStyleSettings.SHADOW_SIZE_MAX)
                     )
                 },
                 bufferSettings = BufferSettings(
@@ -1771,7 +1799,14 @@ class PlayerSettingsDataStore @Inject constructor(
     suspend fun setSubtitleBackgroundColor(color: Int) { store().edit { it[subtitleBackgroundColorKey] = color } }
     suspend fun setSubtitleOutlineEnabled(enabled: Boolean) { store().edit { it[subtitleOutlineEnabledKey] = enabled } }
     suspend fun setSubtitleOutlineColor(color: Int) { store().edit { it[subtitleOutlineColorKey] = color } }
-    suspend fun setSubtitleOutlineWidth(width: Int) { store().edit { it[subtitleOutlineWidthKey] = width.coerceIn(1, 5) } }
+    suspend fun setSubtitleOutlineWidth(width: Int) {
+        store().edit {
+            it[subtitleOutlineWidthKey] = width.coerceIn(
+                SubtitleStyleSettings.OUTLINE_WIDTH_MIN,
+                SubtitleStyleSettings.OUTLINE_WIDTH_MAX
+            )
+        }
+    }
     suspend fun setSubtitleHdrStyleEnabled(enabled: Boolean) { store().edit { it[subtitleHdrStyleEnabledKey] = enabled } }
     suspend fun setSubtitleHdrTextColor(color: Int) { store().edit { it[subtitleHdrTextColorKey] = color } }
     suspend fun setSubtitleHdrDimPlayerControls(enabled: Boolean) {
@@ -1783,6 +1818,40 @@ class PlayerSettingsDataStore @Inject constructor(
                 SubtitleStyleSettings.HDR_BRIGHTNESS_MIN,
                 SubtitleStyleSettings.HDR_BRIGHTNESS_MAX
             )
+        }
+    }
+    suspend fun setSubtitleFontId(fontId: String) { store().edit { it[subtitleFontIdKey] = fontId } }
+    suspend fun setSubtitleBackgroundRadius(radius: Int) {
+        store().edit { it[subtitleBackgroundRadiusKey] = radius.coerceIn(0, SubtitleStyleSettings.BACKGROUND_RADIUS_MAX) }
+    }
+    suspend fun setSubtitleShadowEnabled(enabled: Boolean) { store().edit { it[subtitleShadowEnabledKey] = enabled } }
+    suspend fun setSubtitleShadowOpacity(opacity: Int) { store().edit { it[subtitleShadowOpacityKey] = opacity.coerceIn(0, 100) } }
+    suspend fun setSubtitleShadowSize(size: Int) {
+        store().edit {
+            it[subtitleShadowSizeKey] = size.coerceIn(SubtitleStyleSettings.SHADOW_SIZE_MIN, SubtitleStyleSettings.SHADOW_SIZE_MAX)
+        }
+    }
+    suspend fun resetSubtitleAppearance(resetHdrText: Boolean = false) {
+        val defaults = SubtitleStyleSettings()
+        store().edit { prefs ->
+            prefs[subtitleSizeKey] = defaults.size
+            prefs[subtitleVerticalOffsetKey] = defaults.verticalOffset
+            prefs[subtitleBoldKey] = defaults.bold
+            if (resetHdrText) {
+                prefs[subtitleHdrTextColorKey] = defaults.hdrTextColor
+                prefs[subtitleHdrBrightnessKey] = defaults.hdrBrightness
+            } else {
+                prefs[subtitleTextColorKey] = defaults.textColor
+            }
+            prefs[subtitleBackgroundColorKey] = defaults.backgroundColor
+            prefs[subtitleOutlineEnabledKey] = defaults.outlineEnabled
+            prefs[subtitleOutlineColorKey] = defaults.outlineColor
+            prefs[subtitleOutlineWidthKey] = defaults.outlineWidth
+            prefs[subtitleFontIdKey] = defaults.fontId
+            prefs[subtitleBackgroundRadiusKey] = defaults.backgroundRadius
+            prefs[subtitleShadowEnabledKey] = defaults.shadowEnabled
+            prefs[subtitleShadowOpacityKey] = defaults.shadowOpacity
+            prefs[subtitleShadowSizeKey] = defaults.shadowSize
         }
     }
 
