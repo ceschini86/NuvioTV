@@ -21,6 +21,9 @@ import kotlinx.coroutines.flow.onStart
 /**
  * Ryot collections as Library tabs. Watchlist and the user's own collections take items from the app;
  * Ryot fills In Progress, Completed, On Hold and Dropped itself, so the app only shows those.
+ *
+ * Saving a title Ryot does not have yet goes through the integration webhook, which Ryot processes in
+ * the background. Until a sync brings the new row, a pending entry shows the title as saved.
  */
 class RyotLibraryProvider(
     private val sync: RyotSyncRepository,
@@ -29,7 +32,12 @@ class RyotLibraryProvider(
     private val api: RyotApi,
     private val client: RyotGraphqlClient,
     private val ids: RyotIdResolver,
-    profiles: ProfileManager
+    profiles: ProfileManager,
+    /** Error text when TMDB has no id for the title, so Ryot cannot store it. */
+    private val untrackableMessage: () -> String = { "Ryot cannot find this title on TMDB." },
+    /** Error text when a removal targets a title Ryot is still creating. */
+    private val stillProcessingMessage: () -> String = { "Ryot is still adding this title. Try again in a few seconds." },
+    private val now: () -> Long = System::currentTimeMillis
 ) : TrackingLibraryProvider {
     override val providerId = TrackingProviderId.RYOT
 
@@ -80,19 +88,28 @@ class RyotLibraryProvider(
             year = item.year,
             ids = TrackingExternalIds(imdb = item.imdbId ?: item.itemId.takeIf { it.startsWith("tt") }, tmdb = item.tmdbId?.toLong())
         )
-        val tmdbId = ids.tmdbFor(media) ?: return
+        val tmdbId = ids.tmdbFor(media) ?: throw IllegalStateException(untrackableMessage())
         val lot = if (kind == TrackingMediaKind.MOVIE) RyotLot.MOVIE else RyotLot.SHOW
-        val metadataId = current.metadataIdFor(lot, tmdbId)
-        val existing = metadataId?.let { current.user[it]?.collections }.orEmpty()
+        var metadataId = current.metadataIdFor(lot, tmdbId)
+        val pendingId = current.pendingIdFor(lot, tmdbId)
+        val existing = (metadataId ?: pendingId)?.let { current.user[it]?.collections }.orEmpty()
         val changed = changes.desiredMembership.filter { (key, wanted) ->
             recognizesListKey(key) && (collectionName(key) in existing) != wanted
         }
         if (changed.isEmpty()) return
+        if (metadataId == null && pendingId != null && changed.values.any { !it }) {
+            // Removing from a title Ryot is still creating: wait for the real row, or the webhook
+            // would add the title back after the removal.
+            sync.refresh(TrackingRefreshIntent.INVALIDATED)
+            metadataId = sync.currentSnapshot()?.metadataIdFor(lot, tmdbId)
+                ?: throw IllegalStateException(stillProcessingMessage())
+        }
+        val realId = metadataId
         auth.withAuthorization { authorization ->
             changed.forEach { (key, wanted) ->
                 val name = collectionName(key)
                 when {
-                    metadataId != null -> api.changeCollection(authorization.auth, name, listOf(metadataId), add = wanted)
+                    realId != null -> api.changeCollection(authorization.auth, name, listOf(realId), add = wanted)
                     wanted -> {
                         // Not in the Ryot library yet: the webhook creates the row and adds it to the collection.
                         val slug = authorization.auth.integrationSlug ?: throw RyotAuthException(RyotAuthError.INTEGRATION_FAILED)
@@ -104,15 +121,28 @@ class RyotLibraryProvider(
                 }
             }
         }
-        if (metadataId != null) {
-            sync.mutateLocally { snapshot ->
-                val entry = snapshot.user[metadataId] ?: RyotUserEntry()
-                val collections = entry.collections + changed.filterValues { it }.keys.map(::collectionName) -
-                    changed.filterValues { !it }.keys.map(::collectionName).toSet()
-                snapshot.copy(user = snapshot.user + (metadataId to entry.copy(collections = collections)))
+        val added = changed.filterValues { it }.keys.map(::collectionName)
+        val removed = changed.filterValues { !it }.keys.map(::collectionName).toSet()
+        val now = now()
+        sync.mutateLocally { snapshot ->
+            if (realId != null) {
+                val entry = snapshot.user[realId] ?: RyotUserEntry()
+                snapshot.copy(user = snapshot.user + (realId to entry.copy(
+                    collections = entry.collections + added - removed,
+                    collectionAddedAt = entry.collectionAddedAt + added.associateWith { now } - removed
+                ))).let { next -> pendingId?.let(next::withoutPending) ?: next }
+            } else {
+                // Ryot creates the title in the background; show it saved until a sync brings the real row.
+                added.fold(snapshot) { next, name ->
+                    next.withPendingTitle(lot, tmdbId, item.title, item.year, item.poster, media.ids.imdb, name, now)
+                }
             }
         }
-        sync.refreshSoon()
+        if (realId != null) {
+            sync.refreshSoon()
+        } else {
+            sync.refreshUntil { snapshot -> snapshot.metadataIdFor(lot, tmdbId)?.let { it in snapshot.user } == true }
+        }
     }
 
     override suspend fun refresh(intent: TrackingRefreshIntent) = sync.refresh(intent)
@@ -154,32 +184,51 @@ class RyotLibraryProvider(
             isMembershipDestination = destination
         )
 
-        internal fun entriesOf(snapshot: RyotSnapshot): List<LibraryEntry> =
-            snapshot.user.mapNotNull { (id, user) ->
+        /**
+         * The library entries, newest first. In each list an entry ranks by when it entered that
+         * collection; titles synced before Ryot reported that date rank by their last watch.
+         */
+        internal fun entriesOf(snapshot: RyotSnapshot): List<LibraryEntry> {
+            val entries = snapshot.user.mapNotNull { (id, user) ->
                 val meta = snapshot.metadata[id]?.takeIf(RyotMetadataEntry::isTrackable) ?: return@mapNotNull null
                 val contentId = meta.contentId ?: return@mapNotNull null
-                val keys = user.collections.filter { it !in HIDDEN_COLLECTIONS }.mapTo(linkedSetOf(), ::key)
-                if (keys.isEmpty()) return@mapNotNull null
-                LibraryEntry(
-                    id = contentId,
-                    type = if (meta.lot == RyotLot.MOVIE) "movie" else "series",
-                    name = meta.title,
-                    poster = meta.poster,
-                    background = null,
-                    logo = null,
-                    description = null,
-                    releaseInfo = meta.year?.toString(),
-                    imdbRating = null,
-                    genres = emptyList(),
-                    addonBaseUrl = null,
-                    listKeys = keys,
-                    listedAt = (user.history.maxOfOrNull { it.updatedAtEpochMs } ?: 0L),
-                    imdbId = meta.imdb,
-                    tmdbId = meta.tmdbId?.toInt(),
-                    trackingProviderId = RyotProgressProjection.PROVIDER_ID,
-                    trackingProviderItemId = meta.tmdbId?.let { "tmdb:$it" }
-                )
-            }.sortedByDescending(LibraryEntry::listedAt)
+                val names = user.collections.filter { it !in HIDDEN_COLLECTIONS }
+                if (names.isEmpty()) return@mapNotNull null
+                val lastWatch = user.history.maxOfOrNull { it.updatedAtEpochMs } ?: 0L
+                val addedAt = names.associate { name -> key(name) to (user.collectionAddedAt[name] ?: lastWatch) }
+                entryOf(meta, contentId, addedAt.keys, listedAt = maxOf(lastWatch, addedAt.values.max())) to addedAt
+            }
+            // rank[index of entry][list key], counted from the newest addition to that list
+            val ranks = List(entries.size) { mutableMapOf<String, Int>() }
+            entries.withIndex()
+                .flatMap { (index, pair) -> pair.second.map { (key, time) -> Triple(key, index, time) } }
+                .groupBy { it.first }
+                .forEach { (key, members) ->
+                    members.sortedByDescending { it.third }.forEachIndexed { rank, member -> ranks[member.second][key] = rank }
+                }
+            return entries.mapIndexed { index, (entry, _) -> entry.copy(listRanks = ranks[index]) }
+                .sortedByDescending(LibraryEntry::listedAt)
+        }
+
+        private fun entryOf(meta: RyotMetadataEntry, contentId: String, keys: Set<String>, listedAt: Long) = LibraryEntry(
+            id = contentId,
+            type = if (meta.lot == RyotLot.MOVIE) "movie" else "series",
+            name = meta.displayTitle,
+            poster = meta.poster,
+            background = null,
+            logo = null,
+            description = null,
+            releaseInfo = meta.year?.toString(),
+            imdbRating = null,
+            genres = emptyList(),
+            addonBaseUrl = null,
+            listKeys = keys,
+            listedAt = listedAt,
+            imdbId = meta.imdb,
+            tmdbId = meta.tmdbId?.toInt(),
+            trackingProviderId = RyotProgressProjection.PROVIDER_ID,
+            trackingProviderItemId = meta.tmdbId?.let { "tmdb:$it" }
+        )
 
         internal fun membershipOf(snapshot: RyotSnapshot, contentId: String): Set<String> =
             snapshot.user.entries.firstOrNull { (id, _) -> contentId in snapshot.metadata[id]?.aliases.orEmpty() }

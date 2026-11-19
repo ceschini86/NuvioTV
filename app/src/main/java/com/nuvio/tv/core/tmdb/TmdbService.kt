@@ -284,6 +284,23 @@ class TmdbService @Inject constructor(
     fun apiKey(): String = TMDB_API_KEY
 
     /**
+     * The title of a TMDB movie or show in [language], or null when TMDB has no translation in that
+     * language. Callers keep their own title then.
+     */
+    suspend fun translatedTitle(tmdbId: Int, mediaType: String, language: String): String? = withContext(Dispatchers.IO) {
+        val details = runCatching {
+            if (normalizeMediaType(mediaType) == "movie") tmdbApi.getMovieDetails(tmdbId, TMDB_API_KEY, language).body()
+            else tmdbApi.getTvDetails(tmdbId, TMDB_API_KEY, language).body()
+        }.getOrNull() ?: return@withContext null
+        pickTranslatedTitle(
+            localized = details.title ?: details.name,
+            original = details.originalTitle ?: details.originalName,
+            originalLanguage = details.originalLanguage,
+            language = language
+        )
+    }
+
+    /**
      * Fetches backdrop and poster URLs from TMDB for the given IMDB ID.
      * Returns null if the IMDB ID doesn't start with "tt" or if TMDB has no data.
      * Results are NOT cached here — callers should persist what they need.
@@ -309,3 +326,17 @@ class TmdbService @Inject constructor(
 }
 
 data class TmdbImages(val backdropUrl: String?, val posterUrl: String?, val runtimeMinutes: Int? = null)
+
+/**
+ * TMDB answers with the original title when a title has no translation in the requested language.
+ * That is a translation only when the title was made in [language]; a Korean title is not one for a
+ * Portuguese viewer, who gets null so the caller keeps its own (English) title.
+ */
+internal fun pickTranslatedTitle(localized: String?, original: String?, originalLanguage: String?, language: String): String? {
+    val title = localized?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    val requested = language.substringBefore('-').substringBefore('_').lowercase()
+    val sameLanguage = originalLanguage?.lowercase() == requested
+    if (title == original?.trim() && !sameLanguage) return null
+    if (containsCjkOrHangul(title) && requested !in setOf("ja", "ko", "zh")) return null
+    return title
+}

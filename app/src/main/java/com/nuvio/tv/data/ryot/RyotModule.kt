@@ -11,6 +11,8 @@ import com.nuvio.tv.core.tracking.TrackingProgressProvider
 import com.nuvio.tv.core.tracking.TrackingProvider
 import com.nuvio.tv.data.local.LayoutPreferenceDataStore
 import com.nuvio.tv.data.local.ProfileDataStore
+import com.nuvio.tv.data.local.TmdbSettingsDataStore
+import com.nuvio.tv.R
 import java.io.File
 import dagger.Module
 import dagger.Provides
@@ -23,6 +25,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 
@@ -77,14 +80,19 @@ object RyotModule {
         auth: RyotAuthRepository,
         api: RyotApi,
         ids: RyotIdResolver,
-        profiles: ProfileManager
+        profiles: ProfileManager,
+        tmdbSettings: TmdbSettingsDataStore
     ) = RyotSyncRepository(
         storage = FileRyotSyncStorage(File(context.filesDir, "ryot")),
         store = store,
         auth = auth,
         activeProfileId = profiles.activeProfileId,
         coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
-        remoteFor = { stored -> RyotApiSyncRemote(api, stored, ids::imdbFor) }
+        remoteFor = { stored -> RyotApiSyncRemote(api, stored, ids) },
+        // Library titles follow the language the rest of the app uses for TMDB titles.
+        titleLanguage = tmdbSettings.settings.map { settings ->
+            settings.language.takeIf { settings.enabled && settings.useBasicInfo && !it.startsWith("en") }
+        }
     )
 
     @Provides
@@ -118,8 +126,13 @@ object RyotModule {
         api: RyotApi,
         client: RyotGraphqlClient,
         ids: RyotIdResolver,
-        profiles: ProfileManager
-    ) = RyotLibraryProvider(sync, store, auth, api, client, ids, profiles)
+        profiles: ProfileManager,
+        @ApplicationContext context: Context
+    ) = RyotLibraryProvider(
+        sync, store, auth, api, client, ids, profiles,
+        untrackableMessage = { context.getString(R.string.ryot_error_title_untrackable) },
+        stillProcessingMessage = { context.getString(R.string.ryot_error_title_still_processing) }
+    )
 
     @Provides
     @IntoSet

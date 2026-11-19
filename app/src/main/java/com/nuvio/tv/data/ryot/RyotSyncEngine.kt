@@ -15,19 +15,22 @@ interface RyotSyncRemote {
     suspend fun collections(): List<RyotCollection>
     /** IMDb id of a TMDB movie or show, or null when TMDB has none. */
     suspend fun imdbFor(lot: RyotLot, tmdbId: Long): String?
+    /** TMDB's title of a movie or show in [language], or null when TMDB has no translation for it. */
+    suspend fun localizedTitle(lot: RyotLot, tmdbId: Long, language: String): String?
 }
 
 class RyotApiSyncRemote(
     private val api: RyotApi,
     private val auth: RyotStoredAuth,
-    private val imdbResolver: suspend (RyotLot, Long) -> String?
+    private val ids: RyotIdResolver
 ) : RyotSyncRemote {
     override suspend fun allMetadataIds(lot: RyotLot) = api.allMetadataIds(auth, lot)
     override suspend fun recentMetadataIds(lot: RyotLot, take: Int) = api.listMetadataIds(auth, lot, 1, take).ids
     override suspend fun metadataDetails(ids: Collection<String>) = api.metadataDetails(auth, ids)
     override suspend fun userMetadataDetails(ids: Collection<String>) = api.userMetadataDetails(auth, ids)
     override suspend fun collections() = api.collections(auth)
-    override suspend fun imdbFor(lot: RyotLot, tmdbId: Long) = imdbResolver(lot, tmdbId)
+    override suspend fun imdbFor(lot: RyotLot, tmdbId: Long) = ids.imdbFor(lot, tmdbId)
+    override suspend fun localizedTitle(lot: RyotLot, tmdbId: Long, language: String) = ids.localizedTitle(lot, tmdbId, language)
 }
 
 /**
@@ -37,6 +40,9 @@ class RyotApiSyncRemote(
  * them. An incremental sync reads the first [RECENT_PAGE] ids of each lot, in last-updated order, and
  * reloads only the first [ALWAYS_RELOAD] ids plus those that are new or moved up since the last sync:
  * Ryot moves a title to the front whenever its progress, history or collections change.
+ *
+ * Pending entries (see [RyotSnapshot.withPendingTitle]) survive both kinds of sync until the real
+ * title shows up or [PENDING_TTL_MS] passes, whichever comes first.
  */
 class RyotSyncEngine(
     private val remote: RyotSyncRemote,
@@ -46,12 +52,13 @@ class RyotSyncEngine(
         val collections = remote.collections().map { RyotCollectionEntry(it.id, it.name, it.count, it.isDefault) }
         val recentOrder = LOTS.associateWith { lot -> remote.recentMetadataIds(lot, RECENT_PAGE) }
 
+        val isFull = full || snapshot.needsFullSync
         val reloadIds: Set<String>
         val keptUser: Map<String, RyotUserEntry>
-        if (full || !snapshot.isInitialized) {
+        if (isFull) {
             val all = LOTS.flatMap { remote.allMetadataIds(it) }.toSet()
             reloadIds = all
-            keptUser = emptyMap()
+            keptUser = snapshot.user.filterKeys(RyotSnapshot::isPendingId)
         } else {
             reloadIds = LOTS.flatMap { lot ->
                 changedIds(snapshot.recentOrder[lot].orEmpty(), recentOrder.getValue(lot), snapshot.user.keys)
@@ -66,30 +73,53 @@ class RyotSyncEngine(
 
         val loadedUser = remote.userMetadataDetails(reloadIds).mapValues { (_, value) -> value.toEntry() }
         val user = keptUser + loadedUser
+        val expired = expiredPendingIds(metadata, user)
 
         return snapshot.copy(
-            metadata = metadata,
-            user = user,
+            metadata = metadata - expired,
+            user = user - expired,
             recentOrder = recentOrder,
             collections = collections,
             checkedAtEpochMs = now(),
-            fullSyncAtEpochMs = if (full || !snapshot.isInitialized) now() else snapshot.fullSyncAtEpochMs
+            fullSyncAtEpochMs = if (isFull) now() else snapshot.fullSyncAtEpochMs,
+            formatVersion = if (isFull) RyotSnapshot.FORMAT_VERSION else snapshot.formatVersion
         )
     }
 
+    /** Pending ids whose real title is in [user] now, or that waited longer than [PENDING_TTL_MS]. */
+    private fun expiredPendingIds(metadata: Map<String, RyotMetadataEntry>, user: Map<String, RyotUserEntry>): Set<String> {
+        val real = user.keys.filterNot(RyotSnapshot::isPendingId)
+            .mapNotNullTo(hashSetOf()) { id -> metadata[id]?.let { it.lot to it.tmdbId } }
+        return user.filterKeys(RyotSnapshot::isPendingId).filter { (id, entry) ->
+            val meta = metadata[id]
+            val addedAt = entry.collectionAddedAt.values.maxOrNull() ?: 0L
+            meta == null || (meta.lot to meta.tmdbId) in real || now() - addedAt !in 0 until PENDING_TTL_MS
+        }.keys
+    }
+
     /**
-     * Looks up the IMDb id of up to [limit] library titles that do not have one yet. It runs after the
-     * synced snapshot is saved, one TMDB call per title, so the app shows `tmdb:<id>` until it ends.
+     * Looks up, for up to [limit] library titles, the IMDb id when it is still unknown and the title in
+     * [language] when it was not looked up in that language yet. A null [language] clears the
+     * translations without a call. It runs after the synced snapshot is saved, so the app shows
+     * `tmdb:<id>` and Ryot's title until it ends.
      */
-    suspend fun resolveImdb(snapshot: RyotSnapshot, limit: Int = IMDB_CHUNK): Map<String, RyotMetadataEntry> =
+    suspend fun resolveTmdb(snapshot: RyotSnapshot, language: String?, limit: Int = TMDB_CHUNK): Map<String, RyotMetadataEntry> =
         coroutineScope {
-            val permits = Semaphore(IMDB_CONCURRENCY)
-            snapshot.metadata.filter { (id, entry) -> id in snapshot.user && !entry.imdbChecked && entry.isTrackable }
-                .entries.take(limit).map { (id, entry) ->
+            val permits = Semaphore(TMDB_CONCURRENCY)
+            snapshot.metadata.filter { (id, entry) ->
+                id in snapshot.user && entry.isTrackable && (!entry.imdbChecked || entry.localizedLanguage != language)
+            }.entries.take(limit).map { (id, entry) ->
                 async {
                     permits.withPermit {
-                        val imdb = runCatching { remote.imdbFor(entry.lot, entry.tmdbId!!) }.getOrNull()
-                        id to entry.copy(imdb = imdb ?: entry.imdb, imdbChecked = true)
+                        val tmdbId = entry.tmdbId!!
+                        val imdb = if (entry.imdbChecked) entry.imdb
+                        else runCatching { remote.imdbFor(entry.lot, tmdbId) }.getOrNull() ?: entry.imdb
+                        val title = when {
+                            language == null -> null
+                            entry.localizedLanguage == language -> entry.localizedTitle
+                            else -> runCatching { remote.localizedTitle(entry.lot, tmdbId, language) }.getOrNull()
+                        }
+                        id to entry.copy(imdb = imdb, imdbChecked = true, localizedTitle = title, localizedLanguage = language)
                     }
                 }
             }.awaitAll().toMap()
@@ -99,8 +129,9 @@ class RyotSyncEngine(
         val LOTS = listOf(RyotLot.MOVIE, RyotLot.SHOW, RyotLot.ANIME)
         const val RECENT_PAGE = 50
         const val ALWAYS_RELOAD = 10
-        private const val IMDB_CONCURRENCY = 8
-        const val IMDB_CHUNK = 40
+        private const val TMDB_CONCURRENCY = 8
+        const val TMDB_CHUNK = 40
+        const val PENDING_TTL_MS = 15L * 60 * 1_000
 
         /**
          * Ids of [current] (newest first) whose user state may have changed: the first [ALWAYS_RELOAD],

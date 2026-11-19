@@ -50,6 +50,38 @@ class RyotLibraryProviderTest {
     }
 
     @Test
+    fun `each list ranks titles by when they entered it, and old rows by their last watch`() {
+        val seen = RyotSeenEntry("s", "COMPLETED", 100.0, updatedAtEpochMs = 500L)
+        val ranked = RyotSnapshot(
+            userId = "usr",
+            metadata = mapOf(
+                "old" to RyotMetadataEntry(RyotLot.MOVIE, "TMDB", "1", "Old", imdb = "tt1", imdbChecked = true),
+                "new" to RyotMetadataEntry(RyotLot.MOVIE, "TMDB", "2", "New", imdb = "tt2", imdbChecked = true,
+                    localizedTitle = "Novo", localizedLanguage = "pt-BR"),
+                "fav" to RyotMetadataEntry(RyotLot.MOVIE, "TMDB", "3", "Fav", imdb = "tt3", imdbChecked = true)
+            ),
+            user = mapOf(
+                "old" to RyotUserEntry(history = listOf(seen), collections = setOf("Watchlist")),
+                "new" to RyotUserEntry(collections = setOf("Watchlist", "Favoritos"),
+                    collectionAddedAt = mapOf("Watchlist" to 2_000L, "Favoritos" to 100L)),
+                "fav" to RyotUserEntry(collections = setOf("Favoritos"), collectionAddedAt = mapOf("Favoritos" to 300L))
+            )
+        )
+
+        val entries = RyotLibraryProvider.entriesOf(ranked).associateBy { it.id }
+        val watchlist = "ryot:collection:Watchlist"
+        val favoritos = "ryot:collection:Favoritos"
+
+        assertEquals(0, entries.getValue("tt2").listRanks[watchlist])
+        assertEquals(1, entries.getValue("tt1").listRanks[watchlist])
+        assertEquals(0, entries.getValue("tt3").listRanks[favoritos])
+        assertEquals(1, entries.getValue("tt2").listRanks[favoritos])
+        assertEquals(2_000L, entries.getValue("tt2").listedAt)
+        assertEquals(500L, entries.getValue("tt1").listedAt)
+        assertEquals("Novo", entries.getValue("tt2").name)
+    }
+
+    @Test
     fun `membership is found by any alias of the title`() {
         assertEquals(setOf("ryot:collection:Watchlist", "ryot:collection:Owned"), RyotLibraryProvider.membershipOf(snapshot, "tmdb:603"))
         assertTrue(RyotLibraryProvider.membershipOf(snapshot, "tt9999999").isEmpty())
