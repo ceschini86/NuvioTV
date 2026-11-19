@@ -20,4 +20,6 @@
     <string name="ryot_error_account_disabled">Esta conta do Ryot está desativada.</string>
     <string name="ryot_error_session_expired">Sua sessão do Ryot expirou. Conecte de novo.</string>
     <string name="ryot_error_integration">O login funcionou, mas o app não conseguiu criar a integração dele no servidor.</string>
+    <string name="ryot_error_title_untrackable">O Ryot não consegue guardar este título porque o TMDB não tem um id para ele.</string>
+    <string name="ryot_error_title_still_processing">O Ryot ainda está adicionando este título. Tente de novo em alguns segundos.</string>
 </resources>

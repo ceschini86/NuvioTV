@@ -18,6 +18,8 @@ import com.nuvio.tv.core.tracking.scrobbleDiagnosticSummary
 interface RyotIdResolver {
     suspend fun tmdbFor(media: TrackingMediaReference): Long?
     suspend fun imdbFor(lot: RyotLot, tmdbId: Long): String?
+    /** The TMDB title in [language], or null when TMDB has no translation for it. */
+    suspend fun localizedTitle(lot: RyotLot, tmdbId: Long, language: String): String? = null
 }
 
 class TmdbRyotIdResolver(private val tmdb: TmdbService) : RyotIdResolver {
@@ -30,6 +32,9 @@ class TmdbRyotIdResolver(private val tmdb: TmdbService) : RyotIdResolver {
 
     override suspend fun imdbFor(lot: RyotLot, tmdbId: Long): String? =
         tmdb.tmdbToImdb(tmdbId.toInt(), if (lot == RyotLot.MOVIE) "movie" else "series")
+
+    override suspend fun localizedTitle(lot: RyotLot, tmdbId: Long, language: String): String? =
+        tmdb.translatedTitle(tmdbId.toInt(), if (lot == RyotLot.MOVIE) "movie" else "series", language)
 }
 
 /**

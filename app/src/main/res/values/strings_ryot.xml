@@ -21,4 +21,6 @@
     <string name="ryot_error_account_disabled">This Ryot account is disabled.</string>
     <string name="ryot_error_session_expired">Your Ryot session expired. Connect again.</string>
     <string name="ryot_error_integration">Logged in, but the app could not create its integration on the server.</string>
+    <string name="ryot_error_title_untrackable">Ryot cannot store this title because TMDB has no id for it.</string>
+    <string name="ryot_error_title_still_processing">Ryot is still adding this title. Try again in a few seconds.</string>
 </resources>

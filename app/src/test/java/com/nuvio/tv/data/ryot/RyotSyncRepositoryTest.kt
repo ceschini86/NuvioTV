@@ -40,6 +40,7 @@ class RyotSyncRepositoryTest {
             return emptyList()
         }
         override suspend fun imdbFor(lot: RyotLot, tmdbId: Long): String? = null
+        override suspend fun localizedTitle(lot: RyotLot, tmdbId: Long, language: String): String? = null
     }
 
     @Test

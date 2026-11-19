@@ -38,14 +38,14 @@ data class RyotSeen(
     val isInProgress: Boolean get() = state == "IN_PROGRESS"
 }
 
-/** The user's state for one metadata row. */
+/** The user's state for one metadata row. [collections] maps each collection name to when the title entered it. */
 data class RyotUserMetadata(
     val metadataId: String,
     val history: List<RyotSeen>,
     val inProgress: RyotSeen?,
     val nextSeason: Int?,
     val nextEpisode: Int?,
-    val collections: Set<String>
+    val collections: Map<String, Long?>
 )
 
 data class RyotCollection(val id: String, val name: String, val count: Int, val isDefault: Boolean, val creatorId: String)
@@ -238,7 +238,7 @@ class RyotApi(private val client: RyotGraphqlClient) {
 
         private const val USER_METADATA_FIELDS =
             "history { $SEEN_FIELDS } inProgress { $SEEN_FIELDS } nextEntry { season episode } " +
-                "collections { details { collectionName } }"
+                "collections { details { collectionName createdOn } }"
 
         internal fun parseMetadata(id: String, json: JsonObject): RyotMetadata? {
             val lot = runCatching { RyotLot.valueOf(json.string("lot") ?: return null) }.getOrNull() ?: return null
@@ -274,9 +274,11 @@ class RyotApi(private val client: RyotGraphqlClient) {
                 inProgress = json.obj("inProgress")?.let(::parseSeen),
                 nextSeason = (next?.get("season") as? JsonPrimitive)?.intOrNull,
                 nextEpisode = (next?.get("episode") as? JsonPrimitive)?.intOrNull,
-                collections = json.array("collections").mapNotNullTo(linkedSetOf()) { element ->
-                    (element as? JsonObject)?.obj("details")?.string("collectionName")
-                }
+                collections = json.array("collections").mapNotNull { element ->
+                    val details = (element as? JsonObject)?.obj("details") ?: return@mapNotNull null
+                    val name = details.string("collectionName") ?: return@mapNotNull null
+                    name to ryotTimestamp(details.string("createdOn"))
+                }.toMap(LinkedHashMap())
             )
         }
     }
