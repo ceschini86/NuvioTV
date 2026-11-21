@@ -151,6 +151,69 @@ class MetaRepositoryNotFoundClassificationTest {
         assertTrue(result is NetworkResult.Success)
     }
 
+    @Test
+    fun `an AIOStreams error meta is a retryable failure and the next addon answers`() = runTest {
+        // AIOStreams answers a rate limit with HTTP 200 and a placeholder meta. It used to reach
+        // the details page and Continue Watching as the title "[❌] AIOStreams - Error".
+        val api = mockk<AddonApi>()
+        coEvery { api.getMeta(any()) } coAnswers {
+            if (firstArg<String>().startsWith("https://a.")) errorMeta() else realMeta()
+        }
+        val repository = newRepository(api, addon("a"), addon("b"))
+
+        val result = repository.getMetaFromAllAddons("movie", contentId).last()
+
+        assertEquals("Real Title", (result as NetworkResult.Success).data.name)
+    }
+
+    @Test
+    fun `an error meta is never cached and the addon is skipped while rate limited`() = runTest {
+        var calls = 0
+        val api = mockk<AddonApi>()
+        coEvery { api.getMeta(any()) } coAnswers { calls++; errorMeta() }
+        val repository = newRepository(api, addon("a"))
+
+        val first = repository.getMetaFromAllAddons("movie", contentId).last()
+        val second = repository.getMetaFromAllAddons("movie", contentId).last()
+
+        assertNull((first as NetworkResult.Error).code)
+        assertNull((second as NetworkResult.Error).code)
+        assertEquals("the second lookup must not ask a rate-limited addon again", 1, calls)
+    }
+
+    @Test
+    fun `HTTP 429 skips the addon on the next lookup`() = runTest {
+        var calls = 0
+        val api = mockk<AddonApi>()
+        coEvery { api.getMeta(any()) } coAnswers {
+            calls++
+            Response.error(429, "".toResponseBody("application/json".toMediaType()))
+        }
+        val repository = newRepository(api, addon("a"))
+
+        repository.getMetaFromAllAddons("movie", contentId).last()
+        repository.getMetaFromAllAddons("movie", "tt0000002").last()
+
+        assertEquals(1, calls)
+    }
+
+    private fun errorMeta(): Response<com.nuvio.tv.data.remote.dto.MetaResponseDto> = Response.success(
+        com.nuvio.tv.data.remote.dto.MetaResponseDto(
+            meta = com.nuvio.tv.data.remote.dto.MetaDto(
+                id = "aiostreamserror.rate_limit",
+                type = "movie",
+                name = "[❌] AIOStreams - Error",
+                description = "Rate Limit Exceeded"
+            )
+        )
+    )
+
+    private fun realMeta(): Response<com.nuvio.tv.data.remote.dto.MetaResponseDto> = Response.success(
+        com.nuvio.tv.data.remote.dto.MetaResponseDto(
+            meta = com.nuvio.tv.data.remote.dto.MetaDto(id = contentId, type = "movie", name = "Real Title")
+        )
+    )
+
     private fun notFound(): Response<com.nuvio.tv.data.remote.dto.MetaResponseDto> =
         Response.error(404, "".toResponseBody("application/json".toMediaType()))
 
