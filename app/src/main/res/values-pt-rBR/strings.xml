@@ -131,6 +131,7 @@
     <string name="error_meta_tried_none">Addons de metadados testados: %1$s. Nenhum deles forneceu metadados para id=%2$s (tipo=%3$s).</string>
     <string name="error_meta_tried_generic">Addons de metadados testados: %1$s. Não foi possível carregar metadados para id=%2$s (tipo=%3$s).</string>
     <string name="error_meta_tried_issues">Addons de metadados testados: %1$s. Não foi possível carregar metadados para id=%2$s (tipo=%3$s). Problemas: %4$s.</string>
+    <string name="error_meta_rate_limited">O addon limitou os pedidos, nova tentativa em instantes</string>
     <string name="error_stream_no_supported_addon">Nenhum addon instalado suporta streams para \"%1$s\".</string>
     <string name="error_stream_tried_none">Addons de stream testados: %1$s. Nenhum deles retornou streams para id=%2$s (tipo=%3$s).</string>
     <string name="error_stream_tried_generic">Addons de stream testados: %1$s. Não foi possível carregar streams para id=%2$s (tipo=%3$s).</string>

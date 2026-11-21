@@ -67,6 +67,24 @@ class MetaRepositoryImpl @Inject constructor(
          * [getMeta] checks its cache first, so a hit never waits.
          */
         private const val INSTALLED_ADDONS_WAIT_MS = 750L
+        /**
+         * How long an addon is skipped after it reports a rate limit. AIOStreams answers a
+         * rate limit with HTTP 200 and a placeholder meta, so every extra request in that
+         * window only extends the limit.
+         */
+        internal const val RATE_LIMIT_COOLDOWN_MS = 60_000L
+        private const val MIN_RETRY_AFTER_MS = 10_000L
+        private const val MAX_RETRY_AFTER_MS = 10L * 60 * 1000
+        /** AIOStreams prefixes the name of every error item it returns with this mark. */
+        private const val ADDON_ERROR_NAME_PREFIX = "[❌]"
+    }
+
+    /** What one addon's meta endpoint answered. */
+    private sealed class MetaFetch {
+        data class Found(val meta: Meta, val ttlMs: Long) : MetaFetch()
+        /** HTTP 404, or a successful response without a meta. */
+        data object Missing : MetaFetch()
+        data class Failed(val detail: String) : MetaFetch()
     }
 
     /**
@@ -136,6 +154,65 @@ class MetaRepositoryImpl @Inject constructor(
     private val inFlightAddonMeta = ConcurrentHashMap<String, Deferred<MetaLookupResult>>()
     private val inFlightPrimaryMeta = ConcurrentHashMap<String, Deferred<Meta?>>()
 
+    // Normalized addon base URL -> time (epoch ms) until which the addon is not asked.
+    private val addonCooldownUntilMs = ConcurrentHashMap<String, Long>()
+
+    /**
+     * Requests one meta from one addon and classifies the answer. An addon in a rate-limit
+     * cooldown is not asked. HTTP 429 and an error placeholder meta start that cooldown and
+     * count as a failed request, so callers neither cache nor show the placeholder.
+     */
+    private suspend fun fetchAddonMeta(addonBaseUrl: String, url: String): MetaFetch {
+        val addonKey = normalizedAddonKey(addonBaseUrl)
+        val cooldownUntil = addonCooldownUntilMs[addonKey]
+        if (cooldownUntil != null) {
+            if (System.currentTimeMillis() < cooldownUntil) {
+                Log.d(TAG, "Skipping rate-limited addon url=$url")
+                return MetaFetch.Failed(context.getString(R.string.error_meta_rate_limited))
+            }
+            addonCooldownUntilMs.remove(addonKey, cooldownUntil)
+        }
+
+        val response = try {
+            api.getMeta(url)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.d(TAG, "Meta fetch failed url=$url: ${e.message}")
+            return MetaFetch.Failed(e.message ?: context.getString(R.string.network_error_unknown))
+        }
+
+        if (response.code() == 429) {
+            startCooldown(addonKey, response.headers()["Retry-After"])
+            return MetaFetch.Failed(context.getString(R.string.error_meta_rate_limited))
+        }
+        if (!response.isSuccessful) {
+            if (response.code() == 404) return MetaFetch.Missing
+            return MetaFetch.Failed(response.message().ifBlank { "HTTP ${response.code()}" })
+        }
+        val metaDto = response.body()?.meta ?: return MetaFetch.Missing
+        if (metaDto.name.trimStart().startsWith(ADDON_ERROR_NAME_PREFIX)) {
+            Log.w(TAG, "Addon returned an error meta url=$url name=${metaDto.name} description=${metaDto.description}")
+            startCooldown(addonKey, retryAfter = null)
+            return MetaFetch.Failed(
+                metaDto.description?.takeIf { it.isNotBlank() } ?: metaDto.name
+            )
+        }
+        return MetaFetch.Found(
+            meta = metaDto.toDomain(context.getString(R.string.episodes_episode)),
+            ttlMs = parseMaxAgeMs(response.headers()["Cache-Control"])
+        )
+    }
+
+    private fun startCooldown(addonKey: String, retryAfter: String?) {
+        val durationMs = retryAfter?.trim()?.toLongOrNull()
+            ?.times(1000)
+            ?.coerceIn(MIN_RETRY_AFTER_MS, MAX_RETRY_AFTER_MS)
+            ?: RATE_LIMIT_COOLDOWN_MS
+        addonCooldownUntilMs[addonKey] = System.currentTimeMillis() + durationMs
+        Log.w(TAG, "Addon rate limited, skipping it for ${durationMs}ms addon=$addonKey")
+    }
+
     override fun getMeta(
         addonBaseUrl: String,
         type: String,
@@ -204,23 +281,12 @@ class MetaRepositoryImpl @Inject constructor(
         val deferred = inFlightMeta.getOrPut(cacheKey) {
             repositoryScope.async {
                 try {
-                    val response = api.getMeta(url)
-                    if (response.isSuccessful) {
-                        val metaDto = response.body()?.meta ?: return@async null
-                        val meta = metaDto.toDomain(context.getString(R.string.episodes_episode))
-                        val ttlMs = parseMaxAgeMs(response.headers()["Cache-Control"])
-                        val cached = CachedMeta(meta, System.currentTimeMillis() + ttlMs)
-                        metaCache[cacheKey] = cached
-                        addonMetaCache[metaLookupCacheKey(requestedType, id)] = cached
-                        meta
-                    } else {
-                        null
-                    }
-                } catch (e: kotlinx.coroutines.CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.w(TAG, "getMeta failed for $url: ${e.message}")
-                    null
+                    val fetched = fetchAddonMeta(addonBaseUrl, url) as? MetaFetch.Found
+                        ?: return@async null
+                    val cached = CachedMeta(fetched.meta, System.currentTimeMillis() + fetched.ttlMs)
+                    metaCache[cacheKey] = cached
+                    addonMetaCache[metaLookupCacheKey(requestedType, id)] = cached
+                    fetched.meta
                 } finally {
                     inFlightMeta.remove(cacheKey)
                 }
@@ -329,36 +395,19 @@ class MetaRepositoryImpl @Inject constructor(
             for (addon in fallbackAddons) {
                 attemptedAddonNames += addon.displayName
                 val url = buildMetaUrl(addon.baseUrl, requestedType, id)
-                try {
-                    val response = api.getMeta(url)
-                    if (response.isSuccessful) {
-                        val metaDto = response.body()?.meta
-                        if (metaDto != null) {
-                            val episodeLabel = context.getString(R.string.episodes_episode)
-                            val meta = metaDto.toDomain(episodeLabel)
-                            val ttlMs = parseMaxAgeMs(response.headers()["Cache-Control"])
-                            val cached = CachedMeta(meta, System.currentTimeMillis() + ttlMs)
-                            addonMetaCache[cacheKey] = cached
-                            metaCache[addonMetaCacheKey(addon.baseUrl, requestedType, id)] = cached
-                            emit(NetworkResult.Success(meta))
-                            return@flow
-                        } else {
-                            attemptedFailures += buildMissingMetaFailure(addon)
-                        }
-                    } else {
-                        attemptedFailures += MetaAttemptFailure(
-                            addonName = addon.displayName,
-                            kind = if (response.code() == 404) MetaFailureKind.MISSING else MetaFailureKind.REQUEST_FAILED,
-                            detail = response.message() ?: "HTTP ${response.code()}"
-                        )
+                when (val fetched = fetchAddonMeta(addon.baseUrl, url)) {
+                    is MetaFetch.Found -> {
+                        val cached = CachedMeta(fetched.meta, System.currentTimeMillis() + fetched.ttlMs)
+                        addonMetaCache[cacheKey] = cached
+                        metaCache[addonMetaCacheKey(addon.baseUrl, requestedType, id)] = cached
+                        emit(NetworkResult.Success(fetched.meta))
+                        return@flow
                     }
-                } catch (e: kotlinx.coroutines.CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    attemptedFailures += MetaAttemptFailure(
+                    MetaFetch.Missing -> attemptedFailures += buildMissingMetaFailure(addon)
+                    is MetaFetch.Failed -> attemptedFailures += MetaAttemptFailure(
                         addonName = addon.displayName,
                         kind = MetaFailureKind.REQUEST_FAILED,
-                        detail = e.message ?: context.getString(R.string.network_error_unknown)
+                        detail = fetched.detail
                     )
                 }
             }
@@ -417,40 +466,27 @@ class MetaRepositoryImpl @Inject constructor(
                         Log.d(TAG, "Trying meta addonId=${addon.id} addonName=${addon.name} type=$candidateType id=$id url=$url")
                         loopAddonNames += addon.displayName
                         attempted++
-                        try {
-                            val response = api.getMeta(url)
-                            if (response.isSuccessful) {
-                                val metaDto = response.body()?.meta
-                                if (metaDto != null) {
-                                    val meta = metaDto.toDomain(context.getString(R.string.episodes_episode))
-                                    val ttlMs = parseMaxAgeMs(response.headers()["Cache-Control"])
-                                    val cached = CachedMeta(meta, System.currentTimeMillis() + ttlMs)
-                                    addonMetaCache[cacheKey] = cached
-                                    metaCache[addonMetaCacheKey(addon.baseUrl, candidateType, id)] = cached
-                                    Log.d(TAG, "Meta fetch success addonId=${addon.id} type=$candidateType id=$id ttl=${ttlMs}ms")
-                                    return@async MetaLookupResult.Found(meta)
-                                }
-                                Log.d(TAG, "Meta response was null addonId=${addon.id} type=$candidateType id=$id")
+                        when (val fetched = fetchAddonMeta(addon.baseUrl, url)) {
+                            is MetaFetch.Found -> {
+                                val cached = CachedMeta(fetched.meta, System.currentTimeMillis() + fetched.ttlMs)
+                                addonMetaCache[cacheKey] = cached
+                                metaCache[addonMetaCacheKey(addon.baseUrl, candidateType, id)] = cached
+                                Log.d(TAG, "Meta fetch success addonId=${addon.id} type=$candidateType id=$id ttl=${fetched.ttlMs}ms")
+                                return@async MetaLookupResult.Found(fetched.meta)
+                            }
+                            MetaFetch.Missing -> {
+                                Log.d(TAG, "Meta missing addonId=${addon.id} type=$candidateType id=$id")
                                 loopFailures += buildMissingMetaFailure(addon)
-                            } else {
+                            }
+                            is MetaFetch.Failed -> {
                                 loopFailures += MetaAttemptFailure(
                                     addonName = addon.displayName,
-                                    kind = if (response.code() == 404) MetaFailureKind.MISSING else MetaFailureKind.REQUEST_FAILED,
-                                    detail = response.message() ?: "HTTP ${response.code()}"
+                                    kind = MetaFailureKind.REQUEST_FAILED,
+                                    detail = fetched.detail
                                 )
-                                if (response.code() != 404) allMissing = false
+                                allMissing = false
+                                /* try next */
                             }
-                        } catch (e: kotlinx.coroutines.CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            Log.d(TAG, "Meta fetch failed addonId=${addon.id} type=$candidateType id=$id: ${e.message}")
-                            loopFailures += MetaAttemptFailure(
-                                addonName = addon.displayName,
-                                kind = MetaFailureKind.REQUEST_FAILED,
-                                detail = e.message ?: context.getString(R.string.network_error_unknown)
-                            )
-                            allMissing = false
-                            /* try next */
                         }
                     }
                     // Comparing against the candidate list makes "every candidate was attempted"
@@ -540,23 +576,12 @@ class MetaRepositoryImpl @Inject constructor(
         val deferred = inFlightPrimaryMeta.getOrPut(cacheKey) {
             repositoryScope.async {
                 try {
-                    val response = api.getMeta(url)
-                    if (response.isSuccessful) {
-                        val metaDto = response.body()?.meta ?: return@async null
-                        val meta = metaDto.toDomain(context.getString(R.string.episodes_episode))
-                        val ttlMs = parseMaxAgeMs(response.headers()["Cache-Control"])
-                        val cached = CachedMeta(meta, System.currentTimeMillis() + ttlMs)
-                        primaryAddonMetaCache[cacheKey] = cached
-                        metaCache[addonMetaCacheKey(addon.baseUrl, candidateType, id)] = cached
-                        meta
-                    } else {
-                        null
-                    }
-                } catch (e: kotlinx.coroutines.CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.w(TAG, "Primary meta fetch failed for $url: ${e.message}")
-                    null
+                    val fetched = fetchAddonMeta(addon.baseUrl, url) as? MetaFetch.Found
+                        ?: return@async null
+                    val cached = CachedMeta(fetched.meta, System.currentTimeMillis() + fetched.ttlMs)
+                    primaryAddonMetaCache[cacheKey] = cached
+                    metaCache[addonMetaCacheKey(addon.baseUrl, candidateType, id)] = cached
+                    fetched.meta
                 } finally {
                     inFlightPrimaryMeta.remove(cacheKey)
                 }
