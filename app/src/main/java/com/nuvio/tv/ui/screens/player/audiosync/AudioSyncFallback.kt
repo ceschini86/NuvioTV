@@ -213,6 +213,7 @@ internal class AudioSyncFallback private constructor(
         }
         takeOverJob?.cancel()
         statusRun = AutoSyncSyncedSubtitle.start(url)
+        com.nuvio.tv.ui.screens.player.AudioSyncTakeover.mark(url) // fork: Info card
         if (isMpv) {
             takeOverJob = scope.launch { takeOverMpv(url) }
             return true

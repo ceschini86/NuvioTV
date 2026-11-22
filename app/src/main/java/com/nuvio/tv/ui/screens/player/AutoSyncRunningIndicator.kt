@@ -35,6 +35,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.ui.screens.player.autosync.AutoSyncAnalysisOutcome
+import com.nuvio.tv.ui.screens.player.autosync.AutoSyncState
 import com.nuvio.tv.ui.screens.player.autosync.AutoSyncSyncedSubtitle
 import com.nuvio.tv.ui.theme.NuvioTheme
 import kotlinx.coroutines.CoroutineScope
@@ -84,6 +85,50 @@ internal data class AutoSyncRunStatus(
     val reason: AutoSyncFailureReason? = null,
 )
 
+/**
+ * The add-on subtitle the audio sync took over after AutoSync kept its original timing
+ * (AudioSyncFallback.takeOver). Cleared when a new AutoSync run starts.
+ */
+internal object AudioSyncTakeover {
+    private val _url = MutableStateFlow<String?>(null)
+    val url: StateFlow<String?> = _url.asStateFlow()
+
+    fun mark(subtitleUrl: String) {
+        _url.value = subtitleUrl
+    }
+
+    fun clear() {
+        _url.value = null
+    }
+}
+
+/** Where the audio sync stands with a subtitle it took over. */
+internal enum class AudioSyncTakeoverState { RUNNING, SYNCED, FAILED }
+
+/**
+ * The audio sync state for [subtitleUrl], read from upstream's status ([status]) when the audio
+ * sync took that subtitle over ([takeoverUrl]); null otherwise.
+ */
+internal fun audioSyncTakeoverState(
+    subtitleUrl: String?,
+    takeoverUrl: String?,
+    status: AutoSyncSyncedSubtitle.Status?,
+): AudioSyncTakeoverState? {
+    if (subtitleUrl == null || takeoverUrl != subtitleUrl || status == null || status.url != subtitleUrl) return null
+    return when (status.state) {
+        AutoSyncState.IN_PROGRESS -> AudioSyncTakeoverState.RUNNING
+        AutoSyncState.SYNCED, AutoSyncState.NOT_NEEDED -> AudioSyncTakeoverState.SYNCED
+        AutoSyncState.NO_FIT, AutoSyncState.NO_REFERENCE, AutoSyncState.FAILED -> AudioSyncTakeoverState.FAILED
+    }
+}
+
+@Composable
+private fun collectAudioSyncTakeoverState(subtitleUrl: String?): AudioSyncTakeoverState? {
+    val takeoverUrl by AudioSyncTakeover.url.collectAsState()
+    val status by AutoSyncSyncedSubtitle.status.collectAsState()
+    return audioSyncTakeoverState(subtitleUrl, takeoverUrl, status)
+}
+
 internal object AutoSyncRunningSubtitle {
     private class Run(val url: String, val job: Job) {
         @Volatile var outcome: AutoSyncAnalysisOutcome? = null
@@ -128,8 +173,10 @@ internal object AutoSyncRunningSubtitle {
 }
 
 /** Hook at the start of an AutoSync job: the menu shows [subtitleUrl] as syncing until it ends. */
-internal fun CoroutineScope.trackAutoSyncRun(subtitleUrl: String) =
+internal fun CoroutineScope.trackAutoSyncRun(subtitleUrl: String) {
+    AudioSyncTakeover.clear()
     AutoSyncRunningSubtitle.track(subtitleUrl, coroutineContext.job)
+}
 
 /**
  * AutoSync chip for the selected add-on subtitle: green "Synced", white "Syncing…" or yellow
@@ -140,8 +187,9 @@ internal fun CoroutineScope.trackAutoSyncRun(subtitleUrl: String) =
 internal fun AutoSyncStatusChip(subtitleUrl: String, selected: Boolean) {
     val status by AutoSyncRunningSubtitle.status.collectAsState()
     val syncedUrl = AutoSyncSyncedSubtitle.status.collectAsState().value.syncedUrl()
+    val audio = collectAudioSyncTakeoverState(subtitleUrl)
     if (!selected) return
-    val state = autoSyncDotState(subtitleUrl, status, syncedUrl) ?: return
+    val state = autoSyncDotState(subtitleUrl, status, syncedUrl, audio = audio) ?: return
 
     val color = autoSyncChipColor(state)
     Row(
@@ -154,9 +202,9 @@ internal fun AutoSyncStatusChip(subtitleUrl: String, selected: Boolean) {
     ) {
         Icon(
             imageVector = when (state) {
-                AutoSyncDotState.SYNCED -> Icons.Default.Check
-                AutoSyncDotState.FAILED, AutoSyncDotState.NO_FIT -> Icons.Default.SyncProblem
-                AutoSyncDotState.RUNNING, AutoSyncDotState.EMBEDDED -> Icons.Default.Sync
+                AutoSyncDotState.SYNCED, AutoSyncDotState.AUDIO_SYNCED -> Icons.Default.Check
+                AutoSyncDotState.FAILED, AutoSyncDotState.NO_FIT, AutoSyncDotState.AUDIO_FAILED -> Icons.Default.SyncProblem
+                AutoSyncDotState.RUNNING, AutoSyncDotState.EMBEDDED, AutoSyncDotState.AUDIO_RUNNING -> Icons.Default.Sync
             },
             contentDescription = null,
             tint = color,
@@ -180,9 +228,10 @@ internal fun AutoSyncStatusChip(subtitleUrl: String, selected: Boolean) {
 internal fun AutoSyncInfoLines(subtitleUrl: String?) {
     val status by AutoSyncRunningSubtitle.status.collectAsState()
     val syncedUrl = AutoSyncSyncedSubtitle.status.collectAsState().value.syncedUrl()
+    val audio = collectAudioSyncTakeoverState(subtitleUrl)
     if (subtitleUrl == null) return
     val runStatus = status?.takeIf { it.url == subtitleUrl }
-    val state = autoSyncDotState(subtitleUrl, runStatus, syncedUrl) ?: return
+    val state = autoSyncDotState(subtitleUrl, runStatus, syncedUrl, audio = audio) ?: return
     val stateLabel = stringResource(autoSyncStateLabel(state))
     Text(
         text = stringResource(R.string.autosync_info_status, stateLabel),
@@ -193,7 +242,15 @@ internal fun AutoSyncInfoLines(subtitleUrl: String?) {
         AutoSyncAdjustmentLines(subtitleUrl)
         return
     }
-    val reason = runStatus?.reason?.takeIf { state.isFailure } ?: return
+    audioSyncInfoText(state)?.let { text ->
+        Text(
+            text = stringResource(text),
+            style = MaterialTheme.typography.bodySmall,
+            color = Color.White.copy(alpha = 0.7f),
+        )
+    }
+    // With the audio sync on it, the AutoSync reason says why AutoSync handed the subtitle over.
+    val reason = runStatus?.reason?.takeIf { state.isFailure || state.isAudio } ?: return
     Text(
         text = stringResource(autoSyncFailureReasonText(reason)),
         style = MaterialTheme.typography.bodySmall,
@@ -251,6 +308,13 @@ private fun AutoSyncAdjustmentLines(subtitleUrl: String) {
     }
 }
 
+private fun audioSyncInfoText(state: AutoSyncDotState): Int? = when (state) {
+    AutoSyncDotState.AUDIO_RUNNING -> R.string.autosync_info_audio_running
+    AutoSyncDotState.AUDIO_SYNCED -> R.string.autosync_info_audio_synced
+    AutoSyncDotState.AUDIO_FAILED -> R.string.autosync_info_audio_failed
+    else -> null
+}
+
 private fun autoSyncFailureReasonText(reason: AutoSyncFailureReason): Int = when (reason) {
     AutoSyncFailureReason.NO_FIT -> R.string.autosync_reason_no_fit
     AutoSyncFailureReason.NO_EMBEDDED -> R.string.autosync_reason_no_embedded
@@ -266,18 +330,31 @@ private fun autoSyncFailureReasonText(reason: AutoSyncFailureReason): Int = when
  * synced or confirmed; white while AutoSync checks; red when it found the subtitle does not fit
  * this release; amber when it could not tell (no embedded reference, inconclusive, error).
  */
-internal enum class AutoSyncDotState { RUNNING, SYNCED, EMBEDDED, FAILED, NO_FIT }
+/** AUDIO_* states: AutoSync kept the timing and the audio sync took the subtitle over. */
+internal enum class AutoSyncDotState { RUNNING, SYNCED, EMBEDDED, FAILED, NO_FIT, AUDIO_RUNNING, AUDIO_SYNCED, AUDIO_FAILED }
 
 internal val AutoSyncDotState.isFailure: Boolean
-    get() = this == AutoSyncDotState.FAILED || this == AutoSyncDotState.NO_FIT
+    get() = this == AutoSyncDotState.FAILED || this == AutoSyncDotState.NO_FIT || this == AutoSyncDotState.AUDIO_FAILED
+
+internal val AutoSyncDotState.isAudio: Boolean
+    get() = this == AutoSyncDotState.AUDIO_RUNNING || this == AutoSyncDotState.AUDIO_SYNCED || this == AutoSyncDotState.AUDIO_FAILED
 
 internal fun autoSyncDotState(
     selectedAddonUrl: String?,
     runStatus: AutoSyncRunStatus?,
     syncedUrl: String?,
     embeddedSelected: Boolean = false,
+    audio: AudioSyncTakeoverState? = null,
 ): AutoSyncDotState? {
     if (selectedAddonUrl == null) return if (embeddedSelected) AutoSyncDotState.EMBEDDED else null
+    // The audio sync takes over once AutoSync's run has ended without a match.
+    if (audio != null && runStatus?.takeIf { it.url == selectedAddonUrl }?.state != AutoSyncRunState.RUNNING) {
+        return when (audio) {
+            AudioSyncTakeoverState.RUNNING -> AutoSyncDotState.AUDIO_RUNNING
+            AudioSyncTakeoverState.SYNCED -> AutoSyncDotState.AUDIO_SYNCED
+            AudioSyncTakeoverState.FAILED -> AutoSyncDotState.AUDIO_FAILED
+        }
+    }
     if (runStatus?.url == selectedAddonUrl) {
         return when (runStatus.state) {
             AutoSyncRunState.RUNNING -> AutoSyncDotState.RUNNING
@@ -301,11 +378,12 @@ internal fun AutoSyncStatusBadge(
 ) {
     val runStatus by AutoSyncRunningSubtitle.status.collectAsState()
     val syncedUrl = AutoSyncSyncedSubtitle.status.collectAsState().value.syncedUrl()
-    val state = autoSyncDotState(selectedAddonUrl, runStatus, syncedUrl, embeddedSelected)
+    val audio = collectAudioSyncTakeoverState(selectedAddonUrl)
+    val state = autoSyncDotState(selectedAddonUrl, runStatus, syncedUrl, embeddedSelected, audio)
     Box {
         content()
         if (state != null) {
-            val pulse = if (state == AutoSyncDotState.RUNNING) {
+            val pulse = if (state == AutoSyncDotState.RUNNING || state == AutoSyncDotState.AUDIO_RUNNING) {
                 val transition = rememberInfiniteTransition(label = "autoSyncDot")
                 val alpha by transition.animateFloat(
                     initialValue = 0.35f,
@@ -339,29 +417,31 @@ private val AutoSyncAmber = Color(0xFFFFB300)
 private val AutoSyncRed = Color(0xFFE53935)
 
 private fun autoSyncDotColor(state: AutoSyncDotState): Color = when (state) {
-    AutoSyncDotState.RUNNING -> Color.White
-    AutoSyncDotState.SYNCED, AutoSyncDotState.EMBEDDED -> AutoSyncGreen
-    AutoSyncDotState.FAILED -> AutoSyncAmber
+    AutoSyncDotState.RUNNING, AutoSyncDotState.AUDIO_RUNNING -> Color.White
+    AutoSyncDotState.SYNCED, AutoSyncDotState.EMBEDDED, AutoSyncDotState.AUDIO_SYNCED -> AutoSyncGreen
+    AutoSyncDotState.FAILED, AutoSyncDotState.AUDIO_FAILED -> AutoSyncAmber
     AutoSyncDotState.NO_FIT -> AutoSyncRed
 }
 
 /** The subtitle-menu chip: one color per outcome, so every failure (no-fit included) is yellow. */
 private fun autoSyncChipColor(state: AutoSyncDotState): Color = when (state) {
-    AutoSyncDotState.RUNNING -> Color.White
-    AutoSyncDotState.SYNCED, AutoSyncDotState.EMBEDDED -> AutoSyncGreen
-    AutoSyncDotState.FAILED, AutoSyncDotState.NO_FIT -> AutoSyncAmber
+    AutoSyncDotState.RUNNING, AutoSyncDotState.AUDIO_RUNNING -> Color.White
+    AutoSyncDotState.SYNCED, AutoSyncDotState.EMBEDDED, AutoSyncDotState.AUDIO_SYNCED -> AutoSyncGreen
+    AutoSyncDotState.FAILED, AutoSyncDotState.NO_FIT, AutoSyncDotState.AUDIO_FAILED -> AutoSyncAmber
 }
 
 private fun autoSyncStateLabel(state: AutoSyncDotState): Int = when (state) {
     AutoSyncDotState.RUNNING -> R.string.autosync_label_syncing
     AutoSyncDotState.SYNCED -> R.string.autosync_label_synced
     AutoSyncDotState.EMBEDDED -> R.string.autosync_label_embedded
-    AutoSyncDotState.FAILED, AutoSyncDotState.NO_FIT -> R.string.autosync_label_failed
+    AutoSyncDotState.FAILED, AutoSyncDotState.NO_FIT, AutoSyncDotState.AUDIO_FAILED -> R.string.autosync_label_failed
+    AutoSyncDotState.AUDIO_RUNNING -> R.string.autosync_label_audio_syncing
+    AutoSyncDotState.AUDIO_SYNCED -> R.string.autosync_label_audio_synced
 }
 
 /** Subtitle URL that AutoSync finished with (adjusted or already in sync); null otherwise. */
 private fun AutoSyncSyncedSubtitle.Status?.syncedUrl(): String? =
     this?.takeIf {
-        it.state == com.nuvio.tv.ui.screens.player.autosync.AutoSyncState.SYNCED ||
-            it.state == com.nuvio.tv.ui.screens.player.autosync.AutoSyncState.NOT_NEEDED
+        it.state == AutoSyncState.SYNCED ||
+            it.state == AutoSyncState.NOT_NEEDED
     }?.url

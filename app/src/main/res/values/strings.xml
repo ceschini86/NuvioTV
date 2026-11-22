@@ -1002,6 +1002,11 @@
     <string name="autosync_reason_download_failed">The subtitles couldn\'t be downloaded.</string>
     <string name="autosync_reason_inconclusive">No reliable match with the embedded subtitles; the original timing was kept.</string>
     <string name="autosync_reason_not_applied">The check didn\'t finish; the original timing was kept.</string>
+    <string name="autosync_label_audio_syncing">Syncing to audio…</string>
+    <string name="autosync_label_audio_synced">Synced to audio</string>
+    <string name="autosync_info_audio_running">AutoSync found no match, so the subtitle is being matched to the film\'s speech.</string>
+    <string name="autosync_info_audio_synced">AutoSync found no match, so the timing was set from the film\'s speech.</string>
+    <string name="autosync_info_audio_failed">The audio sync has not matched this subtitle to the speech yet.</string>
     <string name="subtitle_top_box">Top + black background</string>
     <string name="subtitle_top_box_desc">Saved for this title only</string>
     <string name="sub_ai_translate_action">AI translate</string>

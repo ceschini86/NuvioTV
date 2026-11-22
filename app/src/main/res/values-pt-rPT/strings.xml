@@ -3506,6 +3506,11 @@
     <string name="autosync_reason_download_failed">Não foi possível transferir a legenda.</string>
     <string name="autosync_reason_inconclusive">Não houve correspondência fiável com as legendas incorporadas; o tempo original foi mantido.</string>
     <string name="autosync_reason_not_applied">A verificação não terminou; o tempo original foi mantido.</string>
+    <string name="autosync_label_audio_syncing">A sincronizar pelo áudio…</string>
+    <string name="autosync_label_audio_synced">Sincronizado pelo áudio</string>
+    <string name="autosync_info_audio_running">O AutoSync não encontrou correspondência, por isso a legenda está a ser comparada com a fala do filme.</string>
+    <string name="autosync_info_audio_synced">O AutoSync não encontrou correspondência, por isso o tempo foi acertado pela fala do filme.</string>
+    <string name="autosync_info_audio_failed">A sincronização pelo áudio ainda não encontrou correspondência com a fala.</string>
     <string name="subtitle_top_box">Topo + fundo preto</string>
     <string name="subtitle_top_box_desc">Guardado só para este título</string>
     <string name="sub_ai_option_badge">IA</string>

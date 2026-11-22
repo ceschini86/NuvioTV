@@ -1,6 +1,8 @@
 package com.nuvio.tv.ui.screens.player
 
 import com.nuvio.tv.ui.screens.player.autosync.AutoSyncAnalysisOutcome
+import com.nuvio.tv.ui.screens.player.autosync.AutoSyncState
+import com.nuvio.tv.ui.screens.player.autosync.AutoSyncSyncedSubtitle
 import kotlinx.coroutines.Job
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -121,5 +123,35 @@ class AutoSyncRunningSubtitleTest {
         assertEquals(AutoSyncDotState.FAILED, autoSyncDotState(url, unverified, null))
         // The add-on subtitle wins over a stale embedded index.
         assertEquals(AutoSyncDotState.SYNCED, autoSyncDotState(url, null, url, embeddedSelected = true))
+    }
+
+    @Test
+    fun `audio sync state comes from upstream status only for the subtitle it took over`() {
+        val inProgress = AutoSyncSyncedSubtitle.Status(url, AutoSyncState.IN_PROGRESS)
+        assertEquals(AudioSyncTakeoverState.RUNNING, audioSyncTakeoverState(url, url, inProgress))
+        assertEquals(
+            AudioSyncTakeoverState.SYNCED,
+            audioSyncTakeoverState(url, url, AutoSyncSyncedSubtitle.Status(url, AutoSyncState.SYNCED)),
+        )
+        assertEquals(
+            AudioSyncTakeoverState.FAILED,
+            audioSyncTakeoverState(url, url, AutoSyncSyncedSubtitle.Status(url, AutoSyncState.FAILED)),
+        )
+        // No takeover, another subtitle, or no status: AutoSync's own state applies.
+        assertNull(audioSyncTakeoverState(url, null, inProgress))
+        assertNull(audioSyncTakeoverState(url, "https://addon/b.srt", inProgress))
+        assertNull(audioSyncTakeoverState(url, url, null))
+    }
+
+    @Test
+    fun `after a failed AutoSync run the audio sync state replaces Failed`() {
+        val failed = AutoSyncRunStatus(url, AutoSyncRunState.FAILED, AutoSyncFailureReason.INCONCLUSIVE)
+        assertEquals(AutoSyncDotState.AUDIO_RUNNING, autoSyncDotState(url, failed, null, audio = AudioSyncTakeoverState.RUNNING))
+        assertEquals(AutoSyncDotState.AUDIO_SYNCED, autoSyncDotState(url, failed, url, audio = AudioSyncTakeoverState.SYNCED))
+        assertEquals(AutoSyncDotState.AUDIO_FAILED, autoSyncDotState(url, failed, null, audio = AudioSyncTakeoverState.FAILED))
+        // A new AutoSync run on the same subtitle shows as AutoSync syncing.
+        val running = AutoSyncRunStatus(url, AutoSyncRunState.RUNNING)
+        assertEquals(AutoSyncDotState.RUNNING, autoSyncDotState(url, running, null, audio = AudioSyncTakeoverState.RUNNING))
+        assertEquals(AutoSyncDotState.FAILED, autoSyncDotState(url, failed, null, audio = null))
     }
 }
