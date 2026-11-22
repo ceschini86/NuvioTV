@@ -465,6 +465,7 @@ internal class AudioSyncFallback private constructor(
             if (isMpv) {
                 if (!isMpvShowing(current.url)) return@launch
                 statusRun = AutoSyncSyncedSubtitle.start(url)
+                com.nuvio.tv.ui.screens.player.AudioSyncTakeover.mark(url) // fork: Info card
                 // The previous copy is replaced as soon as the handed-over mapping is applied.
                 target.set(Target(url, cues, generation = 0L, mpvTrackId = current.mpvTrackId))
                 appliedModel = null
@@ -483,6 +484,7 @@ internal class AudioSyncFallback private constructor(
             val generation = runtime.currentSidecarGenerationFor(url)
             if (!committed || generation == null) return@launch
             statusRun = AutoSyncSyncedSubtitle.start(url)
+            com.nuvio.tv.ui.screens.player.AudioSyncTakeover.mark(url) // fork: Info card
             target.set(Target(url, cues, generation))
             appliedModel = null
             runtime._uiState.update { it.copy(selectedAddonSubtitle = subtitle, selectedSubtitleTrackIndex = -1) }
