@@ -19,6 +19,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -80,6 +81,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -240,6 +242,8 @@ fun ProfileSelectionScreen(
     var focusedAvatarColor by remember { mutableStateOf(NuvioPrimitives.blue500) }
     var focusedProfileId by remember { mutableStateOf<Int?>(null) }
     var showCreateProfile by remember { mutableStateOf(false) }
+    val createOverlayVisibility = remember { MutableTransitionState(false) }
+    createOverlayVisibility.targetState = showCreateProfile
     var longPressedProfile by remember { mutableStateOf<UserProfile?>(null) }
     var suppressOptionsDialogFirstKeyUp by remember { mutableStateOf(true) }
     var profileToDelete by remember { mutableStateOf<UserProfile?>(null) }
@@ -397,6 +401,8 @@ fun ProfileSelectionScreen(
                     screenSubtitle = screenSubtitle,
                     screenHint = screenHint,
                     isManagementMode = isManagementMode,
+                    enabled = !createOverlayVisibility.currentState &&
+                        !createOverlayVisibility.targetState && profileToEdit == null,
                     profiles = profiles,
                     activeProfileId = activeProfileId,
                     canAddProfile = viewModel.canAddProfile,
@@ -545,7 +551,7 @@ fun ProfileSelectionScreen(
 
         // Create Profile Overlay
         AnimatedVisibility(
-            visible = showCreateProfile,
+            visibleState = createOverlayVisibility,
             enter = fadeIn(tween(200)),
             exit = fadeOut(tween(150))
         ) {
@@ -898,6 +904,7 @@ private fun ProfileSelectionMainContent(
     screenSubtitle: String,
     screenHint: String,
     isManagementMode: Boolean,
+    enabled: Boolean,
     profiles: List<UserProfile>,
     activeProfileId: Int,
     canAddProfile: Boolean,
@@ -950,6 +957,7 @@ private fun ProfileSelectionMainContent(
             profiles = profiles,
             activeProfileId = activeProfileId,
             isManagementMode = isManagementMode,
+            enabled = enabled,
             canAddProfile = canAddProfile,
             profilePinEnabled = profilePinEnabled,
             avatarImageUrlsById = avatarImageUrlsById,
@@ -972,10 +980,11 @@ private fun ProfileSelectionMainContent(
 }
 
 @Composable
-private fun ProfileGrid(
+internal fun ProfileGrid(
     profiles: List<UserProfile>,
     activeProfileId: Int,
     isManagementMode: Boolean,
+    enabled: Boolean,
     canAddProfile: Boolean,
     profilePinEnabled: Map<Int, Boolean>,
     avatarImageUrlsById: Map<String, String>,
@@ -994,11 +1003,13 @@ private fun ProfileGrid(
     val focusRequesters = remember(totalItems) {
         List(totalItems) { FocusRequester() }
     }
+    var lastFocusedIndex by remember { mutableStateOf<Int?>(null) }
 
-    LaunchedEffect(totalItems, initialFocusIndex, isManagementMode) {
+    LaunchedEffect(totalItems, initialFocusIndex, isManagementMode, enabled) {
         repeat(2) { withFrameNanos { } }
-        if (focusRequesters.isNotEmpty() && initialFocusIndex in focusRequesters.indices) {
-            runCatching { focusRequesters[initialFocusIndex].requestFocus() }
+        val focusIndex = lastFocusedIndex?.takeIf { it in focusRequesters.indices } ?: initialFocusIndex
+        if (enabled && focusIndex in focusRequesters.indices) {
+            runCatching { focusRequesters[focusIndex].requestFocus() }
         }
     }
 
@@ -1041,9 +1052,13 @@ private fun ProfileGrid(
                         avatarImageUrl = profile.avatarUrl?.takeIf { it.isNotBlank() }
                             ?: profile.avatarId?.let(avatarImageUrlsById::get),
                         focusRequester = focusRequesters[index],
+                        enabled = enabled,
                         compact = useCompactCards,
                         profileTheme = profileThemes[profile.id],
-                        onFocused = { onProfileFocused(profile) },
+                        onFocused = {
+                            lastFocusedIndex = index
+                            onProfileFocused(profile)
+                        },
                         onClick = { onProfileSelected(profile) },
                         onLongPress = { onProfileLongPress(profile) }
                     )
@@ -1051,8 +1066,12 @@ private fun ProfileGrid(
                 if (canAddProfile) {
                     AddProfileCard(
                         focusRequester = focusRequesters[profiles.size],
+                        enabled = enabled,
                         compact = useCompactCards,
-                        onFocused = { onProfileFocused(null) },
+                        onFocused = {
+                            lastFocusedIndex = profiles.size
+                            onProfileFocused(null)
+                        },
                         onClick = onAddProfileClick
                     )
                 }
@@ -1076,6 +1095,7 @@ private fun ProfileCard(
     profile: UserProfile,
     avatarImageUrl: String?,
     focusRequester: FocusRequester,
+    enabled: Boolean,
     compact: Boolean,
     profileTheme: com.nuvio.tv.domain.model.AppTheme? = null,
     onFocused: () -> Unit,
@@ -1126,6 +1146,7 @@ private fun ProfileCard(
                 scaleY = itemScale
             }
             .focusRequester(focusRequester)
+            .focusProperties { canFocus = enabled }
             .onFocusChanged {
                 isFocused = it.isFocused
                 if (it.isFocused) onFocused()
@@ -1161,6 +1182,7 @@ private fun ProfileCard(
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
+                enabled = enabled,
                 onClick = onClick
             )
             .semantics { role = Role.Button }
@@ -1271,6 +1293,7 @@ private fun parseProfileColor(colorHex: String): Color {
 @Composable
 private fun AddProfileCard(
     focusRequester: FocusRequester,
+    enabled: Boolean,
     compact: Boolean,
     onFocused: () -> Unit,
     onClick: () -> Unit
@@ -1316,6 +1339,7 @@ private fun AddProfileCard(
                 scaleY = itemScale
             }
             .focusRequester(focusRequester)
+            .focusProperties { canFocus = enabled }
             .onFocusChanged {
                 isFocused = it.isFocused
                 if (it.isFocused) onFocused()
@@ -1323,6 +1347,7 @@ private fun AddProfileCard(
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
+                enabled = enabled,
                 onClick = onClick
             )
             .semantics { role = Role.Button }
@@ -1400,7 +1425,7 @@ private fun AddProfileCard(
 }
 
 @Composable
-private fun CreateProfileOverlay(
+internal fun CreateProfileOverlay(
     profiles: List<UserProfile>,
     avatarCatalog: List<AvatarCatalogItem>,
     isCreating: Boolean,
@@ -1426,6 +1451,9 @@ private fun CreateProfileOverlay(
         avatarCatalog.find { it.id == selectedAvatarId }
     }
     val nameFocusRequester = remember { FocusRequester() }
+    val settingsFocusRequester = remember { FocusRequester() }
+    val avatarFocusRequester = remember { FocusRequester() }
+    var leftPanelFocusRequester by remember { mutableStateOf(nameFocusRequester) }
 
     LaunchedEffect(Unit) {
         repeat(2) { withFrameNanos { } }
@@ -1545,7 +1573,9 @@ private fun CreateProfileOverlay(
                     ProfileNameField(
                         value = profileName,
                         onValueChange = { if (it.length <= 20) profileName = it },
-                        focusRequester = nameFocusRequester
+                        focusRequester = nameFocusRequester,
+                        rightFocusRequester = avatarFocusRequester.takeIf { avatarCatalog.isNotEmpty() },
+                        onFocused = { leftPanelFocusRequester = nameFocusRequester }
                     )
 
                     val selectedCopySource = profiles.firstOrNull { it.id == selectedCopySourceId }
@@ -1559,7 +1589,15 @@ private fun CreateProfileOverlay(
                             )
                         },
                         isPrimary = false,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(settingsFocusRequester)
+                            .focusProperties {
+                                if (avatarCatalog.isNotEmpty()) end = avatarFocusRequester
+                            }
+                            .onFocusChanged {
+                                if (it.isFocused) leftPanelFocusRequester = settingsFocusRequester
+                            },
                         enabled = !isCreating,
                         onClick = { showSettingsSourceDialog = true }
                     )
@@ -1608,6 +1646,8 @@ private fun CreateProfileOverlay(
                             onAvatarFocused = { avatar ->
                                 focusedAvatarName = avatar?.displayName
                             },
+                            entryFocusRequester = avatarFocusRequester,
+                            leftFocusRequester = if (isCreating) nameFocusRequester else leftPanelFocusRequester,
                             modifier = Modifier.heightIn(max = 320.dp)
                         )
 
@@ -1728,7 +1768,7 @@ private fun rememberKeyboardVisibilityState(): KeyboardVisibilityState {
 }
 
 @Composable
-private fun EditProfileOverlay(
+internal fun EditProfileOverlay(
     profile: UserProfile,
     avatarCatalog: List<AvatarCatalogItem>,
     profileBackgroundCatalog: List<ProfileBackgroundCatalogItem>,
@@ -1764,6 +1804,9 @@ private fun EditProfileOverlay(
         else -> null
     }
     val nameFocusRequester = remember { FocusRequester() }
+    val cancelFocusRequester = remember { FocusRequester() }
+    val avatarFocusRequester = remember { FocusRequester() }
+    var leftPanelFocusRequester by remember { mutableStateOf(nameFocusRequester) }
 
     LaunchedEffect(Unit) {
         repeat(2) { withFrameNanos { } }
@@ -1888,13 +1931,27 @@ private fun EditProfileOverlay(
                     ProfileNameField(
                         value = profileName,
                         onValueChange = { if (it.length <= 20) profileName = it },
-                        focusRequester = nameFocusRequester
+                        focusRequester = nameFocusRequester,
+                        rightFocusRequester = avatarFocusRequester.takeIf {
+                            selectedEditorTab == ProfileEditorTab.Avatar && avatarCatalog.isNotEmpty()
+                        },
+                        onFocused = { leftPanelFocusRequester = nameFocusRequester }
                     )
 
                     OverlayButton(
                         text = stringResource(R.string.profile_cancel),
                         isPrimary = true,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(cancelFocusRequester)
+                            .focusProperties {
+                                if (selectedEditorTab == ProfileEditorTab.Avatar && avatarCatalog.isNotEmpty()) {
+                                    end = avatarFocusRequester
+                                }
+                            }
+                            .onFocusChanged {
+                                if (it.isFocused) leftPanelFocusRequester = cancelFocusRequester
+                            },
                         onClick = onDismiss
                     )
                 }
@@ -1950,6 +2007,8 @@ private fun EditProfileOverlay(
                                     onAvatarFocused = { avatar ->
                                         focusedAvatarName = avatar?.displayName
                                     },
+                                    entryFocusRequester = avatarFocusRequester,
+                                    leftFocusRequester = leftPanelFocusRequester,
                                     modifier = Modifier.heightIn(max = 280.dp)
                                 )
 
@@ -2493,10 +2552,14 @@ private fun ProfileNameField(
     value: String,
     onValueChange: (String) -> Unit,
     focusRequester: FocusRequester,
+    rightFocusRequester: FocusRequester? = null,
+    onFocused: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val moveToAvatarsKey = if (isRtl) AndroidKeyEvent.KEYCODE_DPAD_LEFT else AndroidKeyEvent.KEYCODE_DPAD_RIGHT
     val backgroundColor by animateColorAsState(
         targetValue = if (isFocused) NuvioTheme.colors.FocusBackground else Color.White.copy(alpha = 0.05f),
         animationSpec = tween(120),
@@ -2535,8 +2598,25 @@ private fun ProfileNameField(
             onValueChange = onValueChange,
             modifier = Modifier
                 .fillMaxWidth()
+                .onPreviewKeyEvent { event ->
+                    val native = event.nativeKeyEvent
+                    if (rightFocusRequester != null &&
+                        native.action == AndroidKeyEvent.ACTION_DOWN &&
+                        native.keyCode == moveToAvatarsKey
+                    ) {
+                        rightFocusRequester.requestFocus()
+                    } else {
+                        false
+                    }
+                }
                 .focusRequester(focusRequester)
-                .onFocusChanged { isFocused = it.isFocused },
+                .focusProperties {
+                    if (rightFocusRequester != null) end = rightFocusRequester
+                }
+                .onFocusChanged {
+                    isFocused = it.isFocused
+                    if (it.isFocused) onFocused()
+                },
             textStyle = TextStyle(
                 color = Color.White,
                 fontSize = 16.sp,

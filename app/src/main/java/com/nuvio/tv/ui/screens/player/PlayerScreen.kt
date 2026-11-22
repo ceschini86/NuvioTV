@@ -1272,6 +1272,7 @@ fun PlayerScreen(
                             tunneledSurfaceFill = uiState.tunneledSurfaceFill,
                             useLibass = uiState.useLibass,
                             libassRenderMode = uiState.libassRenderMode,
+                            letterboxMaskEnabled = !(transparentLetterbox && playerSurfaceIsFullscreen),
                             subtitleStyle = uiState.effectiveSubtitleStyle,
                             subtitleLiftPx = subtitleLiftPx,
                             onBindSubtitleView = viewModel::bindExoSubtitleView,
@@ -1355,12 +1356,17 @@ fun PlayerScreen(
         }
 
         LoadingOverlay(
-            visible = uiState.showLoadingOverlay && uiState.error == null && !postPlayRecommendationState.isVisible,
+            visible = (uiState.showLoadingOverlay || uiState.showEpisodeAutoPlayLoadingOverlay) &&
+                uiState.error == null && !postPlayRecommendationState.isVisible,
             backdropUrl = uiState.backdrop,
             logoUrl = uiState.logo,
             title = uiState.title,
-            message = uiState.loadingMessage.takeIf { uiState.showPlayerLoadingStatus || uiState.isTorrentStream },
-            progress = uiState.loadingProgress,
+            message = if (uiState.isEpisodeAutoPlaySearching) {
+                stringResource(R.string.stream_finding_source).takeIf { uiState.showPlayerLoadingStatus }
+            } else {
+                uiState.loadingMessage.takeIf { uiState.showPlayerLoadingStatus || uiState.isTorrentStream }
+            },
+            progress = uiState.loadingProgress.takeUnless { uiState.isEpisodeAutoPlaySearching },
             modifier = Modifier
                 .fillMaxSize()
                 .zIndex(2f)
@@ -1849,7 +1855,11 @@ fun PlayerScreen(
                 .reportSubtitleClearance(subtitleClearanceGapPx) { seekClearancePx = it }
                 .then(playerControlsDim)
         ) {
-            SeekOverlayHost(viewModel = viewModel, chapters = uiState.chapters)
+            SeekOverlayHost(
+                viewModel = viewModel,
+                chapters = uiState.chapters,
+                showChapterTitle = uiState.showChapterTitle
+            )
         }
 
         // Chapters side panel (slides in from right, over a scrim)
@@ -1886,7 +1896,8 @@ fun PlayerScreen(
 
         // Episodes/streams side panel (slides in from right)
         AnimatedVisibility(
-            visible = uiState.showEpisodesPanel && uiState.error == null,
+            visible = uiState.showEpisodesPanel && uiState.error == null &&
+                !uiState.showEpisodeAutoPlayLoadingOverlay,
             enter = fadeIn(animationSpec = tween(120)),
             exit = fadeOut(animationSpec = tween(120))
         ) {
@@ -1900,7 +1911,8 @@ fun PlayerScreen(
 
         // Panel itself (slides in from right)
         AnimatedVisibility(
-            visible = uiState.showEpisodesPanel && uiState.error == null,
+            visible = uiState.showEpisodesPanel && uiState.error == null &&
+                !uiState.showEpisodeAutoPlayLoadingOverlay,
             enter = slideInHorizontally(
                 animationSpec = tween(220),
                 initialOffsetX = { it }
@@ -2314,6 +2326,7 @@ private fun ExoPlayerSurface(
     tunneledSurfaceFill: Boolean,
     useLibass: Boolean,
     libassRenderMode: LibassRenderMode,
+    letterboxMaskEnabled: Boolean,
     subtitleStyle: SubtitleStyleSettings,
     subtitleLiftPx: Float,
     onBindSubtitleView: (androidx.media3.ui.SubtitleView?) -> Unit = {},
@@ -2350,6 +2363,9 @@ private fun ExoPlayerSurface(
                 player = player,
                 enabled = useLibass,
                 renderMode = libassRenderMode
+            )
+            it.syncLetterboxMask(
+                letterboxMaskEnabled && useLibass && libassRenderMode == LibassRenderMode.OVERLAY
             )
             latestBindSubtitleView(it.subtitleView)
         }
@@ -3002,6 +3018,7 @@ private fun PlayerControlsOverlay(
                         PlayerControlsProgressBarHost(
                             viewModel = viewModel,
                             chapters = uiState.chapters,
+                            showChapterTitle = uiState.showChapterTitle,
                             focusRequester = progressBarFocusRequester,
                             upFocusRequester = progressBarUpFocusRequester,
                             downFocusRequester = playPauseFocusRequester,
@@ -3265,6 +3282,7 @@ private fun PlayerControlsOverlay(
 private fun PlayerControlsProgressBarHost(
     viewModel: PlayerViewModel,
     chapters: List<PlayerChapter>,
+    showChapterTitle: Boolean,
     focusRequester: FocusRequester,
     upFocusRequester: FocusRequester? = null,
     downFocusRequester: FocusRequester? = null,
@@ -3275,7 +3293,9 @@ private fun PlayerControlsProgressBarHost(
     val playbackTimeline by viewModel.playbackTimeline.collectAsState()
     val isScrubbing by rememberPlayerScrubbing(viewModel) // fork: Stremio-style seek bar
 
-    ChapterTitle(chapters = chapters, positionMs = playbackTimeline.currentPosition)
+    if (showChapterTitle) {
+        ChapterTitle(chapters = chapters, positionMs = playbackTimeline.currentPosition)
+    }
     PlayerSeekBar( // fork: Stremio-style seek bar
         isScrubbing = isScrubbing,
         chapters = chapters,
@@ -3643,7 +3663,8 @@ private fun SeekOverlay(
     currentPosition: Long,
     duration: Long,
     bufferedPosition: Long = 0L,
-    chapters: List<PlayerChapter> = emptyList()
+    chapters: List<PlayerChapter> = emptyList(),
+    showChapterTitle: Boolean = true
 ) {
     Column(
         modifier = Modifier
@@ -3651,7 +3672,9 @@ private fun SeekOverlay(
             .padding(horizontal = NuvioTheme.spacing.xxl, vertical = NuvioTheme.spacing.xl)
     ) {
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-            ChapterTitle(chapters = chapters, positionMs = currentPosition)
+            if (showChapterTitle) {
+                ChapterTitle(chapters = chapters, positionMs = currentPosition)
+            }
             PlayerSeekBar( // fork: Stremio-style seek bar, full scrub look while seeking
                 currentPosition = currentPosition,
                 duration = duration,
@@ -3681,14 +3704,19 @@ private fun SeekOverlay(
 }
 
 @Composable
-private fun SeekOverlayHost(viewModel: PlayerViewModel, chapters: List<PlayerChapter>) {
+private fun SeekOverlayHost(
+    viewModel: PlayerViewModel,
+    chapters: List<PlayerChapter>,
+    showChapterTitle: Boolean
+) {
     val playbackTimeline by viewModel.playbackTimeline.collectAsState()
 
     SeekOverlay(
         currentPosition = playbackTimeline.currentPosition,
         duration = playbackTimeline.duration,
         bufferedPosition = playbackTimeline.bufferedPosition,
-        chapters = chapters
+        chapters = chapters,
+        showChapterTitle = showChapterTitle
     )
 }
 

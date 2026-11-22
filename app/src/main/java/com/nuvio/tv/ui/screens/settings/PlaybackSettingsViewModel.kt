@@ -288,6 +288,10 @@ class PlaybackSettingsViewModel @Inject constructor(
         playerSettingsDataStore.setExoChaptersEnabled(enabled)
     }
 
+    suspend fun setChapterTitleEnabled(enabled: Boolean) {
+        playerSettingsDataStore.setChapterTitleEnabled(enabled)
+    }
+
     suspend fun setUseLibass(enabled: Boolean) {
         playerSettingsDataStore.setUseLibass(enabled)
     }
@@ -691,6 +695,18 @@ class PlaybackSettingsViewModel @Inject constructor(
 
     suspend fun setStreamAutoPlayNextEpisodeFallbackEnabled(enabled: Boolean) {
         playerSettingsDataStore.setStreamAutoPlayNextEpisodeFallbackEnabled(enabled)
+    }
+
+    suspend fun setStreamAutoPlayFallbackOnFailure(enabled: Boolean) {
+        playerSettingsDataStore.setStreamAutoPlayFallbackOnFailure(enabled)
+    }
+
+    suspend fun setStreamAutoPlayFallbackMaxSources(count: Int) {
+        playerSettingsDataStore.setStreamAutoPlayFallbackMaxSources(count)
+    }
+
+    suspend fun setStreamAutoPlayFallbackStartupTimeoutSeconds(seconds: Int) {
+        playerSettingsDataStore.setStreamAutoPlayFallbackStartupTimeoutSeconds(seconds)
     }
 
     suspend fun setStreamAutoPlayPreferBingeGroupForNextEpisode(enabled: Boolean) {

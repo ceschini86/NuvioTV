@@ -101,7 +101,7 @@ internal object AutoSyncRunningSubtitle {
     fun track(
         subtitleUrl: String,
         job: Job,
-        syncedUrl: () -> String? = { AutoSyncSyncedSubtitle.url.value },
+        syncedUrl: () -> String? = { AutoSyncSyncedSubtitle.status.value.syncedUrl() },
     ) {
         val run = Run(subtitleUrl, job)
         current.value = run
@@ -139,7 +139,7 @@ internal fun CoroutineScope.trackAutoSyncRun(subtitleUrl: String) =
 @Composable
 internal fun AutoSyncStatusChip(subtitleUrl: String, selected: Boolean) {
     val status by AutoSyncRunningSubtitle.status.collectAsState()
-    val syncedUrl by AutoSyncSyncedSubtitle.url.collectAsState()
+    val syncedUrl = AutoSyncSyncedSubtitle.status.collectAsState().value.syncedUrl()
     if (!selected) return
     val state = autoSyncDotState(subtitleUrl, status, syncedUrl) ?: return
 
@@ -179,7 +179,7 @@ internal fun AutoSyncStatusChip(subtitleUrl: String, selected: Boolean) {
 @Composable
 internal fun AutoSyncInfoLines(subtitleUrl: String?) {
     val status by AutoSyncRunningSubtitle.status.collectAsState()
-    val syncedUrl by AutoSyncSyncedSubtitle.url.collectAsState()
+    val syncedUrl = AutoSyncSyncedSubtitle.status.collectAsState().value.syncedUrl()
     if (subtitleUrl == null) return
     val runStatus = status?.takeIf { it.url == subtitleUrl }
     val state = autoSyncDotState(subtitleUrl, runStatus, syncedUrl) ?: return
@@ -300,7 +300,7 @@ internal fun AutoSyncStatusBadge(
     content: @Composable () -> Unit,
 ) {
     val runStatus by AutoSyncRunningSubtitle.status.collectAsState()
-    val syncedUrl by AutoSyncSyncedSubtitle.url.collectAsState()
+    val syncedUrl = AutoSyncSyncedSubtitle.status.collectAsState().value.syncedUrl()
     val state = autoSyncDotState(selectedAddonUrl, runStatus, syncedUrl, embeddedSelected)
     Box {
         content()
@@ -358,3 +358,10 @@ private fun autoSyncStateLabel(state: AutoSyncDotState): Int = when (state) {
     AutoSyncDotState.EMBEDDED -> R.string.autosync_label_embedded
     AutoSyncDotState.FAILED, AutoSyncDotState.NO_FIT -> R.string.autosync_label_failed
 }
+
+/** Subtitle URL that AutoSync finished with (adjusted or already in sync); null otherwise. */
+private fun AutoSyncSyncedSubtitle.Status?.syncedUrl(): String? =
+    this?.takeIf {
+        it.state == com.nuvio.tv.ui.screens.player.autosync.AutoSyncState.SYNCED ||
+            it.state == com.nuvio.tv.ui.screens.player.autosync.AutoSyncState.NOT_NEEDED
+    }?.url
