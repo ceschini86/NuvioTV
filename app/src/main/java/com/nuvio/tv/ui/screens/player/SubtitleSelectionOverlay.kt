@@ -2406,30 +2406,24 @@ private fun SourceChip(
     selected: Boolean = false,
     accentYellow: Boolean = false
 ) {
+    // Solid fills: the chips stay readable on the orange selected card and on the dark panel.
     val background = when {
-        accentYellow -> AiSourceIndicatorYellow.copy(alpha = 0.22f)
-        selected -> NuvioTheme.colors.OnSecondary.copy(alpha = 0.14f)
-        else -> Color.White.copy(alpha = 0.08f)
+        accentYellow -> AiSourceIndicatorYellow
+        selected -> Color.Black.copy(alpha = 0.55f)
+        else -> Color.White.copy(alpha = 0.16f)
     }
     val textColor = when {
-        accentYellow -> AiSourceIndicatorYellow
-        selected -> NuvioTheme.colors.OnSecondary.copy(alpha = 0.9f)
-        else -> Color.White.copy(alpha = 0.78f)
+        accentYellow -> Color(0xFF111111)
+        else -> Color.White
     }
     Box(
         modifier = Modifier
             .background(background, RoundedCornerShape(999.dp))
             .then(
-                if (selected && !accentYellow) {
+                if (accentYellow) {
                     Modifier.border(
                         width = NuvioTheme.spacing.hairline,
-                        color = NuvioTheme.colors.OnSecondary.copy(alpha = 0.22f),
-                        shape = RoundedCornerShape(999.dp)
-                    )
-                } else if (accentYellow) {
-                    Modifier.border(
-                        width = NuvioTheme.spacing.hairline,
-                        color = AiSourceIndicatorYellow.copy(alpha = 0.55f),
+                        color = Color.Black.copy(alpha = 0.35f),
                         shape = RoundedCornerShape(999.dp)
                     )
                 } else {
@@ -2441,6 +2435,7 @@ private fun SourceChip(
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
             color = textColor
         )
     }

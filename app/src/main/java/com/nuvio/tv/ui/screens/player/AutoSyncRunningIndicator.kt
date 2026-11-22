@@ -191,11 +191,13 @@ internal fun AutoSyncStatusChip(subtitleUrl: String, selected: Boolean) {
     if (!selected) return
     val state = autoSyncDotState(subtitleUrl, status, syncedUrl, audio = audio) ?: return
 
+    // Solid fill with dark text: readable on the orange selected card and on the dark panel.
     val color = autoSyncChipColor(state)
+    val contentColor = AutoSyncChipText
     Row(
         modifier = Modifier
-            .background(color.copy(alpha = 0.22f), RoundedCornerShape(999.dp))
-            .border(NuvioTheme.spacing.hairline, color.copy(alpha = 0.55f), RoundedCornerShape(999.dp))
+            .background(color, RoundedCornerShape(999.dp))
+            .border(NuvioTheme.spacing.hairline, Color.Black.copy(alpha = 0.35f), RoundedCornerShape(999.dp))
             .padding(horizontal = NuvioTheme.spacing.sm, vertical = 3.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -207,13 +209,14 @@ internal fun AutoSyncStatusChip(subtitleUrl: String, selected: Boolean) {
                 AutoSyncDotState.RUNNING, AutoSyncDotState.EMBEDDED, AutoSyncDotState.AUDIO_RUNNING -> Icons.Default.Sync
             },
             contentDescription = null,
-            tint = color,
+            tint = contentColor,
             modifier = Modifier.size(12.dp),
         )
         Text(
             text = stringResource(autoSyncStateLabel(state)),
             style = MaterialTheme.typography.labelSmall,
-            color = color,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            color = contentColor,
             maxLines = 1,
             softWrap = false,
         )
@@ -413,6 +416,7 @@ internal fun AutoSyncStatusBadge(
 }
 
 private val AutoSyncGreen = Color(0xFF4CAF50)
+private val AutoSyncChipText = Color(0xFF111111)
 private val AutoSyncAmber = Color(0xFFFFB300)
 private val AutoSyncRed = Color(0xFFE53935)
 
