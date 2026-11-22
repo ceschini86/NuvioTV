@@ -1,6 +1,10 @@
 package com.nuvio.tv.ui.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import com.nuvio.tv.LocalRootContentInset
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
@@ -20,6 +24,8 @@ internal fun NavGraphBuilder.channelsDestinations(
     hideBuiltInHeaders: Boolean
 ) {
     composable(Screen.Channels.route) {
+        // Root destination: carries the sidebar inset like NuvioNavHost.rootComposable.
+        Box(modifier = Modifier.padding(start = LocalRootContentInset.current)) {
         ChannelsScreen(
             showBuiltInHeader = !hideBuiltInHeaders,
             onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
@@ -36,6 +42,7 @@ internal fun NavGraphBuilder.channelsDestinations(
                 navController.navigate(Screen.ChannelSeeAll.createRoute(catalogId, addonId, type))
             }
         )
+        }
     }
 
     composable(
